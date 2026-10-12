@@ -13,7 +13,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-02](tasks/P1-02.md) | architect | P1-01 | merged ([review](tasks/P1-02-review.md)) | agent/P1-02 |
 | [P1-03](tasks/P1-03.md) | implementer | P1-02 | in review ([review](tasks/P1-03-review.md)) | agent/P1-03 |
 | [P1-04](tasks/P1-04.md) | implementer | P1-03 | blocked (wave B) | — |
-| [P1-05](tasks/P1-05.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-05](tasks/P1-05.md) | implementer | P1-02 | merged (OPC plumbing parts set to supported on main) | agent/P1-05 |
 | [P1-06](tasks/P1-06.md) | implementer | P1-02 | merged (schema issues 1–2 fixed on main) | agent/P1-06 |
 | [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | ready (wave A) | — |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | merged (oracle built locally, smoke test passes) | agent/P1-07 |
