@@ -11,11 +11,11 @@ Task board. Only the master agent edits this file, on `main`.
 |---|---|---|---|---|
 | [P1-01](tasks/P1-01.md) | researcher | — | merged (corpus binaries excluded, ADR 0005) | agent/P1-01 |
 | [P1-02](tasks/P1-02.md) | architect | P1-01 | merged ([review](tasks/P1-02-review.md)) | agent/P1-02 |
-| [P1-03](tasks/P1-03.md) | implementer | P1-02 | in review ([review](tasks/P1-03-review.md)) | agent/P1-03 |
-| [P1-04](tasks/P1-04.md) | implementer | P1-03 | blocked (wave B) | — |
+| [P1-03](tasks/P1-03.md) | implementer | P1-02 | merged ([review](tasks/P1-03-review.md)) | agent/P1-03 |
+| [P1-04](tasks/P1-04.md) | implementer | P1-03 | ready (wave B) | — |
 | [P1-05](tasks/P1-05.md) | implementer | P1-02 | merged (OPC plumbing parts set to supported on main) | agent/P1-05 |
 | [P1-06](tasks/P1-06.md) | implementer | P1-02 | merged (schema issues 1–2 fixed on main) | agent/P1-06 |
-| [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | ready (wave A) | — |
+| [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | in progress | agent/P1-06b |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | merged (oracle built locally, smoke test passes) | agent/P1-07 |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
 | P1-08 | test-engineer | P1-03..07 | not written | — |
@@ -33,7 +33,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master item: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). After P1-06b merges, update the `FluentId` doc comment in `crates/ui-spec/src/lib.rs` to the pattern `^[A-Za-z_][A-Za-z0-9_]*$` (P1-03 review).
 
 ## Deferred minor findings (for the phase report)
 
