@@ -4,7 +4,9 @@
 //! The fixtures are small workspace roots: `good/` holds a complete
 //! consistent data set (both layouts plus `commands.yaml` and
 //! `shortcuts.yaml`), `xref-*/` each break one cross-reference, and
-//! `bad.yaml` violates the schema.
+//! `bad.yaml` violates the schema. Every workspace fixture carries
+//! **both** layout files: the loader reads both on every load, so the
+//! `fluent_id` cross-reference can run against their union.
 
 use std::path::{Path, PathBuf};
 
@@ -31,6 +33,16 @@ fn temp_workspace(name: &str) -> PathBuf {
 fn copy_good_tables(dir: &Path) {
     let source = fixtures().join("good").join("ui-spec");
     for name in ["commands.yaml", "shortcuts.yaml"] {
+        std::fs::copy(source.join(name), dir.join("ui-spec").join(name)).unwrap();
+    }
+}
+
+/// Copies both layout files from the good fixture into a temp
+/// workspace (every load reads both).
+#[allow(clippy::unwrap_used)] // test helper; tests may panic
+fn copy_good_layouts(dir: &Path) {
+    let source = fixtures().join("good").join("ui-spec");
+    for name in ["visio-2016.yaml", "visio-365.yaml"] {
         std::fs::copy(source.join(name), dir.join("ui-spec").join(name)).unwrap();
     }
 }
@@ -108,12 +120,13 @@ fn select_switches_between_the_two_layouts() {
 #[test]
 fn bad_fixture_is_rejected_with_a_schema_error() {
     let dir = temp_workspace("bad");
+    copy_good_layouts(&dir);
+    copy_good_tables(&dir);
     std::fs::copy(
         fixtures().join("bad.yaml"),
         dir.join("ui-spec").join("visio-2016.yaml"),
     )
     .unwrap();
-    copy_good_tables(&dir);
 
     let loader = Loader::new(&dir).unwrap();
     match loader.load(LayoutKind::Visio2016) {
@@ -131,18 +144,180 @@ fn bad_fixture_is_rejected_with_a_schema_error() {
 #[test]
 fn unknown_fluent_id_in_commands_is_rejected() {
     let loader = Loader::new(fixtures().join("xref-fluent")).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
-        Err(LoadError::CrossReference {
-            kind,
-            id,
-            referenced_by,
-        }) => {
-            assert_eq!(kind, "fluent_id");
-            assert_eq!(id, "GhostControl");
-            assert_eq!(referenced_by, "file.save");
+    // Neither layout uses GhostControl, so the id is in no layout at
+    // all and both LayoutKinds reject it.
+    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+        let err = loader.load(kind).expect_err("must fail");
+        let message = err.to_string();
+        assert!(
+            message.contains("is not in any layout"),
+            "{kind:?}: {message}"
+        );
+        match err {
+            LoadError::CrossReference {
+                kind,
+                id,
+                referenced_by,
+            } => {
+                assert_eq!(kind, "fluent_id");
+                assert_eq!(id, "GhostControl");
+                assert_eq!(referenced_by, "file.save");
+            }
+            other => panic!("expected a fluent_id cross-reference error, got {other:?}"),
         }
-        other => panic!("expected a fluent_id cross-reference error, got {other:?}"),
     }
+}
+
+#[test]
+fn a_command_mapped_to_a_365_only_control_loads_for_both_kinds() {
+    // `edit.redo` in commands.yaml lists RedoButton, which only the
+    // 365 layout contains: commands.yaml is shared, so the check
+    // runs against the union of both layouts (ADR 0007) and neither
+    // kind fails.
+    let loader = Loader::new(fixtures().join("good")).unwrap();
+    let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
+    let set_365 = loader.load(LayoutKind::Visio365).unwrap();
+    for set in [&set_2016, &set_365] {
+        let redo = set
+            .commands
+            .entries
+            .iter()
+            .find(|entry| entry.id == CommandId::new("edit.redo"))
+            .expect("edit.redo is mapped");
+        assert_eq!(redo.fluent_ids, vec![FluentId::new("RedoButton")]);
+    }
+    // RedoButton is a 365-only control...
+    let in_365 = set_365.command_lookup();
+    assert!(in_365.commands.contains_key(&FluentId::new("RedoButton")));
+    // ...so the 2016 layout simply has no control for it.
+    let in_2016 = set_2016.command_lookup();
+    assert!(!in_2016.labels.contains_key(&FluentId::new("RedoButton")));
+}
+
+#[test]
+fn a_control_without_a_command_loads_and_is_labelled_only() {
+    // FontSizeLabel has `command: null` in both layouts: it is a
+    // labelled surface with no dispatch entry.
+    let loader = Loader::new(fixtures().join("good")).unwrap();
+    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+        let set = loader.load(kind).unwrap();
+        let lookup = set.command_lookup();
+        assert_eq!(
+            lookup.labels.get(&FluentId::new("FontSizeLabel")),
+            Some(&"Font Size".to_owned()),
+            "{kind:?}"
+        );
+        assert!(
+            !lookup
+                .commands
+                .contains_key(&FluentId::new("FontSizeLabel")),
+            "{kind:?}"
+        );
+    }
+}
+
+#[test]
+fn load_all_matches_loading_each_kind() {
+    let loader = Loader::new(fixtures().join("good")).unwrap();
+    let sets = loader.load_all().unwrap();
+    assert_eq!(
+        sets.get(LayoutKind::Visio2016),
+        &loader.load(LayoutKind::Visio2016).unwrap()
+    );
+    assert_eq!(
+        sets.get(LayoutKind::Visio365),
+        &loader.load(LayoutKind::Visio365).unwrap()
+    );
+    // The shared tables are identical in both sets.
+    assert_eq!(sets.visio_2016.commands, sets.visio_365.commands);
+    assert_eq!(sets.visio_2016.shortcuts, sets.visio_365.shortcuts);
+}
+
+#[test]
+fn empty_shortcut_table_loads() {
+    let dir = temp_workspace("empty-shortcuts");
+    copy_good_layouts(&dir);
+    copy_good_tables(&dir);
+    std::fs::write(dir.join("ui-spec/shortcuts.yaml"), "[]\n").unwrap();
+
+    let loader = Loader::new(&dir).unwrap();
+    let set = loader.load(LayoutKind::Visio2016).unwrap();
+    assert!(set.shortcuts.entries.is_empty());
+    assert!(!set.commands.entries.is_empty());
+    // Empty is fine for both kinds and for load_all, too.
+    assert!(
+        loader
+            .load(LayoutKind::Visio365)
+            .unwrap()
+            .shortcuts
+            .entries
+            .is_empty()
+    );
+    assert!(
+        loader
+            .load_all()
+            .unwrap()
+            .get(LayoutKind::Visio2016)
+            .shortcuts
+            .entries
+            .is_empty()
+    );
+}
+
+#[test]
+fn empty_command_table_loads_when_no_control_dispatches_a_command() {
+    // A workspace whose only control has `command: null`, so an
+    // empty commands.yaml loses nothing.
+    let dir = temp_workspace("empty-commands");
+    let layout = r#"
+schema_version: 1
+product: visio
+source: "Empty commands fixture"
+source_url: "https://example.com/fixture/empty-commands"
+source_revision: "fixture"
+tabs: []
+backstage:
+  kind: backstage
+  tabs: []
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls:
+    - id: StatusIndicator
+      type: labelControl
+      label: Ready
+      order: 0
+      command: null
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+"#;
+    for name in ["visio-2016.yaml", "visio-365.yaml"] {
+        std::fs::write(dir.join("ui-spec").join(name), layout).unwrap();
+    }
+    std::fs::write(dir.join("ui-spec/commands.yaml"), "[]\n").unwrap();
+    std::fs::write(dir.join("ui-spec/shortcuts.yaml"), "[]\n").unwrap();
+
+    let loader = Loader::new(&dir).unwrap();
+    let set = loader.load(LayoutKind::Visio2016).unwrap();
+    assert!(set.commands.entries.is_empty());
+    assert_eq!(
+        set.command_lookup()
+            .labels
+            .get(&FluentId::new("StatusIndicator")),
+        Some(&"Ready".to_owned())
+    );
+    assert!(
+        loader
+            .load_all()
+            .unwrap()
+            .get(LayoutKind::Visio365)
+            .commands
+            .entries
+            .is_empty()
+    );
 }
 
 #[test]
@@ -195,8 +370,10 @@ fn json_data_files_load_too() {
         "quick_access_toolbar": {"id": "qat", "controls": []}
     }"#;
     std::fs::write(data.join("visio-2016.json"), layout).unwrap();
-    // The schema's root `oneOf` rejects empty tables, so both get one
-    // entry (kept consistent: the shortcut dispatches `edit.undo`).
+    // The loader reads both layout files on every load.
+    std::fs::write(data.join("visio-365.json"), layout).unwrap();
+    // Both tables get one entry; the empty-table cases have their
+    // own tests (the shortcut dispatches `edit.undo`).
     std::fs::write(
         data.join("commands.json"),
         r#"[{"id": "edit.undo", "label": "Undo", "visuicmd": null, "fluent_ids": [], "mapping_confidence": "unknown"}]"#,
@@ -241,6 +418,11 @@ fn wrong_document_kind_is_rejected() {
     )
     .unwrap();
     std::fs::copy(
+        fixtures().join("good/ui-spec/visio-365.yaml"),
+        data.join("visio-365.yaml"),
+    )
+    .unwrap();
+    std::fs::copy(
         fixtures().join("good/ui-spec/shortcuts.yaml"),
         data.join("commands.yaml"),
     )
@@ -262,8 +444,9 @@ fn wrong_document_kind_is_rejected() {
 
 #[test]
 fn controls_per_layout_are_stable() {
-    // Counts reported in the task's Result section: 7 controls in the
-    // 2016 fixture layout, 8 in the 365 one (RedoButton is 365-only).
+    // Counts pinned to the fixtures: 8 controls in the 2016 fixture
+    // layout, 9 in the 365 one (RedoButton is 365-only;
+    // FontSizeLabel, with `command: null`, is in both).
     let loader = Loader::new(fixtures().join("good")).unwrap();
     let count = |set: &LayoutSet| {
         let mut n = set.layout.quick_access_toolbar.controls.len();
@@ -280,6 +463,6 @@ fn controls_per_layout_are_stable() {
         }
         n
     };
-    assert_eq!(count(&loader.load(LayoutKind::Visio2016).unwrap()), 7);
-    assert_eq!(count(&loader.load(LayoutKind::Visio365).unwrap()), 8);
+    assert_eq!(count(&loader.load(LayoutKind::Visio2016).unwrap()), 8);
+    assert_eq!(count(&loader.load(LayoutKind::Visio365).unwrap()), 9);
 }
