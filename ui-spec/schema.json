@@ -35,9 +35,9 @@
       "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
     },
     "fluentId": {
-      "description": "A Microsoft Fluent UI control name (e.g. FileSave). Letters, digits and underscores only. Used as the id of every control, group, tab, backstage tab and context menu in the layout files (ADR 0007 B1).",
+      "description": "A Microsoft Fluent UI control name (e.g. `FileSave`, `_3DRotationGallery`). Letters, digits and underscores; the first character is a letter or an underscore.",
       "type": "string",
-      "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
     },
     "label": {
       "description": "Short UI label. Never a description; see AGENTS.md clean-room rule 4.",

@@ -1,45 +1,146 @@
 //! JSON Schema validator shared by every extractor (P1-03).
 //!
 //! Loads `ui-spec/schema.json` once and validates a file or a string
-//! against it. The `jsonschema` crate is the validator (MIT).
+//! against it. The `jsonschema` crate is the validator (MIT), pinned
+//! to the same major version as `crates/ui-spec` (P1-03 review M1).
 //!
 //! See ADR 0007 for the schema and ADR 0009 for how extractors call
 //! [`Schema::validate_file`].
-//!
-//! Status: stub. The P1-02 skeleton provides the function signatures
-//! and the error mapping. P1-03 wires the actual `jsonschema` crate
-//! and adds unit tests with a minimal fixture.
 
-#![allow(dead_code)]
+use std::path::{Path, PathBuf};
 
-use std::path::Path;
+use serde_json::Value;
 
 use super::{ExtractError, ExtractResult};
 
-/// Compiled schema handle. Cheap to clone; holds an `Arc<JSONSchema>`
-/// in the P1-03 implementation.
-#[derive(Clone, Default)]
+/// Compiled schema handle. Cheap to clone; holds the original
+/// `serde_json::Value` of the file plus a `Validator` for the
+/// full document (re-compiled sub-schemas via `jsonschema::draft7::new`).
+#[derive(Clone)]
 pub struct Schema {
-    /// Marker field; the real schema is loaded lazily in P1-03.
-    _private: (),
+    /// The original JSON of the schema file. Used to compile
+    /// sub-schemas.
+    raw: Value,
+    /// Path the schema was loaded from. Used for error messages.
+    source: PathBuf,
+}
+
+impl std::fmt::Debug for Schema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Schema")
+            .field("source", &self.source)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Schema {
     /// Loads `ui-spec/schema.json` from the workspace root.
     pub fn load_default() -> ExtractResult<Self> {
-        Ok(Self { _private: () })
+        let root = crate::util::root();
+        let path = root.join("ui-spec").join("schema.json");
+        Self::load(&path)
     }
 
-    /// Validates a YAML or JSON file already on disk. P1-03
-    /// implementation parses the file, picks the right
-    /// `$defs/{layout,commands,shortcuts}` definition, and returns the
-    /// validator's error list joined by `; `.
-    pub fn validate_file(&self, _path: &Path) -> ExtractResult<()> {
-        Ok(())
+    /// Loads a schema from a JSON file.
+    pub fn load(path: &Path) -> ExtractResult<Self> {
+        let text = std::fs::read_to_string(path).map_err(|e| ExtractError::Io {
+            path: path.to_path_buf(),
+            source: e.to_string(),
+        })?;
+        let value: Value = serde_json::from_str(&text).map_err(|e| ExtractError::Parse {
+            path: path.to_path_buf(),
+            message: format!("not valid JSON: {e}"),
+        })?;
+        Ok(Self {
+            raw: value,
+            source: path.to_path_buf(),
+        })
     }
 
-    /// Validates an in-memory YAML or JSON value. P1-03 implementation.
-    pub fn validate_str(&self, _text: &str, _kind: SchemaKind) -> ExtractResult<()> {
+    /// Validates a YAML file already on disk. P1-03 implementation
+    /// parses the YAML, then validates the chosen
+    /// `$defs/{layout,commands,shortcuts}` definition.
+    pub fn validate_file(&self, path: &Path) -> ExtractResult<()> {
+        let text = std::fs::read_to_string(path).map_err(|e| ExtractError::Io {
+            path: path.to_path_buf(),
+            source: e.to_string(),
+        })?;
+        let kind = SchemaKind::for_path(path).ok_or_else(|| ExtractError::Parse {
+            path: path.to_path_buf(),
+            message: "cannot infer schema kind from file name".into(),
+        })?;
+        self.validate_str(&text, kind)
+    }
+
+    /// Validates an in-memory YAML string.
+    pub fn validate_str(&self, text: &str, kind: SchemaKind) -> ExtractResult<()> {
+        let value = parse_yaml_to_json(text).map_err(|e| ExtractError::Parse {
+            path: self.source.clone(),
+            message: e,
+        })?;
+        self.validate_json(&value, kind)
+    }
+
+    /// Validates an already-parsed JSON value.
+    pub fn validate_json(&self, value: &Value, kind: SchemaKind) -> ExtractResult<()> {
+        let def_name = kind.def_name();
+        if self
+            .raw
+            .pointer(&format!("/definitions/{def_name}"))
+            .is_none()
+            && self.raw.pointer(&format!("/$defs/{def_name}")).is_none()
+        {
+            return Err(ExtractError::Parse {
+                path: self.source.clone(),
+                message: format!("schema missing definitions/{def_name}"),
+            });
+        }
+        // Build a synthetic root that re-anchors the sub-schema via
+        // `$ref` and re-supplies the document's `definitions` block.
+        // jsonschema 0.58 doesn't expose a way to scope a
+        // sub-schema, so we wrap it in a `{ "$ref":
+        // "#/definitions/<name>", "definitions": { ... } }` document
+        // and compile that.
+        let mut synthetic = serde_json::Map::new();
+        synthetic.insert(
+            "$ref".into(),
+            Value::String(format!("#/definitions/{def_name}")),
+        );
+        if let Some(defs) = self.raw.get("definitions") {
+            synthetic.insert("definitions".into(), defs.clone());
+        }
+        if let Some(defs) = self.raw.get("$defs") {
+            synthetic.insert("$defs".into(), defs.clone());
+        }
+        if let Some(s) = self.raw.get("$schema") {
+            synthetic.insert("$schema".into(), s.clone());
+        }
+        let compiled = jsonschema::draft7::new(&Value::Object(synthetic)).map_err(|e| {
+            ExtractError::Parse {
+                path: self.source.clone(),
+                message: format!("sub-schema compilation failed: {e}"),
+            }
+        })?;
+        // Deduplicate messages to a small set so the error stays
+        // readable (some failure modes repeat per-item).
+        let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut msgs: Vec<String> = Vec::new();
+        for e in compiled.iter_errors(value) {
+            let s = e.to_string();
+            if seen.insert(s.clone()) {
+                msgs.push(s);
+                if msgs.len() >= 10 {
+                    msgs.push("... (truncated)".to_string());
+                    break;
+                }
+            }
+        }
+        if !msgs.is_empty() {
+            return Err(ExtractError::Schema {
+                path: self.source.clone(),
+                message: msgs.join("; "),
+            });
+        }
         Ok(())
     }
 }
@@ -56,6 +157,15 @@ pub enum SchemaKind {
 }
 
 impl SchemaKind {
+    /// The name of the `$defs` entry.
+    pub fn def_name(self) -> &'static str {
+        match self {
+            Self::Layout => "layout",
+            Self::Commands => "commands",
+            Self::Shortcuts => "shortcuts",
+        }
+    }
+
     /// Infers the kind from the file name.
     pub fn for_path(path: &Path) -> Option<Self> {
         let name = path.file_name()?.to_str()?;
@@ -68,13 +178,20 @@ impl SchemaKind {
     }
 }
 
-fn _unused(_: &Path) -> ExtractResult<()> {
-    Err(ExtractError::Unimplemented { task: "P1-03" })
+/// Parses a YAML string into a `serde_json::Value` using
+/// `serde-saphyr`. Returns a flat error message on failure.
+fn parse_yaml_to_json(text: &str) -> Result<Value, String> {
+    serde_saphyr::from_str::<Value>(text).map_err(|e| format!("YAML parse error: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn workspace_root() -> PathBuf {
+        crate::util::root()
+    }
 
     #[test]
     fn schema_kind_for_path() {
@@ -85,5 +202,142 @@ mod tests {
         let p = Path::new("ui-spec/shortcuts.yaml");
         assert_eq!(SchemaKind::for_path(p), Some(SchemaKind::Shortcuts));
         assert_eq!(SchemaKind::for_path(Path::new("foo/bar")), None);
+    }
+
+    #[test]
+    fn schema_kind_def_name() {
+        assert_eq!(SchemaKind::Layout.def_name(), "layout");
+        assert_eq!(SchemaKind::Commands.def_name(), "commands");
+        assert_eq!(SchemaKind::Shortcuts.def_name(), "shortcuts");
+    }
+
+    #[test]
+    fn load_real_schema() {
+        let path = workspace_root().join("ui-spec").join("schema.json");
+        if !path.is_file() {
+            eprintln!("schema.json not present; skipping");
+            return;
+        }
+        let s = Schema::load(&path).expect("schema loads");
+        let _ = s.source;
+    }
+
+    #[test]
+    fn validate_minimal_layout_fixture() {
+        let path = workspace_root().join("ui-spec").join("schema.json");
+        if !path.is_file() {
+            eprintln!("schema.json not present; skipping");
+            return;
+        }
+        let s = Schema::load(&path).expect("schema loads");
+
+        // A hand-written minimal layout fixture (B1: control id is
+        // the Fluent name `FileSave`).
+        let yaml = r#"
+schema_version: 1
+product: visio
+source: "test"
+source_url: "https://example.invalid/"
+source_revision: "test"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: FileSave
+            type: button
+            label: Save
+            order: 0
+            command: null
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs: []
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []
+"#;
+        s.validate_str(yaml, SchemaKind::Layout)
+            .expect("minimal layout is valid");
+    }
+
+    #[test]
+    fn validate_rejects_bad_control_id() {
+        let path = workspace_root().join("ui-spec").join("schema.json");
+        if !path.is_file() {
+            eprintln!("schema.json not present; skipping");
+            return;
+        }
+        let s = Schema::load(&path).expect("schema loads");
+
+        // Control id "3DSave" (leading digit) violates the
+        // fluentId pattern `[A-Za-z_][A-Za-z0-9_]*`.
+        let yaml = r#"
+schema_version: 1
+product: visio
+source: "test"
+source_url: "https://example.invalid/"
+source_revision: "test"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: 3DSave
+            type: button
+            label: Save
+            order: 0
+            command: null
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs: []
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []
+"#;
+        let err = s
+            .validate_str(yaml, SchemaKind::Layout)
+            .expect_err("leading-digit id should fail");
+        let msg = format!("{err}");
+        assert!(msg.contains("schema"), "got: {msg}");
     }
 }

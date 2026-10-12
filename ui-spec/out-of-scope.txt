@@ -1,0 +1,29 @@
+# Fluent control ids that Ferrogram will not implement in the alpha.
+#
+# One id per line. Lines starting with `#` and blank lines are
+# ignored. Matched exactly against the Fluent id of every control,
+# group, tab, backstage tab, context menu, and QAT control in the
+# extracted layouts.
+#
+# The master agent owns this file (AGENTS.md section 1). P1-03
+# seeded the obvious exclusions below; the master will prune or
+# extend the list as Phase 1 progresses.
+
+# Coauthoring / collaboration surface (Microsoft cloud features;
+# not in scope for the alpha).
+CoauthorMenu
+*Coauthor*
+
+# Macros (VBA automation; out of scope for the alpha).
+*Macro*
+
+# COM add-ins and Visio Solutions XML (no Surface in the alpha).
+*AddIn*
+*Addin*
+
+# Third-party data linking (SQL Server, OLE DB, ODBC) — too
+# platform-specific and too thin a surface for Phase 4.
+*DataLink*
+*SqlServer*
+*OleDb*
+*Odbc*
