@@ -1,0 +1,6 @@
+# A valid non-empty shortcuts table. (The schema's root `oneOf`
+# rejects an empty list: `[]` validates as both a commands and a
+# shortcuts document, so an empty table cannot be expressed.)
+- sequence: [[Ctrl, S]]
+  command: file.save
+  scope: global

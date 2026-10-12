@@ -1,0 +1,36 @@
+# Test fixture for crates/ui-spec. Not real Microsoft data.
+- id: file.save
+  label: Save
+  visuicmd: visCmdFileSave
+  fluent_ids: [FileSave, FileSaveQuickAccess]
+  mapping_confidence: exact
+- id: edit.paste
+  label: Paste
+  visuicmd: visCmdPaste
+  fluent_ids: [PasteGallery, PasteMenu]
+  mapping_confidence: inferred
+- id: format.text.bold
+  label: Bold
+  visuicmd: null
+  fluent_ids: [BoldToggleButton]
+  mapping_confidence: unknown
+- id: tools.connector
+  label: Connector
+  visuicmd: visCmdConnectorTool
+  fluent_ids: [ConnectorTool]
+  mapping_confidence: exact
+- id: edit.cut
+  label: Cut
+  visuicmd: visCmdCut
+  fluent_ids: [Cut, CutShortcutItem]
+  mapping_confidence: exact
+- id: edit.undo
+  label: Undo
+  visuicmd: null
+  fluent_ids: []
+  mapping_confidence: unknown
+- id: edit.redo
+  label: Redo
+  visuicmd: null
+  fluent_ids: []
+  mapping_confidence: unknown

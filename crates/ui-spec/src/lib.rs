@@ -1,9 +1,14 @@
 //! Loader for ribbon, backstage, context-menu and shortcut layout data.
 //!
-//! Phase 1 fills this crate's public types; P1-06 implements the
-//! loader logic. This file declares the public surface only; no
-//! runtime logic is here yet. See ADR 0007 (format), ADR 0008
-//! (ShapeSheet table) and the `ui-spec/` data directory for the inputs.
+//! The public types below are the contract of `ui-spec/schema.json`
+//! (ADR 0007 format, ADR 0008 ShapeSheet table). The loader itself
+//! lives in the [`loader`] module: [`Loader`] reads
+//! `ui-spec/panel-2016.yaml`, `ui-spec/panel-365.yaml`,
+//! `ui-spec/commands.yaml` and `ui-spec/shortcuts.yaml` from a
+//! workspace root, validates every file against the schema, decodes
+//! it into these types and cross-checks the references between the
+//! three files. The [`lookup`] module builds the [`CommandLookup`]
+//! index and holds the [`LayoutSet::select`] layout switch.
 //!
 //! The crate is L0 (no workspace deps), so it is usable by any other
 //! layer without breaking the layering rules (ADR 0002).
@@ -12,6 +17,13 @@
 #![allow(clippy::derive_partial_eq_without_eq)] // IDs are content-addressed; equality is fine.
 
 use std::collections::BTreeMap;
+
+pub mod error;
+pub mod loader;
+pub mod lookup;
+
+pub use error::LoadError;
+pub use loader::Loader;
 
 /// A Ferrogram command id. See ADR 0006.
 ///
@@ -31,7 +43,8 @@ use std::collections::BTreeMap;
 /// surfaced on the Home tab in 2016 and on the Arrange tab in 365; the
 /// id does not change. The `Control` type's `command` field is the
 /// link from a Fluent control to one of these ids.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize)]
+#[serde(transparent)]
 pub struct CommandId(pub String);
 
 impl CommandId {
@@ -66,7 +79,8 @@ impl AsRef<str> for CommandId {
 /// primary id of every control, group, tab, backstage tab and
 /// context menu in the layout files (ADR 0007 B1). The pattern
 /// (enforced by `ui-spec/schema.json`) is `^[A-Za-z][A-Za-z0-9_]*$`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize)]
+#[serde(transparent)]
 pub struct FluentId(pub String);
 
 impl FluentId {
@@ -194,9 +208,21 @@ impl ControlType {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for ControlType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown control type: {raw:?}")))
+    }
+}
+
 /// Bounding box in device-independent pixels. Filled in by the
 /// screenshot pass (ADR 0007).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[serde(default)]
 pub struct Bounds {
     /// X coordinate (left edge).
     pub x: f32,
@@ -215,37 +241,46 @@ pub struct Bounds {
 /// the Ferrogram command id dispatched when the control is activated
 /// (e.g. `file.save`). `command` may be `None` for non-actionable
 /// controls and for controls whose mapping is not yet known.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Control {
     /// The Fluent control name (primary id).
     pub id: FluentId,
     /// The Fluent type.
+    #[serde(rename = "type")]
     pub r#type: ControlType,
     /// Short UI label (never a description).
     pub label: String,
     /// Sibling order.
     pub order: u32,
     /// Immediate parent control id (Fluent), or `None` for top-level.
+    #[serde(default)]
     pub parent: Option<FluentId>,
     /// Ferrogram command id dispatched on activation, or `None` if
     /// the control is non-actionable or its mapping is unknown.
+    #[serde(default)]
     pub command: Option<CommandId>,
     /// Alternate Fluent ids for the same control across ribbon
     /// placements (e.g. when `ConnectorTool` appears on both the
     /// Home and Insert ribbons in 365). P1-03 picks a primary
     /// parent by `tab` match; the others are recorded here.
+    #[serde(default)]
     pub aliases: Vec<FluentId>,
     /// Reserved for the screenshot pass.
+    #[serde(default)]
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
+    #[serde(default)]
     pub icon_ref: Option<String>,
     /// Reserved for the screenshot pass. The keytip shown next to the
     /// label.
+    #[serde(default)]
     pub keytip: Option<String>,
     /// Reserved for the screenshot pass. The button size variant.
+    #[serde(default)]
     pub size_variant: Option<SizeVariant>,
     /// Reserved for the screenshot pass. Free-text annotation; never a
     /// description of behaviour.
+    #[serde(default)]
     pub visual_notes: Option<String>,
 }
 
@@ -286,8 +321,19 @@ impl SizeVariant {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for SizeVariant {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown size variant: {raw:?}")))
+    }
+}
+
 /// A group of controls inside a tab.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Group {
     /// Group Fluent id.
     pub id: FluentId,
@@ -296,23 +342,28 @@ pub struct Group {
     /// Sibling order.
     pub order: u32,
     /// Reserved for the screenshot pass.
+    #[serde(default)]
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
+    #[serde(default)]
     pub icon_ref: Option<String>,
     /// Reserved for the screenshot pass. The keytip shown next to the
     /// label.
+    #[serde(default)]
     pub keytip: Option<String>,
     /// Reserved for the screenshot pass. The button size variant.
+    #[serde(default)]
     pub size_variant: Option<SizeVariant>,
     /// Reserved for the screenshot pass. Free-text annotation; never a
     /// description of behaviour.
+    #[serde(default)]
     pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
 
 /// A top-level ribbon tab.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Tab {
     /// Tab Fluent id.
     pub id: FluentId,
@@ -322,25 +373,31 @@ pub struct Tab {
     pub order: u32,
     /// Fluent tab-set name (e.g. `TabSetPrimary`); `None` for tabs
     /// that are not part of a tab set.
+    #[serde(default)]
     pub tab_set: Option<String>,
     /// Reserved for the screenshot pass.
+    #[serde(default)]
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
+    #[serde(default)]
     pub icon_ref: Option<String>,
     /// Reserved for the screenshot pass. The keytip shown next to the
     /// label.
+    #[serde(default)]
     pub keytip: Option<String>,
     /// Reserved for the screenshot pass. The button size variant.
+    #[serde(default)]
     pub size_variant: Option<SizeVariant>,
     /// Reserved for the screenshot pass. Free-text annotation; never a
     /// description of behaviour.
+    #[serde(default)]
     pub visual_notes: Option<String>,
     /// Groups in display order.
     pub groups: Vec<Group>,
 }
 
 /// Backstage surface. Tabs are flat (no groups).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Backstage {
     /// Tabs under the File button.
     pub tabs: Vec<BackstageTab>,
@@ -348,7 +405,7 @@ pub struct Backstage {
 
 /// A single backstage tab. Always flat (no groups); controls are
 /// shown as a vertical stack.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct BackstageTab {
     /// Tab Fluent id.
     pub id: FluentId,
@@ -357,23 +414,28 @@ pub struct BackstageTab {
     /// Sibling order.
     pub order: u32,
     /// Reserved for the screenshot pass.
+    #[serde(default)]
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
+    #[serde(default)]
     pub icon_ref: Option<String>,
     /// Reserved for the screenshot pass. The keytip shown next to the
     /// label.
+    #[serde(default)]
     pub keytip: Option<String>,
     /// Reserved for the screenshot pass. The button size variant.
+    #[serde(default)]
     pub size_variant: Option<SizeVariant>,
     /// Reserved for the screenshot pass. Free-text annotation; never a
     /// description of behaviour.
+    #[serde(default)]
     pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
 
 /// A context menu.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct ContextMenu {
     /// Menu Fluent id.
     pub id: FluentId,
@@ -383,23 +445,28 @@ pub struct ContextMenu {
     /// Sibling order.
     pub order: u32,
     /// Reserved for the screenshot pass.
+    #[serde(default)]
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
+    #[serde(default)]
     pub icon_ref: Option<String>,
     /// Reserved for the screenshot pass. The keytip shown next to the
     /// label.
+    #[serde(default)]
     pub keytip: Option<String>,
     /// Reserved for the screenshot pass. The button size variant.
+    #[serde(default)]
     pub size_variant: Option<SizeVariant>,
     /// Reserved for the screenshot pass. Free-text annotation; never a
     /// description of behaviour.
+    #[serde(default)]
     pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
 
 /// The Quick Access Toolbar (QAT).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct QuickAccessToolbar {
     /// Controls in display order.
     pub controls: Vec<Control>,
@@ -411,7 +478,7 @@ pub struct QuickAccessToolbar {
 /// every `cargo xtask extract` run, breaking ADR 0009's
 /// deterministic-output rule. `source_revision` is the pinned source
 /// identifier.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Layout {
     /// Always `1` for now.
     pub schema_version: u32,
@@ -421,8 +488,10 @@ pub struct Layout {
     /// 365, Current Channel").
     pub source: String,
     /// URL of the source dataset.
+    #[serde(default)]
     pub source_url: String,
     /// Pinning info (commit, channel, date).
+    #[serde(default)]
     pub source_revision: String,
     /// Top-level ribbon tabs (excludes the File tab's backstage).
     pub tabs: Vec<Tab>,
@@ -454,7 +523,7 @@ impl Default for Layout {
 
 /// Mapping from Ferrogram command id to VisUICmds and to one or more
 /// Fluent control names. See `ui-spec/commands.yaml` and ADR 0006.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct CommandMapping {
     /// The Ferrogram command id.
     pub id: CommandId,
@@ -462,6 +531,7 @@ pub struct CommandMapping {
     pub label: String,
     /// The VisUICmds constant (e.g. `visCmdFileSave`), or `None` when
     /// no mapping is known.
+    #[serde(default)]
     pub visuicmd: Option<String>,
     /// Fluent control names that surface this command.
     pub fluent_ids: Vec<FluentId>,
@@ -503,13 +573,24 @@ impl MappingConfidence {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for MappingConfidence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown mapping confidence: {raw:?}")))
+    }
+}
+
 /// A keyboard shortcut. See `ui-spec/shortcuts.yaml` and ADR 0007.
 ///
 /// `sequence` is the list of chords the user types in order. A
 /// single-chord shortcut (e.g. Ctrl+Z) has a one-element sequence;
 /// a multi-chord ribbon keytip (e.g. Alt+H, F, O) is a three-element
 /// sequence. Each chord is a set of keys pressed simultaneously.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Shortcut {
     /// Ordered list of chords. Each chord is a non-empty list of key
     /// tokens (modifier or key, e.g. `Ctrl`, `Shift`, `A`, `F1`).
@@ -519,6 +600,7 @@ pub struct Shortcut {
     /// Where the shortcut applies.
     pub scope: ShortcutScope,
     /// Optional human-readable section from the source page.
+    #[serde(default)]
     pub section: Option<String>,
 }
 
@@ -564,6 +646,17 @@ impl ShortcutScope {
             Self::Selection => "selection",
             Self::Window => "window",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ShortcutScope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::parse(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown shortcut scope: {raw:?}")))
     }
 }
 
@@ -857,5 +950,107 @@ mod tests {
             section: None,
         };
         assert_eq!(s2.sequence.len(), 3);
+    }
+
+    #[test]
+    fn serde_decodes_control_with_null_command() {
+        let json = r#"{
+            "id": "Cut", "type": "button", "label": "Cut", "order": 3,
+            "command": null, "aliases": ["CutMenu"],
+            "bounds": null, "icon_ref": null, "keytip": null,
+            "size_variant": "small", "visual_notes": null
+        }"#;
+        let c: Control = serde_json::from_str(json).unwrap();
+        assert_eq!(c.id, FluentId::new("Cut"));
+        assert_eq!(c.r#type, ControlType::Button);
+        assert_eq!(c.order, 3);
+        assert_eq!(c.command, None);
+        assert_eq!(c.aliases, vec![FluentId::new("CutMenu")]);
+        assert_eq!(c.size_variant, Some(SizeVariant::Small));
+    }
+
+    #[test]
+    fn serde_decodes_control_with_missing_optional_fields() {
+        let json = r#"{"id": "Cut", "type": "menu", "label": "Cut", "order": 0}"#;
+        let c: Control = serde_json::from_str(json).unwrap();
+        assert_eq!(c.r#type, ControlType::Menu);
+        assert_eq!(c.command, None);
+        assert!(c.aliases.is_empty());
+        assert!(c.bounds.is_none());
+        assert!(c.parent.is_none());
+    }
+
+    #[test]
+    fn serde_control_type_field_is_named_type() {
+        // `r#type` must map to the YAML key `type`, not `r#type`.
+        let json = r#"{"id": "X", "type": "splitButton", "label": "X", "order": 0}"#;
+        let c: Control = serde_json::from_str(json).unwrap();
+        assert_eq!(c.r#type, ControlType::SplitButton);
+    }
+
+    #[test]
+    fn serde_enums_accept_their_as_str_values() {
+        for s in [
+            "tab",
+            "tabSet",
+            "group",
+            "button",
+            "toggleButton",
+            "splitButton",
+            "gallery",
+            "menu",
+            "checkBox",
+            "dropDown",
+            "comboBox",
+            "labelControl",
+            "control",
+            "buttonDialogBoxLauncher",
+            "contextMenu",
+            "task",
+            "taskFormGroup",
+            "category",
+            "none",
+        ] {
+            let t: ControlType = serde_json::from_str(&format!("\"{s}\"")).unwrap();
+            assert_eq!(t.as_str(), s);
+        }
+        for s in ["small", "medium", "large", "extra-large"] {
+            let v: SizeVariant = serde_json::from_str(&format!("\"{s}\"")).unwrap();
+            assert_eq!(v.as_str(), s);
+        }
+        for s in ["exact", "inferred", "unknown"] {
+            let c: MappingConfidence = serde_json::from_str(&format!("\"{s}\"")).unwrap();
+            assert_eq!(c.as_str(), s);
+        }
+        for s in ["global", "ribbon", "page", "text", "selection", "window"] {
+            let v: ShortcutScope = serde_json::from_str(&format!("\"{s}\"")).unwrap();
+            assert_eq!(v.as_str(), s);
+        }
+    }
+
+    #[test]
+    fn serde_enums_reject_unknown_values() {
+        assert!(serde_json::from_str::<ControlType>("\"notAType\"").is_err());
+        assert!(serde_json::from_str::<SizeVariant>("\"huge\"").is_err());
+        assert!(serde_json::from_str::<MappingConfidence>("\"maybe\"").is_err());
+        assert!(serde_json::from_str::<ShortcutScope>("\"everywhere\"").is_err());
+    }
+
+    #[test]
+    fn serde_decodes_ids_and_bounds() {
+        let id: CommandId = serde_json::from_str("\"file.save\"").unwrap();
+        assert_eq!(id, CommandId::new("file.save"));
+        let f: FluentId = serde_json::from_str("\"FileSave\"").unwrap();
+        assert_eq!(f, FluentId::new("FileSave"));
+        let b: Bounds = serde_json::from_str("{\"x\": 1.5, \"w\": 2.0}").unwrap();
+        assert_eq!(
+            b,
+            Bounds {
+                x: 1.5,
+                y: 0.0,
+                w: 2.0,
+                h: 0.0
+            }
+        );
     }
 }

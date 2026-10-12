@@ -1,0 +1,6 @@
+# GhostControl is not in any layout: fluent_id cross-reference failure.
+- id: file.save
+  label: Save
+  visuicmd: visCmdFileSave
+  fluent_ids: [FileSave, GhostControl]
+  mapping_confidence: exact
