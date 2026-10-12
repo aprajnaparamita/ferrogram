@@ -8,6 +8,8 @@
 //! - `corpus [--verify-only] [--offline <dir>]`: fetch and verify the test corpus.
 //! - `extract [--reference <path>] [--out <path>] [--allow-unimplemented]`:
 //!   regenerate every Phase 1 output from `reference/`. See ADR 0009.
+//! - `oracle [status|build|clean] [--build-dir <path>] [--jobs <n>]`:
+//!   build or inspect the libvisio test oracle. See ADR 0010.
 
 #![forbid(unsafe_code)]
 
@@ -16,6 +18,7 @@ mod coverage;
 mod extract;
 mod gate;
 mod layers;
+mod oracle;
 mod util;
 
 use std::process::ExitCode;
@@ -31,7 +34,9 @@ tasks:
   corpus [--verify-only] [--offline d] fetch and verify the test corpus (ADR 0005)
                                        --offline copies from a local dir instead of the network
   extract [--reference <path>] [--out <path>] [--allow-unimplemented]
-                                       regenerate Phase 1 outputs from reference/";
+                                       regenerate Phase 1 outputs from reference/
+  oracle [status|build|clean] [--build-dir <path>] [--jobs <n>]
+                                       build/inspect the libvisio test oracle (ADR 0010)";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -44,6 +49,7 @@ fn main() -> ExitCode {
         Some("layers") => layers::run(),
         Some("corpus") => corpus::run(args.get(1..).unwrap_or_default()),
         Some("extract") => extract_dispatch(args.get(1..).unwrap_or_default()),
+        Some("oracle") => oracle::run(args.get(1..).unwrap_or_default()),
         Some("-h" | "--help" | "help") | None => {
             println!("{USAGE}");
             Ok(())
