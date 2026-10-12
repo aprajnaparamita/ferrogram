@@ -10,12 +10,12 @@ Task board. Only the master agent edits this file, on `main`.
 | Task | Role | Depends on | State | Branch |
 |---|---|---|---|---|
 | [P1-01](tasks/P1-01.md) | researcher | — | merged (corpus binaries excluded, ADR 0005) | agent/P1-01 |
-| [P1-02](tasks/P1-02.md) | architect | P1-01 | changes requested ([review](tasks/P1-02-review.md)) | agent/P1-02 |
-| P1-03 | implementer | P1-02 | outline (in P1-02) | — |
-| P1-04 | implementer | P1-02 | outline (in P1-02) | — |
-| P1-05 | implementer | P1-02 | outline (in P1-02) | — |
-| P1-06 | implementer | P1-02 | outline (in P1-02) | — |
-| P1-07 | implementer | P1-02 | outline (in P1-02) | — |
+| [P1-02](tasks/P1-02.md) | architect | P1-01 | merged ([review](tasks/P1-02-review.md)) | agent/P1-02 |
+| [P1-03](tasks/P1-03.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-04](tasks/P1-04.md) | implementer | P1-03 | blocked (wave B) | — |
+| [P1-05](tasks/P1-05.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-06](tasks/P1-06.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-07](tasks/P1-07.md) | implementer | P1-02 | ready (wave A) | — |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
 | P1-08 | test-engineer | P1-03..07 | not written | — |
 | P1-09 | reviewer | P1-08 | not written | — |
@@ -29,6 +29,10 @@ States: not written · outline · ready · in progress · in review · merged ·
 | Phase | Report | Gate |
 |---|---|---|
 | 0 | [phase-0.md](progress/phase-0.md) | green (2026-10-12) |
+
+Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
+
+Open master item: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 
 ## Deferred minor findings (for the phase report)
 
