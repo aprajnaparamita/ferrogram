@@ -78,7 +78,7 @@ impl AsRef<str> for CommandId {
 /// Distinct from [`CommandId`] (ADR 0006). The Fluent name is the
 /// primary id of every control, group, tab, backstage tab and
 /// context menu in the layout files (ADR 0007 B1). The pattern
-/// (enforced by `ui-spec/schema.json`) is `^[A-Za-z][A-Za-z0-9_]*$`.
+/// (enforced by `ui-spec/schema.json`) is `^[A-Za-z_][A-Za-z0-9_]*$`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize)]
 #[serde(transparent)]
 pub struct FluentId(pub String);
