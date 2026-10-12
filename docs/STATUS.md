@@ -16,7 +16,7 @@ Task board. Only the master agent edits this file, on `main`.
 | P1-05 | implementer | P1-02 | outline (in P1-02) | — |
 | P1-06 | implementer | P1-02 | outline (in P1-02) | — |
 | P1-07 | implementer | P1-02 | outline (in P1-02) | — |
-| [P1-12](tasks/P1-12.md) | implementer | — | in progress | agent/P1-12 |
+| [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
 | P1-08 | test-engineer | P1-03..07 | not written | — |
 | P1-09 | reviewer | P1-08 | not written | — |
 | P1-10 | coverage-auditor | P1-08 | not written | — |
@@ -29,3 +29,8 @@ States: not written · outline · ready · in progress · in review · merged ·
 | Phase | Report | Gate |
 |---|---|---|
 | 0 | [phase-0.md](progress/phase-0.md) | green (2026-10-12) |
+
+## Deferred minor findings (for the phase report)
+
+- P1-12: `download` writes the file before verifying sha256; verifying the in-memory body first would avoid ever placing a bad file at the final path.
+- P1-12: `ureq` uses the private `_ring` feature; it may break on a ureq minor update. Revisit if the webpki-roots licence (CDLA-Permissive-2.0) is accepted in `deny.toml`.
