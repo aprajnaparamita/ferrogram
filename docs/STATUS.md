@@ -14,7 +14,8 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-03](tasks/P1-03.md) | implementer | P1-02 | ready (wave A) | — |
 | [P1-04](tasks/P1-04.md) | implementer | P1-03 | blocked (wave B) | — |
 | [P1-05](tasks/P1-05.md) | implementer | P1-02 | ready (wave A) | — |
-| [P1-06](tasks/P1-06.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-06](tasks/P1-06.md) | implementer | P1-02 | merged (schema issues 1–2 fixed on main) | agent/P1-06 |
+| [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | ready (wave A) | — |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | ready (wave A) | — |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
 | P1-08 | test-engineer | P1-03..07 | not written | — |
