@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the stable toolchain, components and wasm target;
+      # rustup installs it on first cargo invocation.
+      - name: Install pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Install nightly (fuzz builds)
+        if: runner.os != 'Windows'
+        run: rustup toolchain install nightly --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-llvm-cov,cargo-fuzz
+
+      # cargo-fuzz (libFuzzer) does not support Windows/MSVC; fuzz builds run on Linux and macOS.
+      - name: Gate
+        if: runner.os != 'Windows'
+        run: cargo xtask gate
+
+      - name: Gate (Windows, no fuzz)
+        if: runner.os == 'Windows'
+        run: cargo xtask gate --skip fuzz
