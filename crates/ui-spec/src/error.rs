@@ -44,12 +44,13 @@ pub enum LoadError {
 
     /// A cross-reference between a layout, `commands.yaml` and
     /// `shortcuts.yaml` is broken (ADR 0007 "Cross-references").
-    #[error("cross-reference ({kind}): {id} (referenced by {referenced_by}) is not known")]
+    #[error("{}", cross_reference_message(kind, id, referenced_by))]
     CrossReference {
         /// What was violated:
         ///
         /// - `"fluent_id"`: an entry in `commands.yaml` lists a Fluent
-        ///   id the layout does not use.
+        ///   id that appears in no layout (the check runs against the
+        ///   union of both layouts, per ADR 0007).
         /// - `"control_command"`: a layout control dispatches a
         ///   `CommandId` that `commands.yaml` does not define.
         /// - `"command_id"`: a shortcut in `shortcuts.yaml` dispatches
@@ -72,4 +73,51 @@ pub enum LoadError {
         /// What was expected and what was found.
         message: String,
     },
+}
+
+/// The `Display` text of a [`LoadError::CrossReference`].
+///
+/// The `fluent_id` case names the union check of ADR 0007: the id
+/// appears in *no* layout, not merely in the layout being loaded.
+/// Every other violation is an id no document defines.
+fn cross_reference_message(kind: &str, id: &str, referenced_by: &str) -> String {
+    let problem = match kind {
+        "fluent_id" => "is not in any layout",
+        _ => "is not known",
+    };
+    format!("cross-reference ({kind}): {id} (referenced by {referenced_by}) {problem}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fluent_id_violation_says_not_in_any_layout() {
+        let err = LoadError::CrossReference {
+            kind: "fluent_id",
+            id: "GhostControl".to_owned(),
+            referenced_by: "file.save".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "cross-reference (fluent_id): GhostControl \
+             (referenced by file.save) is not in any layout"
+        );
+    }
+
+    #[test]
+    fn other_violations_say_not_known() {
+        for kind in ["control_command", "command_id"] {
+            let err = LoadError::CrossReference {
+                kind,
+                id: "edit.undo".to_owned(),
+                referenced_by: "Ctrl+Z".to_owned(),
+            };
+            assert_eq!(
+                err.to_string(),
+                format!("cross-reference ({kind}): edit.undo (referenced by Ctrl+Z) is not known")
+            );
+        }
+    }
 }

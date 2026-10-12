@@ -10,8 +10,15 @@
 //! 4. check the document is the kind of document this file should
 //!    hold ([`LoadError::Unknown`]),
 //! 5. decode into the typed model ([`LoadError::Parse`]),
-//! 6. cross-check references between the layout, `commands.yaml` and
+//! 6. cross-check references between the layouts, `commands.yaml` and
 //!    `shortcuts.yaml` ([`LoadError::CrossReference`]).
+//!
+//! `commands.yaml` and `shortcuts.yaml` are shared by both layouts,
+//! so every load reads *both* layout files: the `fluent_id` check
+//! runs against the union of the Fluent ids of the two layouts (ADR
+//! 0007 "Cross-references" 1). [`Loader::load`] returns one
+//! [`LayoutSet`], [`Loader::load_all`] returns both together as
+//! [`LayoutSets`].
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -21,8 +28,8 @@ use serde::de::DeserializeOwned;
 use crate::error::LoadError;
 use crate::lookup::all_controls;
 use crate::{
-    CommandId, CommandMapping, Commands, FluentId, Layout, LayoutKind, LayoutSet, Shortcut,
-    Shortcuts,
+    CommandId, CommandMapping, Commands, FluentId, Layout, LayoutKind, LayoutSet, LayoutSets,
+    Shortcut, Shortcuts,
 };
 
 /// The JSON Schema, compiled into the binary so the loader does not
@@ -70,13 +77,14 @@ impl DocKind {
 /// Loads the `ui-spec/` data files from a workspace root.
 ///
 /// The schema is compiled once in [`Loader::new`] and shared by every
-/// [`Loader::load`] call, so one `Loader` can serve both layouts:
+/// load call, so one `Loader` can serve both layouts:
 ///
 /// ```no_run
 /// use ferrogram_ui_spec::{FluentId, CommandId, LayoutKind, Loader};
 ///
 /// let loader = Loader::new(".")?;
-/// let set_2016 = loader.load(LayoutKind::Visio2016)?;
+/// let both = loader.load_all()?;
+/// let set_2016 = both.get(LayoutKind::Visio2016);
 /// let lookup = set_2016.command_lookup();
 /// assert_eq!(
 ///     lookup.commands.get(&FluentId::new("FileSave")),
@@ -107,32 +115,82 @@ impl Loader {
 
     /// Loads the full data set for one layout.
     ///
-    /// Reads `ui-spec/<layout>.yaml` (see [`LayoutKind::file_name`]),
-    /// `ui-spec/commands.yaml` and `ui-spec/shortcuts.yaml` from the
-    /// workspace root, validates each against the schema, decodes
-    /// them, and cross-checks the three cross-references of ADR 0007:
+    /// Reads `ui-spec/<layout>.yaml` (see [`LayoutKind::file_name`])
+    /// for **both** layouts, plus `ui-spec/commands.yaml` and
+    /// `ui-spec/shortcuts.yaml` from the workspace root, validates
+    /// each against the schema, decodes them, and cross-checks the
+    /// three cross-references of ADR 0007:
     ///
-    /// 1. every Fluent id listed in `commands.yaml` appears in the
-    ///    layout (`kind: "fluent_id"`),
-    /// 2. every `command` on a layout control is defined in
-    ///    `commands.yaml` (`kind: "control_command"`),
+    /// 1. every Fluent id listed in `commands.yaml` appears in at
+    ///    least one of the two layouts (`kind: "fluent_id"`; the
+    ///    shared table may legitimately name a 365-only or a
+    ///    2016-only control),
+    /// 2. every `command` on a control of the *requested* layout is
+    ///    defined in `commands.yaml` (`kind: "control_command"`),
     /// 3. every `command` in `shortcuts.yaml` is defined in
     ///    `commands.yaml` (`kind: "command_id"`).
     ///
-    /// The data files may be YAML or JSON: a missing `.yaml` file is
-    /// looked up as `.json` with the same stem.
+    /// Only the requested layout is returned; use [`Self::load_all`]
+    /// to get both (its `control_command` check then covers both
+    /// layouts). The data files may be YAML or JSON: a missing
+    /// `.yaml` file is looked up as `.json` with the same stem.
     pub fn load(&self, kind: LayoutKind) -> Result<LayoutSet, LoadError> {
-        let layout: Layout =
-            self.load_document(&self.data_file(kind.file_name())?, DocKind::Layout)?;
-        let commands_path = self.data_file(COMMANDS_FILE)?;
-        let shortcuts_path = self.data_file(SHORTCUTS_FILE)?;
-        let entries: Vec<CommandMapping> = self.load_document(&commands_path, DocKind::Commands)?;
+        let docs = self.read_documents()?;
+        check_references(
+            &[docs.layout(kind)],
+            &docs.fluent_union(),
+            &docs.commands,
+            &docs.shortcuts,
+        )?;
+        Ok(docs.into_set(kind))
+    }
+
+    /// Loads the data set for **both** layouts in one pass.
+    ///
+    /// Reads every `ui-spec/` file exactly once and runs all three
+    /// ADR 0007 cross-references over the pair: the `fluent_id` check
+    /// against the union of both layouts' Fluent ids, the
+    /// `control_command` check against each layout's controls, and
+    /// the `command_id` check against the shared shortcut table.
+    ///
+    /// ```no_run
+    /// # use ferrogram_ui_spec::{LayoutKind, Loader};
+    /// let loader = Loader::new(".")?;
+    /// let sets = loader.load_all()?;
+    /// let set_365 = sets.get(LayoutKind::Visio365);
+    /// # Ok::<(), ferrogram_ui_spec::LoadError>(())
+    /// ```
+    pub fn load_all(&self) -> Result<LayoutSets, LoadError> {
+        let docs = self.read_documents()?;
+        check_references(
+            &[&docs.visio_2016, &docs.visio_365],
+            &docs.fluent_union(),
+            &docs.commands,
+            &docs.shortcuts,
+        )?;
+        Ok(docs.into_sets())
+    }
+
+    /// Reads and validates all four data documents, in file order:
+    /// both layouts, then the shared command and shortcut tables.
+    fn read_documents(&self) -> Result<Documents, LoadError> {
+        let visio_2016: Layout = self.load_document(
+            &self.data_file(LayoutKind::Visio2016.file_name())?,
+            DocKind::Layout,
+        )?;
+        let visio_365: Layout = self.load_document(
+            &self.data_file(LayoutKind::Visio365.file_name())?,
+            DocKind::Layout,
+        )?;
+        let entries: Vec<CommandMapping> =
+            self.load_document(&self.data_file(COMMANDS_FILE)?, DocKind::Commands)?;
         let commands = Commands { entries };
-        let entries: Vec<Shortcut> = self.load_document(&shortcuts_path, DocKind::Shortcuts)?;
+        let entries: Vec<Shortcut> =
+            self.load_document(&self.data_file(SHORTCUTS_FILE)?, DocKind::Shortcuts)?;
         let shortcuts = Shortcuts { entries };
-        check_references(&layout, &commands, &shortcuts)?;
-        Ok(LayoutSet {
-            layout,
+        Ok(Documents {
+            visio_2016,
+            visio_365,
             commands,
             shortcuts,
         })
@@ -208,6 +266,73 @@ impl Loader {
                 path: path.to_path_buf(),
                 message: errors.join("; "),
             })
+        }
+    }
+}
+
+/// The four data documents of one workspace, read and validated
+/// together so the cross-references can see the whole data set.
+struct Documents {
+    /// `ui-spec/panel-2016.yaml`.
+    visio_2016: Layout,
+    /// `ui-spec/panel-365.yaml`.
+    visio_365: Layout,
+    /// `ui-spec/commands.yaml`, shared by both layouts.
+    commands: Commands,
+    /// `ui-spec/shortcuts.yaml`, shared by both layouts.
+    shortcuts: Shortcuts,
+}
+
+impl Documents {
+    /// The layout for `kind`.
+    fn layout(&self, kind: LayoutKind) -> &Layout {
+        match kind {
+            LayoutKind::Visio2016 => &self.visio_2016,
+            LayoutKind::Visio365 => &self.visio_365,
+        }
+    }
+
+    /// The union of both layouts' Fluent ids (ADR 0007
+    /// cross-reference 1: "must appear in at least one layout").
+    fn fluent_union(&self) -> BTreeSet<FluentId> {
+        collect_fluent_ids(&self.visio_2016)
+            .union(&collect_fluent_ids(&self.visio_365))
+            .cloned()
+            .collect()
+    }
+
+    /// Turns the documents into the set for one layout.
+    fn into_set(self, kind: LayoutKind) -> LayoutSet {
+        let Self {
+            visio_2016,
+            visio_365,
+            commands,
+            shortcuts,
+        } = self;
+        let layout = match kind {
+            LayoutKind::Visio2016 => visio_2016,
+            LayoutKind::Visio365 => visio_365,
+        };
+        LayoutSet {
+            layout,
+            commands,
+            shortcuts,
+        }
+    }
+
+    /// Turns the documents into both sets.
+    fn into_sets(self) -> LayoutSets {
+        LayoutSets {
+            visio_2016: LayoutSet {
+                layout: self.visio_2016,
+                commands: self.commands.clone(),
+                shortcuts: self.shortcuts.clone(),
+            },
+            visio_365: LayoutSet {
+                layout: self.visio_365,
+                commands: self.commands,
+                shortcuts: self.shortcuts,
+            },
         }
     }
 }
@@ -296,13 +421,21 @@ fn render_sequence(sequence: &[Vec<String>]) -> String {
 
 /// Runs the three cross-references of ADR 0007. Returns the first
 /// violation in document order.
+///
+/// - `layouts` are the layouts being returned by the load; each one's
+///   controls must dispatch a defined command (`control_command`).
+///   [`Loader::load`] passes only the requested layout,
+///   [`Loader::load_all`] passes both.
+/// - `fluent_ids` is the union over **both** layout files: a command
+///   may name a 365-only or a 2016-only control
+///   (`fluent_id` fails only when the id is in no layout at all).
 fn check_references(
-    layout: &Layout,
+    layouts: &[&Layout],
+    fluent_ids: &BTreeSet<FluentId>,
     commands: &Commands,
     shortcuts: &Shortcuts,
 ) -> Result<(), LoadError> {
-    // 1. Every Fluent id in commands.yaml appears in the layout.
-    let fluent_ids = collect_fluent_ids(layout);
+    // 1. Every Fluent id in commands.yaml is in at least one layout.
     for entry in &commands.entries {
         for fluent_id in &entry.fluent_ids {
             if !fluent_ids.contains(fluent_id) {
@@ -315,22 +448,24 @@ fn check_references(
         }
     }
 
-    // 2. Every control's command is defined in commands.yaml.
+    // 2. Every checked layout control's command is in commands.yaml.
     let command_ids: BTreeSet<&CommandId> =
         commands.entries.iter().map(|entry| &entry.id).collect();
-    for control in all_controls(layout) {
-        if let Some(command) = &control.command
-            && !command_ids.contains(command)
-        {
-            return Err(LoadError::CrossReference {
-                kind: "control_command",
-                id: command.to_string(),
-                referenced_by: control.id.to_string(),
-            });
+    for layout in layouts {
+        for control in all_controls(layout) {
+            if let Some(command) = &control.command
+                && !command_ids.contains(command)
+            {
+                return Err(LoadError::CrossReference {
+                    kind: "control_command",
+                    id: command.to_string(),
+                    referenced_by: control.id.to_string(),
+                });
+            }
         }
     }
 
-    // 3. Every shortcut's command is defined in commands.yaml.
+    // 3. Every shortcut's command is in commands.yaml.
     for shortcut in &shortcuts.entries {
         if !command_ids.contains(&shortcut.command) {
             return Err(LoadError::CrossReference {
@@ -396,6 +531,11 @@ mod tests {
 
     fn loader() -> Loader {
         Loader::new(".").expect("the embedded schema always compiles")
+    }
+
+    /// The good fixture workspace (used by the `load_all` unit test).
+    fn good_fixture() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/good")
     }
 
     #[test]
@@ -575,7 +715,40 @@ mod tests {
         let shortcuts = Shortcuts {
             entries: vec![shortcut(&["Ctrl+S"], "file.save")],
         };
-        assert!(check_references(&layout, &commands, &shortcuts).is_ok());
+        let fluent_ids = collect_fluent_ids(&layout);
+        assert!(check_references(&[&layout], &fluent_ids, &commands, &shortcuts).is_ok());
+    }
+
+    #[test]
+    fn check_references_accepts_an_id_only_the_other_layout_has() {
+        // `commands.yaml` is shared: a command may name a control of
+        // the layout being *returned* only (union reading of ADR
+        // 0007 cross-reference 1).
+        let checked = Layout {
+            quick_access_toolbar: QuickAccessToolbar {
+                controls: vec![control("FileSave", Some("file.save"))],
+            },
+            ..empty_layout()
+        };
+        let other = Layout {
+            quick_access_toolbar: QuickAccessToolbar {
+                controls: vec![control("RedoButton", Some("edit.redo"))],
+            },
+            ..empty_layout()
+        };
+        let fluent_ids: BTreeSet<FluentId> = collect_fluent_ids(&checked)
+            .union(&collect_fluent_ids(&other))
+            .cloned()
+            .collect();
+        let commands = Commands {
+            entries: vec![
+                command("file.save", &["FileSave"]),
+                command("edit.redo", &["RedoButton"]),
+            ],
+        };
+        assert!(
+            check_references(&[&checked], &fluent_ids, &commands, &Shortcuts::default()).is_ok()
+        );
     }
 
     #[test]
@@ -589,8 +762,12 @@ mod tests {
         let commands = Commands {
             entries: vec![command("file.save", &["FileSave", "Ghost"])],
         };
-        let err =
-            check_references(&layout, &commands, &Shortcuts::default()).expect_err("must fail");
+        let fluent_ids = collect_fluent_ids(&layout);
+        let err = check_references(&[&layout], &fluent_ids, &commands, &Shortcuts::default())
+            .expect_err("must fail");
+        // The union reading: the id is in *no* layout.
+        let message = err.to_string();
+        assert!(message.contains("is not in any layout"), "got {message}");
         match err {
             LoadError::CrossReference {
                 kind,
@@ -616,8 +793,9 @@ mod tests {
         let commands = Commands {
             entries: vec![command("edit.paste", &[])],
         };
-        let err =
-            check_references(&layout, &commands, &Shortcuts::default()).expect_err("must fail");
+        let fluent_ids = collect_fluent_ids(&layout);
+        let err = check_references(&[&layout], &fluent_ids, &commands, &Shortcuts::default())
+            .expect_err("must fail");
         match err {
             LoadError::CrossReference {
                 kind,
@@ -640,7 +818,10 @@ mod tests {
         let shortcuts = Shortcuts {
             entries: vec![shortcut(&["Ctrl+Z"], "edit.undo")],
         };
-        let err = check_references(&empty_layout(), &commands, &shortcuts).expect_err("must fail");
+        let layout = empty_layout();
+        let fluent_ids = collect_fluent_ids(&layout);
+        let err = check_references(&[&layout], &fluent_ids, &commands, &shortcuts)
+            .expect_err("must fail");
         match err {
             LoadError::CrossReference {
                 kind,
@@ -652,6 +833,44 @@ mod tests {
                 assert_eq!(referenced_by, "Ctrl+Z");
             }
             other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_all_returns_both_layouts_and_get_picks_one() {
+        let loader = Loader::new(good_fixture()).expect("the fixture workspace loads");
+        let sets = loader.load_all().expect("the good fixture is consistent");
+        // Same data as loading each kind on its own.
+        assert_eq!(
+            sets.get(LayoutKind::Visio2016),
+            &loader.load(LayoutKind::Visio2016).expect("2016 loads")
+        );
+        assert_eq!(
+            sets.get(LayoutKind::Visio365),
+            &loader.load(LayoutKind::Visio365).expect("365 loads")
+        );
+        // Distinct layouts, shared tables.
+        assert_ne!(sets.visio_2016.layout, sets.visio_365.layout);
+        assert_eq!(sets.visio_2016.commands, sets.visio_365.commands);
+        assert_eq!(sets.visio_2016.shortcuts, sets.visio_365.shortcuts);
+    }
+
+    #[test]
+    fn load_all_reports_the_same_fluent_id_failure_as_load() {
+        let loader =
+            Loader::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/xref-fluent"))
+                .expect("the fixture workspace loads");
+        match loader.load_all() {
+            Err(LoadError::CrossReference {
+                kind,
+                id,
+                referenced_by,
+            }) => {
+                assert_eq!(kind, "fluent_id");
+                assert_eq!(id, "GhostControl");
+                assert_eq!(referenced_by, "file.save");
+            }
+            other => panic!("expected a fluent_id cross-reference error, got {other:?}"),
         }
     }
 
@@ -672,7 +891,7 @@ mod tests {
     #[test]
     fn load_text_rejects_the_wrong_document_kind() {
         // A shortcuts table in commands.yaml: schema-valid (both are
-        // `oneOf` alternatives) but not what this file should hold.
+        // root alternatives) but not what this file should hold.
         let text = "- sequence: [[Ctrl, Z]]\n  command: edit.undo\n  scope: global\n";
         let err = loader()
             .load_text::<Vec<CommandMapping>>(text, Path::new("commands.yaml"), DocKind::Commands)

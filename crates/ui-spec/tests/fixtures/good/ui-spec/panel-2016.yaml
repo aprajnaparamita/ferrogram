@@ -56,6 +56,20 @@ tabs:
             keytip: null
             size_variant: null
             visual_notes: null
+          # A control that dispatches no command (`command: null`):
+          # it still gets a label in the lookup, but no dispatch
+          # entry.
+          - id: FontSizeLabel
+            type: labelControl
+            label: Font Size
+            order: 1
+            parent: GroupFont
+            command: null
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
   - id: TabInsert
     label: Insert
     order: 1
