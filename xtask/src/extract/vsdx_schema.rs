@@ -117,13 +117,13 @@ const PARTS: &[PartRow] = &[
         path: "/[Content_Types].xml",
         content_type: "application/xml",
         label: "Package content-type map",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/_rels/.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Package relationships",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/customXml/*",
@@ -135,13 +135,13 @@ const PARTS: &[PartRow] = &[
         path: "/docProps/app.xml",
         content_type: "application/vnd.openxmlformats-officedocument.extended-properties+xml",
         label: "Extended document properties",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/docProps/core.xml",
         content_type: "application/vnd.openxmlformats-package.core-properties+xml",
         label: "Core document properties",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/docProps/custom.xml",
@@ -159,7 +159,7 @@ const PARTS: &[PartRow] = &[
         path: "/visio/_rels/document.xml.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Document relationships",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/visio/comments.xml",
@@ -195,13 +195,13 @@ const PARTS: &[PartRow] = &[
         path: "/visio/masters/_rels/masters.xml.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Masters relationships",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/visio/masters/_rels/master{N}.xml.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Master relationships",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/visio/masters/masters.xml",
@@ -225,13 +225,13 @@ const PARTS: &[PartRow] = &[
         path: "/visio/pages/_rels/pages.xml.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Pages relationships",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/visio/pages/_rels/page{N}.xml.rels",
         content_type: "application/vnd.openxmlformats-package.relationships+xml",
         label: "Page relationships (images)",
-        status: Status::PreservedOnly,
+        status: Status::Supported,
     },
     PartRow {
         path: "/visio/pages/pages.xml",

@@ -42,26 +42,26 @@ catch-all for parts not listed here.
 
 | **Part** | **Content type** | **Label** | **Status** |
 |---|---|---|---|
-| /[Content_Types].xml | application/xml | Package content-type map | preserved-only |
-| /_rels/.rels | application/vnd.openxmlformats-package.relationships+xml | Package relationships | preserved-only |
+| /[Content_Types].xml | application/xml | Package content-type map | supported |
+| /_rels/.rels | application/vnd.openxmlformats-package.relationships+xml | Package relationships | supported |
 | /customXml/* | application/xml | Custom XML data parts | preserved-only |
-| /docProps/app.xml | application/vnd.openxmlformats-officedocument.extended-properties+xml | Extended document properties | preserved-only |
-| /docProps/core.xml | application/vnd.openxmlformats-package.core-properties+xml | Core document properties | preserved-only |
+| /docProps/app.xml | application/vnd.openxmlformats-officedocument.extended-properties+xml | Extended document properties | supported |
+| /docProps/core.xml | application/vnd.openxmlformats-package.core-properties+xml | Core document properties | supported |
 | /docProps/custom.xml | application/vnd.openxmlformats-officedocument.custom-properties+xml | Custom document properties | preserved-only |
 | /docProps/thumbnail.emf | image/x-emf | Document thumbnail | preserved-only |
-| /visio/_rels/document.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Document relationships | preserved-only |
+| /visio/_rels/document.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Document relationships | supported |
 | /visio/comments.xml | application/vnd.ms-visio.comments+xml | Comments and authors | later |
 | /visio/data/connections.xml | application/vnd.ms-visio.connections+xml | Data connections | preserved-only |
 | /visio/data/recordsets.xml | application/vnd.ms-visio.recordsets+xml | Data recordsets and bindings | later |
 | /visio/document.xml | application/vnd.ms-visio.drawing.main+xml | Main drawing document | supported |
 | /visio/extensions.xml | application/vnd.ms-visio.extensions+xml | Extension definitions | preserved-only |
-| /visio/masters/_rels/masters.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Masters relationships | preserved-only |
-| /visio/masters/_rels/master{N}.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Master relationships | preserved-only |
+| /visio/masters/_rels/masters.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Masters relationships | supported |
+| /visio/masters/_rels/master{N}.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Master relationships | supported |
 | /visio/masters/masters.xml | application/vnd.ms-visio.masters+xml | Master index | supported |
 | /visio/masters/master{N}.xml | application/vnd.ms-visio.master+xml | Master contents (N = 1..count) | supported |
 | /visio/moderncomments.xml | — (not in [MS-VSDX] v20250520) | Modern comments | later |
-| /visio/pages/_rels/pages.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Pages relationships | preserved-only |
-| /visio/pages/_rels/page{N}.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Page relationships (images) | preserved-only |
+| /visio/pages/_rels/pages.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Pages relationships | supported |
+| /visio/pages/_rels/page{N}.xml.rels | application/vnd.openxmlformats-package.relationships+xml | Page relationships (images) | supported |
 | /visio/pages/pages.xml | application/vnd.ms-visio.pages+xml | Page index | supported |
 | /visio/pages/page{N}.xml | application/vnd.ms-visio.page+xml | Page contents (N = 1..count) | supported |
 | /visio/persons.xml | — (not in [MS-VSDX] v20250520) | Modern comment authors | later |
@@ -1226,7 +1226,7 @@ attribute (directly or via an extension base).
 
 | **Table** | **Total** | **supported** | **preserved-only** | **later** |
 |---|---|---|---|---|
-| OPC parts | 31 | 5 | 20 | 6 |
+| OPC parts | 31 | 14 | 11 | 6 |
 | Complex types | 620 | 52 | 537 | 31 |
 | Elements | 201 | 80 | 91 | 30 |
 | Attributes | 276 | 67 | 130 | 79 |
