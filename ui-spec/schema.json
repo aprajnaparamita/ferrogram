@@ -105,8 +105,10 @@
         },
         "command": {
           "description": "Ferrogram command id dispatched when the control is activated, or null if none.",
-          "type": ["string", "null"],
-          "$ref": "#/definitions/commandId"
+          "anyOf": [
+            { "$ref": "#/definitions/commandId" },
+            { "type": "null" }
+          ]
         },
         "aliases": {
           "description": "Alternate Fluent ids for the same control across ribbon/cross-ribbon placements (P1-03 picks a primary parent).",
@@ -376,7 +378,7 @@
       "items": { "$ref": "#/definitions/shortcut" }
     }
   },
-  "oneOf": [
+  "anyOf": [
     { "$ref": "#/definitions/layout" },
     { "$ref": "#/definitions/commands" },
     { "$ref": "#/definitions/shortcuts" }
