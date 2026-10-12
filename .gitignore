@@ -20,3 +20,9 @@
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Fetched test corpus (see corpus/manifest.toml); never commit these.
+/corpus/vsd/
+/corpus/vsdx/
+/corpus/vss/
+/corpus/vssx/

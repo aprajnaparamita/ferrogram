@@ -1,0 +1,150 @@
+# Test corpus manifest. Files listed here are NOT committed: they are fetched
+# from the pinned upstream commit and verified by sha256 with
+# `cargo xtask corpus` (task P1-12) into corpus/<kind>/ (gitignored).
+# See ADR 0005 and corpus/PROVENANCE.md.
+
+[sources.libvisio]
+repo = "https://git.libreoffice.org/libvisio"
+mirror_raw = "https://raw.githubusercontent.com/LibreOffice/libvisio/{commit}/{path}"
+commit = "c7c970775b750a4bf7fd1b4364d69bac9815bfcb"
+license = "MPL-2.0"
+
+[[file]]
+name = "vsd/dwg.vsd"
+source = "libvisio"
+path = "src/test/data/dwg.vsd"
+sha256 = "4d2c343313352067a6a709360fe146d6a7a1d22e8c42873de45011d0ee51a3c1"
+size = 41984
+
+[[file]]
+name = "vsd/fdo86729-ms1252.vsd"
+source = "libvisio"
+path = "src/test/data/fdo86729-ms1252.vsd"
+sha256 = "b570b47d68d9e3a84ac3683034dde3fa72b624d8037de3c5c3707ef3a8a6e686"
+size = 39936
+
+[[file]]
+name = "vsd/fdo86729-utf8.vsd"
+source = "libvisio"
+path = "src/test/data/fdo86729-utf8.vsd"
+sha256 = "f46e8b7050d10e7e95e20109066a1d74e9f3475391c84d754bc3b7d99830ef58"
+size = 39936
+
+[[file]]
+name = "vsd/no-bgcolor.vsd"
+source = "libvisio"
+path = "src/test/data/no-bgcolor.vsd"
+sha256 = "e114f8252a297964a63b2390b76447ac81de5fc3190cf9b54f9caa86cdb531aa"
+size = 39936
+
+[[file]]
+name = "vsd/tdf76829-numeric-format.vsd"
+source = "libvisio"
+path = "src/test/data/tdf76829-numeric-format.vsd"
+sha256 = "bed31fd569992e6777ca4fcef6c25460fa6fa639d20eaed4a660787a489cc031"
+size = 45568
+
+[[file]]
+name = "vsdx/bgcolor.vsdx"
+source = "libvisio"
+path = "src/test/data/bgcolor.vsdx"
+sha256 = "7b89f56666ec41b4e1122d3ffcaa11ec1c102ec42c5a11b1a95617c4626c8ae0"
+size = 17905
+
+[[file]]
+name = "vsdx/blue-box.vsdx"
+source = "libvisio"
+path = "src/test/data/blue-box.vsdx"
+sha256 = "6c67a8b3ccd2b81b3d9d41b74aa0ef5f31b506a714b761b4b4fb4c76ebeb7a94"
+size = 20964
+
+[[file]]
+name = "vsdx/color-boxes.vsdx"
+source = "libvisio"
+path = "src/test/data/color-boxes.vsdx"
+sha256 = "75072b91b5c3023eeea25d2480776e5a1ee8c336ca263adf3a6440e25f35f800"
+size = 24693
+
+[[file]]
+name = "vsdx/dwg.vsdx"
+source = "libvisio"
+path = "src/test/data/dwg.vsdx"
+sha256 = "e05d55753bdc206dac427ec50e95fcc5672b2067e6ce9384682dfc508af5e189"
+size = 24469
+
+[[file]]
+name = "vsdx/fdo86664.vsdx"
+source = "libvisio"
+path = "src/test/data/fdo86664.vsdx"
+sha256 = "fc628bbb1c4686489a6b5bf7c2f9987db870ac2bb12dd8a6c9c27ed501a338b5"
+size = 22175
+
+[[file]]
+name = "vsdx/qs-box.vsdx"
+source = "libvisio"
+path = "src/test/data/qs-box.vsdx"
+sha256 = "e8c253142d30f434229eb810eeecb48cd69886faf5e7c7555d91bb5f6d6c4ee8"
+size = 21037
+
+[[file]]
+name = "vsdx/recursion-cycle.vsdx"
+source = "libvisio"
+path = "src/test/data/recursion-cycle.vsdx"
+sha256 = "4a2ff4bc60c0b8683aae227d6eea72ed5f7eab2f434fa03518ed6467ad5e70c1"
+size = 2478
+
+[[file]]
+name = "vsdx/tab-short-prefix.vsdx"
+source = "libvisio"
+path = "src/test/data/tab-short-prefix.vsdx"
+sha256 = "7ae4b2084f96758084c607af2b303e3580322b822aeabb2743406f14a3edb501"
+size = 3191
+
+[[file]]
+name = "vsdx/tdf136564-WhiteTextBackground.vsdx"
+source = "libvisio"
+path = "src/test/data/tdf136564-WhiteTextBackground.vsdx"
+sha256 = "6a4b29df7c637c8ae2a5ed43517c75aafa3d63167a5226e8a43261172b9de283"
+size = 19149
+
+[[file]]
+name = "vsdx/tdf154379-QuickStyleFillMatrix.vsdx"
+source = "libvisio"
+path = "src/test/data/tdf154379-QuickStyleFillMatrix.vsdx"
+sha256 = "4a2c8a08567f9c6e59d4784affea1ecf024d6890dd8c2c9020e0c71d64d37783"
+size = 87603
+
+[[file]]
+name = "vsdx/testfile1.vsdx"
+source = "libvisio"
+path = "src/test/data/testfile1.vsdx"
+sha256 = "2ebcf3e9ce4a599c749e5dc7d31030ef4d7d8b69dfbd2565b59b854133cdeec8"
+size = 43669
+
+[[file]]
+name = "vsdx/testfile3.vsdx"
+source = "libvisio"
+path = "src/test/data/testfile3.vsdx"
+sha256 = "9ea7dd2a88ecc4e7f29ff5b022712db18baa5b607e44b32d73f2b79bd4029387"
+size = 43054
+
+[[file]]
+name = "vsdx/testfile4.vsdx"
+source = "libvisio"
+path = "src/test/data/testfile4.vsdx"
+sha256 = "cba7f2981207bcf553a13cc145ca07a5ff6cdeb8a553bb339e6a0757ef55230d"
+size = 33175
+
+[[file]]
+name = "vsdx/testfile5.vsdx"
+source = "libvisio"
+path = "src/test/data/testfile5.vsdx"
+sha256 = "f2e6ea832811a4e181f252baf84ac99402ff093ef10f48521b8012315191ee1a"
+size = 20687
+
+[[file]]
+name = "vsdx/testfile6.vsdx"
+source = "libvisio"
+path = "src/test/data/testfile6.vsdx"
+sha256 = "102269177b3ca1d287959c5a857279bc3e84fae628f1cc8e023193719790b5b3"
+size = 41365
