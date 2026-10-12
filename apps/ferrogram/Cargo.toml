@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram"
+description = "Ferrogram desktop app (eframe/egui)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

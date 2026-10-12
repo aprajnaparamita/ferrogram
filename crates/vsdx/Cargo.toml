@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-vsdx"
+description = "OPC package and XML read/write for .vsdx/.vssx/.vstx"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

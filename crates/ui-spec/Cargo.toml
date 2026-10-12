@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-ui-spec"
+description = "Loader for ribbon, menu and shortcut layout data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

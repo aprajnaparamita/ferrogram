@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-geom"
+description = "Geometry: paths, arcs, NURBS, splines, transforms, hit testing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

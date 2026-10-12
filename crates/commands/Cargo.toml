@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-commands"
+description = "Command registry, undo/redo and selection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

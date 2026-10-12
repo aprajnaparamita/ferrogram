@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-cli"
+description = "Ferrogram command-line tool: inspect, render, export, run-command."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

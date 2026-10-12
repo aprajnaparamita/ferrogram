@@ -1,0 +1,13 @@
+[package]
+name = "ferrogram-shapesheet"
+description = "ShapeSheet formula parser, evaluator and recalc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true
