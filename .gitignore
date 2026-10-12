@@ -8,6 +8,10 @@
 # Raw downloads (Microsoft specs, libvisio source, etc.). Never commit.
 /reference
 
+# libvisio oracle build output (ADR 0010). The real build dir is on the
+# external drive; this guards against an in-tree build too.
+tools/libvisio-oracle/bin/
+
 # Local coverage output
 /lcov.info
 /coverage/
