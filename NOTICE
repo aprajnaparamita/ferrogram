@@ -1,0 +1,21 @@
+Ferrogram
+Copyright (c) 2026 The Ferrogram contributors
+
+Ferrogram is licensed under the MIT License (see LICENSE), with the
+following exception:
+
+crates/vsd-binary
+-----------------
+This crate is licensed under the Mozilla Public License, v. 2.0
+(https://mozilla.org/MPL/2.0/). It contains code ported from or derived
+from libvisio (https://git.libreoffice.org/libvisio), which is licensed
+under MPL-2.0. Each source file in the crate carries the MPL-2.0 header.
+
+libvisio upstream commit used as the reference: (recorded in Phase 1)
+
+No libvisio-derived code appears outside crates/vsd-binary.
+
+Trademarks
+----------
+Microsoft, Visio and Microsoft 365 are trademarks of Microsoft
+Corporation. Ferrogram is not affiliated with or endorsed by Microsoft.
