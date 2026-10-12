@@ -180,7 +180,7 @@ pub enum Outcome {
 pub fn run(args: &ExtractArgs) -> Result<Vec<(&'static str, Outcome)>> {
     if !args.reference.is_dir() {
         return Err(format!(
-            "reference/ not found: {}. Run `cargo xtask corpus` first, or pass --reference <path>.",
+            "reference/ not found: {}. See docs/sources.md and task P1-01 for setup, or pass --reference <path>.",
             args.reference.display()
         ));
     }
@@ -286,6 +286,11 @@ mod tests {
         };
         let err = run(&args).unwrap_err();
         assert!(err.contains("reference/ not found"), "{err}");
+        // m3: the error must point to docs/sources.md / P1-01, not
+        // to `cargo xtask corpus` (the corpus fetcher does not
+        // populate reference/).
+        assert!(err.contains("docs/sources.md"), "{err}");
+        assert!(!err.contains("cargo xtask corpus"), "{err}");
     }
 
     #[test]
