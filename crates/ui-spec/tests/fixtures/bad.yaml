@@ -1,0 +1,45 @@
+# Hand-written bad fixture for crates/ui-spec/tests/loader.rs.
+# Schema violations: `type` is not in the controlType enum and `label`
+# is empty (the schema requires 1..=80 characters). Must be rejected
+# with LoadError::Schema.
+schema_version: 1
+product: visio
+source: "Bad fixture"
+source_url: "https://example.com/fixture/bad"
+source_revision: "fixture"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: PasteGallery
+            type: notAType
+            label: ""
+            order: 0
+            command: edit.paste
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs: []
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []

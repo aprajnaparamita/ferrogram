@@ -1,0 +1,35 @@
+# Cross-reference violation: the shortcut dispatches `app.quit`, which
+# commands.yaml does not define. Must be rejected with
+# LoadError::CrossReference { kind: "command_id", .. }.
+schema_version: 1
+product: visio
+source: "Cross-reference fixture (command_id)"
+source_url: "https://example.com/fixture/xref-shortcut"
+source_revision: "fixture"
+tabs: []
+backstage:
+  kind: backstage
+  tabs:
+    - id: FileNew
+      label: New
+      order: 0
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+      controls:
+        - id: FileSave
+          type: button
+          label: Save
+          order: 0
+          command: file.save
+          bounds: null
+          icon_ref: null
+          keytip: null
+          size_variant: null
+          visual_notes: null
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []

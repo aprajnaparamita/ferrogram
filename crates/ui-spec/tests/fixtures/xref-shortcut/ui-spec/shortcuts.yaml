@@ -1,0 +1,5 @@
+# `app.quit` is not in commands.yaml: command_id cross-reference
+# failure.
+- sequence: [[Ctrl, Q]]
+  command: app.quit
+  scope: global
