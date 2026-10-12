@@ -1,0 +1,35 @@
+# Test fixture for crates/ui-spec. Not real Microsoft data.
+# The 365 half of the cross-reference fixture: the violation is in
+# shortcuts.yaml (the shortcut dispatches the undefined `app.quit`).
+schema_version: 1
+product: visio
+source: "Cross-reference fixture (command_id, 365 layout)"
+source_url: "https://example.com/fixture/xref-shortcut"
+source_revision: "fixture"
+tabs: []
+backstage:
+  kind: backstage
+  tabs:
+    - id: FileNew
+      label: New
+      order: 0
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+      controls:
+        - id: FileSave
+          type: button
+          label: Save
+          order: 0
+          command: file.save
+          bounds: null
+          icon_ref: null
+          keytip: null
+          size_variant: null
+          visual_notes: null
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []

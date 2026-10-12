@@ -32,5 +32,7 @@
 - id: edit.redo
   label: Redo
   visuicmd: null
-  fluent_ids: []
+  # RedoButton exists only in the 365 layout: valid, because
+  # commands.yaml is shared by both layouts (ADR 0007).
+  fluent_ids: [RedoButton]
   mapping_confidence: unknown

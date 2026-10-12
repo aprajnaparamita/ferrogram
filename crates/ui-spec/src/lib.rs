@@ -439,8 +439,9 @@ pub struct BackstageTab {
 pub struct ContextMenu {
     /// Menu Fluent id.
     pub id: FluentId,
-    /// Menu label (shown in the menu header; can be empty for
-    /// canvas context menus).
+    /// Menu label (shown in the menu header). One to 80 characters,
+    /// never empty (the schema's `label` rule; the loader rejects
+    /// anything else).
     pub label: String,
     /// Sibling order.
     pub order: u32,
@@ -685,6 +686,32 @@ pub struct LayoutSet {
     pub shortcuts: Shortcuts,
 }
 
+/// Both [`LayoutSet`]s, loaded together by [`Loader::load_all`].
+///
+/// `commands.yaml` and `shortcuts.yaml` are shared by the two
+/// layouts, so the ADR 0007 cross-references are checked over the
+/// whole set at once: a Fluent id listed in `commands.yaml` must
+/// appear in at least one of the two layouts. At runtime
+/// [`LayoutSet::select`] picks the active one; [`Self::get`] borrows
+/// one by its [`LayoutKind`].
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct LayoutSets {
+    /// The Office 2016 Fluent data.
+    pub visio_2016: LayoutSet,
+    /// The Microsoft 365 Current Channel Fluent data.
+    pub visio_365: LayoutSet,
+}
+
+impl LayoutSets {
+    /// The set for `kind` (borrowed, so the caller keeps both).
+    pub fn get(&self, kind: LayoutKind) -> &LayoutSet {
+        match kind {
+            LayoutKind::Visio2016 => &self.visio_2016,
+            LayoutKind::Visio365 => &self.visio_365,
+        }
+    }
+}
+
 /// A lookup table built from a [`LayoutSet`]. The UI (P1-06 +
 /// `crates/ui`) walks the layout tree directly using the Fluent ids;
 /// the lookup is a precomputed index for the most common queries.
@@ -852,6 +879,25 @@ mod tests {
         assert!(s.layout.tabs.is_empty());
         assert!(s.commands.entries.is_empty());
         assert!(s.shortcuts.entries.is_empty());
+    }
+
+    #[test]
+    fn layout_sets_get_borrows_the_kind_matching_set() {
+        let mut sets = LayoutSets::default();
+        sets.visio_2016.layout.source = "2016".to_owned();
+        sets.visio_365.layout.source = "365".to_owned();
+        assert_eq!(sets.get(LayoutKind::Visio2016).layout.source, "2016");
+        assert_eq!(sets.get(LayoutKind::Visio365).layout.source, "365");
+        // Borrows, so both sets stay usable.
+        assert_eq!(sets.get(LayoutKind::Visio2016).layout.product, "visio");
+        assert_eq!(sets.visio_365.layout.source, "365");
+        assert!(
+            LayoutSets::default()
+                .get(LayoutKind::Visio365)
+                .layout
+                .tabs
+                .is_empty()
+        );
     }
 
     #[test]
