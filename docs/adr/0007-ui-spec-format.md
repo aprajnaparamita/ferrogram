@@ -40,13 +40,23 @@ ID`. The 19 control types in column B include `tab`, `tabSet`, `group`,
 
 ## Decision
 
-Format: **YAML**, parsed by `serde_yml` (MIT/Apache-2.0; the maintained
-successor to `serde_yaml`, which is archived upstream) in the loader
-and extractors. Validated by a **JSON Schema** (`ui-spec/schema.json`)
-using `jsonschema` (MIT) at both ends. YAML is a superset of JSON, so
-the schema is a normal JSON Schema; we do not use YAML-specific
-keywords. `serde_yml` is API-compatible with `serde_yaml`, so the
-schema and the data do not change when we switch crates.
+Format: **YAML**, parsed by `serde-saphyr` (MIT, pure Rust, no
+`unsafe-libyaml` C dependency) in the loader and extractors.
+Validated by a **JSON Schema** (`ui-spec/schema.json`) using
+`jsonschema` (MIT, latest 0.x as of Phase 1 start) at both ends.
+YAML is a superset of JSON, so the schema is a normal JSON Schema;
+we do not use YAML-specific keywords.
+
+The first P1-02 review draft chose `serde_yaml` (archived upstream)
+and then `serde_yml` (the maintained `serde_yaml` fork); both were
+rejected in the P1-02 review follow-up. `serde_yaml` is published
+as `0.9.34+deprecated` and `serde_yml` triggers cargo-deny
+advisories RUSTSEC-2025-0068 (unsound) and RUSTSEC-2026-0333
+(unmaintained). `serde-saphyr` is a pure-Rust, dependency-light
+crate with no advisories at the time of this review; the fallback
+if advisories reappear is `serde_norway` (also pure Rust, MIT,
+Embark Studios). Both produce identical YAML 1.2 output for our
+data, so the schema and the committed YAMLs do not change.
 
 ### Canonical source for Microsoft 365
 
@@ -297,5 +307,9 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
   (`serde_yaml = "0.9.34+deprecated"`) and is flagged as unmaintained
   in `cargo deny`'s advisory database. `serde_yml` is the maintained
   drop-in successor.
+- **Use `serde_yml`.** Rejected by the P1-02 review follow-up:
+  `serde_yml` triggers `cargo deny check advisories` (RUSTSEC-2025-0068
+  and RUSTSEC-2026-0333). `serde-saphyr` is the chosen replacement;
+  `serde_norway` is the documented fallback.
 - **Pin `jsonschema` to 0.18.** Rejected (M5): the 0.18 line is no
   longer the latest. We use the latest 0.x as of Phase 1 start.
