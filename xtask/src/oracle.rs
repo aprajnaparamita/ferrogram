@@ -456,6 +456,41 @@ mod tests {
         assert_eq!(status_in(tmp.path()), OracleStatus::Built);
     }
 
+    /// The script's own `FERROGRAM_LIBVISIO_BUILD_DIR` override: tests
+    /// pass the variable to the child process, never to this one.
+    #[cfg(unix)]
+    #[test]
+    fn the_script_honours_the_build_dir_env_var() {
+        let tmp = TempDir::new("env-override");
+        let out = Command::new("/bin/sh")
+            .arg(
+                util::root()
+                    .join("tools")
+                    .join("libvisio-oracle")
+                    .join("build.sh"),
+            )
+            .arg("status")
+            .env("FERROGRAM_LIBVISIO_BUILD_DIR", tmp.path())
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "not built");
+        fake_build(tmp.path());
+        let out = Command::new("/bin/sh")
+            .arg(
+                util::root()
+                    .join("tools")
+                    .join("libvisio-oracle")
+                    .join("build.sh"),
+            )
+            .arg("status")
+            .env("FERROGRAM_LIBVISIO_BUILD_DIR", tmp.path())
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "built");
+    }
+
     #[test]
     fn status_in_treats_an_unreadable_build_dir_as_not_built() {
         let tmp = TempDir::new("status-file");
