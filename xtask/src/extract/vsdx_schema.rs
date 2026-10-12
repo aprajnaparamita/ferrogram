@@ -1552,9 +1552,13 @@ mod tests {
     const FIXTURE_PAGE_UNMAPPED: &str = "# Ghost_Type complexType (Visio XML)\n\nnothing here\n";
 
     /// Builds a fixture `reference/` tree in a unique temp directory.
+    /// Every call gets its own directory: tests run in parallel and
+    /// must not rewrite each other's fixture files.
     fn fixture_tree(name: &str) -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir =
-            std::env::temp_dir().join(format!("ferrogram-p105-{}-{}", std::process::id(), name));
+            std::env::temp_dir().join(format!("ferrogram-p105-{}-{name}-{n}", std::process::id()));
         let visio = dir.join("ms-vsdx/office-developer-client-docs/docs/visio");
         fs::create_dir_all(&visio).expect("fixture dir");
         fs::write(
