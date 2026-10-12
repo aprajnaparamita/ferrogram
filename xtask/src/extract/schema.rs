@@ -1,30 +1,26 @@
 //! JSON Schema validator shared by every extractor (P1-03).
 //!
 //! Loads `ui-spec/schema.json` once and validates a file or a string
-//! against it. The `jsonschema` crate is the validator (MIT).
+//! against it. The `jsonschema` crate is the validator (MIT), pinned
+//! to the same major version as `crates/ui-spec` (P1-03 review M1).
 //!
 //! See ADR 0007 for the schema and ADR 0009 for how extractors call
 //! [`Schema::validate_file`].
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use jsonschema::{Draft, JSONSchema};
 use serde_json::Value;
 
 use super::{ExtractError, ExtractResult};
 
 /// Compiled schema handle. Cheap to clone; holds the original
-/// `serde_json::Value` of the file. We re-compile sub-schemas
-/// (`$defs/{layout,commands,shortcuts}`) on demand because
-/// `jsonschema` 0.18 doesn't expose `$defs` lookup on the compiled
-/// tree; the cost is one extra compile per validate, but the
-/// schema is small.
+/// `serde_json::Value` of the file plus a `Validator` for the
+/// full document (re-compiled sub-schemas via `jsonschema::draft7::new`).
 #[derive(Clone)]
 pub struct Schema {
     /// The original JSON of the schema file. Used to compile
     /// sub-schemas.
-    raw: Arc<Value>,
+    raw: Value,
     /// Path the schema was loaded from. Used for error messages.
     source: PathBuf,
 }
@@ -38,17 +34,14 @@ impl std::fmt::Debug for Schema {
 }
 
 impl Schema {
-    /// Loads `ui-spec/schema.json` from the workspace root. The
-    /// schema is compiled with `Draft::Draft7` (matches the file's
-    /// `$schema`).
+    /// Loads `ui-spec/schema.json` from the workspace root.
     pub fn load_default() -> ExtractResult<Self> {
         let root = crate::util::root();
         let path = root.join("ui-spec").join("schema.json");
         Self::load(&path)
     }
 
-    /// Loads a schema from a JSON file. Sub-schemas are compiled on
-    /// demand in [`Schema::validate_json`].
+    /// Loads a schema from a JSON file.
     pub fn load(path: &Path) -> ExtractResult<Self> {
         let text = std::fs::read_to_string(path).map_err(|e| ExtractError::Io {
             path: path.to_path_buf(),
@@ -59,7 +52,7 @@ impl Schema {
             message: format!("not valid JSON: {e}"),
         })?;
         Ok(Self {
-            raw: Arc::new(value),
+            raw: value,
             source: path.to_path_buf(),
         })
     }
@@ -90,11 +83,6 @@ impl Schema {
 
     /// Validates an already-parsed JSON value.
     pub fn validate_json(&self, value: &Value, kind: SchemaKind) -> ExtractResult<()> {
-        // We validate by compiling a synthetic root schema that
-        // re-exports the `definitions` block plus a top-level
-        // `$ref` to the target definition. The `oneOf`/nested
-        // `$ref`s in the target resolve against the re-exported
-        // definitions.
         let def_name = kind.def_name();
         if self
             .raw
@@ -107,6 +95,12 @@ impl Schema {
                 message: format!("schema missing definitions/{def_name}"),
             });
         }
+        // Build a synthetic root that re-anchors the sub-schema via
+        // `$ref` and re-supplies the document's `definitions` block.
+        // jsonschema 0.58 doesn't expose a way to scope a
+        // sub-schema, so we wrap it in a `{ "$ref":
+        // "#/definitions/<name>", "definitions": { ... } }` document
+        // and compile that.
         let mut synthetic = serde_json::Map::new();
         synthetic.insert(
             "$ref".into(),
@@ -121,41 +115,33 @@ impl Schema {
         if let Some(s) = self.raw.get("$schema") {
             synthetic.insert("$schema".into(), s.clone());
         }
-        let compiled = JSONSchema::options()
-            .with_draft(Draft::Draft7)
-            .compile(&Value::Object(synthetic))
-            .map_err(|e| ExtractError::Parse {
+        let compiled = jsonschema::draft7::new(&Value::Object(synthetic)).map_err(|e| {
+            ExtractError::Parse {
                 path: self.source.clone(),
                 message: format!("sub-schema compilation failed: {e}"),
-            })?;
-        if let Err(errors) = compiled.validate(value) {
-            // Deduplicate messages to a small set so the error
-            // stays readable (some failure modes repeat per-item).
-            let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-            let mut msgs: Vec<String> = Vec::new();
-            for e in errors {
-                let s = e.to_string();
-                if seen.insert(s.clone()) {
-                    msgs.push(s);
-                    if msgs.len() >= 10 {
-                        msgs.push("... (truncated)".to_string());
-                        break;
-                    }
+            }
+        })?;
+        // Deduplicate messages to a small set so the error stays
+        // readable (some failure modes repeat per-item).
+        let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut msgs: Vec<String> = Vec::new();
+        for e in compiled.iter_errors(value) {
+            let s = e.to_string();
+            if seen.insert(s.clone()) {
+                msgs.push(s);
+                if msgs.len() >= 10 {
+                    msgs.push("... (truncated)".to_string());
+                    break;
                 }
             }
+        }
+        if !msgs.is_empty() {
             return Err(ExtractError::Schema {
                 path: self.source.clone(),
                 message: msgs.join("; "),
             });
         }
         Ok(())
-    }
-
-    /// Borrow the original raw schema value. Used by the dispatcher
-    /// when re-validating without recompiling.
-    #[allow(dead_code)]
-    pub fn raw(&self) -> &Value {
-        &self.raw
     }
 }
 
