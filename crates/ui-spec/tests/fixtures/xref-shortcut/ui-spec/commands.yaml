@@ -1,0 +1,6 @@
+# Consistent with the layout; `app.quit` below is the violation.
+- id: file.save
+  label: Save
+  visuicmd: visCmdFileSave
+  fluent_ids: [FileSave]
+  mapping_confidence: exact

@@ -1,0 +1,63 @@
+# Cross-reference violation: the Paste control dispatches
+# `edit.paste`, which commands.yaml does not define. Must be rejected
+# with LoadError::CrossReference { kind: "control_command", .. }.
+schema_version: 1
+product: visio
+source: "Cross-reference fixture (control_command)"
+source_url: "https://example.com/fixture/xref-control"
+source_revision: "fixture"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: PasteGallery
+            type: gallery
+            label: Paste
+            order: 0
+            command: edit.paste
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+      - id: GroupFile
+        label: File
+        order: 1
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: FileSave
+            type: button
+            label: Save
+            order: 0
+            command: file.save
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs: []
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []

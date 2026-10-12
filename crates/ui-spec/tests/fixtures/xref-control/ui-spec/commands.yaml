@@ -1,0 +1,7 @@
+# `edit.paste` (dispatched by the PasteGallery control) is missing
+# here: control_command cross-reference failure.
+- id: file.save
+  label: Save
+  visuicmd: visCmdFileSave
+  fluent_ids: [FileSave]
+  mapping_confidence: exact

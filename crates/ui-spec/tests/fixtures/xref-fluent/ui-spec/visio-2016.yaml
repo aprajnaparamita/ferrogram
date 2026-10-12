@@ -1,0 +1,35 @@
+# Cross-reference violation: commands.yaml lists the Fluent id
+# `GhostControl`, which no layout uses. Must be rejected with
+# LoadError::CrossReference { kind: "fluent_id", .. }.
+schema_version: 1
+product: visio
+source: "Cross-reference fixture (fluent_id)"
+source_url: "https://example.com/fixture/xref-fluent"
+source_revision: "fixture"
+tabs: []
+backstage:
+  kind: backstage
+  tabs:
+    - id: FileNew
+      label: New
+      order: 0
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+      controls:
+        - id: FileSave
+          type: button
+          label: Save
+          order: 0
+          command: file.save
+          bounds: null
+          icon_ref: null
+          keytip: null
+          size_variant: null
+          visual_notes: null
+context_menus: []
+quick_access_toolbar:
+  id: qat
+  controls: []

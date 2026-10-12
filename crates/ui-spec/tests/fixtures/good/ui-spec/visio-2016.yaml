@@ -1,0 +1,156 @@
+# Test fixture for crates/ui-spec. Not real Microsoft data.
+schema_version: 1
+product: visio
+source: "Test fixture, Office 2016 layout"
+source_url: "https://example.com/fixture/visio-2016"
+source_revision: "fixture"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    tab_set: TabSetPrimary
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: PasteGallery
+            type: gallery
+            label: Paste
+            order: 0
+            parent: GroupClipboard
+            command: edit.paste
+            aliases: [PasteMenu]
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+      - id: GroupFont
+        label: Font
+        order: 1
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: BoldToggleButton
+            type: toggleButton
+            label: Bold
+            order: 0
+            parent: GroupFont
+            command: format.text.bold
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+  - id: TabInsert
+    label: Insert
+    order: 1
+    tab_set: TabSetPrimary
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupShapes
+        label: Shapes
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: ConnectorTool
+            type: button
+            label: Connector
+            order: 0
+            parent: GroupShapes
+            command: tools.connector
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs:
+    - id: FileNew
+      label: New
+      order: 0
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+      controls:
+        - id: FileSave
+          type: button
+          label: Save
+          order: 0
+          parent: FileNew
+          command: file.save
+          bounds: null
+          icon_ref: null
+          keytip: null
+          size_variant: null
+          visual_notes: null
+context_menus:
+  - id: ShapeShortcutMenu
+    label: Shape shortcut menu
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    controls:
+      - id: Cut
+        type: button
+        label: Cut
+        order: 0
+        parent: ShapeShortcutMenu
+        command: edit.cut
+        aliases: [CutShortcutItem]
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+quick_access_toolbar:
+  id: qat
+  controls:
+    - id: FileSaveQuickAccess
+      type: button
+      label: Save
+      order: 0
+      command: file.save
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+    - id: UndoQuickAccess
+      type: button
+      label: Undo
+      order: 1
+      command: edit.undo
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
