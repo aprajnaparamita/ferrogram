@@ -439,8 +439,9 @@ pub struct BackstageTab {
 pub struct ContextMenu {
     /// Menu Fluent id.
     pub id: FluentId,
-    /// Menu label (shown in the menu header; can be empty for
-    /// canvas context menus).
+    /// Menu label (shown in the menu header). One to 80 characters,
+    /// never empty (the schema's `label` rule; the loader rejects
+    /// anything else).
     pub label: String,
     /// Sibling order.
     pub order: u32,
