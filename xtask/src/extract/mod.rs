@@ -15,6 +15,7 @@
 //! | [`shapesheet`]  | P1-04          | `ui-spec/shapesheet.toml`                 |
 //! | [`shortcuts`]   | P1-04          | `ui-spec/shortcuts.yaml`                  |
 //! | [`vsdx_schema`] | P1-05          | `docs/vsdx-inventory.md`                  |
+//! | [`markdown`]    | P1-05          | markdown table + fence parser (shared)    |
 //! | [`diff`]        | P1-03          | `ui-spec/diff-2016-vs-365.md`             |
 //! | [`parity`]      | P1-03          | `docs/parity/controls.md`                 |
 //! | [`schema`]      | P1-03          | schema validator shared by all extractors |
@@ -26,6 +27,7 @@
 
 pub mod diff;
 pub mod fluent;
+pub mod markdown;
 pub mod parity;
 pub mod schema;
 pub mod shapesheet;
