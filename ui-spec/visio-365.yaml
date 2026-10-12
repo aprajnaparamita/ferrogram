@@ -3296,8 +3296,8 @@ quick_access_toolbar:
       visual_notes: null
   id: qat
 schema_version: 1
-source: "Microsoft Fluent UI 365, Current Channel, Visio"
-source_revision: "Microsoft 365 Current Channel, Visio control-identifier spreadsheet (commit b230a0df45036b2d5e8b49ebf368b3f90ada8d63, 2024-03-18). 1,161 data rows."
+source: Microsoft Fluent UI 365, Current Channel, Visio
+source_revision: Microsoft 365 Current Channel, Visio control-identifier spreadsheet (commit b230a0df45036b2d5e8b49ebf368b3f90ada8d63, 2024-03-18). 1,161 data rows.
 source_url: https://github.com/OfficeDev/office-fluent-ui-command-identifiers
 tabs:
   - bounds: null
