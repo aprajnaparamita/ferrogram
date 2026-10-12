@@ -11,7 +11,7 @@ Task board. Only the master agent edits this file, on `main`.
 |---|---|---|---|---|
 | [P1-01](tasks/P1-01.md) | researcher | — | merged (corpus binaries excluded, ADR 0005) | agent/P1-01 |
 | [P1-02](tasks/P1-02.md) | architect | P1-01 | merged ([review](tasks/P1-02-review.md)) | agent/P1-02 |
-| [P1-03](tasks/P1-03.md) | implementer | P1-02 | ready (wave A) | — |
+| [P1-03](tasks/P1-03.md) | implementer | P1-02 | in review ([review](tasks/P1-03-review.md)) | agent/P1-03 |
 | [P1-04](tasks/P1-04.md) | implementer | P1-03 | blocked (wave B) | — |
 | [P1-05](tasks/P1-05.md) | implementer | P1-02 | ready (wave A) | — |
 | [P1-06](tasks/P1-06.md) | implementer | P1-02 | merged (schema issues 1–2 fixed on main) | agent/P1-06 |
