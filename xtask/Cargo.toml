@@ -16,6 +16,7 @@ toml = "0.9"
 # via rustls-native-certs below.
 rustls-native-certs = "0.8"
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring"] }
+roxmltree = "0.21.1"
 
 [lints]
 workspace = true
