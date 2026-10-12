@@ -45,3 +45,9 @@ ADR 0007 says the five reserved fields are not required by the schema and a cust
 - **m3.** The missing-`reference/` error says "Run `cargo xtask corpus` first". The corpus fetcher does not populate `reference/`. Point to `docs/sources.md` / task P1-01 instead.
 - **m4.** The `extracted:` timestamp in generated files makes `cargo xtask extract` output differ on every run (ADR 0009 requires deterministic output). Drop it; `source_revision` is enough.
 - **m5.** Microsoft 365 Current Channel as canonical: accepted. Record it in ADR 0007 (not only in the YAML).
+
+## Follow-up after the first fix pass
+
+- **YAML crate:** `serde_yml` fails `cargo deny check advisories` (RUSTSEC-2025-0068: unsound and unmaintained; RUSTSEC-2026-0333). Use **`serde-saphyr`** (pure Rust, no `unsafe-libyaml`, no advisories at the time of review). Confirm with `cargo deny check`. Fallback: `serde_norway`. Update ADR 0007 and P1-03/P1-06.
+- **Phase 2 codegen owner:** the master will create the task at Phase 2 planning (`cargo xtask codegen` + freshness check in the gate). Nothing to do in P1-02 beyond ADR 0008.
+- The first fix pass left ADR/schema edits uncommitted and the "Pending" list open. Finish every Pending item, then commit in the suggested groups.
