@@ -1,0 +1,238 @@
+# 0006: Command id scheme
+
+- Status: accepted
+- Date: 2026-10-12
+- Task: P1-02
+
+## Context
+
+AGENTS.md section 6 says: "One command registry (`crates/commands`). Every user
+action is a command with an id, label, enabled-state predicate and undo support.
+Menus, ribbon, shortcuts, CLI, the JSON control channel and MCP all dispatch by
+command id through the same registry. Programmatic calls never open dialogs."
+
+Microsoft's published surface uses two separate id spaces:
+
+1. **Fluent UI control names** (ribbon XML). Examples: `FileSave`,
+   `ConnectorTool`, `AlignLeftGallery`. These are the strings used in the
+   Office 2016 and Microsoft 365 control-identifier spreadsheets (source 1 in
+   `docs/sources.md`).
+2. **VisUICmds constants** (the VBA `VisUICmds` enumeration). Examples:
+   `visCmdFileSave` (value 1107), `visCmdConnectorTool`, `visCmdAlignObjectLeft`.
+   These are the integer command ids passed to `Application.DoCmd`, the
+   `CmdNum` property and the `EnterScope`/`ExitScope` events. The enumeration
+   has 664 entries.
+
+These two spaces overlap on some names (`ConnectorTool` is a Fluent name and
+has a `visCmdConnectorTool` constant) but not on most (`FileSave` is a Fluent
+name without a `visCmdFileSave` constant; many visUICmds have no Fluent
+control). The Phase 1 extractor must keep them separate, and Ferrogram needs
+its own id space that survives future Fluent and VisUICmds renames and works
+uniformly across the ribbon, menus, shortcuts, CLI, JSON control channel and
+MCP.
+
+The P1-02 review found that an earlier draft used ribbon-tab scopes
+(`home`, `design`, ...). That is wrong: a single command may be reachable
+from two ribbons in two layouts (Home in 2016, Insert in 365) and from a
+context menu, a shortcut, the JSON channel and MCP. The scope must describe
+what the command does, not where the user finds it.
+
+## Decision
+
+Ferrogram defines its own command id space, called `CommandId` everywhere in
+code. The id grammar is:
+
+```
+command_id  := scope '.' verb ['.' qualifier]*
+scope       := 'app' | 'file' | 'edit' | 'view' | 'insert' | 'format'
+             | 'text' | 'arrange' | 'shape' | 'connector' | 'page'
+             | 'layer' | 'tools' | 'data' | 'review' | 'developer'
+             | 'help'
+verb        := [a-z][a-z0-9_]*
+qualifier   := [a-z][a-z0-9_]*
+```
+
+Rules:
+
+- Lowercase ASCII letters, digits, underscore and dot. No dashes, no spaces,
+  no uppercase, no leading dot, no trailing dot, no consecutive dots.
+- A scope is one of the fixed functional tokens above. Adding a scope is an
+  ADR change. The list is closed on purpose: a new scope is a new public
+  surface and a new area of the registry.
+- Each id is a leaf in the `crates/commands` registry (one entry per id).
+- The Fluent control name is **not** the command id. It is stored in
+  `commands.yaml` as `fluent_ids: [string]` (the Fluent control names that
+  surface this command).
+- The VisUICmds constant is **not** the command id. It is stored as
+  `visuicmd: string_or_null` on the command entry. The integer value is not
+  stored; it is re-derived from the enumeration at load time.
+- Two Fluent control names can map to the same command id (one action, two
+  surfaces) and one command id can map to multiple Fluent control names
+  (e.g. `arrange.align.left` appears in the ribbon group and in a context
+  menu). The mapping is many-to-many in both directions.
+
+The scope list is functional, not positional. Examples of correct ids:
+
+```text
+app.quit                        # application-level: exit, settings
+file.save                       # file operations
+file.save_as
+file.open
+edit.undo
+edit.redo
+edit.cut
+edit.copy
+edit.paste
+view.zoom.in
+view.zoom.out
+view.toggle_grid
+view.toggle_rulers
+insert.shape                    # generic insert
+insert.text
+insert.picture
+format.text.bold
+format.text.italic
+arrange.align.left              # align / distribute / group / order
+arrange.align.center
+arrange.align.right
+arrange.align.top
+arrange.align.bottom
+arrange.distribute.horizontal
+arrange.group
+arrange.ungroup
+arrange.bring_forward
+arrange.send_backward
+shape.rectangle
+shape.ellipse
+shape.line
+connector.dynamic               # connector-specific actions
+connector.straight
+connector.right_angle
+page.next
+page.previous
+page.add
+page.delete
+page.rename
+layer.add
+layer.show
+layer.hide
+tools.pointer                   # tool selection
+tools.text
+tools.connector
+data.refresh
+data.link
+review.spell_check
+developer.macro
+help.about
+```
+
+Compared to the earlier `home.align.left` / `home.insert.shape` form, the
+new ids do not change when the ribbon layout changes. The same `arrange.align.left`
+id is used whether the command lives on the Home tab (2016) or the Arrange
+tab (365) or a context menu, and is the same id in the shortcut, CLI,
+JSON control channel and MCP.
+
+The mapping table lives at `ui-spec/commands.yaml` and is generated by the
+Phase 1 extractors (P1-04). Its schema is in the ADR 0007 JSON Schema file
+(it is a separate YAML, so the schema has a sibling definition
+`#/definitions/commands`). Every entry is one of three confidence levels:
+
+- `exact`: the VisUICmds name and the Fluent control name are both known and
+  point at the same action.
+- `inferred`: at least one side is inferred by name match (e.g. a Fluent
+  `AlignLeftGallery` corresponds to a `visCmdAlignObjectLeft`-shaped action
+  but the gallery itself is not exactly that command).
+- `unknown`: a command with neither a VisUICmds nor a Fluent mapping yet.
+  Implementers still register the command; the UI shows it as "not yet
+  implemented" until both mappings are filled in (Phase 4).
+
+Examples:
+
+```yaml
+# ui-spec/commands.yaml
+- id: file.save
+  label: Save
+  visuicmd: visCmdFileSave
+  fluent_ids: [FileSave, FileSaveAll]
+  mapping_confidence: exact
+- id: arrange.align.left
+  label: Align Left
+  visuicmd: visCmdAlignObjectLeft
+  fluent_ids: [AlignLeftButton, AlignLeftGallery]
+  mapping_confidence: exact
+- id: tools.connector
+  label: Connector
+  visuicmd: visCmdConnectorTool
+  fluent_ids: [ConnectorTool]
+  mapping_confidence: exact
+- id: insert.shape
+  label: Insert Shape
+  visuicmd: null
+  fluent_ids: [InsertShapeGallery]
+  mapping_confidence: unknown
+```
+
+`crates/commands` exposes a `CommandId` newtype around a `&'static str`. The
+registry builds itself from `ui-spec/commands.yaml` at startup in Phase 4;
+in Phase 1 the loader (`crates/ui-spec`) parses the file and the commands
+crate does not yet depend on it.
+
+### Layout ids are Fluent ids, not command ids
+
+A separate decision: the id of a control, group, tab, backstage tab, or
+context menu in `ui-spec/panel-2016.yaml` and `ui-spec/panel-365.yaml` is
+the **Fluent control name** verbatim (e.g. `FileSave`, `TabHome`,
+`GroupClipboard`), not a Ferrogram command id. See ADR 0007. This is
+because:
+
+- KICKOFF requires the layouts to come from Microsoft's control-identifier
+  data, and those rows are keyed by Fluent name.
+  Fluent name.
+- A command is not always tied to one control: a single control has one
+  `command` link (a `CommandId` or null), and one command may be surfaced
+  by many controls (e.g. `arrange.align.left` is in the Home ribbon in
+  2016 and in the Arrange tab in 365).
+
+## Consequences
+
+- We can rename a Fluent control or a VisUICmds constant without touching
+  any Ferrogram code; only the generated `commands.yaml` changes.
+- Adding a new user action is a single new entry in `commands.yaml` plus
+  a handler in the registry; no UI plumbing.
+- The same id is used for menu, ribbon, shortcut, CLI flag, JSON control
+  channel and MCP. There is exactly one dispatch table.
+- The fixed functional scope list means new top-level groupings (e.g.
+  "diagram" if we ever add it) require an ADR. This is intentional: every
+  scope is a public surface.
+- The mapping table is generated, not hand-maintained. Implementers never
+  edit `commands.yaml`; they edit the extractor rules in
+  `xtask/src/extract/visuicmds.rs` and `xtask/src/extract/fluent.rs`.
+- `crates/commands` cannot depend on `crates/ui-spec` (L4 cannot depend
+  on L0 in the current layering? Actually L4 may depend on L0: it only
+  forbids depending on higher or same layer. L4 is commands, L0 is
+  ui-spec, so it may. The order of startup is the question: in Phase 4
+  the registry is built from the YAML at app start. In tests the
+  registry is hard-coded.)
+- Layout file control ids stay as Fluent names. The two namespaces do
+  not collide: a `FluentId` matches `^[A-Za-z][A-Za-z0-9_]*$`, a
+  `CommandId` matches `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`.
+
+## Alternatives considered
+
+- **Use Fluent control names directly as command ids.** Rejected: those
+  names are ribbon-specific; menus, shortcuts and MCP would need a
+  parallel table. The same command reachable from two ribbons would need
+  two ids.
+- **Use VisUICmds constants directly as command ids.** Rejected: VisUICmds
+  is 664 integers without structure; they do not group by feature, and a
+  constant is missing for any UI action that Microsoft did not script
+  (e.g. some 365-only commands). Future versions rename constants; the
+  mapping table is the right level of indirection.
+- **Ribbon-tab scopes (`home`, `design`, `process`, `stencils`).** Tried
+  in an earlier draft. Rejected by the P1-02 review: a single command may
+  be on different tabs in 2016 and 365, and on a context menu, a shortcut
+  and MCP. A positional id forces a rename whenever the UI surface moves.
+- **Stable hashed ids** (e.g. `c0a1f2`). Rejected: unreadable, hard to
+  grep, ugly in the JSON control channel.
+- **A single flat namespace** (no scopes). Rejected: hard to filter, hard
+  to bind to feature areas, and the human-facing UI groups by area.
