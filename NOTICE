@@ -11,7 +11,7 @@ This crate is licensed under the Mozilla Public License, v. 2.0
 from libvisio (https://git.libreoffice.org/libvisio), which is licensed
 under MPL-2.0. Each source file in the crate carries the MPL-2.0 header.
 
-libvisio upstream commit used as the reference: (recorded in Phase 1)
+libvisio upstream commit used as the reference: c7c970775b750a4bf7fd1b4364d69bac9815bfcb (2026-10-09)
 
 No libvisio-derived code appears outside crates/vsd-binary.
 
