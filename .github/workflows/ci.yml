@@ -39,11 +39,19 @@ jobs:
         with:
           tool: cargo-deny,cargo-llvm-cov,cargo-fuzz
 
+      # Fetch the third-party test corpus before the gate (ADR 0005).
+      - name: Fetch test corpus
+        run: cargo xtask corpus
+
       # cargo-fuzz (libFuzzer) does not support Windows/MSVC; fuzz builds run on Linux and macOS.
       - name: Gate
         if: runner.os != 'Windows'
+        env:
+          FERROGRAM_REQUIRE_CORPUS: "1"
         run: cargo xtask gate
 
       - name: Gate (Windows, no fuzz)
         if: runner.os == 'Windows'
+        env:
+          FERROGRAM_REQUIRE_CORPUS: "1"
         run: cargo xtask gate --skip fuzz
