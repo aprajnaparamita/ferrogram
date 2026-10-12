@@ -26,3 +26,6 @@
 /corpus/vsdx/
 /corpus/vss/
 /corpus/vssx/
+
+# pi harness local state
+/.pi/
