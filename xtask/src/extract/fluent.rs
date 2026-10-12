@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 
 use calamine::{Data, Range, Reader, open_workbook_auto};
 use serde_json::{Map, Value, json};
+use serde_saphyr::SerializerOptions;
 
 use super::schema::Schema;
 use super::util::write_atomic;
@@ -61,7 +62,6 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
 
     let path_2016 = out_dir.join("ui-spec").join("visio-2016.yaml");
     let path_365 = out_dir.join("ui-spec").join("visio-365.yaml");
-
     write_atomic(&path_2016, &layout_2016.text).map_err(|msg| ExtractError::Io {
         path: path_2016.clone(),
         source: msg,
@@ -185,9 +185,24 @@ fn build_layout(
     let rows = parse_xlsx(xlsx_path)?;
     let row_refs: Vec<&Row> = rows.iter().collect();
     let layout = assemble_layout(&row_refs, source, source_url, source_revision)?;
-    let text = serde_saphyr::to_string(&layout).map_err(|e| ExtractError::Parse {
-        path: xlsx_path.to_path_buf(),
-        message: format!("YAML serialize: {e}"),
+    // serde-saphyr 1.x defaults differ from 0.0.16 in two ways that
+    // affect the diff:
+    //
+    // - `compact_list_indent = true`: the list dash is put at the
+    //   parent's indent. Disable to keep the older
+    //   `tabs:\n  - bounds: null` style.
+    // - `prefer_block_scalars = true`: long single-line strings and
+    //   strings with newlines are written as block scalars
+    //   (`| ... |`). Disable to keep plain (and quoted) inline
+    //   scalars.
+    let mut options = SerializerOptions::default();
+    options.compact_list_indent = false;
+    options.prefer_block_scalars = false;
+    let text = serde_saphyr::to_string_with_options(&layout, options).map_err(|e| {
+        ExtractError::Parse {
+            path: xlsx_path.to_path_buf(),
+            message: format!("YAML serialize: {e}"),
+        }
     })?;
     Ok(BuiltLayout { text })
 }
@@ -1131,5 +1146,77 @@ mod tests {
             alias_strs.contains(&"GroupIconEditClipboard"),
             "aliases: {alias_strs:?}"
         );
+    }
+
+    /// M2 of the P1-03 review: prove the committed layouts load
+    /// with the runtime [`ferrogram_ui_spec::Loader`]. Copies the
+    /// committed YAMLs into a temp workspace, adds empty
+    /// `commands.yaml` and `shortcuts.yaml` (the P1-04 files do not
+    /// exist yet), and calls `Loader::load` for both layouts.
+    #[test]
+    fn committed_layouts_load_with_the_runtime_loader() {
+        use ferrogram_ui_spec::{LayoutKind, Loader};
+
+        let ws = crate::util::root();
+        let committed_2016 = ws.join("ui-spec").join("visio-2016.yaml");
+        let committed_365 = ws.join("ui-spec").join("visio-365.yaml");
+        if !committed_2016.is_file() || !committed_365.is_file() {
+            eprintln!("committed layouts missing; skipping loader test");
+            return;
+        }
+
+        // Build a temp workspace that mirrors the layout directory
+        // shape: ui-spec/{visio-2016.yaml, visio-365.yaml, commands.yaml, shortcuts.yaml}.
+        let tmp =
+            std::env::temp_dir().join(format!("ferrogram-p1-03-loader-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let data_dir = tmp.join("ui-spec");
+        std::fs::create_dir_all(&data_dir).unwrap();
+        std::fs::copy(&committed_2016, data_dir.join("visio-2016.yaml")).unwrap();
+        std::fs::copy(&committed_365, data_dir.join("visio-365.yaml")).unwrap();
+        // P1-04 / P1-04b haven't landed yet, so commands and
+        // shortcuts are empty lists. The loader requires the files
+        // to exist (it looks them up explicitly).
+        std::fs::write(data_dir.join("commands.yaml"), "[]\n").unwrap();
+        std::fs::write(data_dir.join("shortcuts.yaml"), "[]\n").unwrap();
+
+        let loader = Loader::new(&tmp).expect("loader compiles");
+        let set_2016 = loader.load(LayoutKind::Visio2016).expect("2016 loads");
+        let set_365 = loader.load(LayoutKind::Visio365).expect("365 loads");
+
+        // Counts match the values reported in the Result section.
+        // 2016: 16 ribbon + 8 backstage + 43 context menus + 9 QAT.
+        assert_eq!(set_2016.layout.tabs.len(), 16, "2016 ribbon tabs");
+        assert_eq!(
+            set_2016.layout.backstage.tabs.len(),
+            8,
+            "2016 backstage tabs"
+        );
+        assert_eq!(
+            set_2016.layout.context_menus.len(),
+            43,
+            "2016 context menus"
+        );
+        assert_eq!(
+            set_2016.layout.quick_access_toolbar.controls.len(),
+            9,
+            "2016 QAT controls"
+        );
+
+        // 365: 19 ribbon + 10 backstage + 43 context menus + 9 QAT.
+        assert_eq!(set_365.layout.tabs.len(), 19, "365 ribbon tabs");
+        assert_eq!(
+            set_365.layout.backstage.tabs.len(),
+            10,
+            "365 backstage tabs"
+        );
+        assert_eq!(set_365.layout.context_menus.len(), 43, "365 context menus");
+        assert_eq!(
+            set_365.layout.quick_access_toolbar.controls.len(),
+            9,
+            "365 QAT controls"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
