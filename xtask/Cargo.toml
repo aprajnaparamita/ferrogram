@@ -9,7 +9,13 @@ publish = false
 
 [dependencies]
 serde_json = "1"
+sha2 = "0.10"
 toml = "0.9"
+# rustls with the ring provider, but no bundled webpki-roots (that crate is
+# CDLA-Permissive-2.0, not in deny.toml). We load the OS root store ourselves
+# via rustls-native-certs below.
+rustls-native-certs = "0.8"
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring"] }
 
 [lints]
 workspace = true

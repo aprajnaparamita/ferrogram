@@ -5,9 +5,11 @@
 //! - `gate [--quick] [--skip <step>[,<step>...]]`: the full quality gate (see AGENTS.md).
 //! - `coverage [--update-ratchet]`: coverage only; optionally record the ratchet.
 //! - `layers`: check crate layering.
+//! - `corpus [--verify-only] [--offline <dir>]`: fetch and verify the test corpus.
 
 #![forbid(unsafe_code)]
 
+mod corpus;
 mod coverage;
 mod gate;
 mod layers;
@@ -22,7 +24,9 @@ tasks:
                                        steps: fmt clippy test doc coverage deny layers wasm fuzz
                                        --quick skips coverage, wasm and fuzz
   coverage [--update-ratchet]          run coverage and check thresholds
-  layers                               check crate layering rules";
+  layers                               check crate layering rules
+  corpus [--verify-only] [--offline d] fetch and verify the test corpus (ADR 0005)
+                                       --offline copies from a local dir instead of the network";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,6 +37,7 @@ fn main() -> ExitCode {
             coverage::run(update)
         }
         Some("layers") => layers::run(),
+        Some("corpus") => corpus::run(args.get(1..).unwrap_or_default()),
         Some("-h" | "--help" | "help") | None => {
             println!("{USAGE}");
             Ok(())
