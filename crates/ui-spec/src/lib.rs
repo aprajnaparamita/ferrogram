@@ -19,12 +19,18 @@ use std::collections::BTreeMap;
 ///
 /// ```text
 /// command_id  := scope '.' verb ('.' qualifier)*
-/// scope       := 'app' | 'file' | 'edit' | 'view' | 'insert' | 'format'
-///              | 'home' | 'design' | 'page' | 'review' | 'developer'
-///              | 'data' | 'process' | 'shape' | 'stencils' | 'help'
+/// scope       := 'app' | 'file' | 'edit' | 'view' | 'insert'
+///              | 'format' | 'text' | 'arrange' | 'shape'
+///              | 'connector' | 'page' | 'layer' | 'tools'
+///              | 'data' | 'review' | 'developer' | 'help'
 /// verb        := [a-z][a-z0-9_]*
 /// qualifier   := [a-z][a-z0-9_]*
 /// ```
+///
+/// Scopes are **functional**, not ribbon tabs. The same command may be
+/// surfaced on the Home tab in 2016 and on the Arrange tab in 365; the
+/// id does not change. The `Control` type's `command` field is the
+/// link from a Fluent control to one of these ids.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CommandId(pub String);
 
@@ -56,8 +62,10 @@ impl AsRef<str> for CommandId {
 
 /// A Microsoft Fluent UI control name (e.g. `FileSave`).
 ///
-/// Distinct from [`CommandId`] (ADR 0006): the Fluent name is a
-/// ribbon-XML identifier; the command id is Ferrogram's own.
+/// Distinct from [`CommandId`] (ADR 0006). The Fluent name is the
+/// primary id of every control, group, tab, backstage tab and
+/// context menu in the layout files (ADR 0007 B1). The pattern
+/// (enforced by `ui-spec/schema.json`) is `^[A-Za-z][A-Za-z0-9_]*$`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FluentId(pub String);
 
@@ -76,6 +84,12 @@ impl FluentId {
 impl std::fmt::Display for FluentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for FluentId {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -196,23 +210,31 @@ pub struct Bounds {
 
 /// A control in a ribbon, backstage, or context menu. See
 /// `ui-spec/schema.json#/definitions/control`.
+///
+/// `id` is the Fluent control name (e.g. `FileSave`); `command` is
+/// the Ferrogram command id dispatched when the control is activated
+/// (e.g. `file.save`). `command` may be `None` for non-actionable
+/// controls and for controls whose mapping is not yet known.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Control {
-    /// The control's command id. For actionable controls this is the
-    /// primary command. For containers (groups, tabs) it is a stable
-    /// container id.
-    pub id: CommandId,
+    /// The Fluent control name (primary id).
+    pub id: FluentId,
     /// The Fluent type.
     pub r#type: ControlType,
     /// Short UI label (never a description).
     pub label: String,
     /// Sibling order.
     pub order: u32,
-    /// Immediate parent control id, or `None` for top-level.
-    pub parent: Option<CommandId>,
-    /// Alternate command ids that also dispatch this control
-    /// (e.g. when the same action lives on two ribbons).
-    pub alt_ids: Vec<CommandId>,
+    /// Immediate parent control id (Fluent), or `None` for top-level.
+    pub parent: Option<FluentId>,
+    /// Ferrogram command id dispatched on activation, or `None` if
+    /// the control is non-actionable or its mapping is unknown.
+    pub command: Option<CommandId>,
+    /// Alternate Fluent ids for the same control across ribbon
+    /// placements (e.g. when `ConnectorTool` appears on both the
+    /// Home and Insert ribbons in 365). P1-03 picks a primary
+    /// parent by `tab` match; the others are recorded here.
+    pub aliases: Vec<FluentId>,
     /// Reserved for the screenshot pass.
     pub bounds: Option<Bounds>,
     /// Reserved for the screenshot pass. Path or id of an icon asset.
@@ -252,17 +274,39 @@ impl SizeVariant {
         };
         Some(v)
     }
+
+    /// The YAML string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Small => "small",
+            Self::Medium => "medium",
+            Self::Large => "large",
+            Self::ExtraLarge => "extra-large",
+        }
+    }
 }
 
 /// A group of controls inside a tab.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Group {
-    /// Group id.
-    pub id: CommandId,
+    /// Group Fluent id.
+    pub id: FluentId,
     /// Group label.
     pub label: String,
     /// Sibling order.
     pub order: u32,
+    /// Reserved for the screenshot pass.
+    pub bounds: Option<Bounds>,
+    /// Reserved for the screenshot pass. Path or id of an icon asset.
+    pub icon_ref: Option<String>,
+    /// Reserved for the screenshot pass. The keytip shown next to the
+    /// label.
+    pub keytip: Option<String>,
+    /// Reserved for the screenshot pass. The button size variant.
+    pub size_variant: Option<SizeVariant>,
+    /// Reserved for the screenshot pass. Free-text annotation; never a
+    /// description of behaviour.
+    pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
@@ -270,8 +314,8 @@ pub struct Group {
 /// A top-level ribbon tab.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tab {
-    /// Tab id.
-    pub id: CommandId,
+    /// Tab Fluent id.
+    pub id: FluentId,
     /// Tab label.
     pub label: String,
     /// Sibling order.
@@ -279,6 +323,18 @@ pub struct Tab {
     /// Fluent tab-set name (e.g. `TabSetPrimary`); `None` for tabs
     /// that are not part of a tab set.
     pub tab_set: Option<String>,
+    /// Reserved for the screenshot pass.
+    pub bounds: Option<Bounds>,
+    /// Reserved for the screenshot pass. Path or id of an icon asset.
+    pub icon_ref: Option<String>,
+    /// Reserved for the screenshot pass. The keytip shown next to the
+    /// label.
+    pub keytip: Option<String>,
+    /// Reserved for the screenshot pass. The button size variant.
+    pub size_variant: Option<SizeVariant>,
+    /// Reserved for the screenshot pass. Free-text annotation; never a
+    /// description of behaviour.
+    pub visual_notes: Option<String>,
     /// Groups in display order.
     pub groups: Vec<Group>,
 }
@@ -294,12 +350,24 @@ pub struct Backstage {
 /// shown as a vertical stack.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BackstageTab {
-    /// Tab id.
-    pub id: CommandId,
+    /// Tab Fluent id.
+    pub id: FluentId,
     /// Tab label.
     pub label: String,
     /// Sibling order.
     pub order: u32,
+    /// Reserved for the screenshot pass.
+    pub bounds: Option<Bounds>,
+    /// Reserved for the screenshot pass. Path or id of an icon asset.
+    pub icon_ref: Option<String>,
+    /// Reserved for the screenshot pass. The keytip shown next to the
+    /// label.
+    pub keytip: Option<String>,
+    /// Reserved for the screenshot pass. The button size variant.
+    pub size_variant: Option<SizeVariant>,
+    /// Reserved for the screenshot pass. Free-text annotation; never a
+    /// description of behaviour.
+    pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
@@ -307,13 +375,25 @@ pub struct BackstageTab {
 /// A context menu.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContextMenu {
-    /// Menu id.
-    pub id: CommandId,
+    /// Menu Fluent id.
+    pub id: FluentId,
     /// Menu label (shown in the menu header; can be empty for
     /// canvas context menus).
     pub label: String,
     /// Sibling order.
     pub order: u32,
+    /// Reserved for the screenshot pass.
+    pub bounds: Option<Bounds>,
+    /// Reserved for the screenshot pass. Path or id of an icon asset.
+    pub icon_ref: Option<String>,
+    /// Reserved for the screenshot pass. The keytip shown next to the
+    /// label.
+    pub keytip: Option<String>,
+    /// Reserved for the screenshot pass. The button size variant.
+    pub size_variant: Option<SizeVariant>,
+    /// Reserved for the screenshot pass. Free-text annotation; never a
+    /// description of behaviour.
+    pub visual_notes: Option<String>,
     /// Controls in display order.
     pub controls: Vec<Control>,
 }
@@ -326,6 +406,11 @@ pub struct QuickAccessToolbar {
 }
 
 /// A complete layout (e.g. `panel-2016.yaml`).
+///
+/// `extracted` is intentionally absent: a timestamp would change on
+/// every `cargo xtask extract` run, breaking ADR 0009's
+/// deterministic-output rule. `source_revision` is the pinned source
+/// identifier.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Layout {
     /// Always `1` for now.
@@ -339,8 +424,6 @@ pub struct Layout {
     pub source_url: String,
     /// Pinning info (commit, channel, date).
     pub source_revision: String,
-    /// When the file was generated.
-    pub extracted: String,
     /// Top-level ribbon tabs (excludes the File tab's backstage).
     pub tabs: Vec<Tab>,
     /// Backstage tabs under the File button.
@@ -349,6 +432,24 @@ pub struct Layout {
     pub context_menus: Vec<ContextMenu>,
     /// Quick Access Toolbar.
     pub quick_access_toolbar: QuickAccessToolbar,
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            product: "visio".to_owned(),
+            source: String::new(),
+            source_url: String::new(),
+            source_revision: String::new(),
+            tabs: Vec::new(),
+            backstage: Backstage { tabs: Vec::new() },
+            context_menus: Vec::new(),
+            quick_access_toolbar: QuickAccessToolbar {
+                controls: Vec::new(),
+            },
+        }
+    }
 }
 
 /// Mapping from Ferrogram command id to VisUICmds and to one or more
@@ -403,11 +504,16 @@ impl MappingConfidence {
 }
 
 /// A keyboard shortcut. See `ui-spec/shortcuts.yaml` and ADR 0007.
+///
+/// `sequence` is the list of chords the user types in order. A
+/// single-chord shortcut (e.g. Ctrl+Z) has a one-element sequence;
+/// a multi-chord ribbon keytip (e.g. Alt+H, F, O) is a three-element
+/// sequence. Each chord is a set of keys pressed simultaneously.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shortcut {
-    /// Chord tokens, in canonical order (modifier-first, then key).
-    /// E.g. `[Ctrl, Shift, Z]`.
-    pub keys: Vec<String>,
+    /// Ordered list of chords. Each chord is a non-empty list of key
+    /// tokens (modifier or key, e.g. `Ctrl`, `Shift`, `A`, `F1`).
+    pub sequence: Vec<Vec<String>>,
     /// The command the shortcut dispatches.
     pub command: CommandId,
     /// Where the shortcut applies.
@@ -447,6 +553,18 @@ impl ShortcutScope {
         };
         Some(v)
     }
+
+    /// The YAML string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Global => "global",
+            Self::Ribbon => "ribbon",
+            Self::Page => "page",
+            Self::Text => "text",
+            Self::Selection => "selection",
+            Self::Window => "window",
+        }
+    }
 }
 
 /// A `ui-spec/commands.yaml` document.
@@ -474,37 +592,23 @@ pub struct LayoutSet {
     pub shortcuts: Shortcuts,
 }
 
-impl Default for Layout {
-    fn default() -> Self {
-        Self {
-            schema_version: 1,
-            product: "visio".to_owned(),
-            source: String::new(),
-            source_url: String::new(),
-            source_revision: String::new(),
-            extracted: String::new(),
-            tabs: Vec::new(),
-            backstage: Backstage { tabs: Vec::new() },
-            context_menus: Vec::new(),
-            quick_access_toolbar: QuickAccessToolbar {
-                controls: Vec::new(),
-            },
-        }
-    }
-}
-
-/// A lookup table built from a [`LayoutSet`]. Maps every command id
-/// to the surfaces on which it appears. P1-06 builds this once at
-/// load time; the rest of Ferrogram (ribbon, menu, shortcut dispatch)
-/// queries it.
+/// A lookup table built from a [`LayoutSet`]. The UI (P1-06 +
+/// `crates/ui`) walks the layout tree directly using the Fluent ids;
+/// the lookup is a precomputed index for the most common queries.
+///
+/// Indexes are `BTreeMap`-backed so iteration is sorted.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CommandLookup {
-    /// `command id -> label`.
-    pub labels: BTreeMap<CommandId, String>,
-    /// `command id -> one of the control paths (tab/group/control)`
-    /// for menus and tooltips. P1-06 picks the ribbon path when there
-    /// are several.
-    pub primary_path: BTreeMap<CommandId, String>,
+    /// `FluentId -> label`, built from every control, group, tab,
+    /// backstage tab and context menu in the layout.
+    pub labels: BTreeMap<FluentId, String>,
+    /// `FluentId -> dispatched CommandId`, when the control has a
+    /// `command` link. P1-06 picks the primary path when a control
+    /// has aliases.
+    pub commands: BTreeMap<FluentId, CommandId>,
+    /// `CommandId -> FluentIds` of every control that dispatches
+    /// this command. The reverse of the `commands` index.
+    pub fluent_by_command: BTreeMap<CommandId, Vec<FluentId>>,
 }
 
 impl CommandLookup {
@@ -513,12 +617,12 @@ impl CommandLookup {
         Self::default()
     }
 
-    /// Number of commands in the lookup.
+    /// Number of Fluent ids in the lookup.
     pub fn len(&self) -> usize {
         self.labels.len()
     }
 
-    /// True if there are no commands.
+    /// True if the lookup has no entries.
     pub fn is_empty(&self) -> bool {
         self.labels.is_empty()
     }
@@ -593,7 +697,8 @@ mod tests {
     #[test]
     fn shortcut_scope_round_trip() {
         for s in ["global", "ribbon", "page", "text", "selection", "window"] {
-            assert!(ShortcutScope::parse(s).is_some());
+            let v = ShortcutScope::parse(s).unwrap();
+            assert_eq!(v.as_str(), s);
         }
         assert!(ShortcutScope::parse("everywhere").is_none());
     }
@@ -606,9 +711,25 @@ mod tests {
 
     #[test]
     fn command_id_display() {
-        let id = CommandId::new("home.align.left");
-        assert_eq!(id.to_string(), "home.align.left");
-        assert_eq!(id.as_str(), "home.align.left");
+        let id = CommandId::new("arrange.align.left");
+        assert_eq!(id.to_string(), "arrange.align.left");
+        assert_eq!(id.as_str(), "arrange.align.left");
+    }
+
+    #[test]
+    fn command_id_ref() {
+        let id = CommandId::new("file.save");
+        let s: &str = id.as_ref();
+        assert_eq!(s, "file.save");
+    }
+
+    #[test]
+    fn fluent_id_display_and_ref() {
+        let f = FluentId::new("FileSave");
+        assert_eq!(f.to_string(), "FileSave");
+        assert_eq!(f.as_str(), "FileSave");
+        let s: &str = f.as_ref();
+        assert_eq!(s, "FileSave");
     }
 
     #[test]
@@ -616,6 +737,9 @@ mod tests {
         let l = CommandLookup::empty();
         assert_eq!(l.len(), 0);
         assert!(l.is_empty());
+        assert!(l.labels.is_empty());
+        assert!(l.commands.is_empty());
+        assert!(l.fluent_by_command.is_empty());
     }
 
     #[test]
@@ -650,13 +774,7 @@ mod tests {
     fn size_variant_round_trip() {
         for s in ["small", "medium", "large", "extra-large"] {
             let v = SizeVariant::parse(s).unwrap();
-            let back = match v {
-                SizeVariant::Small => "small",
-                SizeVariant::Medium => "medium",
-                SizeVariant::Large => "large",
-                SizeVariant::ExtraLarge => "extra-large",
-            };
-            assert_eq!(back, s);
+            assert_eq!(v.as_str(), s);
         }
         assert!(SizeVariant::parse("huge").is_none());
     }
@@ -672,10 +790,13 @@ mod tests {
     }
 
     #[test]
-    fn fluent_id_display_and_ref() {
-        let f = FluentId::new("FileSave");
-        assert_eq!(f.to_string(), "FileSave");
-        assert_eq!(f.as_str(), "FileSave");
+    fn fluent_id_ord() {
+        let a = FluentId::new("AlignLeftButton");
+        let b = FluentId::new("AlignRightButton");
+        let c = FluentId::new("FileSave");
+        assert!(a < b);
+        assert!(b < c);
+        assert_eq!(a, FluentId::new("AlignLeftButton"));
     }
 
     #[test]
@@ -687,5 +808,54 @@ mod tests {
         s.insert(LayoutKind::Visio2016);
         assert_eq!(s.len(), 2);
         assert_ne!(LayoutKind::Visio2016, LayoutKind::Visio365);
+    }
+
+    #[test]
+    fn control_carries_fluent_id_and_command_link() {
+        // Sanity: Control.id is a FluentId, Control.command is an
+        // Option<CommandId>. B1 finding.
+        let c = Control {
+            id: FluentId::new("FileSave"),
+            r#type: ControlType::Button,
+            label: "Save".into(),
+            order: 0,
+            parent: None,
+            command: Some(CommandId::new("file.save")),
+            aliases: vec![],
+            bounds: None,
+            icon_ref: None,
+            keytip: None,
+            size_variant: None,
+            visual_notes: None,
+        };
+        assert_eq!(c.id, FluentId::new("FileSave"));
+        assert_eq!(c.command, Some(CommandId::new("file.save")));
+        assert!(c.aliases.is_empty());
+    }
+
+    #[test]
+    fn shortcut_carries_sequence_of_chords() {
+        // m2 finding: shortcut.sequence is an ordered list of chords.
+        let s = Shortcut {
+            sequence: vec![vec!["Ctrl".into(), "Z".into()]],
+            command: CommandId::new("edit.undo"),
+            scope: ShortcutScope::Global,
+            section: Some("Frequently used shortcuts".into()),
+        };
+        assert_eq!(s.sequence.len(), 1);
+        assert_eq!(s.sequence[0], vec!["Ctrl", "Z"]);
+
+        // Multi-chord keytip (Alt+H, F, O).
+        let s2 = Shortcut {
+            sequence: vec![
+                vec!["Alt".into(), "H".into()],
+                vec!["F".into()],
+                vec!["O".into()],
+            ],
+            command: CommandId::new("file.open"),
+            scope: ShortcutScope::Global,
+            section: None,
+        };
+        assert_eq!(s2.sequence.len(), 3);
     }
 }
