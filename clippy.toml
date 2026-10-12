@@ -1,0 +1,7 @@
+# The never-crash lints (see [workspace.lints.clippy] in Cargo.toml) apply to
+# non-test code only.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-dbg-in-tests = true

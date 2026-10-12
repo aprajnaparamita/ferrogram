@@ -1,0 +1,50 @@
+# cargo-deny configuration. Run with `cargo deny check` (part of `cargo xtask gate`).
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Allowances are listed up front for crates we expect (fonts, unicode, GUI stack).
+unused-allowed-license = "allow"
+# Permissive licenses only. MPL-2.0 is NOT in this list: it is allowed solely
+# for ferrogram-vsd-binary via the exception below (see ADR 0003).
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "BSL-1.0",
+    "OFL-1.1",
+]
+
+[[licenses.exceptions]]
+crate = "ferrogram-vsd-binary"
+allow = ["MPL-2.0"]
+
+[licenses.private]
+# Check our own workspace crates too, so a stray MPL license anywhere else fails.
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

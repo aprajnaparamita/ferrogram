@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*", "xtask"]
+# Fuzz crates (crates/<name>/fuzz) are their own workspaces, as cargo-fuzz generates them.
+# They need nightly and are built by `cargo xtask gate` via `cargo +nightly fuzz build`.
+exclude = ["tools/libvisio-oracle"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.95"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Never crash: non-test code returns errors instead of panicking.
+# Tests are exempted via clippy.toml.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+# Parser crates (vsdx, vsd-binary, shapesheet) also deny `indexing_slicing` at their crate root.
+dbg_macro = "warn"
+
+[profile.dev]
+# Keep debug builds reasonably fast for the UI.
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

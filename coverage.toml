@@ -1,0 +1,29 @@
+# Per-crate line-coverage thresholds for `cargo xtask gate` (step 5).
+#
+# [thresholds]: minimum line coverage in percent, per package.
+# [ratchet]:    coverage recorded at the end of the previous phase. The gate
+#               fails if any crate drops below it. Update at a phase end with
+#               `cargo xtask coverage --update-ratchet` and commit the result.
+#
+# A crate with zero instrumented lines (an empty placeholder) passes.
+
+[thresholds]
+ferrogram-geom = 85.0
+ferrogram-model = 85.0
+ferrogram-vsdx = 85.0
+ferrogram-vsd-binary = 85.0
+ferrogram-shapesheet = 85.0
+ferrogram-commands = 85.0
+ferrogram-ui-spec = 85.0
+ferrogram-render = 75.0
+ferrogram-text = 75.0
+ferrogram-control = 50.0
+ferrogram-ui = 50.0
+ferrogram = 50.0
+ferrogram-cli = 50.0
+
+[ratchet]
+ferrogram = 66.6
+ferrogram-cli = 66.6
+ferrogram-web = 0.0
+xtask = 55.6

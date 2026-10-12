@@ -1,0 +1,22 @@
+# Build output
+/target/
+**/fuzz/target/
+**/fuzz/corpus/
+**/fuzz/artifacts/
+/dist/
+
+# Raw downloads (Microsoft specs, libvisio source, etc.). Never commit.
+/reference
+
+# Local coverage output
+/lcov.info
+/coverage/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/settings.local.json
