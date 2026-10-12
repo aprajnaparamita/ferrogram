@@ -15,7 +15,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-04](tasks/P1-04.md) | implementer | P1-03 | ready (wave B) | — |
 | [P1-05](tasks/P1-05.md) | implementer | P1-02 | merged (OPC plumbing parts set to supported on main) | agent/P1-05 |
 | [P1-06](tasks/P1-06.md) | implementer | P1-02 | merged (schema issues 1–2 fixed on main) | agent/P1-06 |
-| [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | in progress | agent/P1-06b |
+| [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | merged | agent/P1-06b |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | merged (oracle built locally, smoke test passes) | agent/P1-07 |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
 | P1-08 | test-engineer | P1-03..07 | not written | — |
@@ -33,7 +33,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). After P1-06b merges, update the `FluentId` doc comment in `crates/ui-spec/src/lib.rs` to the pattern `^[A-Za-z_][A-Za-z0-9_]*$` (P1-03 review).
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 
 ## Deferred minor findings (for the phase report)
 
@@ -41,3 +41,4 @@ Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 - P1-12: `ureq` uses the private `_ring` feature; it may break on a ureq minor update. Revisit if the webpki-roots licence (CDLA-Permissive-2.0) is accepted in `deny.toml`.
 - P1-07: CI does not build the oracle yet. When the GitHub remote exists, add an oracle build step on Linux and macOS (apt/brew deps from `tools/libvisio-oracle/README.md`), set `FERROGRAM_LIBVISIO_ORACLE` and `FERROGRAM_REQUIRE_ORACLE=1`, and run the ignored oracle tests. Windows skips.
 - P1-07: `cargo llvm-cov` excludes `tests/` by default, so a crate's coverage counts only `src/`. The vsd-binary threshold becomes meaningful once it has library code (Phase 7).
+- P1-06b: a test that loads the committed `ui-spec/*.yaml` with real `commands.yaml` and `shortcuts.yaml` and pins the real control counts. P1-03 covers the layouts with empty tables; P1-04 adds a loader check; P1-08 (test-engineer) owns the final version.
