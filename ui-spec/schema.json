@@ -1,0 +1,384 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ferrogram.dev/schemas/ui-spec-v1.json",
+  "title": "Ferrogram ui-spec layout, commands and shortcuts",
+  "description": "Schema for ui-spec/visio-2016.yaml, ui-spec/visio-365.yaml, ui-spec/commands.yaml and ui-spec/shortcuts.yaml. Validated by the xtask extract step and by crates/ui-spec at load time. See ADR 0007.",
+  "definitions": {
+    "controlType": {
+      "description": "The Fluent UI control type vocabulary (ADR 0007).",
+      "type": "string",
+      "enum": [
+        "tab",
+        "tabSet",
+        "group",
+        "button",
+        "toggleButton",
+        "splitButton",
+        "gallery",
+        "menu",
+        "checkBox",
+        "dropDown",
+        "comboBox",
+        "labelControl",
+        "control",
+        "buttonDialogBoxLauncher",
+        "contextMenu",
+        "task",
+        "taskFormGroup",
+        "category",
+        "none"
+      ]
+    },
+    "commandId": {
+      "description": "A Ferrogram command id (ADR 0006): dotted, lowercase, [a-z0-9_]. Functional scope (arrange, file, tools, ...), never a ribbon tab.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "fluentId": {
+      "description": "A Microsoft Fluent UI control name (e.g. FileSave). Letters, digits and underscores only. Used as the id of every control, group, tab, backstage tab and context menu in the layout files (ADR 0007 B1).",
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+    },
+    "label": {
+      "description": "Short UI label. Never a description; see AGENTS.md clean-room rule 4.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "order": {
+      "description": "Sibling order. Ties broken by id, ascending.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "iconRef": {
+      "description": "Reserved for the screenshot pass. Path or id of an icon asset.",
+      "type": ["string", "null"]
+    },
+    "keytip": {
+      "description": "Reserved for the screenshot pass. The keyboard keytip shown next to the label (e.g. 'A', 'NS').",
+      "type": ["string", "null"],
+      "maxLength": 8
+    },
+    "sizeVariant": {
+      "description": "Reserved for the screenshot pass. One of: 'small', 'medium', 'large', 'extra-large'.",
+      "type": ["string", "null"],
+      "enum": [null, "small", "medium", "large", "extra-large"]
+    },
+    "bounds": {
+      "description": "Reserved for the screenshot pass. Optional bounding box in device-independent pixels.",
+      "type": ["object", "null"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "w": { "type": "number", "minimum": 0 },
+        "h": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "visualNotes": {
+      "description": "Reserved for the screenshot pass. Free-text annotation, never a description of behaviour.",
+      "type": ["string", "null"]
+    },
+    "control": {
+      "description": "One control in a ribbon, backstage, or context menu. The id is the Fluent control name; the optional `command` is a Ferrogram command id from commands.yaml.",
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "label",
+        "order",
+        "command",
+        "bounds",
+        "icon_ref",
+        "keytip",
+        "size_variant",
+        "visual_notes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/fluentId" },
+        "type": { "$ref": "#/definitions/controlType" },
+        "label": { "$ref": "#/definitions/label" },
+        "order": { "$ref": "#/definitions/order" },
+        "parent": {
+          "description": "Immediate parent control id (Fluent), or null for top-level.",
+          "type": ["string", "null"]
+        },
+        "command": {
+          "description": "Ferrogram command id dispatched when the control is activated, or null if none.",
+          "type": ["string", "null"],
+          "$ref": "#/definitions/commandId"
+        },
+        "aliases": {
+          "description": "Alternate Fluent ids for the same control across ribbon/cross-ribbon placements (P1-03 picks a primary parent).",
+          "type": "array",
+          "items": { "$ref": "#/definitions/fluentId" },
+          "uniqueItems": true
+        },
+        "bounds": { "$ref": "#/definitions/bounds" },
+        "icon_ref": { "$ref": "#/definitions/iconRef" },
+        "keytip": { "$ref": "#/definitions/keytip" },
+        "size_variant": { "$ref": "#/definitions/sizeVariant" },
+        "visual_notes": { "$ref": "#/definitions/visualNotes" }
+      },
+      "additionalProperties": false
+    },
+    "group": {
+      "description": "A Fluent group inside a tab. Children are controls of any type (group / splitButton / etc).",
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "order",
+        "bounds",
+        "icon_ref",
+        "keytip",
+        "size_variant",
+        "visual_notes",
+        "controls"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/fluentId" },
+        "type": { "const": "group" },
+        "label": { "$ref": "#/definitions/label" },
+        "order": { "$ref": "#/definitions/order" },
+        "bounds": { "$ref": "#/definitions/bounds" },
+        "icon_ref": { "$ref": "#/definitions/iconRef" },
+        "keytip": { "$ref": "#/definitions/keytip" },
+        "size_variant": { "$ref": "#/definitions/sizeVariant" },
+        "visual_notes": { "$ref": "#/definitions/visualNotes" },
+        "controls": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/control" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tab": {
+      "description": "A Fluent tab (top-level or nested in a tabSet).",
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "order",
+        "bounds",
+        "icon_ref",
+        "keytip",
+        "size_variant",
+        "visual_notes",
+        "groups"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/fluentId" },
+        "type": { "const": "tab" },
+        "label": { "$ref": "#/definitions/label" },
+        "order": { "$ref": "#/definitions/order" },
+        "tab_set": {
+          "description": "The Fluent tab set name (e.g. 'TabSetPrimary').",
+          "type": ["string", "null"]
+        },
+        "bounds": { "$ref": "#/definitions/bounds" },
+        "icon_ref": { "$ref": "#/definitions/iconRef" },
+        "keytip": { "$ref": "#/definitions/keytip" },
+        "size_variant": { "$ref": "#/definitions/sizeVariant" },
+        "visual_notes": { "$ref": "#/definitions/visualNotes" },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/group" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tabsList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/tab" }
+    },
+    "backstage": {
+      "description": "Backstage tabs under the File button. Backstage tabs are flat (no groups).",
+      "type": "object",
+      "required": ["kind", "tabs"],
+      "properties": {
+        "kind": { "const": "backstage" },
+        "tabs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "order",
+              "bounds",
+              "icon_ref",
+              "keytip",
+              "size_variant",
+              "visual_notes",
+              "controls"
+            ],
+            "properties": {
+              "id": { "$ref": "#/definitions/fluentId" },
+              "type": { "const": "tab" },
+              "label": { "$ref": "#/definitions/label" },
+              "order": { "$ref": "#/definitions/order" },
+              "bounds": { "$ref": "#/definitions/bounds" },
+              "icon_ref": { "$ref": "#/definitions/iconRef" },
+              "keytip": { "$ref": "#/definitions/keytip" },
+              "size_variant": { "$ref": "#/definitions/sizeVariant" },
+              "visual_notes": { "$ref": "#/definitions/visualNotes" },
+              "controls": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/control" }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "contextMenus": {
+      "description": "Context menus on the canvas and on shapes.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "order",
+          "bounds",
+          "icon_ref",
+          "keytip",
+          "size_variant",
+          "visual_notes",
+          "controls"
+        ],
+        "properties": {
+          "id": { "$ref": "#/definitions/fluentId" },
+          "type": { "const": "contextMenu" },
+          "label": { "$ref": "#/definitions/label" },
+          "order": { "$ref": "#/definitions/order" },
+          "bounds": { "$ref": "#/definitions/bounds" },
+          "icon_ref": { "$ref": "#/definitions/iconRef" },
+          "keytip": { "$ref": "#/definitions/keytip" },
+          "size_variant": { "$ref": "#/definitions/sizeVariant" },
+          "visual_notes": { "$ref": "#/definitions/visualNotes" },
+          "controls": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/control" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "quickAccessToolbar": {
+      "description": "The Quick Access Toolbar (QAT).",
+      "type": "object",
+      "required": ["id", "controls"],
+      "properties": {
+        "id": { "const": "qat" },
+        "controls": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/control" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "layout": {
+      "description": "Top-level shape of visio-2016.yaml and visio-365.yaml. `extracted` is intentionally absent: a timestamp would change on every `cargo xtask extract` run, breaking ADR 0009's deterministic-output rule. `source_revision` is the pinned source identifier.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "product",
+        "source",
+        "tabs",
+        "backstage",
+        "context_menus",
+        "quick_access_toolbar"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "product": { "const": "visio" },
+        "source": { "type": "string" },
+        "source_url": { "type": "string", "format": "uri" },
+        "source_revision": { "type": "string" },
+        "tabs": { "$ref": "#/definitions/tabsList" },
+        "backstage": { "$ref": "#/definitions/backstage" },
+        "context_menus": { "$ref": "#/definitions/contextMenus" },
+        "quick_access_toolbar": { "$ref": "#/definitions/quickAccessToolbar" }
+      },
+      "additionalProperties": false
+    },
+    "mappingConfidence": {
+      "type": "string",
+      "enum": ["exact", "inferred", "unknown"]
+    },
+    "command": {
+      "description": "One entry in commands.yaml. Maps a Ferrogram command id to a VisUICmds constant and to one or more Fluent control names. Every `fluent_ids` entry must appear in at least one layout; the loader enforces that.",
+      "type": "object",
+      "required": ["id", "label", "visuicmd", "fluent_ids", "mapping_confidence"],
+      "properties": {
+        "id": { "$ref": "#/definitions/commandId" },
+        "label": { "$ref": "#/definitions/label" },
+        "visuicmd": {
+          "description": "A VisUICmds constant name (e.g. 'visCmdFileSave'), or null when no mapping is known yet.",
+          "type": ["string", "null"],
+          "pattern": "^visCmd[A-Za-z0-9]+$"
+        },
+        "fluent_ids": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/fluentId" },
+          "uniqueItems": true
+        },
+        "mapping_confidence": { "$ref": "#/definitions/mappingConfidence" }
+      },
+      "additionalProperties": false
+    },
+    "commands": {
+      "description": "Top-level shape of commands.yaml.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/command" }
+    },
+    "keyChord": {
+      "description": "A single key in a chord, e.g. 'Ctrl', 'Shift', 'A', 'F1'. Modifiers and one key, in any order within a chord.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "shortcutScope": {
+      "type": "string",
+      "enum": ["global", "ribbon", "page", "text", "selection", "window"]
+    },
+    "shortcut": {
+      "description": "A keyboard shortcut. A sequence of chords typed in order; each chord is a set of keys pressed simultaneously. A single-key shortcut has a one-chord sequence (e.g. `[[Ctrl, Z]]` for Ctrl+Z); a ribbon keytip like Alt+H, F, O is `[[Alt, H], [F, O]]`.",
+      "type": "object",
+      "required": ["sequence", "command", "scope"],
+      "properties": {
+        "sequence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/definitions/keyChord" },
+            "uniqueItems": true
+          }
+        },
+        "command": { "$ref": "#/definitions/commandId" },
+        "scope": { "$ref": "#/definitions/shortcutScope" },
+        "section": {
+          "description": "Optional human-readable section from the source page (e.g. 'Frequently used shortcuts').",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "shortcuts": {
+      "description": "Top-level shape of shortcuts.yaml.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/shortcut" }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/layout" },
+    { "$ref": "#/definitions/commands" },
+    { "$ref": "#/definitions/shortcuts" }
+  ]
+}
