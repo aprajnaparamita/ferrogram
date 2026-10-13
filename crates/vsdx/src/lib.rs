@@ -7,8 +7,10 @@
 //! relationships and part access, with hard caps against zip bombs and huge
 //! inputs (ADR 0017).
 //!
-//! Part of Ferrogram. Alpha: function bodies here are `Err` stubs until tasks
-//! P2-05 to P2-07 implement them (task P2-01 defines the signatures).
+//! Part of Ferrogram. Alpha: the package layer (`read_package`,
+//! `write_package`) is implemented (task P2-05); the document mapping
+//! (`read_document`, `to_model`, `from_model`, `write_document`) is `Err`
+//! stubs until tasks P2-06 and P2-07 implement them.
 
 #![forbid(unsafe_code)]
 #![deny(clippy::indexing_slicing)]

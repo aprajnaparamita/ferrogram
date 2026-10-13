@@ -5,6 +5,7 @@
 
 mod read;
 mod write;
+mod xml;
 
 use ferrogram_model::Preserved;
 
@@ -206,7 +207,6 @@ pub use write::write_package;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Error;
 
     #[test]
     fn newtypes_hold_their_strings() {
@@ -273,14 +273,9 @@ mod tests {
     }
 
     #[test]
-    fn package_io_is_stubs() {
-        assert_eq!(
-            read_package(&[], &Limits::DEFAULT),
-            Err(Error::NotImplemented("read_package"))
-        );
-        assert_eq!(
-            write_package(&Package::new()),
-            Err(Error::NotImplemented("write_package"))
-        );
+    fn package_io_is_implemented() {
+        assert!(read_package(&[], &Limits::DEFAULT).is_err());
+        let bytes = write_package(&Package::new()).expect("write");
+        assert!(!bytes.is_empty());
     }
 }
