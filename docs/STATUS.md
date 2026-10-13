@@ -35,7 +35,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). Before the first push: rewrite history to drop the verbatim support-page text in `docs/tasks/P1-04.md` at `c5d2652` (P1-11 F1; needs the user's go-ahead). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). Before the first push: rewrite history to drop the verbatim support-page text in `docs/tasks/P1-04.md` at `c5d2652` (P1-11 F1; approved by the user on 2026-10-13, to run after P1-13 and P1-14 merge, with no worktrees open and a backup branch). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
 
 ## Deferred minor findings (for the phase report)
 
