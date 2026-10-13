@@ -159,15 +159,21 @@ fn is_delimiter_row(line: &str) -> bool {
 }
 
 /// Splits one table row into cells, honouring `\|` escapes and an
-/// optional trailing pipe.
+/// optional trailing pipe. The trailing pipe is dropped only when it
+/// is a real closing pipe: a `|` preceded by an odd number of
+/// backslashes is an escaped pipe, not a delimiter.
 fn split_row(line: &str) -> Vec<String> {
     let mut body = line.trim();
     if let Some(stripped) = body.strip_prefix('|') {
         body = stripped;
     }
     // Drop a trailing pipe unless it is escaped.
-    if body.ends_with('|') && !body.ends_with("\\|") {
-        body = &body[..body.len() - 1];
+    if body.ends_with('|') {
+        let before = &body[..body.len() - 1];
+        let backslashes = before.chars().rev().take_while(|c| *c == '\\').count();
+        if backslashes % 2 == 0 {
+            body = before;
+        }
     }
     let mut cells = Vec::new();
     let mut cur = String::new();
@@ -375,6 +381,18 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].rows.len(), 1);
         assert_eq!(parsed[0].rows[0], vec!["p | q", "r"]);
+    }
+
+    #[test]
+    fn tables_trailing_escaped_backslash() {
+        // `|a\\|` is one cell `a\` with a closing pipe: the trailing
+        // pipe follows two (an even number of) backslashes and is a
+        // real delimiter, not an escaped one.
+        let parsed = tables("|h|\n|---|\n|a\\\\|\n|b\\\\\\|\n");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].rows[0], vec!["a\\"]);
+        // `|b\\\||` is one cell `b\|` (escaped pipe at the end).
+        assert_eq!(parsed[0].rows[1], vec!["b\\|"]);
     }
 
     #[test]
