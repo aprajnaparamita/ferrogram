@@ -291,7 +291,7 @@ fn load_pages(docs_dir: &Path) -> ExtractResult<(Vec<CellPage>, BTreeMap<String,
             // their row-index constants come from the cell pages.
             let _ = (name, section);
         } else if let Some((name, _)) = split_title(&title, " Section") {
-            // How-to pages ("Add, Show, Hide, or Delete a Section")
+            // How-to pages (the "manage a section" how-to) are
             // have comma-separated imperative names; section names
             // are noun phrases. The MS-VSDX schema pages
             // (`cell-element-*-visio-xml.md`) are named like
@@ -695,7 +695,7 @@ Index lookup for this cell:
 ";
 
     const CELL_REPEAT_FIXTURE: &str = "\
-# Y Justify Cell (Action Tags Section)
+# YJustify Cell (Action Tags Section)
 
 How far the tag button sits below its anchor.
 

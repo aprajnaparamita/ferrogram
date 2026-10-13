@@ -2019,12 +2019,10 @@ mod tests {
             Some(PageKind::TypePage("Actions_Type".into()))
         );
         assert_eq!(
-            page_kind(
-                "# AttachedToolbars element (DocumentSettings_Type complexType) (Visio XML)\n"
-            ),
+            page_kind("# Widget123 element (Gadget_Type complexType) (Visio XML)\n"),
             Some(PageKind::ElementPage {
-                name: "AttachedToolbars".into(),
-                parent: "DocumentSettings_Type".into(),
+                name: "Widget123".into(),
+                parent: "Gadget_Type".into(),
             })
         );
         assert_eq!(page_kind("# A page about nothing\n"), None);
