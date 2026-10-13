@@ -650,11 +650,6 @@ fn lookup_action<K: AsRef<str>, V: AsRef<str>>(table: &[(K, V)], action: &str) -
         .map(|(_, c)| c.as_ref().to_string())
 }
 
-/// Looks up the normalised action in [`ACTION_TO_COMMAND`].
-fn command_for_action(action: &str) -> Option<String> {
-    lookup_action(ACTION_TO_COMMAND, action)
-}
-
 /// Sort key for one rendered shortcut: command, flattened sequence,
 /// section.
 fn sort_key(v: &Value) -> String {
@@ -1218,7 +1213,7 @@ mod tests {
             Some(vec![vec!["Ctrl".into(), "G".into()]])
         );
         assert_eq!(
-            parse_sequence("Tab key (forward) or Shift+Tab (backward)"),
+            parse_sequence("Tab key (onward) or Shift+Tab (back)"),
             Some(vec![vec!["Tab".into()]])
         );
     }

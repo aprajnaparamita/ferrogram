@@ -304,11 +304,6 @@ fn parent_of(dest: &Path) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Runs the corpus task against the workspace root.
-pub fn run(args: &[String]) -> Result<()> {
-    run_opts(&parse_args(args)?)
-}
-
 /// Runs the corpus task with already-parsed options.
 pub fn run_opts(opts: &Options) -> Result<()> {
     run_with_root(opts, &crate::util::root())
@@ -784,7 +779,6 @@ size = 41984
     fn fetch_loop_reports_a_stat_error_while_verifying() {
         let sha = sha256_hex(b"abc");
         let root = one_file_root("a.bin", "s", &sha, 3);
-        let dest = root.join("corpus/a.bin");
         // The fetch "succeeds" but leaves a symlink loop behind.
         let mut fetch = |_s: &Source, _e: &FileEntry, d: &Path| {
             let _ = fs::remove_file(d);
