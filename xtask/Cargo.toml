@@ -36,6 +36,10 @@ serde-saphyr = "1.3"     # MIT; pure-Rust YAML (replaces archived serde_yaml and
 # the ui-spec format (P1-03 review M2). xtask is outside the layer
 # rules (AGENTS.md section 6), so it may depend on crates/ui-spec.
 ferrogram-ui-spec = { path = "../crates/ui-spec" }
+# Already in the tree (calamine reads .xlsx with it); the P1-08
+# fixture builder writes tiny .xlsx workbooks for the extract --check
+# tests.
+zip = "8.6"
 
 [lints]
 workspace = true
