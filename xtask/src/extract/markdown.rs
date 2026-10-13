@@ -1,5 +1,8 @@
 //! Tiny markdown helpers for the Phase 1 extractors (P1-05).
 //!
+//! Whitespace collapsing comes from [`super::util::collapse`]; there is
+//! one such helper in the tree.
+//!
 //! The Microsoft reference pages under `reference/` are markdown with a
 //! small, uniform shape. This module extracts just the two constructs the
 //! extractors need, without a full markdown dependency:
@@ -17,6 +20,8 @@
 //! Clean-room note (AGENTS.md section 4): [`cell_text`] returns text as it
 //! appears in the source. Callers must store only structural fields
 //! (names, ids, types, parents) and never prose (ADR 0009).
+
+use super::util::collapse;
 
 /// One fenced code block: the info string after the opening fence and the
 /// block body.
@@ -284,11 +289,6 @@ fn link_at(chars: &[char], start: usize) -> Option<(String, usize)> {
     }
     let text: String = chars[start + 1..j].iter().collect();
     Some((cell_text(&text), k + 1))
-}
-
-/// Collapses whitespace runs and trims.
-fn collapse(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Collects `(key, value)` pairs from every table in `text`, taking the

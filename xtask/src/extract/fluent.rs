@@ -20,10 +20,9 @@ use std::path::{Path, PathBuf};
 
 use calamine::{Data, Range, Reader, open_workbook_auto};
 use serde_json::{Map, Value, json};
-use serde_saphyr::SerializerOptions;
 
 use super::schema::Schema;
-use super::util::write_atomic;
+use super::util::{emit_yaml, write_and_validate};
 use super::{ExtractError, ExtractResult};
 
 /// Per-extractor entry point. Reads from `in_dir` (the
@@ -62,17 +61,8 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
 
     let path_2016 = out_dir.join("ui-spec").join("panel-2016.yaml");
     let path_365 = out_dir.join("ui-spec").join("panel-365.yaml");
-    write_atomic(&path_2016, &layout_2016.text).map_err(|msg| ExtractError::Io {
-        path: path_2016.clone(),
-        source: msg,
-    })?;
-    write_atomic(&path_365, &layout_365.text).map_err(|msg| ExtractError::Io {
-        path: path_365.clone(),
-        source: msg,
-    })?;
-
-    schema.validate_file(&path_2016)?;
-    schema.validate_file(&path_365)?;
+    write_and_validate(&schema, &path_2016, &layout_2016.text)?;
+    write_and_validate(&schema, &path_365, &layout_365.text)?;
 
     Ok(vec![path_2016, path_365])
 }
@@ -193,24 +183,9 @@ fn build_layout(
     let rows = parse_xlsx(xlsx_path)?;
     let row_refs: Vec<&Row> = rows.iter().collect();
     let layout = assemble_layout(&row_refs, xlsx_path, source, source_url, source_revision)?;
-    // serde-saphyr 1.x defaults differ from 0.0.16 in two ways that
-    // affect the diff:
-    //
-    // - `compact_list_indent = true`: the list dash is put at the
-    //   parent's indent. Disable to keep the older
-    //   `tabs:\n  - bounds: null` style.
-    // - `prefer_block_scalars = true`: long single-line strings and
-    //   strings with newlines are written as block scalars
-    //   (`| ... |`). Disable to keep plain (and quoted) inline
-    //   scalars.
-    let mut options = SerializerOptions::default();
-    options.compact_list_indent = false;
-    options.prefer_block_scalars = false;
-    let text = serde_saphyr::to_string_with_options(&layout, options).map_err(|e| {
-        ExtractError::Parse {
-            path: xlsx_path.to_path_buf(),
-            message: format!("YAML serialize: {e}"),
-        }
+    let text = emit_yaml(&layout).map_err(|msg| ExtractError::Parse {
+        path: xlsx_path.to_path_buf(),
+        message: msg,
     })?;
     Ok(BuiltLayout { text })
 }

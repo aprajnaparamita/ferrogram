@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use toml::Value as Toml;
 
 use super::markdown::{cell_text, kv_pairs, tables};
-use super::util::write_atomic;
+use super::util::{unescape_entities, write_atomic};
 use super::{ExtractError, ExtractResult};
 
 /// ShapeSheet reference revision recorded in the file header
@@ -657,16 +657,8 @@ fn render_toml(
     })
 }
 
-/// Decodes the HTML entities that leak into the markdown titles
-/// (`Ruler &amp; Grid Section`).
-fn unescape_entities(text: &str) -> String {
-    text.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&nbsp;", " ")
-}
+// The HTML entity decoder lives in `super::util` (one decoder shared
+// by every extractor).
 
 #[cfg(test)]
 mod tests {
