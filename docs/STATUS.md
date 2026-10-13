@@ -11,7 +11,7 @@ Task board. Only the master agent edits this file, on `main`.
 |---|---|---|---|---|
 | [P2-01](tasks/P2-01.md) | architect | phase-1 | merged (ADRs 0011–0017, stubs, task files) | agent/P2-01 |
 | [P2-02](tasks/P2-02.md) | implementer | P2-01 | ready (group A) | — |
-| [P2-03](tasks/P2-03.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-03](tasks/P2-03.md) | implementer | P2-01 | merged (use `UnitKind` for kind-checked conversion) | agent/P2-03 |
 | [P2-05](tasks/P2-05.md) | implementer | P2-01 | ready (group A) | — |
 | [P2-08](tasks/P2-08.md) | implementer | P2-01 | ready (group A) | — |
 | [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | waiting (group B) | — |
