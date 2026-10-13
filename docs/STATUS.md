@@ -22,6 +22,8 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-09](tasks/P1-09.md) | reviewer | P1-08 | merged (approve with fixes: 0 blocker, 2 major, 8 minor) | agent/P1-09 |
 | [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | merged (pass: 0 blocker, 2 major, 7 minor) | agent/P1-10 |
 | [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | merged (pass with findings: 0 blocker, 1 major, 4 minor) | agent/P1-11 |
+| [P1-13](tasks/P1-13.md) | implementer | P1-09..11 | ready (parallel) | — |
+| [P1-14](tasks/P1-14.md) | implementer | P1-09..10 | ready (parallel) | — |
 
 States: not written · outline · ready · in progress · in review · merged · blocked.
 
@@ -33,7 +35,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). Before the first push: rewrite history to drop the verbatim support-page text in `docs/tasks/P1-04.md` at `c5d2652` (P1-11 F1; needs the user's go-ahead). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
 
 ## Deferred minor findings (for the phase report)
 
