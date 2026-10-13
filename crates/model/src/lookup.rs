@@ -1270,12 +1270,25 @@ mod tests {
             Some(CellValue::Number(0.5))
         );
         assert_eq!(
-            parse_default_value("90", "Degrees", "Number"),
-            Some(CellValue::Number(90.0))
-        );
-        assert_eq!(
             parse_default_value("2", "NoCast", "Number"),
             Some(CellValue::Number(2.0))
+        );
+    }
+
+    #[test]
+    fn parse_default_angle_values_are_radians() {
+        // The canonical angle unit is radians (ADR 0011), so a `Degrees`
+        // default converts to radians and a `Radians` default stays as
+        // written. `parse_default_value` itself does not change.
+        match parse_default_value("90", "Degrees", "Number") {
+            Some(CellValue::Number(value)) => {
+                assert!((value - core::f64::consts::FRAC_PI_2).abs() <= 1.0e-12, "{value}");
+            }
+            other => panic!("expected a number, got {other:?}"),
+        }
+        assert_eq!(
+            parse_default_value("1.5", "Radians", "Number"),
+            Some(CellValue::Number(1.5))
         );
     }
 
