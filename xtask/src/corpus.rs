@@ -306,8 +306,12 @@ fn parent_of(dest: &Path) -> PathBuf {
 
 /// Runs the corpus task against the workspace root.
 pub fn run(args: &[String]) -> Result<()> {
-    let opts = parse_args(args)?;
-    run_with_root(&opts, &crate::util::root())
+    run_opts(&parse_args(args)?)
+}
+
+/// Runs the corpus task with already-parsed options.
+pub fn run_opts(opts: &Options) -> Result<()> {
+    run_with_root(opts, &crate::util::root())
 }
 
 /// Core of [`run`], separated so tests can point it at a temp root.

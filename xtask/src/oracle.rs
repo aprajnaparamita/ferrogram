@@ -281,6 +281,12 @@ struct Options {
     jobs: Option<String>,
 }
 
+/// Validates `cargo xtask oracle` arguments without running anything
+/// (C3: the dispatcher validates arguments before running).
+pub fn parse_args(args: &[String]) -> Result<()> {
+    parse(args).map(|_| ())
+}
+
 /// Parses `cargo xtask oracle` arguments. `status` is the default
 /// command, mirroring `build.sh`.
 fn parse(args: &[String]) -> Result<Options> {
