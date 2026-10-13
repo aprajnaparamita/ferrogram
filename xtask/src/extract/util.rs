@@ -249,7 +249,10 @@ mod tests {
         assert_eq!(unescape_entities("a &amp; b"), "a & b");
         assert_eq!(unescape_entities("x &#39;y&#39;"), "x 'y'");
         assert_eq!(unescape_entities("&#65;"), "A");
-        assert_eq!(unescape_entities("keep &unknown; as-is"), "keep &unknown; as-is");
+        assert_eq!(
+            unescape_entities("keep &unknown; as-is"),
+            "keep &unknown; as-is"
+        );
         assert_eq!(unescape_entities("no entity"), "no entity");
     }
 

@@ -200,11 +200,7 @@ fn workbook_rows<'a>(extra: &[Vec<&'a str>]) -> Vec<Vec<&'a str>> {
 /// directory. Every call gets its own directory: tests run in
 /// parallel and must not rewrite each other's fixture files.
 pub fn reference_tree(name: &str) -> PathBuf {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let root =
-        std::env::temp_dir().join(format!("ferrogram-p108-{}-{name}-{n}", std::process::id()));
+    let root = crate::util::test_support::temp_path(&format!("fixture-{name}"));
     let _ = std::fs::remove_dir_all(&root);
     write(&root, "learn/visuicmds/visuicmds.md", VISUICMDS_MD);
     write(

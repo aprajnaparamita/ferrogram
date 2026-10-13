@@ -67,7 +67,8 @@ pub fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| format!("path has no parent: {}", path.display()))?;
-    std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
     let tmp = unique_temp_path(path)?;
     {
         let mut f = std::fs::File::create(&tmp)
@@ -122,13 +123,22 @@ pub mod test_support {
     /// A unique temp directory, removed when it is dropped.
     pub struct TempDir(PathBuf);
 
+    /// A unique temp path name: `ferrogram-xtask-<label>-<pid>-<n>`,
+    /// where the counter makes every call unique. The one naming
+    /// helper for xtask test temp dirs.
+    pub fn temp_path(label: &str) -> PathBuf {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "ferrogram-xtask-{label}-{}-{n}",
+            std::process::id()
+        ))
+    }
+
     impl TempDir {
         /// Creates a fresh temp directory tagged with `label`.
         pub fn new(label: &str) -> Self {
-            static COUNTER: AtomicUsize = AtomicUsize::new(0);
-            let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("ferrogram-xtask-{label}-{}-{n}", std::process::id()));
+            let path = temp_path(label);
             let _ = std::fs::remove_dir_all(&path);
             std::fs::create_dir_all(&path).expect("test temp dir");
             TempDir(path)

@@ -397,30 +397,7 @@ pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    /// A unique temp directory removed on drop.
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new() -> Self {
-            static N: AtomicUsize = AtomicUsize::new(0);
-            let n = N.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("ferrogram-xtask-corpus-{}-{n}", std::process::id()));
-            fs::create_dir_all(&path).unwrap();
-            TempDir(path)
-        }
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::util::test_support::TempDir;
 
     const SAMPLE: &str = r#"[sources.libvisio]
 repo = "https://git.libreoffice.org/libvisio"
@@ -502,7 +479,7 @@ size = 41984
 
     #[test]
     fn verifies_files() {
-        let t = TempDir::new();
+        let t = TempDir::new("corpus");
         let data = b"hello, corpus\n";
         let expected_sha = sha256_hex(data);
 
@@ -564,7 +541,7 @@ size = 41984
     /// the file, and runs the fetch end-to-end without network.
     #[test]
     fn offline_run_fetches_and_is_idempotent() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let data = b"offline corpus bytes";
         let sha = sha256_hex(data);
 
@@ -605,7 +582,7 @@ size = 41984
 
     #[test]
     fn offline_run_rejects_missing_source_file() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let corpus = root.path().join("corpus");
         fs::create_dir_all(&corpus).unwrap();
         fs::write(
@@ -624,7 +601,7 @@ size = 41984
 
     #[test]
     fn rejects_hostile_manifest_names() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let corpus = root.path().join("corpus");
         fs::create_dir_all(&corpus).unwrap();
         fs::write(

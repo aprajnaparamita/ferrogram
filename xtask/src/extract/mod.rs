@@ -392,13 +392,20 @@ fn stale_generated(produced: &BTreeSet<PathBuf>, committed_root: &Path) -> Vec<P
     stale
 }
 
-/// True when both paths hold the same bytes. A missing or unreadable
-/// file is never equal to anything.
+/// True when both paths hold the same content. A missing or
+/// unreadable file is never equal to anything. Line endings do not
+/// count: a Windows checkout with `core.autocrlf` compares equal to
+/// the LF the emitters write (R6).
 fn same_bytes(a: &Path, b: &Path) -> bool {
     match (std::fs::read(a), std::fs::read(b)) {
-        (Ok(x), Ok(y)) => x == y,
+        (Ok(x), Ok(y)) => strip_cr(&x) == strip_cr(&y),
         _ => false,
     }
+}
+
+/// Drops carriage returns, so CRLF and LF compare equal.
+fn strip_cr(bytes: &[u8]) -> Vec<u8> {
+    bytes.iter().copied().filter(|b| *b != b'\r').collect()
 }
 
 /// Copies one committed input file into the scratch tree. Missing
@@ -539,21 +546,17 @@ mod tests {
             eprintln!("committed ui-spec not complete; skipping");
             return;
         }
-        let tmp =
-            std::env::temp_dir().join(format!("ferrogram-p1-04-loader-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("ui-loader");
         let data = tmp.join("ui-spec");
         std::fs::create_dir_all(&data).unwrap();
         for f in files {
             std::fs::copy(ui.join(f), data.join(f)).unwrap();
         }
 
-        let loader = Loader::new(&tmp).expect("loader compiles");
+        let loader = Loader::new(tmp.path()).expect("loader compiles");
         let sets = loader.load_all().expect("the committed quartet loads");
         assert!(!sets.visio_365.commands.entries.is_empty());
         assert!(!sets.visio_365.shortcuts.entries.is_empty());
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
@@ -628,8 +631,7 @@ mod tests {
     /// fails on the fixture tree.
     fn fixture_outputs(name: &str) -> (PathBuf, PathBuf) {
         let reference = fixtures::reference_tree(name);
-        let out =
-            std::env::temp_dir().join(format!("ferrogram-p108-out-{}-{name}", std::process::id()));
+        let out = crate::util::test_support::temp_path(&format!("check-out-{name}"));
         let _ = std::fs::remove_dir_all(&out);
         std::fs::create_dir_all(&out).unwrap();
         let args = ExtractArgs {
@@ -721,6 +723,19 @@ mod tests {
         );
     }
 
+    /// R6: `--check` treats CRLF and LF as equal.
+    #[test]
+    fn check_treats_crlf_and_lf_as_equal() {
+        let tmp = crate::util::test_support::TempDir::new("crlf");
+        let lf = tmp.join("a.txt");
+        let crlf = tmp.join("b.txt");
+        std::fs::write(&lf, b"one\ntwo\n").unwrap();
+        std::fs::write(&crlf, b"one\r\ntwo\r\n").unwrap();
+        assert!(same_bytes(&lf, &crlf));
+        std::fs::write(&crlf, b"one\r\ntoo\r\n").unwrap();
+        assert!(!same_bytes(&lf, &crlf));
+    }
+
     // ---- stale outputs (P1-13 goal 5 / R5) --------------------------
 
     /// The generated-path list is complete: the fixture run writes
@@ -748,10 +763,7 @@ mod tests {
                 other => panic!("extractor failed on the fixture tree: {other:?}"),
             }
         }
-        let listed: BTreeSet<String> = GENERATED_OUTPUTS
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect();
+        let listed: BTreeSet<String> = GENERATED_OUTPUTS.iter().map(|s| (*s).to_string()).collect();
         assert_eq!(produced, listed);
     }
 
@@ -760,16 +772,36 @@ mod tests {
     #[test]
     fn check_flags_committed_files_no_extractor_produced() {
         let (reference, out) = fixture_outputs("stale");
-        std::fs::write(out.join("ui-spec").join("legacy-layout.yaml"), b"# gone
-").unwrap();
-        std::fs::write(out.join("ui-spec").join("legacy-tables.toml"), b"# gone
-").unwrap();
-        std::fs::write(out.join("ui-spec").join("schema.json"), b"{}
-").unwrap();
-        std::fs::write(out.join("ui-spec").join("notes.txt"), b"notes
-").unwrap();
-        std::fs::write(out.join("ui-spec").join("README.md"), b"# readme
-").unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("legacy-layout.yaml"),
+            b"# gone
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("legacy-tables.toml"),
+            b"# gone
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("schema.json"),
+            b"{}
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("notes.txt"),
+            b"notes
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("README.md"),
+            b"# readme
+",
+        )
+        .unwrap();
         let report = check(&check_args(reference, out)).unwrap();
         let names: Vec<String> = report
             .stale
@@ -811,23 +843,17 @@ mod tests {
 
     #[test]
     fn seed_input_copies_and_tolerates_missing_files() {
-        let from = std::env::temp_dir().join(format!("ferrogram-p108-seed-{}", std::process::id()));
-        let to =
-            std::env::temp_dir().join(format!("ferrogram-p108-seed-to-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&from);
-        let _ = std::fs::remove_dir_all(&to);
+        let from = crate::util::test_support::TempDir::new("seed");
+        let to = crate::util::test_support::TempDir::new("seed-to");
         std::fs::create_dir_all(from.join("ui-spec")).unwrap();
-        std::fs::create_dir_all(&to).unwrap();
         std::fs::write(from.join("ui-spec").join("out-of-scope.txt"), b"X\n").unwrap();
-        seed_input(&from, &to, "ui-spec/out-of-scope.txt");
+        seed_input(from.path(), to.path(), "ui-spec/out-of-scope.txt");
         assert_eq!(
             std::fs::read_to_string(to.join("ui-spec").join("out-of-scope.txt")).unwrap(),
             "X\n"
         );
         // A missing source is a no-op, not an error.
-        seed_input(&from, &to, "ui-spec/not-there.txt");
+        seed_input(from.path(), to.path(), "ui-spec/not-there.txt");
         assert!(!to.join("ui-spec").join("not-there.txt").exists());
-        let _ = std::fs::remove_dir_all(&from);
-        let _ = std::fs::remove_dir_all(&to);
     }
 }
