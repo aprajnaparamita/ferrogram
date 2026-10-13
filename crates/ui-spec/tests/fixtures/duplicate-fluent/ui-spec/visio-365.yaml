@@ -1,0 +1,173 @@
+# Test fixture for crates/ui-spec. Not real Microsoft data.
+# The same Fluent controls as visio-2016.yaml, reorganised the way the
+# 365 ribbon differs from 2016 (Save on the Home tab, Connector in a
+# Tools group, one 365-only control).
+schema_version: 1
+product: visio
+source: "Test fixture, Microsoft 365 layout"
+source_url: "https://example.com/fixture/visio-365"
+source_revision: "fixture"
+tabs:
+  - id: TabHome
+    label: Home
+    order: 0
+    tab_set: TabSetPrimary
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    groups:
+      - id: GroupClipboard
+        label: Clipboard
+        order: 0
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: PasteGallery
+            type: gallery
+            label: Paste
+            order: 0
+            parent: GroupClipboard
+            command: edit.paste
+            aliases: [PasteMenu]
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+          - id: FileSave
+            type: button
+            label: Save
+            order: 1
+            parent: GroupClipboard
+            command: file.save
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+      - id: GroupFont
+        label: Font
+        order: 1
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: BoldToggleButton
+            type: toggleButton
+            label: Bold
+            order: 0
+            parent: GroupFont
+            command: format.text.bold
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+          # A control that dispatches no command (`command: null`):
+          # it still gets a label in the lookup, but no dispatch
+          # entry.
+          - id: FontSizeLabel
+            type: labelControl
+            label: Font Size
+            order: 1
+            parent: GroupFont
+            command: null
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+      - id: GroupTools
+        label: Tools
+        order: 2
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+        controls:
+          - id: ConnectorTool
+            type: button
+            label: Connector
+            order: 0
+            parent: GroupTools
+            command: tools.connector
+            bounds: null
+            icon_ref: null
+            keytip: null
+            size_variant: null
+            visual_notes: null
+backstage:
+  kind: backstage
+  tabs:
+    - id: FileNew
+      label: New
+      order: 0
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+      controls: []
+context_menus:
+  - id: ShapeShortcutMenu
+    label: Shape shortcut menu
+    order: 0
+    bounds: null
+    icon_ref: null
+    keytip: null
+    size_variant: null
+    visual_notes: null
+    controls:
+      - id: Cut
+        type: button
+        label: Cut
+        order: 0
+        parent: ShapeShortcutMenu
+        command: edit.cut
+        aliases: [CutShortcutItem]
+        bounds: null
+        icon_ref: null
+        keytip: null
+        size_variant: null
+        visual_notes: null
+quick_access_toolbar:
+  id: qat
+  controls:
+    - id: FileSaveQuickAccess
+      type: button
+      label: Save
+      order: 0
+      command: file.save
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+    - id: UndoQuickAccess
+      type: button
+      label: Undo
+      order: 1
+      command: edit.undo
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
+    - id: RedoButton
+      type: button
+      label: Redo
+      order: 2
+      command: edit.redo
+      bounds: null
+      icon_ref: null
+      keytip: null
+      size_variant: null
+      visual_notes: null
