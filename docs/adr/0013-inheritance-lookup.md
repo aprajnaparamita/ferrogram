@@ -68,6 +68,42 @@ entity it is written on. It does not copy master values into instances or
 style values into shapes. `Resolved` borrows from the document; nothing in
 the document changes when a lookup runs.
 
+## Amendments
+
+### Amended 2026-10-14, P2-06b: the master position rule and the style-id chain
+
+- **The master rung matches by position when a master has several
+  top-level shapes.** A master holds a list of top-level shapes
+  (`Master::shapes`, ADR 0011 amendment). An instance matches the master's
+  only shape when the list has exactly one, and the shape at its own
+  position otherwise: the instance root's position among its siblings (a
+  parent group's children, or the page's top-level shapes), reused at every
+  rung of a chained master reference. A position the master does not have
+  degrades to the master's first shape. Why: the singular "master's content
+  shape" of the original text does not exist in the file ([MS-VSDX] allows
+  several, the corpus has them), and picking the first shape for every
+  instance would resolve every instance of a multi-shape master to one
+  shape.
+- **The style chain follows Visio style IDs, per cell kind.** The
+  `LineStyle`/`FillStyle`/`TextStyle` values are the `ID` of a stylesheet
+  row (`Document::style_by_visio_id`), not a style name, and a style's own
+  chain is its own three attributes, not a `Style` cell (which `.vsdx` does
+  not write for this). A `Line Format` cell follows the `line_style` link,
+  a `Fill Format` cell the `fill_style` link, a `Character`/`Paragraph`
+  cell the `text_style` link, at every step of the chain. `style_by_name`
+  stays for callers that hold a name. Why: the name-based rung never
+  matched a file-loaded shape, so inheritance was invisible on real files.
+- **A cell name looked up in a section matches the section's own cells
+  before its row cells** (`Section::cells`, ADR 0011 amendment), after the
+  sheet's direct cells. Why: `Geometry` writes `NoFill` and friends at
+  section level; the lookup must see them where the file puts them.
+- **A cell defines its source only when it is not the inherit marker.**
+  The corpus writes `F='Inh'` on cells that resolve through master, style
+  or default inheritance (e.g. `blue-box.vsdx`'s `LineWeight`). The lookup
+  still treats any formula or cached value as defining (unchanged here);
+  treating `Inh` as "continue the chain" is a Phase 3 question, recorded as
+  an open issue of P2-06b.
+
 ## Consequences
 
 - Rendering and property panels call `resolve` per cell; caching is a later
