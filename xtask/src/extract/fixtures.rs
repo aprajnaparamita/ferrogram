@@ -192,7 +192,7 @@ fn workbook_rows<'a>(extra: &[Vec<&'a str>]) -> Vec<Vec<&'a str>> {
             "8",
         ],
     ];
-    rows.extend(extra.iter().map(|r| r.iter().map(|s| *s).collect()));
+    rows.extend(extra.iter().map(|r| r.to_vec()));
     rows
 }
 
