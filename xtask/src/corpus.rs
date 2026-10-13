@@ -231,10 +231,10 @@ pub fn copy_offline(offline_dir: &Path, path: &str, dest: &Path) -> Result<()> {
     }
     let parent = parent_of(dest);
     fs::create_dir_all(&parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let tmp = temp_path(dest);
+    let tmp = crate::util::unique_temp_path(dest)?;
     fs::copy(&src, &tmp)
         .map_err(|e| format!("cannot copy {} -> {}: {e}", src.display(), tmp.display()))?;
-    finalize(&tmp, dest)
+    crate::util::finalize(&tmp, dest)
 }
 
 /// A shared HTTP agent using rustls with the platform's root certificate store
@@ -278,44 +278,18 @@ pub fn download(source: &Source, entry: &FileEntry, dest: &Path) -> Result<()> {
     write_atomic(dest, &body)
 }
 
-/// Writes `bytes` to `dest` atomically (temp file + rename).
+/// Writes `bytes` to `dest` atomically (temp file + rename). The one
+/// atomic writer shared with the extractors
+/// ([`crate::util::write_atomic_bytes`]); temp names are unique per
+/// call, so concurrent `cargo xtask corpus` runs never collide.
 pub fn write_atomic(dest: &Path, bytes: &[u8]) -> Result<()> {
-    let parent = parent_of(dest);
-    fs::create_dir_all(&parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let tmp = temp_path(dest);
-    fs::write(&tmp, bytes).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
-    finalize(&tmp, dest)
-}
-
-/// Renames `tmp` over `dest`, cleaning up the temp file on failure.
-fn finalize(tmp: &Path, dest: &Path) -> Result<()> {
-    match fs::rename(tmp, dest) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = fs::remove_file(tmp);
-            Err(format!(
-                "cannot move {} -> {}: {e}",
-                tmp.display(),
-                dest.display()
-            ))
-        }
-    }
+    crate::util::write_atomic_bytes(dest, bytes)
 }
 
 fn parent_of(dest: &Path) -> PathBuf {
     dest.parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."))
-}
-
-/// Temp file name next to `dest` so the final rename is atomic.
-fn temp_path(dest: &Path) -> PathBuf {
-    let mut name = dest
-        .file_name()
-        .map(|n| n.to_os_string())
-        .unwrap_or_default();
-    name.push(".tmp");
-    dest.with_file_name(name)
 }
 
 /// Runs the corpus task against the workspace root.
