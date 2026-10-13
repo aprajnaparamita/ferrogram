@@ -8,7 +8,7 @@
 //! workspace root, validates every file against the schema, decodes
 //! it into these types and cross-checks the references between the
 //! three files. The [`lookup`] module builds the [`CommandLookup`]
-//! index and holds the [`LayoutSet::select`] layout switch.
+//! index; [`LayoutSets::get`] is the layout switch.
 //!
 //! The crate is L0 (no workspace deps), so it is usable by any other
 //! layer without breaking the layering rules (ADR 0002).
@@ -22,7 +22,7 @@ pub mod error;
 pub mod loader;
 pub mod lookup;
 
-pub use error::LoadError;
+pub use error::{IdError, LoadError};
 pub use loader::Loader;
 
 /// A Ferrogram command id. See ADR 0006.
@@ -43,14 +43,69 @@ pub use loader::Loader;
 /// surfaced on the Home tab in 2016 and on the Arrange tab in 365; the
 /// id does not change. The `Control` type's `command` field is the
 /// link from a Fluent control to one of these ids.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct CommandId(pub String);
 
 impl CommandId {
-    /// Wraps a string in `CommandId` without validation. The loader
-    /// is the right place to enforce the grammar; the type itself is
-    /// a newtype.
+    /// Parses and validates a command id (ADR 0006).
+    ///
+    /// Enforces the same grammar as the `commandId` pattern in
+    /// `ui-spec/schema.json`:
+    ///
+    /// ```text
+    /// command_id := scope '.' verb ('.' qualifier)*
+    /// token      := [a-z][a-z0-9_]*
+    /// ```
+    ///
+    /// At least two dot-separated tokens (scope and verb); no empty
+    /// token (no leading, trailing or consecutive dots). The ADR 0006
+    /// scope *vocabulary* (`app`, `file`, `edit`, ...) is a further,
+    /// policy-level restriction on top of this grammar; this parser
+    /// checks the grammar only, exactly like the schema pattern does.
+    ///
+    /// ```
+    /// use ferrogram_ui_spec::CommandId;
+    /// assert!(CommandId::parse("file.save").is_ok());
+    /// assert!(CommandId::parse("File.Save").is_err()); // uppercase
+    /// assert!(CommandId::parse("file").is_err()); // no verb
+    /// ```
+    pub fn parse(s: &str) -> Result<CommandId, IdError> {
+        if s.is_empty() {
+            return Err(IdError::new("id is empty", s));
+        }
+        let mut tokens = 0;
+        for token in s.split('.') {
+            tokens += 1;
+            if token.is_empty() {
+                return Err(IdError::new(
+                    "empty token (leading, trailing or consecutive '.')",
+                    s,
+                ));
+            }
+            if !token.starts_with(|c: char| c.is_ascii_lowercase()) {
+                return Err(IdError::new("token must start with a lowercase letter", s));
+            }
+            if !token
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            {
+                return Err(IdError::new("token may only contain [a-z0-9_]", s));
+            }
+        }
+        if tokens < 2 {
+            return Err(IdError::new("missing '.' between scope and verb", s));
+        }
+        Ok(CommandId(s.to_owned()))
+    }
+
+    /// Wraps a string in `CommandId` **without validation**.
+    ///
+    /// For trusted data (decoded by the loader, which validates every
+    /// document against the schema) and for tests. New code that
+    /// accepts an id from a caller should use [`Self::parse`].
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
     }
@@ -79,12 +134,41 @@ impl AsRef<str> for CommandId {
 /// primary id of every control, group, tab, backstage tab and
 /// context menu in the layout files (ADR 0007 B1). The pattern
 /// (enforced by `ui-spec/schema.json`) is `^[A-Za-z_][A-Za-z0-9_]*$`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct FluentId(pub String);
 
 impl FluentId {
-    /// Wraps a string without validation.
+    /// Parses and validates a Fluent control name.
+    ///
+    /// Enforces the same pattern as `ui-spec/schema.json`:
+    /// `^[A-Za-z_][A-Za-z0-9_]*$`.
+    ///
+    /// ```
+    /// use ferrogram_ui_spec::FluentId;
+    /// assert!(FluentId::parse("FileSave").is_ok());
+    /// assert!(FluentId::parse("2Cut").is_err()); // starts with a digit
+    /// ```
+    pub fn parse(s: &str) -> Result<FluentId, IdError> {
+        if s.is_empty() {
+            return Err(IdError::new("id is empty", s));
+        }
+        if !s.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+            return Err(IdError::new("id must start with a letter or '_'", s));
+        }
+        if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(IdError::new("id may only contain [A-Za-z0-9_]", s));
+        }
+        Ok(FluentId(s.to_owned()))
+    }
+
+    /// Wraps a string **without validation**.
+    ///
+    /// For trusted data (decoded by the loader, which validates every
+    /// document against the schema) and for tests. New code that
+    /// accepts an id from a caller should use [`Self::parse`].
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
     }
@@ -219,9 +303,15 @@ impl<'de> serde::Deserialize<'de> for ControlType {
     }
 }
 
+impl serde::Serialize for ControlType {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// Bounding box in device-independent pixels. Filled in by the
 /// screenshot pass (ADR 0007).
-#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Bounds {
     /// X coordinate (left edge).
@@ -241,7 +331,7 @@ pub struct Bounds {
 /// the Ferrogram command id dispatched when the control is activated
 /// (e.g. `file.save`). `command` may be `None` for non-actionable
 /// controls and for controls whose mapping is not yet known.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Control {
     /// The Fluent control name (primary id).
     pub id: FluentId,
@@ -332,8 +422,14 @@ impl<'de> serde::Deserialize<'de> for SizeVariant {
     }
 }
 
+impl serde::Serialize for SizeVariant {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// A group of controls inside a tab.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Group {
     /// Group Fluent id.
     pub id: FluentId,
@@ -363,7 +459,7 @@ pub struct Group {
 }
 
 /// A top-level ribbon tab.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Tab {
     /// Tab Fluent id.
     pub id: FluentId,
@@ -397,7 +493,7 @@ pub struct Tab {
 }
 
 /// Backstage surface. Tabs are flat (no groups).
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Backstage {
     /// Tabs under the File button.
     pub tabs: Vec<BackstageTab>,
@@ -405,7 +501,7 @@ pub struct Backstage {
 
 /// A single backstage tab. Always flat (no groups); controls are
 /// shown as a vertical stack.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BackstageTab {
     /// Tab Fluent id.
     pub id: FluentId,
@@ -435,7 +531,7 @@ pub struct BackstageTab {
 }
 
 /// A context menu.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ContextMenu {
     /// Menu Fluent id.
     pub id: FluentId,
@@ -467,7 +563,7 @@ pub struct ContextMenu {
 }
 
 /// The Quick Access Toolbar (QAT).
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct QuickAccessToolbar {
     /// Controls in display order.
     pub controls: Vec<Control>,
@@ -479,7 +575,7 @@ pub struct QuickAccessToolbar {
 /// every `cargo xtask extract` run, breaking ADR 0009's
 /// deterministic-output rule. `source_revision` is the pinned source
 /// identifier.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Layout {
     /// Always `1` for now.
     pub schema_version: u32,
@@ -524,7 +620,7 @@ impl Default for Layout {
 
 /// Mapping from Ferrogram command id to VisUICmds and to one or more
 /// Fluent control names. See `ui-spec/commands.yaml` and ADR 0006.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CommandMapping {
     /// The Ferrogram command id.
     pub id: CommandId,
@@ -585,13 +681,19 @@ impl<'de> serde::Deserialize<'de> for MappingConfidence {
     }
 }
 
+impl serde::Serialize for MappingConfidence {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// A keyboard shortcut. See `ui-spec/shortcuts.yaml` and ADR 0007.
 ///
 /// `sequence` is the list of chords the user types in order. A
 /// single-chord shortcut (e.g. Ctrl+Z) has a one-element sequence;
 /// a multi-chord ribbon keytip (e.g. Alt+H, F, O) is a three-element
 /// sequence. Each chord is a set of keys pressed simultaneously.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Shortcut {
     /// Ordered list of chords. Each chord is a non-empty list of key
     /// tokens (modifier or key, e.g. `Ctrl`, `Shift`, `A`, `F1`).
@@ -661,22 +763,64 @@ impl<'de> serde::Deserialize<'de> for ShortcutScope {
     }
 }
 
+impl serde::Serialize for ShortcutScope {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 /// A `ui-spec/commands.yaml` document.
+///
+/// Serializes as the bare entry list of the data file, so the
+/// document round-trips through the on-disk format.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Commands {
     /// One entry per Ferrogram command.
     pub entries: Vec<CommandMapping>,
 }
 
+impl serde::Serialize for Commands {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.entries.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Commands {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Vec::<CommandMapping>::deserialize(deserializer).map(|entries| Commands { entries })
+    }
+}
+
 /// A `ui-spec/shortcuts.yaml` document.
+///
+/// Serializes as the bare entry list of the data file, so the
+/// document round-trips through the on-disk format.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Shortcuts {
     /// One entry per keyboard shortcut.
     pub entries: Vec<Shortcut>,
 }
 
+impl serde::Serialize for Shortcuts {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.entries.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Shortcuts {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Vec::<Shortcut>::deserialize(deserializer).map(|entries| Shortcuts { entries })
+    }
+}
+
 /// The full set of data loaded for a single layout (e.g. 2016).
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct LayoutSet {
     /// The ribbon + backstage + context menus + QAT.
     pub layout: Layout,
@@ -691,10 +835,9 @@ pub struct LayoutSet {
 /// `commands.yaml` and `shortcuts.yaml` are shared by the two
 /// layouts, so the ADR 0007 cross-references are checked over the
 /// whole set at once: a Fluent id listed in `commands.yaml` must
-/// appear in at least one of the two layouts. At runtime
-/// [`LayoutSet::select`] picks the active one; [`Self::get`] borrows
-/// one by its [`LayoutKind`].
-#[derive(Debug, Clone, PartialEq, Default)]
+/// appear in at least one of the two layouts. [`Self::get`] is the
+/// runtime layout switch: it borrows one set by its [`LayoutKind`].
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct LayoutSets {
     /// The Office 2016 Fluent data.
     pub visio_2016: LayoutSet,
@@ -712,19 +855,20 @@ impl LayoutSets {
     }
 }
 
-/// A lookup table built from a [`LayoutSet`]. The UI (P1-06 +
-/// `crates/ui`) walks the layout tree directly using the Fluent ids;
-/// the lookup is a precomputed index for the most common queries.
+/// A lookup table built from a [`LayoutSet`]. The UI walks the
+/// layout tree directly using the Fluent ids; the lookup is a
+/// precomputed index for the most common queries.
 ///
+/// [`CommandLookup::build`] fills the three indexes from one layout.
 /// Indexes are `BTreeMap`-backed so iteration is sorted.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CommandLookup {
     /// `FluentId -> label`, built from every control, group, tab,
     /// backstage tab and context menu in the layout.
     pub labels: BTreeMap<FluentId, String>,
     /// `FluentId -> dispatched CommandId`, when the control has a
-    /// `command` link. P1-06 picks the primary path when a control
-    /// has aliases.
+    /// `command` link. [`CommandLookup::build`] picks the primary
+    /// path (the control's own id) when a control has aliases.
     pub commands: BTreeMap<FluentId, CommandId>,
     /// `CommandId -> FluentIds` of every control that dispatches
     /// this command. The reverse of the `commands` index.
@@ -732,7 +876,8 @@ pub struct CommandLookup {
 }
 
 impl CommandLookup {
-    /// An empty lookup. P1-06 will provide a real constructor.
+    /// An empty lookup. [`CommandLookup::build`] constructs a
+    /// populated one from a [`Layout`].
     pub fn empty() -> Self {
         Self::default()
     }
@@ -749,7 +894,7 @@ impl CommandLookup {
 }
 
 /// Layout variant. Phase 1 ships two: 2016 and 365.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum LayoutKind {
     /// Office 2016 Fluent control data.
     Visio2016,
@@ -1098,5 +1243,299 @@ mod tests {
                 h: 0.0
             }
         );
+    }
+
+    #[test]
+    fn command_id_parse_accepts_the_grammar() {
+        for s in [
+            "file.save",
+            "app.quit",
+            "arrange.align.left",
+            "format.text.bold",
+            "tools.snap_to_grid_1",
+            "a.b",
+            "x2.y9.z_",
+        ] {
+            assert_eq!(CommandId::parse(s).expect(s), CommandId::new(s), "for {s}");
+        }
+    }
+
+    #[test]
+    fn command_id_parse_rejects_broken_ids() {
+        let cases = [
+            ("", "id is empty"),
+            (
+                ".save",
+                "empty token (leading, trailing or consecutive '.')",
+            ),
+            (
+                "file.",
+                "empty token (leading, trailing or consecutive '.')",
+            ),
+            (
+                "file..save",
+                "empty token (leading, trailing or consecutive '.')",
+            ),
+            ("File.save", "token must start with a lowercase letter"),
+            ("file.Save", "token must start with a lowercase letter"),
+            ("file.9save", "token must start with a lowercase letter"),
+            ("file.sav-e", "token may only contain [a-z0-9_]"),
+            ("file.save!", "token may only contain [a-z0-9_]"),
+            ("fi le.save", "token may only contain [a-z0-9_]"),
+            ("file", "missing '.' between scope and verb"),
+        ];
+        for (s, reason) in cases {
+            let err = CommandId::parse(s).expect_err(s);
+            assert_eq!(err.reason(), reason, "for {s:?}");
+            assert_eq!(err.value(), s);
+        }
+    }
+
+    #[test]
+    fn command_id_parse_agrees_with_new_on_valid_ids() {
+        for s in ["file.save", "edit.undo"] {
+            assert_eq!(CommandId::parse(s).unwrap(), CommandId::new(s));
+        }
+    }
+
+    #[test]
+    fn fluent_id_parse_accepts_the_pattern() {
+        for s in ["FileSave", "_private", "a", "A1_b", "visCmdFileSave", "x"] {
+            assert_eq!(FluentId::parse(s).expect(s), FluentId::new(s), "for {s}");
+        }
+    }
+
+    #[test]
+    fn fluent_id_parse_rejects_broken_ids() {
+        let cases = [
+            ("", "id is empty"),
+            ("2Cut", "id must start with a letter or '_'"),
+            ("-Cut", "id must start with a letter or '_'"),
+            ("Cut!", "id may only contain [A-Za-z0-9_]"),
+            ("Cut Menu", "id may only contain [A-Za-z0-9_]"),
+            ("Cut.Menu", "id may only contain [A-Za-z0-9_]"),
+        ];
+        for (s, reason) in cases {
+            let err = FluentId::parse(s).expect_err(s);
+            assert_eq!(err.reason(), reason, "for {s:?}");
+            assert_eq!(err.value(), s);
+        }
+        assert_eq!(
+            FluentId::parse("FileSave").unwrap(),
+            FluentId::new("FileSave")
+        );
+    }
+
+    #[test]
+    fn enums_serialize_as_their_as_str_values() {
+        assert_eq!(
+            serde_json::to_string(&ControlType::SplitButton).unwrap(),
+            "\"splitButton\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SizeVariant::ExtraLarge).unwrap(),
+            "\"extra-large\""
+        );
+        assert_eq!(
+            serde_json::to_string(&MappingConfidence::Inferred).unwrap(),
+            "\"inferred\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ShortcutScope::Selection).unwrap(),
+            "\"selection\""
+        );
+    }
+
+    #[test]
+    fn ids_serialize_as_plain_strings() {
+        assert_eq!(
+            serde_json::to_string(&CommandId::new("file.save")).unwrap(),
+            "\"file.save\""
+        );
+        assert_eq!(
+            serde_json::to_string(&FluentId::new("FileSave")).unwrap(),
+            "\"FileSave\""
+        );
+    }
+
+    #[test]
+    fn commands_and_shortcuts_serialize_as_bare_entry_lists() {
+        let commands = Commands {
+            entries: vec![CommandMapping {
+                id: CommandId::new("file.save"),
+                label: "Save".to_owned(),
+                visuicmd: Some("visCmdFileSave".to_owned()),
+                fluent_ids: vec![FluentId::new("FileSave")],
+                mapping_confidence: MappingConfidence::Exact,
+            }],
+        };
+        let value = serde_json::to_value(&commands).unwrap();
+        assert_eq!(value[0]["id"], "file.save");
+        assert_eq!(value[0]["fluent_ids"][0], "FileSave");
+        let back: Commands = serde_json::from_value(value).unwrap();
+        assert_eq!(back, commands);
+
+        let shortcuts = Shortcuts {
+            entries: vec![Shortcut {
+                sequence: vec![vec!["Ctrl".to_owned(), "S".to_owned()]],
+                command: CommandId::new("file.save"),
+                scope: ShortcutScope::Global,
+                section: None,
+            }],
+        };
+        let value = serde_json::to_value(&shortcuts).unwrap();
+        assert_eq!(value[0]["command"], "file.save");
+        let back: Shortcuts = serde_json::from_value(value).unwrap();
+        assert_eq!(back, shortcuts);
+    }
+
+    /// Round-trips a value through JSON: deserialize, serialize,
+    /// deserialize must give an equal value.
+    fn round_trip<T>(value: &T)
+    where
+        T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+    {
+        let json = serde_json::to_value(value).expect("serializes");
+        let back: T = serde_json::from_value(json).expect("deserializes");
+        assert_eq!(&back, value);
+    }
+
+    #[test]
+    fn model_types_round_trip_through_json() {
+        let control = Control {
+            id: FluentId::new("FileSave"),
+            r#type: ControlType::Button,
+            label: "Save".to_owned(),
+            order: 3,
+            parent: Some(FluentId::new("GroupFile")),
+            command: Some(CommandId::new("file.save")),
+            aliases: vec![FluentId::new("FileSaveMenu")],
+            bounds: Some(Bounds {
+                x: 1.0,
+                y: 2.0,
+                w: 3.0,
+                h: 4.0,
+            }),
+            icon_ref: Some("icons/save.svg".to_owned()),
+            keytip: Some("S".to_owned()),
+            size_variant: Some(SizeVariant::Large),
+            visual_notes: Some("note".to_owned()),
+        };
+        round_trip(&control);
+        round_trip(&control.r#type);
+        round_trip(&control.size_variant);
+        round_trip(&control.bounds.unwrap());
+        round_trip(&control.id);
+        round_trip(&control.command.clone().unwrap());
+        round_trip(&MappingConfidence::Unknown);
+        round_trip(&ShortcutScope::Window);
+        round_trip(&LayoutKind::Visio365);
+
+        let group = Group {
+            id: FluentId::new("GroupFile"),
+            label: "File".to_owned(),
+            order: 0,
+            bounds: None,
+            icon_ref: None,
+            keytip: None,
+            size_variant: None,
+            visual_notes: None,
+            controls: vec![control.clone()],
+        };
+        round_trip(&group);
+
+        let tab = Tab {
+            id: FluentId::new("TabHome"),
+            label: "Home".to_owned(),
+            order: 0,
+            tab_set: Some("TabSetPrimary".to_owned()),
+            bounds: None,
+            icon_ref: None,
+            keytip: None,
+            size_variant: None,
+            visual_notes: None,
+            groups: vec![group],
+        };
+        round_trip(&tab);
+
+        let backstage_tab = BackstageTab {
+            id: FluentId::new("FileSave"),
+            label: "Save".to_owned(),
+            order: 0,
+            bounds: None,
+            icon_ref: None,
+            keytip: None,
+            size_variant: None,
+            visual_notes: None,
+            controls: vec![control.clone()],
+        };
+        round_trip(&backstage_tab);
+        round_trip(&Backstage {
+            tabs: vec![backstage_tab],
+        });
+
+        let menu = ContextMenu {
+            id: FluentId::new("ShapeShortcutMenu"),
+            label: "Shape".to_owned(),
+            order: 0,
+            bounds: None,
+            icon_ref: None,
+            keytip: None,
+            size_variant: None,
+            visual_notes: None,
+            controls: vec![control.clone()],
+        };
+        round_trip(&menu);
+        round_trip(&QuickAccessToolbar {
+            controls: vec![control],
+        });
+
+        let layout = Layout {
+            tabs: vec![tab],
+            ..Layout::default()
+        };
+        round_trip(&layout);
+
+        let mapping = CommandMapping {
+            id: CommandId::new("file.save"),
+            label: "Save".to_owned(),
+            visuicmd: None,
+            fluent_ids: vec![FluentId::new("FileSave")],
+            mapping_confidence: MappingConfidence::Inferred,
+        };
+        round_trip(&mapping);
+        round_trip(&Commands {
+            entries: vec![mapping],
+        });
+
+        let shortcut = Shortcut {
+            sequence: vec![vec!["Ctrl".to_owned(), "S".to_owned()]],
+            command: CommandId::new("file.save"),
+            scope: ShortcutScope::Global,
+            section: None,
+        };
+        round_trip(&shortcut);
+        round_trip(&Shortcuts {
+            entries: vec![shortcut],
+        });
+
+        let set = LayoutSet {
+            layout,
+            ..LayoutSet::default()
+        };
+        round_trip(&set);
+        round_trip(&LayoutSets {
+            visio_2016: set.clone(),
+            visio_365: set,
+        });
+        round_trip(&CommandLookup::empty());
+        round_trip(&CommandLookup {
+            labels: BTreeMap::from([(FluentId::new("FileSave"), "Save".to_owned())]),
+            commands: BTreeMap::from([(FluentId::new("FileSave"), CommandId::new("file.save"))]),
+            fluent_by_command: BTreeMap::from([(
+                CommandId::new("file.save"),
+                vec![FluentId::new("FileSave")],
+            )]),
+        });
     }
 }

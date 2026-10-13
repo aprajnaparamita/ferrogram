@@ -174,3 +174,35 @@ fn layout_kind_file_names_match_the_committed_files() {
         assert!(path.is_file(), "{} must exist", path.display());
     }
 }
+
+/// Serialize round-trip (P1-14 goal 3): deserialize, serialize,
+/// deserialize must give an equal value — over the whole committed
+/// data set, for every public model type.
+#[test]
+fn model_types_round_trip_over_the_committed_data() {
+    let loader = Loader::new(workspace_root()).expect("the embedded schema compiles");
+    let sets = loader.load_all().expect("the committed ui-spec loads");
+    for (name, set) in [
+        ("visio-2016", &sets.visio_2016),
+        ("visio-365", &sets.visio_365),
+    ] {
+        round_trip(&set.layout, name);
+        round_trip(&set.commands, name);
+        round_trip(&set.shortcuts, name);
+        round_trip(set, name);
+        round_trip(&set.command_lookup(), name);
+    }
+    round_trip(&sets, "both layouts");
+}
+
+/// Round-trips one value through JSON and asserts the result is
+/// equal.
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test helper; tests may panic
+fn round_trip<T>(value: &T, name: &str)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+{
+    let json = serde_json::to_value(value).expect("serializes");
+    let back: T = serde_json::from_value(json).expect("deserializes");
+    assert_eq!(&back, value, "{name}: round trip changed the value");
+}
