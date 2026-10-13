@@ -15,10 +15,11 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-05](tasks/P2-05.md) | implementer | P2-01 | merged (XML declaration added on main) | agent/P2-05 |
 | [P2-08](tasks/P2-08.md) | implementer | P2-01 | merged (ATTRIBUTION row added on main) | agent/P2-08 |
 | [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | merged | agent/P2-04 |
-| [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | ready (also owns the model name aliases) | — |
-| [P2-07](tasks/P2-07.md) | implementer | P2-06 | waiting | — |
-| [P2-09](tasks/P2-09.md) | implementer | P2-07, P2-08 | waiting | — |
-| [P2-10](tasks/P2-10.md) | test-engineer | P2-09 | waiting | — |
+| [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | merged (angles are radians; 25 name aliases) | agent/P2-06 |
+| [P2-06b](tasks/P2-06b.md) | implementer | P2-06 | ready (parallel with P2-09) | — |
+| [P2-07](tasks/P2-07.md) | implementer | P2-06b | waiting (patch-based writer; owns `roundtrip.rs`) | — |
+| [P2-09](tasks/P2-09.md) | implementer | P2-06, P2-08 | ready (parallel with P2-06b, P2-07) | — |
+| [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | waiting | — |
 | [P2-11](tasks/P2-11.md) | reviewer | P2-10 | waiting (group D) | — |
 | [P2-12](tasks/P2-12.md) | coverage-auditor | P2-10 | waiting (group D) | — |
 | [P2-13](tasks/P2-13.md) | cleanroom-auditor | P2-10 | waiting (group D) | — |
@@ -73,7 +74,8 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P1-14 (decided): a Fluent id is not unique within a layout. The same control appears in several places (ribbon, QAT, backstage), so a placement is identified by its path in the layout, not by its id. Command ids stay unique (enforced). Repeats inside one container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in one group) look like extractor artefacts; review them when Phase 4 builds the ribbon, and record the rule in ADR 0007 then.
 - P1-14: serialized layouts are not schema-valid for write-back (the model lacks `backstage.kind` and `quick_access_toolbar.id`). Fix before the screenshot pass writes layouts back.
 - History rewrite (P1-11 F1), done 2026-10-13 with the user's approval: `git filter-repo` replaced the blob of `docs/tasks/P1-04.md` that held the verbatim support-page text with the cleaned version. The final tree is unchanged; commit hashes from `7097013` onward changed, and hashes quoted in docs were updated. A pre-rewrite mirror is at `/Volumes/Dara/ferrogram/backup/ferrogram-pre-rewrite.git`. Delete it before the first push.
-- P2-01: the canonical angle unit is degrees (ADR 0011); P2-06 checks the cached unit against the corpus and amends the ADR if it is radians. The MS-VSDX XSD licence is checked in P2-09; until then the XSD is never committed. The coverage ratchet for geom, model, vsdx and shapesheet is set at the Phase 2 end.
+- P2-01: the canonical angle unit is radians (ADR 0011, amended by P2-06 from corpus evidence; P2-06b moves `geom` to radians). The MS-VSDX XSD licence is checked in P2-09; until then the XSD is never committed. The coverage ratchet for geom, model, vsdx and shapesheet is set at the Phase 2 end.
 - P2-02: the ShapeSheet table has gaps, so the generated defs use `Option`: 10 of 420 cells have no cell index, the Layer Membership section has no section index, and 8 of 51 rows have no owning section. Fill them if a later source gives the values.
 - P2-05 (decided): the package reader accepts a package without `[Content_Types].xml` and infers declarations, because two libvisio corpus files have none. A dangling internal relationship is recorded, not an error. The XML helpers live in `crates/vsdx/src/package/xml.rs`; there is no `src/xml/` module.
 - P2-04 (decided): the model keeps cell and section names as spelled in the `.vsdx` file; P2-06 adds a name-alias table in `crates/model/src/aliases.rs` for the ShapeSheet-table lookups. `ferrogram_model::Error::NotImplemented` and the `vsdx` one are removed after P2-07. Table defaults are parsed lazily and interned with `Box::leak` (bounded by the static table); move the parsing into codegen once `shapesheet.toml` records default values.
+- P2-06 (decided): the writer patches the source part trees (P2-07, ADR 0018), because unmapped children interleave with mapped ones in the corpus. Model gaps (section-level cells, several master shapes, style references by ID, `Connect` preservation, radians in geom) go to P2-06b. `tests/roundtrip.rs` moved from P2-09 to P2-07; P2-10 adds schema validation of written parts.
