@@ -319,6 +319,9 @@ fn count_model_cells(document: &Document) -> usize {
     for page in &document.pages {
         count += sheet_cells(&page.sheet);
         count += preserved_cells(&page.preserved);
+        for record in &page.connects {
+            count += preserved_cells(&record.preserved);
+        }
     }
     for master in &document.masters {
         count += preserved_cells(&master.preserved);
