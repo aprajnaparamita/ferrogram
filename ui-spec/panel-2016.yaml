@@ -17,7 +17,7 @@ backstage:
           visual_notes: null
         - aliases: []
           bounds: null
-          command: null
+          command: tools.usage.permissions
           icon_ref: null
           id: UsagePermissions
           keytip: null
@@ -29,7 +29,7 @@ backstage:
           visual_notes: null
         - aliases: []
           bounds: null
-          command: null
+          command: file.upgrade.document
           icon_ref: null
           id: UpgradeDocument
           keytip: null
@@ -349,7 +349,7 @@ backstage:
           visual_notes: null
         - aliases: []
           bounds: null
-          command: null
+          command: tools.button.open.browse
           icon_ref: null
           id: ButtonOpenBrowse
           keytip: null
@@ -1381,7 +1381,7 @@ quick_access_toolbar:
   controls:
     - aliases: []
       bounds: null
-      command: null
+      command: review.spelling.change
       icon_ref: null
       id: Spelling
       keytip: null
@@ -1393,7 +1393,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: file.save
       icon_ref: null
       id: FileSave
       keytip: null
@@ -1405,7 +1405,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: edit.undo
       icon_ref: null
       id: Undo
       keytip: null
@@ -1417,7 +1417,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: edit.redo.or.repeat
       icon_ref: null
       id: RedoOrRepeat
       keytip: null
@@ -1429,7 +1429,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: file.send.as.attachment
       icon_ref: null
       id: FileSendAsAttachment
       keytip: null
@@ -1441,7 +1441,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: file.new
       icon_ref: null
       id: FileNewDefault
       keytip: null
@@ -1453,7 +1453,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: file.print
       icon_ref: null
       id: FilePrintQuick
       keytip: null
@@ -1465,7 +1465,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: file.open
       icon_ref: null
       id: FileOpenUsingBackstage
       keytip: null
@@ -1477,7 +1477,7 @@ quick_access_toolbar:
       visual_notes: null
     - aliases: []
       bounds: null
-      command: null
+      command: tools.pointer.mode.options
       icon_ref: null
       id: PointerModeOptions
       keytip: null
@@ -1500,7 +1500,7 @@ tabs:
           - aliases:
               - GroupIconEditClipboard
             bounds: null
-            command: null
+            command: edit.copy
             icon_ref: null
             id: Copy
             keytip: null
@@ -1513,7 +1513,7 @@ tabs:
           - aliases:
               - GroupIconEditClipboard
             bounds: null
-            command: null
+            command: edit.cut
             icon_ref: null
             id: Cut
             keytip: null
@@ -1526,7 +1526,7 @@ tabs:
           - aliases:
               - GroupIconEditClipboard
             bounds: null
-            command: null
+            command: edit.paste
             icon_ref: null
             id: Paste
             keytip: null
@@ -1538,7 +1538,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.format_painter
             icon_ref: null
             id: FormatPainter
             keytip: null
@@ -1550,7 +1550,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.paste.duplicate
             icon_ref: null
             id: PasteDuplicate
             keytip: null
@@ -1562,7 +1562,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.paste.special.dialog
             icon_ref: null
             id: PasteSpecialDialog
             keytip: null
@@ -1574,7 +1574,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.inet.paste.as.hyperlink
             icon_ref: null
             id: PasteAsHyperlink
             keytip: null
@@ -1586,7 +1586,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.paste
             icon_ref: null
             id: PasteMenu
             keytip: null
@@ -1608,7 +1608,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.bold
             icon_ref: null
             id: Bold
             keytip: null
@@ -1620,7 +1620,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.italic
             icon_ref: null
             id: Italic
             keytip: null
@@ -1632,7 +1632,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.underline
             icon_ref: null
             id: Underline
             keytip: null
@@ -1644,7 +1644,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.strikethrough
             icon_ref: null
             id: Strikethrough
             keytip: null
@@ -1656,7 +1656,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.small_caps
             icon_ref: null
             id: TextSmallCaps
             keytip: null
@@ -1668,7 +1668,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.all_caps
             icon_ref: null
             id: TextAllCaps
             keytip: null
@@ -1680,7 +1680,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.change.case.dialog.classic
             icon_ref: null
             id: ChangeCaseDialogClassic
             keytip: null
@@ -1692,7 +1692,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.font.size.increase
             icon_ref: null
             id: FontSizeIncrease
             keytip: null
@@ -1704,7 +1704,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.font.size.decrease
             icon_ref: null
             id: FontSizeDecrease
             keytip: null
@@ -1716,7 +1716,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.font
             icon_ref: null
             id: Font
             keytip: null
@@ -1728,7 +1728,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.font.size
             icon_ref: null
             id: FontSize
             keytip: null
@@ -1752,7 +1752,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.font.color
             icon_ref: null
             id: FontColorGallery
             keytip: null
@@ -1764,7 +1764,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.normal.case
             icon_ref: null
             id: TextNormalCase
             keytip: null
@@ -1776,7 +1776,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.initial.caps
             icon_ref: null
             id: TextInitialCaps
             keytip: null
@@ -1798,7 +1798,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: text.bullets
             icon_ref: null
             id: Bullets
             keytip: null
@@ -1810,7 +1810,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.align.object.left
             icon_ref: null
             id: AlignLeft
             keytip: null
@@ -1822,7 +1822,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.align.object.right
             icon_ref: null
             id: AlignRight
             keytip: null
@@ -1834,7 +1834,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.align.object.center
             icon_ref: null
             id: AlignCenter
             keytip: null
@@ -1846,7 +1846,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.align_justify
             icon_ref: null
             id: AlignJustify
             keytip: null
@@ -1858,7 +1858,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.direction.left.to.right
             icon_ref: null
             id: TextDirectionLeftToRight
             keytip: null
@@ -1870,7 +1870,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.direction.right.to.left
             icon_ref: null
             id: TextDirectionRightToLeft
             keytip: null
@@ -1882,7 +1882,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.align_top
             icon_ref: null
             id: TextAlignTop
             keytip: null
@@ -1894,7 +1894,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.align_bottom
             icon_ref: null
             id: TextAlignBottom
             keytip: null
@@ -1906,7 +1906,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.text.align_middle
             icon_ref: null
             id: TextAlignMiddle
             keytip: null
@@ -1918,7 +1918,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.direction.vertical
             icon_ref: null
             id: TextDirectionVertical
             keytip: null
@@ -1930,7 +1930,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.increase.indent
             icon_ref: null
             id: IndentIncreaseWord
             keytip: null
@@ -1942,7 +1942,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.decrease.indent
             icon_ref: null
             id: IndentDecreaseWord
             keytip: null
@@ -1954,7 +1954,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: text.rotate90
             icon_ref: null
             id: TextRotate90Degrees
             keytip: null
@@ -1989,7 +1989,7 @@ tabs:
           - aliases:
               - GroupInkTools
             bounds: null
-            command: null
+            command: tools.pointer
             icon_ref: null
             id: PointerTool
             keytip: null
@@ -2001,7 +2001,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.connector
             icon_ref: null
             id: ConnectorTool
             keytip: null
@@ -2013,7 +2013,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.connection.point
             icon_ref: null
             id: ConnectionPointTool
             keytip: null
@@ -2025,7 +2025,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.text
             icon_ref: null
             id: TextTool
             keytip: null
@@ -2037,7 +2037,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.text_block
             icon_ref: null
             id: TextBlockTool
             keytip: null
@@ -2050,7 +2050,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.rectangle
             icon_ref: null
             id: RectangleTool
             keytip: null
@@ -2063,7 +2063,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.ellipse
             icon_ref: null
             id: EllipseTool
             keytip: null
@@ -2076,7 +2076,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: format.line
             icon_ref: null
             id: LineTool
             keytip: null
@@ -2089,7 +2089,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: shape.arc
             icon_ref: null
             id: ArcTool
             keytip: null
@@ -2102,7 +2102,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.freeform
             icon_ref: null
             id: FreeformTool
             keytip: null
@@ -2115,7 +2115,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.pencil
             icon_ref: null
             id: PencilTool
             keytip: null
@@ -2127,7 +2127,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.drawing.tools
             icon_ref: null
             id: DrawingToolsMenu
             keytip: null
@@ -2162,7 +2162,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: tools.line.styles.dialog
             icon_ref: null
             id: LineStylesDialog
             keytip: null
@@ -2175,7 +2175,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: tools.line.styles.dialog
             icon_ref: null
             id: LineStylesDialog
             keytip: null
@@ -2188,7 +2188,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: tools.arrows.more
             icon_ref: null
             id: ArrowsMore
             keytip: null
@@ -2200,7 +2200,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.styles
             icon_ref: null
             id: ShapeStylesGallery
             keytip: null
@@ -2212,7 +2212,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.rotation_3d
             icon_ref: null
             id: _3DRotationGallery
             keytip: null
@@ -2224,7 +2224,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.effect.soft.edges
             icon_ref: null
             id: ObjectEffectSoftEdgesGallery
             keytip: null
@@ -2236,7 +2236,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.effect.glow
             icon_ref: null
             id: ObjectEffectGlowGallery
             keytip: null
@@ -2248,7 +2248,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.effect.shadow
             icon_ref: null
             id: ObjectEffectShadowGallery
             keytip: null
@@ -2260,7 +2260,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.shadow.options.dialog
             icon_ref: null
             id: ShadowOptionsDialog
             keytip: null
@@ -2272,7 +2272,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.rotation_3d_options
             icon_ref: null
             id: _3DRotationOptionsDialog
             keytip: null
@@ -2284,7 +2284,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.bevel_options_3d
             icon_ref: null
             id: _3DBevelOptionsDialog
             keytip: null
@@ -2296,7 +2296,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.reflection
             icon_ref: null
             id: ReflectionGallery
             keytip: null
@@ -2308,7 +2308,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.bevel.shape
             icon_ref: null
             id: BevelShapeGallery
             keytip: null
@@ -2320,7 +2320,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.effects
             icon_ref: null
             id: ShapeEffectsMenu
             keytip: null
@@ -2332,7 +2332,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.allow.themes
             icon_ref: null
             id: AllowThemes
             keytip: null
@@ -2344,7 +2344,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.fill.dialog
             icon_ref: null
             id: FillDialog
             keytip: null
@@ -2357,7 +2357,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: tools.line.dialog
             icon_ref: null
             id: LineDialog
             keytip: null
@@ -2369,7 +2369,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.remove.theme.from.sel
             icon_ref: null
             id: RemoveTheme
             keytip: null
@@ -2382,7 +2382,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: tools.line.arrows
             icon_ref: null
             id: LineArrowsGallery
             keytip: null
@@ -2395,7 +2395,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: format.set.line.weight
             icon_ref: null
             id: LineWeightGallery
             keytip: null
@@ -2408,7 +2408,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: format.set.line.pattern
             icon_ref: null
             id: LinePatternGallery
             keytip: null
@@ -2420,7 +2420,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.set.fill.color
             icon_ref: null
             id: FillColorGallery
             keytip: null
@@ -2433,7 +2433,7 @@ tabs:
           - aliases:
               - GroupPictureStylesVisio
             bounds: null
-            command: null
+            command: format.set.line.color
             icon_ref: null
             id: LineColorGallery
             keytip: null
@@ -2445,7 +2445,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.reflections.more.options
             icon_ref: null
             id: ReflectionsMoreOptions
             keytip: null
@@ -2457,7 +2457,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.glows.more.options
             icon_ref: null
             id: GlowsMoreOptions
             keytip: null
@@ -2469,7 +2469,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.soft.edges.more.options
             icon_ref: null
             id: SoftEdgesMoreOptions
             keytip: null
@@ -2492,7 +2492,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: arrange.size.objects
             icon_ref: null
             id: ObjectsGroup
             keytip: null
@@ -2505,7 +2505,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.objects.ungroup
             icon_ref: null
             id: ObjectsUngroup
             keytip: null
@@ -2518,7 +2518,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.bring_to_front
             icon_ref: null
             id: ObjectBringToFront
             keytip: null
@@ -2531,7 +2531,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.send_to_back
             icon_ref: null
             id: ObjectSendToBack
             keytip: null
@@ -2544,7 +2544,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.bring_forward
             icon_ref: null
             id: ObjectBringForward
             keytip: null
@@ -2557,7 +2557,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.send_backward
             icon_ref: null
             id: ObjectSendBackward
             keytip: null
@@ -2570,7 +2570,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.bring_to_front
             icon_ref: null
             id: ObjectBringToFrontMenu
             keytip: null
@@ -2583,7 +2583,7 @@ tabs:
           - aliases:
               - GroupPictureToolArrange
             bounds: null
-            command: null
+            command: arrange.send_to_back
             icon_ref: null
             id: ObjectSendToBackMenu
             keytip: null
@@ -2596,7 +2596,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: arrange.size.objects
             icon_ref: null
             id: ObjectsGroupMenu
             keytip: null
@@ -2609,7 +2609,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.objects.add.to
             icon_ref: null
             id: ObjectsAddToGroup
             keytip: null
@@ -2622,7 +2622,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.objects.convert.to
             icon_ref: null
             id: ObjectsConvertToGroup
             keytip: null
@@ -2635,7 +2635,7 @@ tabs:
           - aliases:
               - GroupShapeDesign
             bounds: null
-            command: null
+            command: tools.objects.remove.from
             icon_ref: null
             id: ObjectsRemoveFromGroup
             keytip: null
@@ -2647,7 +2647,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.position
             icon_ref: null
             id: PositionMenu
             keytip: null
@@ -2659,7 +2659,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.shapes.rotate
             icon_ref: null
             id: ShapesRotateGallery
             keytip: null
@@ -2671,7 +2671,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.rotate_left
             icon_ref: null
             id: RotateDiagram
             keytip: null
@@ -2683,7 +2683,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.align.box
             icon_ref: null
             id: AlignGallery
             keytip: null
@@ -2705,7 +2705,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.find.dialog
             icon_ref: null
             id: FindDialog
             keytip: null
@@ -2717,7 +2717,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.replace.dialog
             icon_ref: null
             id: ReplaceDialog
             keytip: null
@@ -2730,7 +2730,7 @@ tabs:
           - aliases:
               - GroupIconEditSelect
             bounds: null
-            command: null
+            command: edit.select_all
             icon_ref: null
             id: SelectAll
             keytip: null
@@ -2742,7 +2742,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.lasso.select.visio
             icon_ref: null
             id: LassoSelectVisio
             keytip: null
@@ -2754,7 +2754,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: layer.properties.dialog
             icon_ref: null
             id: LayerPropertiesDialog
             keytip: null
@@ -2766,7 +2766,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.select.special
             icon_ref: null
             id: SelectMenu
             keytip: null
@@ -2778,7 +2778,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.select.by.type.dialog
             icon_ref: null
             id: SelectByTypeDialog
             keytip: null
@@ -2790,7 +2790,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.area.select
             icon_ref: null
             id: AreaSelect
             keytip: null
@@ -2802,7 +2802,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.find
             icon_ref: null
             id: FindMenu
             keytip: null
@@ -2814,7 +2814,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.layers
             icon_ref: null
             id: LayersMenu
             keytip: null
@@ -2826,7 +2826,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: layer.dialog
             icon_ref: null
             id: LayerDialog
             keytip: null
@@ -2838,7 +2838,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.replace.shape
             icon_ref: null
             id: ReplaceShape
             keytip: null
@@ -2871,7 +2871,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.blank.page.insert
             icon_ref: null
             id: BlankPageInsertMenu
             keytip: null
@@ -2883,7 +2883,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: insert.new.background.page
             icon_ref: null
             id: BackgroundPageInsert
             keytip: null
@@ -2895,7 +2895,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.blank.page.insert.visio
             icon_ref: null
             id: BlankPageInsertVisio
             keytip: null
@@ -2907,7 +2907,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.duplicate.page
             icon_ref: null
             id: DuplicateThisPage
             keytip: null
@@ -2929,7 +2929,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.chart.insert
             icon_ref: null
             id: ChartInsert
             keytip: null
@@ -2941,7 +2941,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.insert.from.file
             icon_ref: null
             id: PictureInsertFromFile
             keytip: null
@@ -2953,7 +2953,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.cad.drawing
             icon_ref: null
             id: CadDrawing
             keytip: null
@@ -2965,7 +2965,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: insert.clip.art
             icon_ref: null
             id: ClipArtInsertDialog
             keytip: null
@@ -2987,7 +2987,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.disband.container
             icon_ref: null
             id: ContainerGallery
             keytip: null
@@ -2999,7 +2999,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.associate.callout
             icon_ref: null
             id: CalloutGallery
             keytip: null
@@ -3011,7 +3011,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.quick.connector
             icon_ref: null
             id: QuickConnectorTool
             keytip: null
@@ -3034,7 +3034,7 @@ tabs:
           - aliases:
               - GroupShapeSheetEditing
             bounds: null
-            command: null
+            command: tools.hyperlink.insert
             icon_ref: null
             id: HyperlinkInsert
             keytip: null
@@ -3056,7 +3056,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: insert.text.box
             icon_ref: null
             id: TextBoxInsertVertical
             keytip: null
@@ -3068,7 +3068,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ole.objectct.insert
             icon_ref: null
             id: OleObjectctInsert
             keytip: null
@@ -3080,7 +3080,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.insert.field
             icon_ref: null
             id: FieldInsert
             keytip: null
@@ -3092,7 +3092,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.mso.insert.symbol
             icon_ref: null
             id: SymbolInsertGallery
             keytip: null
@@ -3104,7 +3104,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: insert.text.box
             icon_ref: null
             id: TextBoxInsertMenu
             keytip: null
@@ -3116,7 +3116,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: insert.text.box
             icon_ref: null
             id: TextBoxInsertHorizontal
             keytip: null
@@ -3128,7 +3128,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.symbols.dialog
             icon_ref: null
             id: SymbolsDialog
             keytip: null
@@ -3140,7 +3140,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.screen.tip
             icon_ref: null
             id: ScreenTip
             keytip: null
@@ -3173,7 +3173,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.more.page.sizes
             icon_ref: null
             id: MorePageSizes
             keytip: null
@@ -3185,7 +3185,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: page.auto.size.toggle
             icon_ref: null
             id: AutoSizePage
             keytip: null
@@ -3197,7 +3197,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: page.size.to.fit.drawing
             icon_ref: null
             id: PageFitToDrawing
             keytip: null
@@ -3221,7 +3221,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: page.size.dlg
             icon_ref: null
             id: PageSize
             keytip: null
@@ -3233,7 +3233,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.set.page.orientation
             icon_ref: null
             id: PageOrientation
             keytip: null
@@ -3255,7 +3255,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.themes.gallery.visio.legacy
             icon_ref: null
             id: ThemesGalleryVisioLegacy
             keytip: null
@@ -3277,7 +3277,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.themes.gallery.visio
             icon_ref: null
             id: ThemesGalleryVisio
             keytip: null
@@ -3289,7 +3289,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.apply.theme.to.new.shapes.toggle
             icon_ref: null
             id: ThemeApplyToNewShapes
             keytip: null
@@ -3311,7 +3311,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.theme.colors.gallery.visio
             icon_ref: null
             id: ThemeColorsGalleryVisio
             keytip: null
@@ -3323,7 +3323,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.theme.effects.gallery.visio
             icon_ref: null
             id: ThemeEffectsGalleryVisio
             keytip: null
@@ -3335,7 +3335,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: file.new.theme.colors
             icon_ref: null
             id: ThemeColorsCreateNewVisio
             keytip: null
@@ -3347,7 +3347,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.theme.connectors
             icon_ref: null
             id: ThemeConnectorsGallery
             keytip: null
@@ -3359,7 +3359,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.theme.variants
             icon_ref: null
             id: ThemeVariantsGallery
             keytip: null
@@ -3371,7 +3371,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.embellishment
             icon_ref: null
             id: EmbellishmentGallery
             keytip: null
@@ -3405,7 +3405,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.backgrounds
             icon_ref: null
             id: BackgroundsGallery
             keytip: null
@@ -3417,7 +3417,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.borders.and.titles
             icon_ref: null
             id: BordersAndTitlesGallery
             keytip: null
@@ -3429,7 +3429,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.background.color
             icon_ref: null
             id: BackgroundColor
             keytip: null
@@ -3451,7 +3451,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.layout.more.options
             icon_ref: null
             id: LayoutMoreOptions
             keytip: null
@@ -3463,7 +3463,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: page.relayout
             icon_ref: null
             id: PageRelayoutGallery
             keytip: null
@@ -3475,7 +3475,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.delete.connectors
             icon_ref: null
             id: ConnectorsGallery
             keytip: null
@@ -3487,7 +3487,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: connector.right_angle
             icon_ref: null
             id: ConnectorRightAngle
             keytip: null
@@ -3499,7 +3499,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: connector.straight.lines
             icon_ref: null
             id: ConnectorStraightLines
             keytip: null
@@ -3511,7 +3511,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: connector.curved.lines
             icon_ref: null
             id: ConnectorCurvedLines
             keytip: null
@@ -3523,7 +3523,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: connector.show.line.jumps
             icon_ref: null
             id: ConnectorShowLineJumps
             keytip: null
@@ -3568,7 +3568,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: data.refresh
             icon_ref: null
             id: RefreshMenu
             keytip: null
@@ -3580,7 +3580,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.link.data.to.shapes
             icon_ref: null
             id: DataLinkDataToShapes
             keytip: null
@@ -3592,7 +3592,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.refresh
             icon_ref: null
             id: DataRefreshAllDialog
             keytip: null
@@ -3604,7 +3604,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.refresh
             icon_ref: null
             id: DataRefreshDialog
             keytip: null
@@ -3616,7 +3616,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.quick.data.link.data.to.shapes
             icon_ref: null
             id: QuickDataLinkDataToShapes
             keytip: null
@@ -3638,7 +3638,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.callouts
             icon_ref: null
             id: DataGraphicCalloutsGallery
             keytip: null
@@ -3650,7 +3650,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.more.data.graphics
             icon_ref: null
             id: MoreDataGraphics
             keytip: null
@@ -3662,7 +3662,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphics.configure
             icon_ref: null
             id: DataGraphicsConfigure
             keytip: null
@@ -3674,7 +3674,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.position
             icon_ref: null
             id: DataGraphicPosition
             keytip: null
@@ -3686,7 +3686,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.position.horizontal
             icon_ref: null
             id: DataGraphicPositionHorizontal
             keytip: null
@@ -3698,7 +3698,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.position.vertical
             icon_ref: null
             id: DataGraphicPositionVertical
             keytip: null
@@ -3720,7 +3720,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: insert.legend.horizontal
             icon_ref: null
             id: LegendInsertGallery
             keytip: null
@@ -3742,7 +3742,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.data.window
             icon_ref: null
             id: ShapeDataWindow
             keytip: null
@@ -3754,7 +3754,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.external.data.window
             icon_ref: null
             id: ExternalDataWindow
             keytip: null
@@ -3766,7 +3766,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.options
             icon_ref: null
             id: DataOptionsPane
             keytip: null
@@ -3788,7 +3788,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: data.automatically.link
             icon_ref: null
             id: DataAutomaticallyLink
             keytip: null
@@ -3800,7 +3800,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.edit
             icon_ref: null
             id: DataGraphicEdit
             keytip: null
@@ -3812,7 +3812,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.apply.data.graphic
             icon_ref: null
             id: DataGraphicApplyAfterLinkingData
             keytip: null
@@ -3824,7 +3824,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphics.gallery.visio
             icon_ref: null
             id: DataGraphicsGalleryVisio
             keytip: null
@@ -3836,7 +3836,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.graphic.create.new
             icon_ref: null
             id: DataGraphicCreateNew
             keytip: null
@@ -3869,7 +3869,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.subprocess.create.new
             icon_ref: null
             id: SubprocessCreateNew
             keytip: null
@@ -3881,7 +3881,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.subprocess.link.to.existing
             icon_ref: null
             id: SubprocessLinkToExisting
             keytip: null
@@ -3893,7 +3893,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.subprocess.create.from.selection
             icon_ref: null
             id: SubprocessCreateFromSelection
             keytip: null
@@ -3905,7 +3905,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.subprocess.browse.to.other.document
             icon_ref: null
             id: SubprocessBrowseToOtherDocument
             keytip: null
@@ -3917,7 +3917,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.subprocess.edit.link
             icon_ref: null
             id: SubprocessEditLink
             keytip: null
@@ -3939,7 +3939,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.diagram.check
             icon_ref: null
             id: DiagramCheckMenu
             keytip: null
@@ -3951,7 +3951,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.diagram.check
             icon_ref: null
             id: DiagramCheck
             keytip: null
@@ -3963,7 +3963,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: review.ignore.this.issue
             icon_ref: null
             id: IgnoreThisIssueMenu
             keytip: null
@@ -3975,7 +3975,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.rules.to.check
             icon_ref: null
             id: RulesToCheck
             keytip: null
@@ -3987,7 +3987,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: review.validation.issues.window.toggle
             icon_ref: null
             id: IssuesWindow
             keytip: null
@@ -3999,7 +3999,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: review.ignore.this.issue
             icon_ref: null
             id: IgnoreThisIssue
             keytip: null
@@ -4011,7 +4011,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: review.ignore.validation.rule
             icon_ref: null
             id: IgnoreRule
             keytip: null
@@ -4023,7 +4023,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.stop.ignoring.this.issue
             icon_ref: null
             id: StopIgnoringThisIssue
             keytip: null
@@ -4035,7 +4035,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.stop.ignoring.validation.rule
             icon_ref: null
             id: StopIgnoringRule
             keytip: null
@@ -4047,7 +4047,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.ignored.issues.toggle
             icon_ref: null
             id: ShowIgnoredIssues
             keytip: null
@@ -4059,7 +4059,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.rules.import.from
             icon_ref: null
             id: RulesImportFrom
             keytip: null
@@ -4081,7 +4081,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.share.point.workflow.import
             icon_ref: null
             id: SharePointWorkflowImport
             keytip: null
@@ -4093,7 +4093,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.share.point.workflow.export
             icon_ref: null
             id: SharePointWorkflowExport
             keytip: null
@@ -4105,7 +4105,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: file.create.stage.view.diagram
             icon_ref: null
             id: CreateStageViewDiagram
             keytip: null
@@ -4117,7 +4117,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: file.create.workflow.diagram
             icon_ref: null
             id: CreateWorkflowDiagram
             keytip: null
@@ -4150,7 +4150,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: review.spelling.change
             icon_ref: null
             id: Spelling
             keytip: null
@@ -4162,7 +4162,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: help.research.thesaurus
             icon_ref: null
             id: ResearchPane
             keytip: null
@@ -4174,7 +4174,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: help.research.thesaurus
             icon_ref: null
             id: Thesaurus
             keytip: null
@@ -4196,7 +4196,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: format.set.language.dlg
             icon_ref: null
             id: SetLanguage
             keytip: null
@@ -4208,7 +4208,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: help.research.translate
             icon_ref: null
             id: Translate
             keytip: null
@@ -4220,7 +4220,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.language.commands
             icon_ref: null
             id: LanguageCommands
             keytip: null
@@ -4232,7 +4232,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.language.preferences.dlg
             icon_ref: null
             id: LanguagePreferences
             keytip: null
@@ -4254,7 +4254,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: review.new.comment
             icon_ref: null
             id: ReviewNewComment
             keytip: null
@@ -4266,7 +4266,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.tags
             icon_ref: null
             id: ShowTags
             keytip: null
@@ -4278,7 +4278,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.tool
             icon_ref: null
             id: InkTool
             keytip: null
@@ -4290,7 +4290,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.commenting
             icon_ref: null
             id: CommentingPane
             keytip: null
@@ -4302,7 +4302,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.comments
             icon_ref: null
             id: ShowCommentsMenu
             keytip: null
@@ -4314,7 +4314,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.comments.pane
             icon_ref: null
             id: CommentsPaneSplitButton
             keytip: null
@@ -4336,7 +4336,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.reports
             icon_ref: null
             id: ShapeReports
             keytip: null
@@ -4369,7 +4369,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.full.screen.view
             icon_ref: null
             id: ViewFullScreenView
             keytip: null
@@ -4391,7 +4391,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.pan.zoom
             icon_ref: null
             id: PanAndZoomWindow
             keytip: null
@@ -4403,7 +4403,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.shapes.window
             icon_ref: null
             id: ShapesWindow
             keytip: null
@@ -4415,7 +4415,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.size.and.position.window
             icon_ref: null
             id: SizeAndPositionWindow
             keytip: null
@@ -4427,7 +4427,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.page.breaks
             icon_ref: null
             id: ShowPageBreaks
             keytip: null
@@ -4451,7 +4451,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.grid
             icon_ref: null
             id: ShowGrid
             keytip: null
@@ -4463,7 +4463,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.guides
             icon_ref: null
             id: ShowGuides
             keytip: null
@@ -4475,7 +4475,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.ruler.visio
             icon_ref: null
             id: ShowRulerVisio
             keytip: null
@@ -4487,7 +4487,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.task.panes.menu.visio
             icon_ref: null
             id: TaskPanesMenuVisio
             keytip: null
@@ -4499,7 +4499,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.data.window.show.hide
             icon_ref: null
             id: ShapeDataWindowShowHide
             keytip: null
@@ -4521,7 +4521,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.left.to.right
             icon_ref: null
             id: ViewDirectionLeftToRight
             keytip: null
@@ -4533,7 +4533,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.left.to.right
             icon_ref: null
             id: ViewDirectionRightToLeft
             keytip: null
@@ -4545,7 +4545,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.direction.toggle
             icon_ref: null
             id: ViewDirectionMenu
             keytip: null
@@ -4567,7 +4567,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.zoom.dialog
             icon_ref: null
             id: ZoomDialog
             keytip: null
@@ -4579,7 +4579,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.zoom.page.width
             icon_ref: null
             id: ZoomPageWidthVisio
             keytip: null
@@ -4591,7 +4591,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.zoom.fit.to.window.visio
             icon_ref: null
             id: ZoomFitToWindowVisio
             keytip: null
@@ -4613,7 +4613,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: connector.auto_connect
             icon_ref: null
             id: AutoConnect
             keytip: null
@@ -4637,7 +4637,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: connector.dynamic.grid
             icon_ref: null
             id: DynamicGrid
             keytip: null
@@ -4649,7 +4649,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.connection.points
             icon_ref: null
             id: ConnectionPoints
             keytip: null
@@ -4671,7 +4671,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.windows.arrange.all
             icon_ref: null
             id: WindowsArrangeAll
             keytip: null
@@ -4683,7 +4683,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.window.new.window
             icon_ref: null
             id: WindowNew
             keytip: null
@@ -4696,7 +4696,7 @@ tabs:
           - aliases:
               - GroupStencilWindow
             bounds: null
-            command: null
+            command: view.window.more.windows.dialog
             icon_ref: null
             id: WindowMoreWindowsDialog
             keytip: null
@@ -4708,7 +4708,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.windows.cascade
             icon_ref: null
             id: WindowsCascade
             keytip: null
@@ -4721,7 +4721,7 @@ tabs:
           - aliases:
               - GroupStencilWindow
             bounds: null
-            command: null
+            command: view.window.switch.windows.menu.word
             icon_ref: null
             id: WindowSwitchWindowsMenuWord
             keytip: null
@@ -4744,7 +4744,7 @@ tabs:
           - aliases:
               - GroupCode
             bounds: null
-            command: null
+            command: tools.macro.play
             icon_ref: null
             id: MacroPlay
             keytip: null
@@ -4756,7 +4756,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: insert.add.ons
             icon_ref: null
             id: AddOnsMenu
             keytip: null
@@ -4789,7 +4789,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: developer.record.new.macro
             icon_ref: null
             id: MacroRecord
             keytip: null
@@ -4801,7 +4801,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.macro.recorder.pause
             icon_ref: null
             id: MacroRecorderPause
             keytip: null
@@ -4814,7 +4814,7 @@ tabs:
           - aliases:
               - GroupMacros
             bounds: null
-            command: null
+            command: tools.macro.play
             icon_ref: null
             id: MacroPlay
             keytip: null
@@ -4826,7 +4826,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.recorder.stop.visio
             icon_ref: null
             id: RecorderStopVisio
             keytip: null
@@ -4838,7 +4838,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.recorder.resume
             icon_ref: null
             id: RecorderResume
             keytip: null
@@ -4850,7 +4850,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.visual.basic
             icon_ref: null
             id: VisualBasic
             keytip: null
@@ -4862,7 +4862,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.macro.security
             icon_ref: null
             id: MacroSecurity
             keytip: null
@@ -4884,7 +4884,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.com.add.ins.dialog
             icon_ref: null
             id: ComAddInsDialog
             keytip: null
@@ -4906,7 +4906,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.visual.basic.code
             icon_ref: null
             id: ViewVisualBasicCode
             keytip: null
@@ -4918,7 +4918,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.design.mode
             icon_ref: null
             id: DesignMode
             keytip: null
@@ -4930,7 +4930,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.control.properties
             icon_ref: null
             id: ControlProperties
             keytip: null
@@ -4942,7 +4942,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.controls
             icon_ref: null
             id: ControlsGallery
             keytip: null
@@ -4965,7 +4965,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.size.objects
             icon_ref: null
             id: ObjectsGroup
             keytip: null
@@ -4978,7 +4978,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: tools.objects.ungroup
             icon_ref: null
             id: ObjectsUngroup
             keytip: null
@@ -4991,7 +4991,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: tools.rectangle
             icon_ref: null
             id: RectangleTool
             keytip: null
@@ -5004,7 +5004,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: tools.ellipse
             icon_ref: null
             id: EllipseTool
             keytip: null
@@ -5017,7 +5017,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: format.line
             icon_ref: null
             id: LineTool
             keytip: null
@@ -5030,7 +5030,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: shape.arc
             icon_ref: null
             id: ArcTool
             keytip: null
@@ -5043,7 +5043,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: tools.freeform
             icon_ref: null
             id: FreeformTool
             keytip: null
@@ -5056,7 +5056,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: tools.pencil
             icon_ref: null
             id: PencilTool
             keytip: null
@@ -5068,7 +5068,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.drawing.tools
             icon_ref: null
             id: DeveloperDrawingTools
             keytip: null
@@ -5080,7 +5080,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.shape
             icon_ref: null
             id: ShowShapeSheet
             keytip: null
@@ -5093,7 +5093,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.size.objects
             icon_ref: null
             id: ObjectsGroupMenu
             keytip: null
@@ -5106,7 +5106,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: tools.objects.add.to
             icon_ref: null
             id: ObjectsAddToGroup
             keytip: null
@@ -5118,7 +5118,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.combine
             icon_ref: null
             id: ShapesObjectCombine
             keytip: null
@@ -5131,7 +5131,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: tools.objects.convert.to
             icon_ref: null
             id: ObjectsConvertToGroup
             keytip: null
@@ -5143,7 +5143,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.fragment
             icon_ref: null
             id: ShapesObjectFragment
             keytip: null
@@ -5155,7 +5155,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.intersect
             icon_ref: null
             id: ShapesObjectIntersect
             keytip: null
@@ -5167,7 +5167,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.join
             icon_ref: null
             id: ShapesObjectJoin
             keytip: null
@@ -5179,7 +5179,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.object.union
             icon_ref: null
             id: ShapesObjectUnion
             keytip: null
@@ -5191,7 +5191,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.shapes.object.offset
             icon_ref: null
             id: ShapesObjectOffset
             keytip: null
@@ -5203,7 +5203,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.protection
             icon_ref: null
             id: ShapeProtection
             keytip: null
@@ -5216,7 +5216,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: tools.objects.remove.from
             icon_ref: null
             id: ObjectsRemoveFromGroup
             keytip: null
@@ -5228,7 +5228,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.behavior
             icon_ref: null
             id: ShapeBehavior
             keytip: null
@@ -5240,7 +5240,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.name
             icon_ref: null
             id: ShapeName
             keytip: null
@@ -5252,7 +5252,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.subtract
             icon_ref: null
             id: ShapesObjectSubtract
             keytip: null
@@ -5264,7 +5264,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.trim
             icon_ref: null
             id: ShapesObjectTrim
             keytip: null
@@ -5276,7 +5276,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.shapes.object.update.alignment
             icon_ref: null
             id: ShapesObjectUpdateAlignmentBox
             keytip: null
@@ -5288,7 +5288,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.shape
             icon_ref: null
             id: ShowShapeSheetShape
             keytip: null
@@ -5300,7 +5300,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.page
             icon_ref: null
             id: ShowShapeSheetPage
             keytip: null
@@ -5312,7 +5312,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.document
             icon_ref: null
             id: ShowShapeSheetDocument
             keytip: null
@@ -5324,7 +5324,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.operations
             icon_ref: null
             id: OperationsMenu
             keytip: null
@@ -5347,7 +5347,7 @@ tabs:
           - aliases:
               - GroupStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil
             icon_ref: null
             id: NewBlankStencil
             keytip: null
@@ -5360,7 +5360,7 @@ tabs:
           - aliases:
               - GroupStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil.metric
             icon_ref: null
             id: NewBlankStencilMetric
             keytip: null
@@ -5373,7 +5373,7 @@ tabs:
           - aliases:
               - GroupStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil.us
             icon_ref: null
             id: NewBlankStencilUS
             keytip: null
@@ -5395,7 +5395,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.hide.document.stencil
             icon_ref: null
             id: DocumentStencil
             keytip: null
@@ -5407,7 +5407,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.drawing.explorer
             icon_ref: null
             id: DrawingExplorer
             keytip: null
@@ -5419,7 +5419,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.master.explorer
             icon_ref: null
             id: MasterExplorer
             keytip: null
@@ -5441,7 +5441,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.event.monitor
             icon_ref: null
             id: EventMonitor
             keytip: null
@@ -5453,7 +5453,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.persistent.events
             icon_ref: null
             id: PersistentEvents
             keytip: null
@@ -5465,7 +5465,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: file.print.shape.sheet
             icon_ref: null
             id: PrintShapeSheet
             keytip: null
@@ -5498,7 +5498,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.relayout
             icon_ref: null
             id: OrgChartRelayout
             keytip: null
@@ -5510,7 +5510,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.fit.to.page
             icon_ref: null
             id: OrgChartFitToPage
             keytip: null
@@ -5522,7 +5522,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.copy.create
             icon_ref: null
             id: OrgChartCopyCreate
             keytip: null
@@ -5534,7 +5534,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.subordinates.expand
             icon_ref: null
             id: OrgChartSubordinatesExpand
             keytip: null
@@ -5558,7 +5558,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.layout
             icon_ref: null
             id: OrgChartLayoutGallery
             keytip: null
@@ -5570,7 +5570,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.synchronize
             icon_ref: null
             id: OrgChartSynchronize
             keytip: null
@@ -5583,7 +5583,7 @@ tabs:
           - aliases:
               - GroupOrgChartShapes
             bounds: null
-            command: null
+            command: arrange.layout.apply.to.shape.style
             icon_ref: null
             id: LayoutApplyToShapeStyle
             keytip: null
@@ -5617,7 +5617,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.subordinates.show.hide
             icon_ref: null
             id: OrgChartSubordinatesShowHide
             keytip: null
@@ -5629,7 +5629,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.report.move.left
             icon_ref: null
             id: OrgChartReportMoveLeft
             keytip: null
@@ -5641,7 +5641,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.report.move.right
             icon_ref: null
             id: OrgChartReportMoveRight
             keytip: null
@@ -5665,7 +5665,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.report.move.closer
             icon_ref: null
             id: OrgChartReportMoveCloser
             keytip: null
@@ -5677,7 +5677,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.report.move.further
             icon_ref: null
             id: OrgChartReportMoveFurther
             keytip: null
@@ -5711,7 +5711,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.position.type.change
             icon_ref: null
             id: OrgChartPositionTypeChange
             keytip: null
@@ -5735,7 +5735,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.change.style
             icon_ref: null
             id: OrgChartChangeStyle
             keytip: null
@@ -5747,7 +5747,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.increase.height
             icon_ref: null
             id: OrgChartIncreaseHeight
             keytip: null
@@ -5759,7 +5759,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.reduce.height
             icon_ref: null
             id: OrgChartReduceHeight
             keytip: null
@@ -5771,7 +5771,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.increase.width
             icon_ref: null
             id: OrgChartIncreaseWidth
             keytip: null
@@ -5783,7 +5783,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.reduce.width
             icon_ref: null
             id: OrgChartReduceWidth
             keytip: null
@@ -5820,7 +5820,7 @@ tabs:
           - aliases:
               - GroupOrgChartLayout
             bounds: null
-            command: null
+            command: arrange.layout.apply.to.shape.style
             icon_ref: null
             id: LayoutApplyToShapeStyle
             keytip: null
@@ -5842,7 +5842,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.insert
             icon_ref: null
             id: OrgChartPictureInsert
             keytip: null
@@ -5854,7 +5854,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.delete
             icon_ref: null
             id: OrgChartPictureDelete
             keytip: null
@@ -5866,7 +5866,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.hide
             icon_ref: null
             id: OrgChartPictureHide
             keytip: null
@@ -5878,7 +5878,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.change
             icon_ref: null
             id: OrgChartPictureChange
             keytip: null
@@ -5890,7 +5890,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.insert.one
             icon_ref: null
             id: OrgChartPictureInsertOne
             keytip: null
@@ -5902,7 +5902,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.picture.insert.multiple
             icon_ref: null
             id: OrgChartPictureInsertMultiple
             keytip: null
@@ -5924,7 +5924,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.data.import
             icon_ref: null
             id: OrgChartDataImport
             keytip: null
@@ -5936,7 +5936,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.data.export
             icon_ref: null
             id: OrgChartDataExport
             keytip: null
@@ -5948,7 +5948,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.org.chart.data.compare
             icon_ref: null
             id: OrgChartDataCompare
             keytip: null
@@ -6022,7 +6022,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: file.open.stencil
             icon_ref: null
             id: OpenStencil
             keytip: null
@@ -6035,7 +6035,7 @@ tabs:
           - aliases:
               - GroupNewStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil
             icon_ref: null
             id: NewBlankStencil
             keytip: null
@@ -6048,7 +6048,7 @@ tabs:
           - aliases:
               - GroupNewStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil.metric
             icon_ref: null
             id: NewBlankStencilMetric
             keytip: null
@@ -6061,7 +6061,7 @@ tabs:
           - aliases:
               - GroupNewStencil
             bounds: null
-            command: null
+            command: file.new.blank.stencil.us
             icon_ref: null
             id: NewBlankStencilUS
             keytip: null
@@ -6083,7 +6083,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.stencil.explorer
             icon_ref: null
             id: StencilExplorer
             keytip: null
@@ -6095,7 +6095,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.icons.and.details
             icon_ref: null
             id: IconsAndDetails
             keytip: null
@@ -6107,7 +6107,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.icons.and.names
             icon_ref: null
             id: IconsAndNames
             keytip: null
@@ -6119,7 +6119,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.icons.only
             icon_ref: null
             id: IconsOnly
             keytip: null
@@ -6131,7 +6131,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.names.only
             icon_ref: null
             id: NamesOnly
             keytip: null
@@ -6143,7 +6143,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sten.names.under.icons
             icon_ref: null
             id: NamesUnderIcons
             keytip: null
@@ -6155,7 +6155,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: page.size.to.fit.drawing
             icon_ref: null
             id: DrawingPage
             keytip: null
@@ -6177,7 +6177,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sten.edit.icon
             icon_ref: null
             id: EditIcon
             keytip: null
@@ -6189,7 +6189,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: file.create.edit.master
             icon_ref: null
             id: EditMaster
             keytip: null
@@ -6201,7 +6201,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.master.properties
             icon_ref: null
             id: MasterProperties
             keytip: null
@@ -6213,7 +6213,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sten.new.master
             icon_ref: null
             id: NewMaster
             keytip: null
@@ -6225,7 +6225,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.update.icon
             icon_ref: null
             id: UpdateIcon
             keytip: null
@@ -6248,7 +6248,7 @@ tabs:
           - aliases:
               - GroupWindow
             bounds: null
-            command: null
+            command: view.window.more.windows.dialog
             icon_ref: null
             id: WindowMoreWindowsDialog
             keytip: null
@@ -6261,7 +6261,7 @@ tabs:
           - aliases:
               - GroupWindow
             bounds: null
-            command: null
+            command: view.window.switch.windows.menu.word
             icon_ref: null
             id: WindowSwitchWindowsMenuWord
             keytip: null
@@ -6283,7 +6283,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.stencil.close
             icon_ref: null
             id: StencilClose
             keytip: null
@@ -6317,7 +6317,7 @@ tabs:
           - aliases:
               - GroupClipboard
             bounds: null
-            command: null
+            command: edit.copy
             icon_ref: null
             id: Copy
             keytip: null
@@ -6330,7 +6330,7 @@ tabs:
           - aliases:
               - GroupClipboard
             bounds: null
-            command: null
+            command: edit.cut
             icon_ref: null
             id: Cut
             keytip: null
@@ -6343,7 +6343,7 @@ tabs:
           - aliases:
               - GroupClipboard
             bounds: null
-            command: null
+            command: edit.paste
             icon_ref: null
             id: Paste
             keytip: null
@@ -6355,7 +6355,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.clear.icon.colors
             icon_ref: null
             id: ClearIconColors
             keytip: null
@@ -6378,7 +6378,7 @@ tabs:
           - aliases:
               - GroupEditing
             bounds: null
-            command: null
+            command: edit.select_all
             icon_ref: null
             id: SelectAll
             keytip: null
@@ -6390,7 +6390,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.select.lasso
             icon_ref: null
             id: IconSelectLasso
             keytip: null
@@ -6402,7 +6402,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.select.area
             icon_ref: null
             id: IconSelectArea
             keytip: null
@@ -6424,7 +6424,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.bucket.tool
             icon_ref: null
             id: IconBucketTool
             keytip: null
@@ -6436,7 +6436,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.pencil.tool
             icon_ref: null
             id: IconPencilTool
             keytip: null
@@ -6448,7 +6448,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.left.color
             icon_ref: null
             id: LeftButtonIconColor
             keytip: null
@@ -6460,7 +6460,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.right.button.icon.color
             icon_ref: null
             id: RightButtonIconColor
             keytip: null
@@ -6472,7 +6472,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.left.button.icon.transparent
             icon_ref: null
             id: LeftButtonIconTransparent
             keytip: null
@@ -6484,7 +6484,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.right.button.icon.transparent
             icon_ref: null
             id: RightButtonIconTransparent
             keytip: null
@@ -6506,7 +6506,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.icon.edit.close
             icon_ref: null
             id: IconEditClose
             keytip: null
@@ -6539,7 +6539,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.brightness
             icon_ref: null
             id: PictureBrightnessGallery
             keytip: null
@@ -6551,7 +6551,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.contrast
             icon_ref: null
             id: PictureContrastGallery
             keytip: null
@@ -6563,7 +6563,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.corrections.dialog
             icon_ref: null
             id: PictureCorrectionsDialog
             keytip: null
@@ -6575,7 +6575,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.corrections.dialog
             icon_ref: null
             id: PictureCorrectionsDialog
             keytip: null
@@ -6587,7 +6587,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.auto.balance
             icon_ref: null
             id: PictureAutoBalance
             keytip: null
@@ -6599,7 +6599,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.picture.compress
             icon_ref: null
             id: PictureCompress
             keytip: null
@@ -6634,7 +6634,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: tools.line.styles.dialog
             icon_ref: null
             id: LineStylesDialog
             keytip: null
@@ -6647,7 +6647,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: tools.line.styles.dialog
             icon_ref: null
             id: LineStylesDialog
             keytip: null
@@ -6660,7 +6660,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: tools.arrows.more
             icon_ref: null
             id: ArrowsMore
             keytip: null
@@ -6673,7 +6673,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: tools.line.dialog
             icon_ref: null
             id: LineDialog
             keytip: null
@@ -6686,7 +6686,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: tools.line.arrows
             icon_ref: null
             id: LineArrowsGallery
             keytip: null
@@ -6699,7 +6699,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: format.set.line.weight
             icon_ref: null
             id: LineWeightGallery
             keytip: null
@@ -6712,7 +6712,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: format.set.line.pattern
             icon_ref: null
             id: LinePatternGallery
             keytip: null
@@ -6725,7 +6725,7 @@ tabs:
           - aliases:
               - GroupShapeStyles
             bounds: null
-            command: null
+            command: format.set.line.color
             icon_ref: null
             id: LineColorGallery
             keytip: null
@@ -6748,7 +6748,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.bring_to_front
             icon_ref: null
             id: ObjectBringToFront
             keytip: null
@@ -6761,7 +6761,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.send_to_back
             icon_ref: null
             id: ObjectSendToBack
             keytip: null
@@ -6774,7 +6774,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.bring_forward
             icon_ref: null
             id: ObjectBringForward
             keytip: null
@@ -6787,7 +6787,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.send_backward
             icon_ref: null
             id: ObjectSendBackward
             keytip: null
@@ -6799,7 +6799,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.crop
             icon_ref: null
             id: CropTool
             keytip: null
@@ -6811,7 +6811,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.rotate.object
             icon_ref: null
             id: ObjectRotateGallery
             keytip: null
@@ -6824,7 +6824,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.bring_to_front
             icon_ref: null
             id: ObjectBringToFrontMenu
             keytip: null
@@ -6837,7 +6837,7 @@ tabs:
           - aliases:
               - GroupArrange
             bounds: null
-            command: null
+            command: arrange.send_to_back
             icon_ref: null
             id: ObjectSendToBackMenu
             keytip: null
@@ -6871,7 +6871,7 @@ tabs:
           - aliases:
               - GroupTools
             bounds: null
-            command: null
+            command: tools.pointer
             icon_ref: null
             id: PointerTool
             keytip: null
@@ -6883,7 +6883,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.eraser
             icon_ref: null
             id: InkEraser
             keytip: null
@@ -6895,7 +6895,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.ballpoint.pen
             icon_ref: null
             id: InkBallpointPen
             keytip: null
@@ -6907,7 +6907,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.highlighter
             icon_ref: null
             id: InkHighlighter
             keytip: null
@@ -6929,7 +6929,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.outline.weight
             icon_ref: null
             id: OutlineWeightGallery
             keytip: null
@@ -6941,7 +6941,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.color.picker
             icon_ref: null
             id: InkColorPicker
             keytip: null
@@ -6953,7 +6953,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.pen.pressure
             icon_ref: null
             id: PenPressure
             keytip: null
@@ -6975,7 +6975,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.auto.create.shapes
             icon_ref: null
             id: InkAutoCreateShapes
             keytip: null
@@ -6987,7 +6987,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.shape.close
             icon_ref: null
             id: InkShapeClose
             keytip: null
@@ -7009,7 +7009,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.covert.to.text.visio
             icon_ref: null
             id: InkCovertToTextVisio
             keytip: null
@@ -7021,7 +7021,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.ink.covert.to.geometry
             icon_ref: null
             id: InkCovertToGeometry
             keytip: null
@@ -7043,7 +7043,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: file.close.ink.tools.ribbon.tab
             icon_ref: null
             id: InkToolsClose
             keytip: null
@@ -7076,7 +7076,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.shape
             icon_ref: null
             id: ShapeSheetShowFormulas
             keytip: null
@@ -7088,7 +7088,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.shape
             icon_ref: null
             id: ShapeSheetShowSections
             keytip: null
@@ -7100,7 +7100,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.shape.sheet.shape
             icon_ref: null
             id: ShapeSheetShowValues
             keytip: null
@@ -7112,7 +7112,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: format.style.explorer
             icon_ref: null
             id: StyleExplorer
             keytip: null
@@ -7134,7 +7134,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.insert.section
             icon_ref: null
             id: ShapeSheetInsertSection
             keytip: null
@@ -7146,7 +7146,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.delete.section
             icon_ref: null
             id: ShapeSheetDeleteSection
             keytip: null
@@ -7168,7 +7168,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.delete.row
             icon_ref: null
             id: ShapeSheetDeleteRow
             keytip: null
@@ -7180,7 +7180,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.insert.row
             icon_ref: null
             id: ShapeSheetInsertRow
             keytip: null
@@ -7203,7 +7203,7 @@ tabs:
           - aliases:
               - GroupInsertLinks
             bounds: null
-            command: null
+            command: tools.hyperlink.insert
             icon_ref: null
             id: HyperlinkInsert
             keytip: null
@@ -7215,7 +7215,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: data.unlink.shape
             icon_ref: null
             id: ShapeData
             keytip: null
@@ -7227,7 +7227,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.shape.action
             icon_ref: null
             id: ShapeSheetShapeAction
             keytip: null
@@ -7239,7 +7239,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.sheet.edit.formula
             icon_ref: null
             id: ShapeSheetEditFormula
             keytip: null
@@ -7261,7 +7261,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: view.show.formula.tracing.window
             icon_ref: null
             id: ShowFormulaTracingWindow
             keytip: null
@@ -7273,7 +7273,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.trace.back
             icon_ref: null
             id: TraceBack
             keytip: null
@@ -7285,7 +7285,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.trace.forward
             icon_ref: null
             id: TraceForward
             keytip: null
@@ -7297,7 +7297,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.trace.precedent.cells
             icon_ref: null
             id: TracePrecedentCells
             keytip: null
@@ -7309,7 +7309,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.trace.dependent.cells
             icon_ref: null
             id: TraceDependentCells
             keytip: null
@@ -7342,7 +7342,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.container.margins
             icon_ref: null
             id: ContainerMargins
             keytip: null
@@ -7354,7 +7354,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: view.fit.container.to.contents
             icon_ref: null
             id: FitToContents
             keytip: null
@@ -7366,7 +7366,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.automatic.resize
             icon_ref: null
             id: AutomaticResize
             keytip: null
@@ -7378,7 +7378,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.automatic.resize.none
             icon_ref: null
             id: AutomaticResizeNone
             keytip: null
@@ -7390,7 +7390,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.automatic.resize.expand.as.needed
             icon_ref: null
             id: AutomaticResizeExpandAsNeeded
             keytip: null
@@ -7402,7 +7402,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: tools.automatic.resize.always.fit.to.contents
             icon_ref: null
             id: AutomaticResizeAlwaysFitToContents
             keytip: null
@@ -7424,7 +7424,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.container.styles
             icon_ref: null
             id: ContainerStyles
             keytip: null
@@ -7436,7 +7436,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: shape.container.heading.styles
             icon_ref: null
             id: ContainerHeadingStyles
             keytip: null
@@ -7458,7 +7458,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: null
+            command: shape.lock.container
             icon_ref: null
             id: ContainerLock
             keytip: null
@@ -7470,7 +7470,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: edit.select.contents
             icon_ref: null
             id: SelectContents
             keytip: null
@@ -7482,7 +7482,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: null
+            command: arrange.disband.container
             icon_ref: null
             id: ContainerDisband
             keytip: null
