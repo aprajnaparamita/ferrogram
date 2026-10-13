@@ -48,7 +48,7 @@ impl Page {
 
 /// One `Connect` record: a glue between two shapes' cells (the `Connects`
 /// section, written as a `Connect` element).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Connect {
     /// The `FromSheet` attribute: the Visio `ID` of the shape the connector
     /// starts from.
@@ -64,6 +64,9 @@ pub struct Connect {
     pub to_cell: String,
     /// The `ToPart` attribute (the shape part, see `VisToParts`), or 0.
     pub to_part: i32,
+    /// Unmapped attributes and children of the `Connect` element kept
+    /// verbatim (ADR 0012).
+    pub preserved: Preserved,
 }
 
 impl Connect {
@@ -97,6 +100,8 @@ mod tests {
         assert_eq!(c.to_sheet, 0);
         assert!(c.from_cell.is_empty());
         assert!(c.to_cell.is_empty());
+        assert!(c.preserved.attributes.is_empty());
+        assert!(c.preserved.children.is_empty());
         assert_eq!(Connect::default(), Connect::new());
     }
 }

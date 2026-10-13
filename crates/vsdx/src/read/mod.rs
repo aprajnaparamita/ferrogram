@@ -73,8 +73,9 @@
 //!   entity empty (`Master::shapes` is empty, a page has no shapes);
 //! - a `Master` or `BackPage` reference that names nothing stays in
 //!   `Preserved` instead of being resolved;
-//! - a `Connect` element carrying anything the model does not hold (there is
-//!   no preserved slot on `Connect`) is kept verbatim rather than modeled;
+//! - a `Connect` element with text, a comment or a processing instruction is
+//!   kept verbatim rather than modeled; its other unmapped attributes and
+//!   children go to [`Connect::preserved`](ferrogram_model::Connect);
 //! - a numeric or boolean value that does not parse is
 //!   [`Error::InvalidPackage`] naming the part and the cell.
 
@@ -89,7 +90,7 @@ use ferrogram_model::{
 
 use crate::Error;
 use crate::package::{Limits, Package, PartData, PartName, TargetMode};
-use crate::read::node::{attribute, elements, is_namespace_declaration};
+use crate::read::node::{attribute, elements, has_loose_content, is_namespace_declaration};
 
 /// The content type of the main drawing document part.
 const CT_DRAWING_MAIN: &str = "application/vnd.ms-visio.drawing.main+xml";
@@ -802,21 +803,29 @@ fn map_page(node: &XmlNode, index: usize, ids: &[i32]) -> Result<(Page, Option<S
 
 /// Maps the `Connect` children of a `Connects` element.
 ///
-/// A `Connect` element carrying anything the model does not hold (there is
-/// no preserved slot on `Connect`) is kept verbatim instead of being modeled.
+/// Every `Connect` element is modeled (P2-06b decision 4); attributes and
+/// children the model does not hold go to the record's own [`Preserved`],
+/// never to the page's. A `Connect` with text, a comment or a processing
+/// instruction has nowhere to hold it and is kept verbatim by the caller's
+/// `preserved` instead. The wrapper's own attributes follow the wrapper's
+/// owner (the page).
 fn map_connects(
     node: &XmlNode,
     connects: &mut Vec<Connect>,
     preserved: &mut Preserved,
     part: &str,
 ) -> Result<(), Error> {
+    Mapper::keep_attributes(&node.attributes, preserved);
     for element in elements(node) {
         if element.name.local != "Connect" {
             preserved.children.push(element.clone());
             continue;
         }
+        if has_loose_content(element) {
+            preserved.children.push(element.clone());
+            continue;
+        }
         let mut connect = Connect::new();
-        let mut modeled = element.children.is_empty();
         for attribute in &element.attributes {
             if is_namespace_declaration(attribute) {
                 continue;
@@ -832,15 +841,13 @@ fn map_connects(
                 "ToSheet" => connect.to_sheet = parse_attr_int(&attribute.value, part, "ToSheet")?,
                 "ToCell" => connect.to_cell = attribute.value.clone(),
                 "ToPart" => connect.to_part = parse_attr_int(&attribute.value, part, "ToPart")?,
-                // No slot on `Connect`: the whole element is kept verbatim.
-                _ => modeled = false,
+                _ => connect.preserved.attributes.push(attribute.clone()),
             }
         }
-        if modeled {
-            connects.push(connect);
-        } else {
-            preserved.children.push(element.clone());
+        for child in elements(element) {
+            connect.preserved.children.push(child.clone());
         }
+        connects.push(connect);
     }
     Ok(())
 }
@@ -1353,6 +1360,105 @@ mod tests {
         {
             attribute.value = "No Style".to_owned();
         }
+        assert!(matches!(to_model(&package), Err(Error::InvalidPackage(_))));
+    }
+
+    /// Pushes a `Connects` element onto the page contents root.
+    fn with_connects(package: &mut Package, wrapper_attrs: &[(&str, &str)], connect: XmlNode) {
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/pages/page1.xml")
+            && let PartData::Xml(root) = &mut part.data
+        {
+            root.children.push(XmlChild::Element(element(
+                "Connects",
+                wrapper_attrs,
+                &[connect],
+            )));
+        }
+    }
+
+    #[test]
+    fn a_connect_keeps_its_unmapped_content_in_its_own_preserved() {
+        let mut package = drawing();
+        let connect = element(
+            "Connect",
+            &[
+                ("FromSheet", "1"),
+                ("FromCell", "BeginX"),
+                ("FromPart", "9"),
+                ("ToSheet", "2"),
+                ("ToCell", "EndX"),
+                ("ToPart", "3"),
+                ("Trigger", "1"),
+            ],
+            &[element("RefBy", &[("ID", "7")], &[])],
+        );
+        with_connects(&mut package, &[("Note", "kept")], connect);
+        let document = to_model(&package).expect("document");
+        let page = &document.pages[0];
+        assert_eq!(page.connects.len(), 1);
+        let record = &page.connects[0];
+        assert_eq!(record.from_sheet, 1);
+        assert_eq!(record.from_cell, "BeginX");
+        assert_eq!(record.from_part, 9);
+        assert_eq!(record.to_sheet, 2);
+        assert_eq!(record.to_cell, "EndX");
+        assert_eq!(record.to_part, 3);
+        // The unmapped attribute and child stay on the record (P2-06b
+        // decision 4), never in the page's preserved content.
+        let attrs: Vec<&str> = record
+            .preserved
+            .attributes
+            .iter()
+            .map(|attribute| attribute.name.local.as_str())
+            .collect();
+        assert_eq!(attrs, ["Trigger"]);
+        assert_eq!(record.preserved.children.len(), 1);
+        assert_eq!(record.preserved.children[0].name.local, "RefBy");
+        // The wrapper's own attributes follow the wrapper's owner, and
+        // nothing of the record lands in the page's preserved children.
+        assert!(
+            page.preserved
+                .attributes
+                .iter()
+                .any(|attribute| attribute.name.local == "Note"),
+            "the wrapper attribute follows the page"
+        );
+        assert!(
+            page.preserved
+                .children
+                .iter()
+                .all(|child| child.name.local != "RefBy" && child.name.local != "Connect"),
+            "the record's content never falls back to the page"
+        );
+    }
+
+    #[test]
+    fn a_connect_with_loose_content_is_kept_verbatim() {
+        let mut package = drawing();
+        let mut connect = element("Connect", &[("FromSheet", "1")], &[]);
+        connect.children.push(XmlChild::Comment("note".to_owned()));
+        with_connects(&mut package, &[], connect);
+        let document = to_model(&package).expect("document");
+        let page = &document.pages[0];
+        assert!(page.connects.is_empty());
+        let verbatim: Vec<&str> = page
+            .preserved
+            .children
+            .iter()
+            .map(|child| child.name.local.as_str())
+            .filter(|name| *name == "Connect")
+            .collect();
+        assert_eq!(verbatim, ["Connect"]);
+    }
+
+    #[test]
+    fn a_bad_connect_value_is_an_error_naming_the_part() {
+        let mut package = drawing();
+        let connect = element("Connect", &[("FromSheet", "nope")], &[]);
+        with_connects(&mut package, &[], connect);
         assert!(matches!(to_model(&package), Err(Error::InvalidPackage(_))));
     }
 
