@@ -669,8 +669,8 @@ mod tests {
 
 |Constant|Value|Description|
 |:-----|:-----|:-----|
-| **visSectionObject**|1|Stores general properties.|
-| **visSectionScratch**|6|Holds scratch cells.|
+| **visSectionObject**|1|Base properties.|
+| **visSectionScratch**|6|Scratch area.|
 ";
 
     const CELL_FIXTURE: &str = "\
@@ -680,11 +680,11 @@ title: \"PinX Cell (Shape Transform Section)\"
 
 # PinX Cell (Shape Transform Section)
 
-Represents the  *x*  -coordinate of the shape's pin in relation to the origin of its parent.
+Gives the  *x*  spot of the shape pin, in inches, relative to the parent origin.
 
 ## Remarks
 
-To get a reference to the PinX cell by index:
+Index lookup for this cell:
 
 ||Value |
 |:-----|:-----|
@@ -697,7 +697,7 @@ To get a reference to the PinX cell by index:
     const CELL_REPEAT_FIXTURE: &str = "\
 # Y Justify Cell (Action Tags Section)
 
-The y-offset of the action tag button.
+How far the tag button sits below its anchor.
 
 ||Value |
 |:-----|:-----|
@@ -709,7 +709,7 @@ The y-offset of the action tag button.
     const SECTION_FIXTURE: &str = "\
 # Shape Transform Section
 
-Contains general positioning information about a shape.
+Holds the placement facts for one shape.
 ";
 
     fn enums_from(text: &str) -> Enums {
@@ -826,41 +826,43 @@ Contains general positioning information about a shape.
             Some("visXFormPinX")
         );
         let summary = page_summary(CELL_FIXTURE);
-        assert!(summary.starts_with("Represents"), "{summary}");
+        assert!(summary.starts_with("Gives"), "{summary}");
         assert!(!summary.contains("Remarks"));
     }
 
+    /// The summaries here are our own wording (F3); each one keeps
+    /// the keyword the type inference keys on.
     #[test]
     fn type_unit_patterns() {
         assert_eq!(
-            infer_type_unit("Indicates whether the layer is active.", false),
+            infer_type_unit("Tells whether the layer is on.", false),
             ("Bool", "NoCast")
         );
         assert_eq!(
-            infer_type_unit(
-                "Determines the color of the bevel's contour in RGB value.",
-                false
-            ),
+            infer_type_unit("Sets the bevel edge color as an RGB value.", false),
             ("Color", "Color")
         );
         assert_eq!(
-            infer_type_unit("Represents the shape's current angle of rotation.", false),
+            infer_type_unit(
+                "Gives the current rotation of the shape, in degrees.",
+                false
+            ),
             ("Number", "Degrees")
         );
         assert_eq!(
-            infer_type_unit("Determines the width of the bottom bevel in points.", false),
+            infer_type_unit("Sets how wide the lower bevel is, in points.", false),
             ("Number", "Points")
         );
         assert_eq!(
-            infer_type_unit("Represents the x-coordinate of the shape's pin.", false),
+            infer_type_unit("Gives the pin's x position in inches.", false),
             ("Number", "Inches")
         );
         assert_eq!(
-            infer_type_unit("Contains the formula to be executed.", false),
+            infer_type_unit("Holds the formula to run.", false),
             ("String", "String")
         );
         assert_eq!(
-            infer_type_unit("Specifies the tab alignment.", true),
+            infer_type_unit("Chooses how the tab is aligned.", true),
             ("List", "NoCast")
         );
         assert_eq!(infer_type_unit("", false), ("Number", "Number"));
@@ -958,12 +960,12 @@ Contains general positioning information about a shape.
         std::fs::write(tmp.join("shape-transform-section.md"), SECTION_FIXTURE).unwrap();
         std::fs::write(
             tmp.join("lineto-row-geometry-section.md"),
-            "# LineTo Row (Geometry Section)\n\nA row.\n",
+            "# LineTo Row (Geometry Section)\n\nOne geometry row.\n",
         )
         .unwrap();
         std::fs::write(
             tmp.join("about-cell-references.md"),
-            "# About Cell References\n\nProse.\n",
+            "# About Cell References\n\nAn overview page.\n",
         )
         .unwrap();
         let (cells, sections) = load_pages(tmp.path()).unwrap();
