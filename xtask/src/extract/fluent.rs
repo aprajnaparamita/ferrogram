@@ -1174,11 +1174,19 @@ mod tests {
         std::fs::create_dir_all(&data_dir).unwrap();
         std::fs::copy(&committed_2016, data_dir.join("panel-2016.yaml")).unwrap();
         std::fs::copy(&committed_365, data_dir.join("panel-365.yaml")).unwrap();
-        // P1-04 / P1-04b haven't landed yet, so commands and
-        // shortcuts are empty lists. The loader requires the files
-        // to exist (it looks them up explicitly).
-        std::fs::write(data_dir.join("commands.yaml"), "[]\n").unwrap();
-        std::fs::write(data_dir.join("shortcuts.yaml"), "[]\n").unwrap();
+        // The loader requires commands.yaml and shortcuts.yaml to
+        // exist. Since P1-04 the committed layouts carry `command`
+        // links, so the loader's cross-reference check needs the real
+        // committed files; fall back to empty lists when they are not
+        // present (pre-P1-04 trees).
+        for name in ["commands.yaml", "shortcuts.yaml"] {
+            let committed = ws.join("ui-spec").join(name);
+            if committed.is_file() {
+                std::fs::copy(&committed, data_dir.join(name)).unwrap();
+            } else {
+                std::fs::write(data_dir.join(name), "[]\n").unwrap();
+            }
+        }
 
         let loader = Loader::new(&tmp).expect("loader compiles");
         let set_2016 = loader.load(LayoutKind::Visio2016).expect("2016 loads");

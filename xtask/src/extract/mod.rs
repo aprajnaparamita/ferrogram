@@ -11,7 +11,8 @@
 //! | Module          | Implemented in | Output                                    |
 //! |-----------------|----------------|-------------------------------------------|
 //! | [`fluent`]      | P1-03          | `ui-spec/panel-2016.yaml`, `panel-365.yaml`, `docs/parity/controls.md` |
-//! | [`visuicmds`]   | P1-04          | `ui-spec/commands.yaml` (VisUICmds half)  |
+//! | [`commands`]    | P1-04          | `ui-spec/commands.yaml` (+ fills layout `command` fields) |
+//! | [`visuicmds`]   | P1-04          | VisUICmds parser used by [`commands`]     |
 //! | [`shapesheet`]  | P1-04          | `ui-spec/shapesheet.toml`                 |
 //! | [`shortcuts`]   | P1-04          | `ui-spec/shortcuts.yaml`                  |
 //! | [`vsdx_schema`] | P1-05          | `docs/vsdx-inventory.md`                  |
@@ -20,11 +21,11 @@
 //! | [`parity`]      | P1-03          | `docs/parity/controls.md`                 |
 //! | [`schema`]      | P1-03          | schema validator shared by all extractors |
 //!
-//! In P1-02 every module returns [`ExtractError::Unimplemented`]; the
-//! dispatcher prints a `SKIPPED (P1-NN)` line for each and exits 0 when
-//! `--allow-unimplemented` is passed. After P1-03..P1-05 merge the flag
-//! is dropped from CI.
+//! The dispatcher logs a `commands` row (not `visuicmds`): the merge
+//! lives in [`commands`], which calls [`visuicmds::run`] for the
+//! enumeration half.
 
+pub mod commands;
 pub mod diff;
 pub mod fluent;
 pub mod markdown;
@@ -194,9 +195,12 @@ pub fn run(args: &ExtractArgs) -> Result<Vec<(&'static str, Outcome)>> {
             name: "fluent",
             run: fluent::run,
         },
+        // P1-04: the `commands` merge takes the old `visuicmds` slot
+        // (it calls `visuicmds::run` for the enumeration half). The
+        // per-extractor output list logs `commands`, not `visuicmds`.
         Module {
-            name: "visuicmds",
-            run: visuicmds::run,
+            name: "commands",
+            run: commands::run,
         },
         Module {
             name: "shapesheet",
@@ -248,6 +252,65 @@ struct Module {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    /// Loader check (P1-04): the committed `commands.yaml` and
+    /// `shortcuts.yaml` pass `Schema::validate_file`.
+    #[test]
+    fn committed_commands_and_shortcuts_pass_schema_validation() {
+        let root = crate::util::root();
+        let schema_path = root.join("ui-spec").join("schema.json");
+        if !schema_path.is_file() {
+            eprintln!("schema.json not present; skipping");
+            return;
+        }
+        let schema = schema::Schema::load(&schema_path).expect("schema loads");
+        for name in ["commands.yaml", "shortcuts.yaml"] {
+            let path = root.join("ui-spec").join(name);
+            if !path.is_file() {
+                eprintln!("{name} not present; skipping");
+                continue;
+            }
+            schema
+                .validate_file(&path)
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+        }
+    }
+
+    /// Loader check (P1-04): the committed quartet loads with the
+    /// runtime [`ferrogram_ui_spec::Loader`], including the three ADR
+    /// 0007 cross-references.
+    #[test]
+    fn committed_ui_spec_loads_with_the_runtime_loader() {
+        use ferrogram_ui_spec::Loader;
+
+        let root = crate::util::root();
+        let ui = root.join("ui-spec");
+        let files = [
+            "panel-2016.yaml",
+            "panel-365.yaml",
+            "commands.yaml",
+            "shortcuts.yaml",
+        ];
+        if files.iter().any(|f| !ui.join(f).is_file()) {
+            eprintln!("committed ui-spec not complete; skipping");
+            return;
+        }
+        let tmp =
+            std::env::temp_dir().join(format!("ferrogram-p1-04-loader-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let data = tmp.join("ui-spec");
+        std::fs::create_dir_all(&data).unwrap();
+        for f in files {
+            std::fs::copy(ui.join(f), data.join(f)).unwrap();
+        }
+
+        let loader = Loader::new(&tmp).expect("loader compiles");
+        let sets = loader.load_all().expect("the committed quartet loads");
+        assert!(!sets.visio_365.commands.entries.is_empty());
+        assert!(!sets.visio_365.shortcuts.entries.is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 
     #[test]
     fn parse_args_defaults() {
