@@ -81,12 +81,14 @@ fn a_local_edit_overrides_the_master() {
 #[test]
 fn a_style_chain_is_reported_with_provenance() {
     let (mut doc, id) = document_with_shape();
-    doc.shape_mut(id).expect("shape exists").line_style = Some("Red".to_owned());
+    doc.shape_mut(id).expect("shape exists").line_style = Some(1);
     let mut red = Style::new(StyleId { index: 0 });
+    red.visio_id = 1;
     red.name = "Red".to_owned();
-    red.base_style = Some("Normal".to_owned());
+    red.line_style = Some(0);
     doc.stylesheet.styles.push(red);
     let mut normal = Style::new(StyleId { index: 1 });
+    normal.visio_id = 0;
     normal.name = "Normal".to_owned();
     normal.sheet.cells.push(number_cell("LineWeight", 0.05));
     doc.stylesheet.styles.push(normal);
@@ -109,14 +111,16 @@ fn a_style_chain_is_reported_with_provenance() {
 #[test]
 fn a_cyclic_style_chain_terminates_at_the_defaults() {
     let (mut doc, id) = document_with_shape();
-    doc.shape_mut(id).expect("shape exists").line_style = Some("A".to_owned());
+    doc.shape_mut(id).expect("shape exists").line_style = Some(0);
     let mut a = Style::new(StyleId { index: 0 });
+    a.visio_id = 0;
     a.name = "A".to_owned();
-    a.base_style = Some("B".to_owned());
+    a.line_style = Some(1);
     doc.stylesheet.styles.push(a);
     let mut b = Style::new(StyleId { index: 1 });
+    b.visio_id = 1;
     b.name = "B".to_owned();
-    b.base_style = Some("A".to_owned());
+    b.line_style = Some(0);
     doc.stylesheet.styles.push(b);
 
     let r = doc

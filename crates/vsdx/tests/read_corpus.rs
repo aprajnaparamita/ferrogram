@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use ferrogram_model::aliases::table_name;
 use ferrogram_model::generated::{CELLS, SECTIONS};
-use ferrogram_model::{Document, Preserved, XmlChild, XmlNode};
+use ferrogram_model::{CellLookup, CellName, Document, Preserved, ValueSource, XmlChild, XmlNode};
 use ferrogram_vsdx::{Limits, Package, PartData, read_document, read_package};
 
 /// The corpus directory with the real `.vsdx` packages.
@@ -198,6 +198,61 @@ fn corpus_cell_and_section_names_are_known_after_aliasing() {
     );
 }
 
+/// A shape with a `LineStyle` and no local `LineWeight` resolves the cell
+/// from its style, and `via` names that style (P2-06b decision 3).
+#[test]
+fn corpus_lineweight_resolves_from_the_shape_style() {
+    let path = corpus_dir().join("blue-box.vsdx");
+    if corpus_missing(&corpus_files()) {
+        assert!(
+            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+        );
+        return;
+    }
+    let bytes = std::fs::read(&path).expect("corpus file reads");
+    let document = read_document(&bytes, &Limits::DEFAULT).expect("document reads");
+
+    // The master's content shape carries a `LineStyle` and no local
+    // `LineWeight`.
+    let shape_id = document.masters[0].shapes[0];
+    let shape = document.shape(shape_id).expect("shape");
+    let reference = shape.line_style.expect("the shape names a style");
+    assert!(
+        shape
+            .sheet
+            .cells
+            .iter()
+            .all(|cell| cell.name.as_str() != "LineWeight"),
+        "the shape has no local LineWeight"
+    );
+
+    // The value comes from the style the reference names.
+    let resolved = document
+        .resolve(shape_id, &CellName::from_static("LineWeight"))
+        .expect("resolves");
+    let ValueSource::Style(id) = resolved.source else {
+        panic!("expected the style rung, got {:?}", resolved.source);
+    };
+    let style = document.style(id).expect("style");
+    assert_eq!(
+        style.visio_id, reference,
+        "the via style is the referenced one"
+    );
+    assert!(!style.name.is_empty());
+    assert_eq!(
+        resolved.via,
+        vec![ValueSource::Local, ValueSource::Style(id)]
+    );
+    let style_cell = style
+        .sheet
+        .cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "LineWeight")
+        .expect("the style defines LineWeight");
+    assert_eq!(resolved.value, style_cell.value.as_ref());
+}
+
 /// The `N` attribute of an element.
 fn name_of(node: &XmlNode) -> Option<&str> {
     node.attributes
@@ -271,10 +326,6 @@ fn count_model_cells(document: &Document) -> usize {
     for style in &document.stylesheet.styles {
         count += sheet_cells(&style.sheet);
         count += preserved_cells(&style.preserved);
-        if style.base_style.is_some() {
-            // The `Style` cell was consumed into `base_style`.
-            count += 1;
-        }
     }
     for shape in &document.shapes {
         count += sheet_cells(&shape.sheet);
