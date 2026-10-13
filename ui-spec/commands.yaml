@@ -3,6 +3,24 @@
 # Ferrogram command id -> VisUICmds constant (docs/sources.md source 2)
 # and Fluent control names (source 1).
 - fluent_ids:
+    - AlignCenter
+  id: arrange.align.center
+  label: Align Center
+  mapping_confidence: exact
+  visuicmd: visCmdAlignObjectCenter
+- fluent_ids:
+    - AlignLeft
+  id: arrange.align.left
+  label: Align Left
+  mapping_confidence: exact
+  visuicmd: visCmdAlignObjectLeft
+- fluent_ids:
+    - AlignRight
+  id: arrange.align.right
+  label: Align Right
+  mapping_confidence: exact
+  visuicmd: visCmdAlignObjectRight
+- fluent_ids:
     - ObjectBringForward
   id: arrange.bring_forward
   label: Bring Forward
@@ -262,24 +280,6 @@
   label: Align
   mapping_confidence: inferred
   visuicmd: visCmdAlignBox
-- fluent_ids:
-    - AlignCenter
-  id: arrange.align.object.center
-  label: Align Center
-  mapping_confidence: inferred
-  visuicmd: visCmdAlignObjectCenter
-- fluent_ids:
-    - AlignLeft
-  id: arrange.align.object.left
-  label: Align Left
-  mapping_confidence: inferred
-  visuicmd: visCmdAlignObjectLeft
-- fluent_ids:
-    - AlignRight
-  id: arrange.align.object.right
-  label: Align Right
-  mapping_confidence: inferred
-  visuicmd: visCmdAlignObjectRight
 - fluent_ids:
     - ContainerDisband
     - ContainerGallery
@@ -869,17 +869,17 @@
   mapping_confidence: unknown
   visuicmd: visCmdTrustCenterDlg
 - fluent_ids: []
-  id: arrange.align.object.bottom
+  id: arrange.align.bottom
   label: Bottom
   mapping_confidence: unknown
   visuicmd: visCmdAlignObjectBottom
 - fluent_ids: []
-  id: arrange.align.object.middle
+  id: arrange.align.middle
   label: Middle
   mapping_confidence: unknown
   visuicmd: visCmdAlignObjectMiddle
 - fluent_ids: []
-  id: arrange.align.object.top
+  id: arrange.align.top
   label: Top
   mapping_confidence: unknown
   visuicmd: visCmdAlignObjectTop

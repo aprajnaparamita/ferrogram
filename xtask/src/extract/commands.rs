@@ -20,7 +20,7 @@
 //! the seventeen functional scopes of ADR 0006 by the hand-written
 //! [`scope_for_first_word`] table (e.g. `align` -> `arrange`), and the
 //! scope becomes the first id segment
-//! (`visCmdAlignObjectLeft` -> `arrange.align.object.left`). When the
+//! (`visCmdZoomIn` -> `view.zoom.in`). When the
 //! first word already is a scope it is used as-is
 //! (`visCmdFileSave` -> `file.save`). A hand-written [`OVERRIDES`]
 //! table replaces the whole id where the mechanical split gives the
@@ -84,6 +84,13 @@ pub const SCOPES: [&str; 17] = [
 /// scope table) for a constant to land in a different scope than the
 /// mechanical split would give.
 pub const OVERRIDES: &[(&str, &str)] = &[
+    // Align: ADR 0006 canonical ids (no `object` segment).
+    ("visCmdAlignObjectBottom", "arrange.align.bottom"),
+    ("visCmdAlignObjectCenter", "arrange.align.center"),
+    ("visCmdAlignObjectLeft", "arrange.align.left"),
+    ("visCmdAlignObjectMiddle", "arrange.align.middle"),
+    ("visCmdAlignObjectRight", "arrange.align.right"),
+    ("visCmdAlignObjectTop", "arrange.align.top"),
     // Application chrome (the task's own example family).
     ("visCmdABarAutoHeight", "app.bar.auto_height"),
     ("visCmdABarAutohide", "app.bar.auto_hide"),
@@ -1161,7 +1168,7 @@ mod tests {
         );
         assert_eq!(
             command_id_for_constant("visCmdAlignObjectLeft"),
-            "arrange.align.object.left"
+            "arrange.align.left"
         );
         assert_eq!(command_id_for_constant("visCmdFileSave"), "file.save");
         assert_eq!(command_id_for_constant("visCmdZoomIn"), "view.zoom.in");
@@ -1227,11 +1234,7 @@ mod tests {
         assert_eq!(label_for("file.save", &["FileSave".into()], &ctrls), "Save");
         // Humanised Fluent name otherwise.
         assert_eq!(
-            label_for(
-                "arrange.align.object.left",
-                &["AlignLeftButton".into()],
-                &ctrls
-            ),
+            label_for("arrange.align.left", &["AlignLeftButton".into()], &ctrls),
             "Align Left"
         );
         // Last id segment capitalised as the final fallback.
@@ -1273,16 +1276,18 @@ mod tests {
             ("visCmdFileSave", 1004),
             ("visCmdUFEditPaste", 1022),
             ("visCmdAlignObjectLeft", 1196),
+            ("visCmdObjectFlipHorizontalShape", 1300),
         ]);
         let ctrls = controls(&[
             ("FileSave", "button"),
             ("Paste", "button"),
             ("AlignLeftButton", "gallery"),
+            ("FlipShapeHorizontal", "button"),
             ("TabHome", "tab"),
             ("GroupClipboard", "group"),
         ]);
         let entries = build_entries(&v, &ctrls).unwrap();
-        assert_eq!(entries.len(), 3);
+        assert_eq!(entries.len(), 4);
         let save = entries.iter().find(|e| e.id == "file.save").unwrap();
         assert_eq!(save.fluent_ids, vec!["FileSave"]);
         assert_eq!(save.confidence, Confidence::Exact);
@@ -1291,10 +1296,19 @@ mod tests {
         assert_eq!(paste.confidence, Confidence::Exact);
         let align = entries
             .iter()
-            .find(|e| e.id == "arrange.align.object.left")
+            .find(|e| e.id == "arrange.align.left")
             .unwrap();
         assert_eq!(align.fluent_ids, vec!["AlignLeftButton"]);
-        assert_eq!(align.confidence, Confidence::Inferred);
+        // Pass 2: the OVERRIDES id `arrange.align.left` equals the id
+        // derived from the Fluent name, so the join counts as exact.
+        assert_eq!(align.confidence, Confidence::Exact);
+        // Pass 3: word subset of a constant without an override.
+        let flip = entries
+            .iter()
+            .find(|e| e.visuicmd.as_deref() == Some("visCmdObjectFlipHorizontalShape"))
+            .unwrap();
+        assert_eq!(flip.fluent_ids, vec!["FlipShapeHorizontal"]);
+        assert_eq!(flip.confidence, Confidence::Inferred);
         // Tabs and groups never become commands.
         assert!(entries.iter().all(|e| {
             !e.fluent_ids

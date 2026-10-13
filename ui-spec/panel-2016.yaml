@@ -1810,7 +1810,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: arrange.align.object.left
+            command: arrange.align.left
             icon_ref: null
             id: AlignLeft
             keytip: null
@@ -1822,7 +1822,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: arrange.align.object.right
+            command: arrange.align.right
             icon_ref: null
             id: AlignRight
             keytip: null
@@ -1834,7 +1834,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: arrange.align.object.center
+            command: arrange.align.center
             icon_ref: null
             id: AlignCenter
             keytip: null
