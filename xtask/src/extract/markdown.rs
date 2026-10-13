@@ -159,15 +159,21 @@ fn is_delimiter_row(line: &str) -> bool {
 }
 
 /// Splits one table row into cells, honouring `\|` escapes and an
-/// optional trailing pipe.
+/// optional trailing pipe. The trailing pipe is dropped only when it
+/// is a real closing pipe: a `|` preceded by an odd number of
+/// backslashes is an escaped pipe, not a delimiter.
 fn split_row(line: &str) -> Vec<String> {
     let mut body = line.trim();
     if let Some(stripped) = body.strip_prefix('|') {
         body = stripped;
     }
     // Drop a trailing pipe unless it is escaped.
-    if body.ends_with('|') && !body.ends_with("\\|") {
-        body = &body[..body.len() - 1];
+    if body.ends_with('|') {
+        let before = &body[..body.len() - 1];
+        let backslashes = before.chars().rev().take_while(|c| *c == '\\').count();
+        if backslashes % 2 == 0 {
+            body = before;
+        }
     }
     let mut cells = Vec::new();
     let mut cur = String::new();
@@ -378,6 +384,18 @@ mod tests {
     }
 
     #[test]
+    fn tables_trailing_escaped_backslash() {
+        // `|a\\|` is one cell `a\` with a closing pipe: the trailing
+        // pipe follows two (an even number of) backslashes and is a
+        // real delimiter, not an escaped one.
+        let parsed = tables("|h|\n|---|\n|a\\\\|\n|b\\\\\\|\n");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].rows[0], vec!["a\\"]);
+        // `|b\\\||` is one cell `b\|` (escaped pipe at the end).
+        assert_eq!(parsed[0].rows[1], vec!["b\\|"]);
+    }
+
+    #[test]
     fn tables_short_row_is_kept() {
         let parsed = tables("|a|b|c|\n|---|---|---|\n|only|\n");
         assert_eq!(parsed[0].rows[0], vec!["only"]);
@@ -432,5 +450,74 @@ mod tests {
         assert!(tables("").is_empty());
         assert!(kv_pairs("").is_empty());
         assert_eq!(cell_text(""), "");
+    }
+    // ---- P1-08 goal 4: property tests -------------------------------
+
+    use proptest::prelude::*;
+
+    /// Cells whose text survives render + parse unchanged: no line
+    /// breaks, no leading/trailing whitespace, and never a
+    /// delimiter-row look-alike (the `|---|` alphabet is excluded).
+    fn cell_strategy() -> impl Strategy<Value = String> {
+        "[A-Za-z0-9 _.,;=+*()|\\\\]{0,12}".prop_map(|s| s.trim().to_string())
+    }
+
+    /// Renders one table row with `\|` and `\\` escapes and a closing
+    /// pipe.
+    fn render_row(cells: &[String]) -> String {
+        let mut out = String::from("|");
+        for cell in cells {
+            for ch in cell.chars() {
+                match ch {
+                    '\\' => out.push_str("\\\\"),
+                    '|' => out.push_str("\\|"),
+                    other => out.push(other),
+                }
+            }
+            out.push('|');
+        }
+        out
+    }
+
+    /// Renders a whole pipe table: header row, delimiter row, body
+    /// rows.
+    fn render_table(rows: &[Vec<String>]) -> String {
+        let cols = rows.first().map(Vec::len).unwrap_or(0);
+        let mut out = String::new();
+        out.push_str(&render_row(&rows[0]));
+        out.push('\n');
+        out.push_str(&"|---".repeat(cols));
+        out.push_str("|\n");
+        for row in &rows[1..] {
+            out.push_str(&render_row(row));
+            out.push('\n');
+        }
+        out
+    }
+
+    proptest! {
+        /// Every markdown entry point is total: arbitrary input
+        /// yields fewer or shorter results, never a panic.
+        #[test]
+        fn markdown_parsers_never_panic(text in ".*") {
+            let _ = fenced_blocks(&text);
+            let _ = tables(&text);
+            let _ = cell_text(&text);
+            let _ = kv_pairs(&text);
+        }
+
+        /// A table that is rendered and parsed again keeps its cells.
+        #[test]
+        fn rendered_tables_round_trip(rows in proptest::collection::vec(
+            proptest::collection::vec(cell_strategy(), 1..5),
+            1..5,
+        )) {
+            let text = render_table(&rows);
+            let parsed = tables(&text);
+            prop_assert_eq!(parsed.len(), 1, "one table must be parsed from {:?}", text);
+            let table = &parsed[0];
+            prop_assert_eq!(&table.header, &rows[0]);
+            prop_assert_eq!(&table.rows, &rows[1..]);
+        }
     }
 }
