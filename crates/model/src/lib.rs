@@ -8,8 +8,7 @@
 //! inheritance is resolved through a lookup, never flattened on load
 //! (ADR 0013).
 //!
-//! Part of Ferrogram. Alpha: function bodies here are `Err` stubs until task
-//! P2-04 implements them (task P2-01 defines the signatures).
+//! Part of Ferrogram. Alpha.
 
 #![forbid(unsafe_code)]
 
