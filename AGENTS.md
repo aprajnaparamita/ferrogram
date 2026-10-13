@@ -91,6 +91,7 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 
 | Step | Command |
 |---|---|
+| codegen | `cargo xtask codegen --check` (generated files are fresh; never skipped) |
 | fmt | `cargo fmt --all -- --check` |
 | clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | test | `cargo test --workspace --all-features` |
