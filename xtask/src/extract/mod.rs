@@ -37,6 +37,9 @@ pub mod util;
 pub mod visuicmds;
 pub mod vsdx_schema;
 
+#[cfg(test)]
+mod fixtures;
+
 use std::path::{Path, PathBuf};
 
 use crate::util::Result;
@@ -124,6 +127,10 @@ pub struct ExtractArgs {
     /// When true, [`ExtractError::Unimplemented`] is treated as a soft
     /// warning. CI in P1-02 uses this; later phases drop the flag.
     pub allow_unimplemented: bool,
+    /// When true, `cargo xtask extract` runs [`check`] instead of
+    /// [`run`]: regenerate into a scratch directory and compare
+    /// byte-for-byte with the committed files (P1-08 goal 3).
+    pub check: bool,
 }
 
 impl ExtractArgs {
@@ -134,6 +141,7 @@ impl ExtractArgs {
             reference: root.join("reference"),
             out: root,
             allow_unimplemented: false,
+            check: false,
         }
     }
 }
@@ -153,6 +161,7 @@ pub fn parse_args(args: &[String]) -> Result<ExtractArgs> {
                 out.out = PathBuf::from(p);
             }
             "--allow-unimplemented" => out.allow_unimplemented = true,
+            "--check" => out.check = true,
             other => return Err(format!("unknown extract argument `{other}`")),
         }
     }
@@ -246,6 +255,91 @@ struct Module {
     name: &'static str,
     /// The per-extractor entry point.
     run: fn(&Path, &Path) -> ExtractResult<Vec<PathBuf>>,
+}
+
+/// `cargo xtask extract --check` (P1-08 goal 3): regenerates every
+/// output into a scratch directory and compares each output
+/// byte-for-byte with the committed file of the same relative path
+/// under `args.out`.
+///
+/// Returns the sorted relative paths that differ; a committed file
+/// that is missing or unreadable counts as differing. `Err` means the
+/// check could not run at all (no `reference/`, or an extractor
+/// failed). Skipped (unimplemented) extractors produce no outputs and
+/// are not compared.
+///
+/// The scratch tree is seeded with `ui-spec/out-of-scope.txt` when the
+/// committed tree has one: that file is a hand-maintained *input* to
+/// [`parity`], not a generated output.
+pub fn check(args: &ExtractArgs) -> Result<Vec<PathBuf>> {
+    let scratch = scratch_dir()?;
+    seed_input(&args.out, &scratch, "ui-spec/out-of-scope.txt");
+    let mut scratch_args = args.clone();
+    scratch_args.out = scratch.clone();
+    scratch_args.check = false;
+    let results = run(&scratch_args)?;
+
+    let mut differing: Vec<PathBuf> = Vec::new();
+    for (name, outcome) in &results {
+        match outcome {
+            Outcome::Ok { outputs } => {
+                for generated in outputs {
+                    let rel = generated.strip_prefix(&scratch).unwrap_or(generated);
+                    if !same_bytes(generated, &args.out.join(rel)) {
+                        differing.push(rel.to_path_buf());
+                    }
+                }
+            }
+            Outcome::Skipped { .. } => {}
+            Outcome::Failed(e) => {
+                return Err(format!("extract[{name}] failed under --check: {e}"));
+            }
+        }
+    }
+    differing.sort();
+    differing.dedup();
+    Ok(differing)
+}
+
+/// True when both paths hold the same bytes. A missing or unreadable
+/// file is never equal to anything.
+fn same_bytes(a: &Path, b: &Path) -> bool {
+    match (std::fs::read(a), std::fs::read(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Copies one committed input file into the scratch tree. Missing
+/// source files are ignored (`parity` treats a missing
+/// `out-of-scope.txt` as "nothing is out of scope").
+fn seed_input(from_root: &Path, to_root: &Path, rel: &str) {
+    let from = from_root.join(rel);
+    let to = to_root.join(rel);
+    if from.is_file()
+        && let Some(parent) = to.parent()
+        && std::fs::create_dir_all(parent).is_ok()
+    {
+        let _ = std::fs::copy(&from, &to);
+    }
+}
+
+/// A fresh scratch directory under the system temp dir. The name
+/// carries the pid and a counter so parallel runs never collide.
+fn scratch_dir() -> Result<PathBuf> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!(
+        "ferrogram-extract-check-{}-{n}",
+        std::process::id()
+    ));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .map_err(|e| format!("cannot clear {}: {e}", dir.display()))?;
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(dir)
 }
 
 #[cfg(test)]
@@ -377,6 +471,7 @@ mod tests {
         assert!(a.reference.ends_with("reference"));
         assert!(a.out.ends_with("ferrogram") || a.out.to_string_lossy().contains("ferrogram"));
         assert!(!a.allow_unimplemented);
+        assert!(!a.check);
     }
 
     #[test]
@@ -387,11 +482,13 @@ mod tests {
             "--out".into(),
             "/tmp/out".into(),
             "--allow-unimplemented".into(),
+            "--check".into(),
         ])
         .unwrap();
         assert_eq!(a.reference, PathBuf::from("/tmp/ref"));
         assert_eq!(a.out, PathBuf::from("/tmp/out"));
         assert!(a.allow_unimplemented);
+        assert!(a.check);
     }
 
     #[test]
@@ -407,6 +504,7 @@ mod tests {
             reference: PathBuf::from("/nonexistent/never/there"),
             out: crate::util::root(),
             allow_unimplemented: true,
+            check: true,
         };
         let err = run(&args).unwrap_err();
         assert!(err.contains("reference/ not found"), "{err}");
@@ -415,6 +513,9 @@ mod tests {
         // populate reference/).
         assert!(err.contains("docs/sources.md"), "{err}");
         assert!(!err.contains("cargo xtask corpus"), "{err}");
+        // `--check` surfaces the same clean error.
+        let err = check(&args).unwrap_err();
+        assert!(err.contains("reference/ not found"), "{err}");
     }
 
     #[test]
@@ -426,5 +527,126 @@ mod tests {
             message: "bad row 3".into(),
         };
         assert!(e.to_string().contains("bad row 3"));
+    }
+
+    // ---- `extract --check` (P1-08 goal 3) ----------------------------
+
+    /// Runs the whole dispatcher over the fixture reference tree and
+    /// returns `(reference, out)`: `out` then stands in for the
+    /// committed tree of a `--check` run. Panics if any extractor
+    /// fails on the fixture tree.
+    fn fixture_outputs(name: &str) -> (PathBuf, PathBuf) {
+        let reference = fixtures::reference_tree(name);
+        let out =
+            std::env::temp_dir().join(format!("ferrogram-p108-out-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&out);
+        std::fs::create_dir_all(&out).unwrap();
+        let args = ExtractArgs {
+            reference: reference.clone(),
+            out: out.clone(),
+            allow_unimplemented: false,
+            check: false,
+        };
+        let results = run(&args).unwrap();
+        for (module, outcome) in &results {
+            match outcome {
+                Outcome::Ok { outputs } => assert!(!outputs.is_empty(), "{module} wrote nothing"),
+                other => panic!("extractor {module} failed on the fixture tree: {other:?}"),
+            }
+        }
+        (reference, out)
+    }
+
+    fn check_args(reference: PathBuf, out: PathBuf) -> ExtractArgs {
+        ExtractArgs {
+            reference,
+            out,
+            allow_unimplemented: false,
+            check: true,
+        }
+    }
+
+    #[test]
+    fn check_passes_on_a_pristine_fixture_tree() {
+        let (reference, out) = fixture_outputs("pristine");
+        let differing = check(&check_args(reference, out)).unwrap();
+        assert!(differing.is_empty(), "unexpected diffs: {differing:?}");
+    }
+
+    #[test]
+    fn check_reports_changed_and_missing_files() {
+        let (reference, out) = fixture_outputs("changed");
+        // One committed file changed, one gone missing.
+        std::fs::write(out.join("ui-spec").join("commands.yaml"), b"# tampered\n").unwrap();
+        std::fs::remove_file(out.join("docs").join("parity").join("controls.md")).unwrap();
+        let differing = check(&check_args(reference, out)).unwrap();
+        let names: Vec<String> = differing
+            .iter()
+            .map(|p| p.display().to_string().replace('\\', "/"))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "docs/parity/controls.md".to_string(),
+                "ui-spec/commands.yaml".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn check_seeds_the_out_of_scope_input() {
+        // `ui-spec/out-of-scope.txt` is a hand-maintained input to the
+        // parity extractor: with it present but unseeded, the scratch
+        // run would produce a different `docs/parity/controls.md` and
+        // `--check` would report a false difference.
+        let (reference, out) = fixture_outputs("seeded");
+        std::fs::write(out.join("ui-spec").join("out-of-scope.txt"), b"FileSave\n").unwrap();
+        // Regenerate the stand-in committed tree with the input in
+        // place, so its outputs are the ones the input produces.
+        let regen = ExtractArgs {
+            reference: reference.clone(),
+            out: out.clone(),
+            allow_unimplemented: false,
+            check: false,
+        };
+        run(&regen).unwrap();
+        let differing = check(&check_args(reference, out.clone())).unwrap();
+        assert!(
+            differing.is_empty(),
+            "out-of-scope.txt must be seeded into the scratch tree: {differing:?}"
+        );
+        // Sanity: the input really does change the parity output, so
+        // the test above is not vacuous.
+        let parity =
+            std::fs::read_to_string(out.join("docs").join("parity").join("controls.md")).unwrap();
+        let file_save = parity
+            .lines()
+            .find(|line| line.starts_with("| FileSave |"))
+            .expect("the FileSave row is in the parity matrix");
+        assert!(
+            file_save.ends_with("| out-of-scope |"),
+            "FileSave must be out-of-scope, got: {file_save}"
+        );
+    }
+
+    #[test]
+    fn seed_input_copies_and_tolerates_missing_files() {
+        let from = std::env::temp_dir().join(format!("ferrogram-p108-seed-{}", std::process::id()));
+        let to = std::env::temp_dir().join(format!("ferrogram-p108-seed-to-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&from);
+        let _ = std::fs::remove_dir_all(&to);
+        std::fs::create_dir_all(from.join("ui-spec")).unwrap();
+        std::fs::create_dir_all(&to).unwrap();
+        std::fs::write(from.join("ui-spec").join("out-of-scope.txt"), b"X\n").unwrap();
+        seed_input(&from, &to, "ui-spec/out-of-scope.txt");
+        assert_eq!(
+            std::fs::read_to_string(to.join("ui-spec").join("out-of-scope.txt")).unwrap(),
+            "X\n"
+        );
+        // A missing source is a no-op, not an error.
+        seed_input(&from, &to, "ui-spec/not-there.txt");
+        assert!(!to.join("ui-spec").join("not-there.txt").exists());
+        let _ = std::fs::remove_dir_all(&from);
+        let _ = std::fs::remove_dir_all(&to);
     }
 }

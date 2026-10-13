@@ -6,8 +6,9 @@
 //! - `coverage [--update-ratchet]`: coverage only; optionally record the ratchet.
 //! - `layers`: check crate layering rules.
 //! - `corpus [--verify-only] [--offline <dir>]`: fetch and verify the test corpus.
-//! - `extract [--reference <path>] [--out <path>] [--allow-unimplemented]`:
-//!   regenerate every Phase 1 output from `reference/`. See ADR 0009.
+//! - `extract [--reference <path>] [--out <path>] [--allow-unimplemented] [--check]`:
+//!   regenerate every Phase 1 output from `reference/`, or verify the
+//!   committed files with `--check`. See ADR 0009.
 //! - `oracle [status|build|clean] [--build-dir <path>] [--jobs <n>]`:
 //!   build or inspect the libvisio test oracle. See ADR 0010.
 
@@ -33,8 +34,10 @@ tasks:
   layers                               check crate layering rules
   corpus [--verify-only] [--offline d] fetch and verify the test corpus (ADR 0005)
                                        --offline copies from a local dir instead of the network
-  extract [--reference <path>] [--out <path>] [--allow-unimplemented]
+  extract [--reference <path>] [--out <path>] [--allow-unimplemented] [--check]
                                        regenerate Phase 1 outputs from reference/
+                                       --check regenerates into a scratch dir and
+                                       compares byte-for-byte with the committed files
   oracle [status|build|clean] [--build-dir <path>] [--jobs <n>]
                                        build/inspect the libvisio test oracle (ADR 0010)";
 
@@ -68,9 +71,29 @@ fn main() -> ExitCode {
 /// `cargo xtask extract` entry point. Parses args, runs the
 /// dispatcher, prints one line per extractor, and returns Ok(()) only
 /// when every extractor succeeds (or is `Skipped` under
-/// `--allow-unimplemented`).
+/// `--allow-unimplemented`). With `--check` it regenerates into a
+/// scratch directory and compares byte-for-byte with the committed
+/// files instead (P1-08 goal 3).
 fn extract_dispatch(args: &[String]) -> Result<(), String> {
     let parsed = extract::parse_args(args)?;
+    if parsed.check {
+        let differing = extract::check(&parsed)?;
+        return if differing.is_empty() {
+            println!("extract --check: OK (every output matches the committed files)");
+            Ok(())
+        } else {
+            let list: Vec<String> = differing
+                .iter()
+                .map(|p| format!("  {}", p.display()))
+                .collect();
+            Err(format!(
+                "extract --check: {} output file(s) differ from the committed files \
+                 (re-run `cargo xtask extract` and commit):\n{}",
+                differing.len(),
+                list.join("\n")
+            ))
+        };
+    }
     let results = extract::run(&parsed)?;
     let mut had_failure = false;
     for (name, outcome) in &results {
