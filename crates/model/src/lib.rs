@@ -16,6 +16,7 @@
 mod cell;
 mod document;
 mod error;
+pub mod generated;
 mod id;
 mod lookup;
 mod master;
