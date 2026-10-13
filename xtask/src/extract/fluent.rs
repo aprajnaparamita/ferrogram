@@ -922,8 +922,22 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let a = assemble_layout(&refs, Path::new("test.xlsx"), "test", "https://example.invalid/", "rev").unwrap();
-        let b = assemble_layout(&refs, Path::new("test.xlsx"), "test", "https://example.invalid/", "rev").unwrap();
+        let a = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
+        let b = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
         let ya = serde_saphyr::to_string(&a).unwrap();
         let yb = serde_saphyr::to_string(&b).unwrap();
         assert_eq!(ya, yb);
@@ -938,7 +952,14 @@ mod tests {
             rows_from_strings(&[vec!["TabHome", "tab", "None (Core Tab)", "", "", "", "1"]]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, Path::new("test.xlsx"), "src", "https://example/", "rev").unwrap();
+        let layout = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "src",
+            "https://example/",
+            "rev",
+        )
+        .unwrap();
         let tabs = layout.get("tabs").unwrap().as_array().unwrap();
         let first = &tabs[0];
         let id = first.get("id").unwrap();
@@ -1059,7 +1080,14 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, Path::new("test.xlsx"), "test", "https://example.invalid/", "rev").unwrap();
+        let layout = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
         let text = serde_saphyr::to_string(&layout).unwrap();
 
         // Sanity: tabs[0].id is TabHome (Fluent name).
@@ -1150,7 +1178,8 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
+        let layout =
+            assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
         let controls = layout.get("tabs").unwrap().as_array().unwrap()[0]
             .get("groups")
             .unwrap()
@@ -1211,7 +1240,8 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
+        let layout =
+            assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
         let tabs = layout.get("tabs").unwrap().as_array().unwrap();
         let home = tabs
             .iter()
@@ -1253,9 +1283,7 @@ mod tests {
 
         // Build a temp workspace that mirrors the layout directory
         // shape: ui-spec/{panel-2016.yaml, panel-365.yaml, commands.yaml, shortcuts.yaml}.
-        let tmp =
-            std::env::temp_dir().join(format!("ferrogram-p1-03-loader-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("fluent-loader");
         let data_dir = tmp.join("ui-spec");
         std::fs::create_dir_all(&data_dir).unwrap();
         std::fs::copy(&committed_2016, data_dir.join("panel-2016.yaml")).unwrap();
@@ -1274,7 +1302,7 @@ mod tests {
             }
         }
 
-        let loader = Loader::new(&tmp).expect("loader compiles");
+        let loader = Loader::new(tmp.path()).expect("loader compiles");
         let set_2016 = loader.load(LayoutKind::Visio2016).expect("2016 loads");
         let set_365 = loader.load(LayoutKind::Visio365).expect("365 loads");
 
@@ -1310,7 +1338,5 @@ mod tests {
             9,
             "365 QAT controls"
         );
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

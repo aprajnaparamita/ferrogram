@@ -345,37 +345,9 @@ fn check_jobs(jobs: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
-
-    static NEXT_TEMP: AtomicUsize = AtomicUsize::new(0);
-
-    /// A unique temp directory, removed when the test ends.
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new(label: &str) -> TempDir {
-            let dir = std::env::temp_dir().join(format!(
-                "ferrogram-xtask-oracle-{label}-{}-{}",
-                std::process::id(),
-                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
-            ));
-            let _ = fs::remove_dir_all(&dir);
-            fs::create_dir_all(&dir).unwrap();
-            TempDir(dir)
-        }
-
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::util::test_support::TempDir;
 
     /// Creates the six files `build.sh status` looks for.
     fn fake_build(dir: &Path) {

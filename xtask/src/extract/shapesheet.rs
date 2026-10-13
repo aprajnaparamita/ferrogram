@@ -952,9 +952,7 @@ Contains general positioning information about a shape.
 
     #[test]
     fn load_pages_classifies_the_fixture() {
-        let tmp = std::env::temp_dir().join(format!("ferrogram-shapesheet-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = crate::util::test_support::TempDir::new("shapesheet");
         std::fs::write(
             tmp.join("pinx-cell-shape-transform-section.md"),
             CELL_FIXTURE,
@@ -976,7 +974,7 @@ Contains general positioning information about a shape.
             "# About Cell References\n\nProse.\n",
         )
         .unwrap();
-        let (cells, sections) = load_pages(&tmp).unwrap();
+        let (cells, sections) = load_pages(tmp.path()).unwrap();
         assert_eq!(
             cells.len(),
             2,
@@ -985,14 +983,12 @@ Contains general positioning information about a shape.
         );
         assert_eq!(sections.len(), 1);
         assert!(sections.contains_key(&section_key("Shape Transform")));
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
     fn missing_docs_dir_is_a_missing_error() {
-        let tmp =
-            std::env::temp_dir().join(format!("ferrogram-shapesheet2-{}", std::process::id()));
-        let err = run(&tmp, &tmp).unwrap_err();
+        let tmp = crate::util::test_support::TempDir::new("shapesheet2");
+        let err = run(tmp.path(), tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Missing { .. }), "{err}");
     }
 
@@ -1011,13 +1007,10 @@ Contains general positioning information about a shape.
             eprintln!("reference/ not present; skipping");
             return;
         }
-        let out =
-            std::env::temp_dir().join(format!("ferrogram-shapesheet3-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&out);
-        std::fs::create_dir_all(&out).unwrap();
-        let written = run(&ref_dir, &out).unwrap();
+        let out = crate::util::test_support::TempDir::new("shapesheet3");
+        let written = run(&ref_dir, out.path()).unwrap();
         let first = std::fs::read_to_string(&written[0]).unwrap();
-        run(&ref_dir, &out).unwrap();
+        run(&ref_dir, out.path()).unwrap();
         let second = std::fs::read_to_string(&written[0]).unwrap();
         assert_eq!(first, second, "re-running is a no-op");
 
@@ -1042,7 +1035,6 @@ Contains general positioning information about a shape.
                 assert_eq!(cell_names, sorted, "cells sorted in {:?}", s.get("name"));
             }
         }
-        let _ = std::fs::remove_dir_all(&out);
     }
 
     /// The other 108 enum pages are read but not committed.

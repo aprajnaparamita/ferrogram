@@ -1022,8 +1022,7 @@ mod tests {
 
     #[test]
     fn run_on_fixture_writes_and_validates() {
-        let tmp = std::env::temp_dir().join(format!("ferrogram-shortcuts-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("shortcuts");
         let in_dir = tmp.join("in");
         let out_dir = tmp.join("out");
         let src = in_dir.join("support").join("shortcuts");
@@ -1037,17 +1036,13 @@ mod tests {
         // The unmapped row is dropped; the rest are written.
         assert!(!text.contains("Not a command we know"));
         assert!(text.contains("edit.undo"));
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
     fn run_without_input_is_a_missing_error() {
-        let tmp = std::env::temp_dir().join(format!("ferrogram-shortcuts2-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let err = run(&tmp, &tmp).unwrap_err();
+        let tmp = crate::util::test_support::TempDir::new("shortcuts2");
+        let err = run(tmp.path(), tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Missing { .. }), "{err}");
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// R2: a directory in the way is an Io error naming the file, not
@@ -1060,7 +1055,10 @@ mod tests {
         std::fs::create_dir_all(src.join("keyboard-shortcuts-visio.html")).unwrap();
         let err = run(tmp.path(), tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Io { .. }), "{err}");
-        assert!(err.to_string().contains("keyboard-shortcuts-visio.html"), "{err}");
+        assert!(
+            err.to_string().contains("keyboard-shortcuts-visio.html"),
+            "{err}"
+        );
     }
 
     /// R2: a non-UTF-8 source is an Io error keeping the io error
@@ -1070,10 +1068,18 @@ mod tests {
         let tmp = crate::util::test_support::TempDir::new("shortcuts-bin");
         let src = tmp.join("support/shortcuts");
         std::fs::create_dir_all(&src).unwrap();
-        std::fs::write(src.join("keyboard-shortcuts-visio.html"), [0xff, 0xfe, 0xfd]).unwrap();
+        std::fs::write(
+            src.join("keyboard-shortcuts-visio.html"),
+            [0xff, 0xfe, 0xfd],
+        )
+        .unwrap();
         let err = run(tmp.path(), tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Io { .. }), "{err}");
-        assert!(err.to_string().contains("stream did not contain valid UTF-8"), "{err}");
+        assert!(
+            err.to_string()
+                .contains("stream did not contain valid UTF-8"),
+            "{err}"
+        );
     }
 
     /// Every command id in [`ACTION_TO_COMMAND`] must exist in the

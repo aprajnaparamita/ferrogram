@@ -1292,7 +1292,12 @@ mod tests {
             ("TabHome", "tab"),
             ("GroupClipboard", "group"),
         ]);
-        let entries = build_entries(&v, &ctrls, Path::new("reference/learn/visuicmds/visuicmds.md")).unwrap();
+        let entries = build_entries(
+            &v,
+            &ctrls,
+            Path::new("reference/learn/visuicmds/visuicmds.md"),
+        )
+        .unwrap();
         assert_eq!(entries.len(), 4);
         let save = entries.iter().find(|e| e.id == "file.save").unwrap();
         assert_eq!(save.fluent_ids, vec!["FileSave"]);
@@ -1327,7 +1332,12 @@ mod tests {
     fn fluent_only_entry_gets_unknown_confidence() {
         let v = vis(&[("visCmdFileSave", 1004)]);
         let ctrls = controls(&[("FileSave", "button"), ("InsertShapeGallery", "gallery")]);
-        let entries = build_entries(&v, &ctrls, Path::new("reference/learn/visuicmds/visuicmds.md")).unwrap();
+        let entries = build_entries(
+            &v,
+            &ctrls,
+            Path::new("reference/learn/visuicmds/visuicmds.md"),
+        )
+        .unwrap();
         assert_eq!(entries.len(), 2);
         let insert = entries.iter().find(|e| e.id == "insert.shape").unwrap();
         assert_eq!(insert.visuicmd, None);
@@ -1450,7 +1460,8 @@ controls:
             "GroupIconEditClipboard".to_string(),
             "edit.copy".to_string(),
         );
-        let err = fill_layout_commands(&mut value, &map, Path::new("ui-spec/panel-365.yaml")).unwrap_err();
+        let err = fill_layout_commands(&mut value, &map, Path::new("ui-spec/panel-365.yaml"))
+            .unwrap_err();
         assert!(err.to_string().contains("alias"), "{err}");
         // R3: the error names the real layout path, not `<layout>`.
         assert!(err.to_string().contains("ui-spec/panel-365.yaml"), "{err}");
@@ -1472,7 +1483,11 @@ controls:
   mapping_confidence: exact
 "#;
         let err = schema
-            .validate_str(bad, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+            .validate_str(
+                bad,
+                SchemaKind::Commands,
+                Path::new("ui-spec/commands.yaml"),
+            )
             .expect_err("literal \"null\" must fail");
         assert!(err.to_string().contains("schema"), "{err}");
 
@@ -1484,7 +1499,11 @@ controls:
   mapping_confidence: exact
 "#;
         schema
-            .validate_str(good, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+            .validate_str(
+                good,
+                SchemaKind::Commands,
+                Path::new("ui-spec/commands.yaml"),
+            )
             .expect("null visuicmd is valid");
 
         let good_str = r#"
@@ -1495,7 +1514,11 @@ controls:
   mapping_confidence: exact
 "#;
         schema
-            .validate_str(good_str, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+            .validate_str(
+                good_str,
+                SchemaKind::Commands,
+                Path::new("ui-spec/commands.yaml"),
+            )
             .expect("string visuicmd is valid");
     }
 
@@ -1625,13 +1648,21 @@ controls:
         for (constant, id) in OVERRIDES {
             let doc = entry_with_id(id);
             schema()
-                .validate_json(&doc, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+                .validate_json(
+                    &doc,
+                    SchemaKind::Commands,
+                    Path::new("ui-spec/commands.yaml"),
+                )
                 .unwrap_or_else(|e| panic!("OVERRIDES {constant} -> {id}: {e}"));
         }
         for (name, id) in FLUENT_OVERRIDES {
             let doc = entry_with_id(id);
             schema()
-                .validate_json(&doc, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+                .validate_json(
+                    &doc,
+                    SchemaKind::Commands,
+                    Path::new("ui-spec/commands.yaml"),
+                )
                 .unwrap_or_else(|e| panic!("FLUENT_OVERRIDES {name} -> {id}: {e}"));
         }
     }

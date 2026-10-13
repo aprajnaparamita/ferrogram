@@ -196,13 +196,10 @@ Some intro prose.
     fn run_reads_the_documented_path() {
         // With a temp reference root that lacks the file: a clean
         // Missing error naming the documented path.
-        let tmp = std::env::temp_dir().join(format!("ferrogram-visuicmds-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let err = run(&tmp).unwrap_err();
+        let tmp = crate::util::test_support::TempDir::new("visuicmds");
+        let err = run(tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Missing { .. }), "{err}");
         assert!(err.to_string().contains("visuicmds.md"), "{err}");
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// R2: a directory in the way is an Io error naming the file.
@@ -225,21 +222,20 @@ Some intro prose.
         let err = run(tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Io { .. }), "{err}");
         assert!(
-            err.to_string().contains("stream did not contain valid UTF-8"),
+            err.to_string()
+                .contains("stream did not contain valid UTF-8"),
             "{err}"
         );
     }
 
     #[test]
     fn run_parses_a_staged_file() {
-        let tmp = std::env::temp_dir().join(format!("ferrogram-visuicmds2-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("visuicmds2");
         let dir = tmp.join("learn").join("visuicmds");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("visuicmds.md"), FIXTURE).unwrap();
-        let rows = run(&tmp).unwrap();
+        let rows = run(tmp.path()).unwrap();
         assert_eq!(rows.len(), 3);
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// Real-data smoke test: the committed reference yields the 664

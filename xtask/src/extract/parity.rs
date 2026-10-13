@@ -267,8 +267,7 @@ mod tests {
 
     #[test]
     fn loads_out_of_scope_strips_comments() {
-        let tmp = std::env::temp_dir().join("ferrogram-parity-oos");
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = crate::util::test_support::TempDir::new("parity-oos");
         let p = tmp.join("oos.txt");
         std::fs::write(
             &p,
@@ -281,7 +280,6 @@ mod tests {
         assert!(oos.contains("MacrosMenu"));
         assert_eq!(oos.exact.len(), 1);
         assert_eq!(oos.globs.len(), 1);
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
@@ -303,8 +301,7 @@ mod tests {
         // Run the extractor pointing at the workspace as `out_dir`
         // so the input layout files exist. Re-run, and compare the
         // produced file content to a captured copy in a tmp dir.
-        let tmp = std::env::temp_dir().join("ferrogram-parity-test");
-        std::fs::create_dir_all(&tmp).unwrap();
+        let tmp = crate::util::test_support::TempDir::new("parity");
         let _ = std::fs::remove_file(ws().join("docs").join("parity").join("controls.md"));
         let out_a = run(Path::new("."), &ws()).unwrap();
         let first = out_a[0].clone();
@@ -316,7 +313,6 @@ mod tests {
         assert_eq!(ta, tb);
         assert!(ta.contains("| status |"));
         assert!(ta.contains("| stub |"));
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

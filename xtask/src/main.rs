@@ -89,7 +89,12 @@ fn extract_dispatch(args: &[String]) -> Result<(), String> {
                      (re-run `cargo xtask extract` and commit):",
                     report.differing.len()
                 ));
-                lines.extend(report.differing.iter().map(|p| format!("  {}", p.display())));
+                lines.extend(
+                    report
+                        .differing
+                        .iter()
+                        .map(|p| format!("  {}", p.display())),
+                );
             }
             if !report.stale.is_empty() {
                 lines.push(format!(
