@@ -1564,4 +1564,58 @@ controls:
         assert!(arr[0].get("visuicmd").unwrap().is_string());
         assert!(arr[1].get("visuicmd").unwrap().is_null());
     }
+
+    // ---- P1-08 goal 4: property tests -------------------------------
+
+    use proptest::prelude::*;
+
+    /// The committed schema, compiled once per test run.
+    fn schema() -> Schema {
+        use std::sync::OnceLock;
+        static SCHEMA: OnceLock<Schema> = OnceLock::new();
+        SCHEMA
+            .get_or_init(|| Schema::load_default().unwrap())
+            .clone()
+    }
+
+    /// A minimal schema-valid `commands.yaml` entry carrying `id`.
+    fn entry_with_id(id: &str) -> Value {
+        serde_json::json!([{
+            "fluent_ids": [],
+            "id": id,
+            "label": "Label",
+            "mapping_confidence": "unknown",
+            "visuicmd": null
+        }])
+    }
+
+    proptest! {
+        /// The id derivation for any `visCmd[A-Za-z0-9]+` constant
+        /// yields a schema-valid command id; it never yields an
+        /// invalid one (the other entry fields are constants, so a
+        /// validation failure can only come from the id).
+        #[test]
+        fn derived_ids_are_schema_valid(constant in "visCmd[A-Za-z0-9]{0,24}") {
+            let id = command_id_for_constant(&constant);
+            let doc = entry_with_id(&id);
+            let err = schema().validate_json(&doc, SchemaKind::Commands).err();
+            prop_assert!(err.is_none(), "invalid id {id:?} for {constant:?}: {err:?}");
+        }
+    }
+
+    #[test]
+    fn override_ids_are_schema_valid() {
+        for (constant, id) in OVERRIDES {
+            let doc = entry_with_id(id);
+            schema()
+                .validate_json(&doc, SchemaKind::Commands)
+                .unwrap_or_else(|e| panic!("OVERRIDES {constant} -> {id}: {e}"));
+        }
+        for (name, id) in FLUENT_OVERRIDES {
+            let doc = entry_with_id(id);
+            schema()
+                .validate_json(&doc, SchemaKind::Commands)
+                .unwrap_or_else(|e| panic!("FLUENT_OVERRIDES {name} -> {id}: {e}"));
+        }
+    }
 }

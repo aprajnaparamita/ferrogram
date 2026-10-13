@@ -231,7 +231,11 @@ pub fn reference_tree(name: &str) -> PathBuf {
         "learn/enums/visio.visunitcodes.md",
         &enum_md(&[("visNumber", 0), ("visInches", 1)]),
     );
-    write(&root, "support/shortcuts/keyboard-shortcuts-visio.html", SHORTCUTS_HTML);
+    write(
+        &root,
+        "support/shortcuts/keyboard-shortcuts-visio.html",
+        SHORTCUTS_HTML,
+    );
 
     let visio = "ms-vsdx/office-developer-client-docs/docs/visio";
     write(
@@ -389,8 +393,8 @@ pub fn workbook_xml(rows: &[Vec<&str>]) -> Vec<u8> {
     let mut cursor = std::io::Cursor::new(Vec::new());
     {
         let mut zip = zip::ZipWriter::new(&mut cursor);
-        let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         for (name, body) in files {
             zip.start_file(name, options).expect("zip entry");
             zip.write_all(body.as_bytes()).expect("zip bytes");

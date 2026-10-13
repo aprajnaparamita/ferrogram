@@ -632,7 +632,8 @@ mod tests {
     #[test]
     fn seed_input_copies_and_tolerates_missing_files() {
         let from = std::env::temp_dir().join(format!("ferrogram-p108-seed-{}", std::process::id()));
-        let to = std::env::temp_dir().join(format!("ferrogram-p108-seed-to-{}", std::process::id()));
+        let to =
+            std::env::temp_dir().join(format!("ferrogram-p108-seed-to-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&from);
         let _ = std::fs::remove_dir_all(&to);
         std::fs::create_dir_all(from.join("ui-spec")).unwrap();
