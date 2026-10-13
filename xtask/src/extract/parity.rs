@@ -211,14 +211,16 @@ impl OutOfScope {
 }
 
 /// Converts a shell-style glob (`*` only) into a regex anchored at
-/// both ends. The escape rules are minimal: `*` is `.*`, all other
-/// characters are literal.
+/// both ends. The escape rules are minimal: `*` matches any run of
+/// characters, everything else is literal.
 fn glob_to_pattern(glob: &str) -> String {
     let mut out = String::with_capacity(glob.len() + 4);
     out.push('^');
     for ch in glob.chars() {
         match ch {
-            '*' => out.push_str(".*"),
+            // `(?s)` so `*` really matches any string, newlines
+            // included (P1-08 goal 4).
+            '*' => out.push_str("(?s:.*)"),
             // Regex meta-characters we want literal.
             '.' | '(' | ')' | '[' | ']' | '?' | '+' | '|' | '^' | '$' | '\\' | '{' | '}' => {
                 out.push('\\');
@@ -315,5 +317,14 @@ mod tests {
         assert!(ta.contains("| status |"));
         assert!(ta.contains("| stub |"));
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn star_glob_matches_across_newlines() {
+        // Regression (P1-08 goal 4): `*` must match *any* string, so
+        // the wildcard's dot has to match newlines too.
+        assert!(glob_match(&glob_to_pattern("*"), "a\nb"));
+        assert!(glob_match(&glob_to_pattern("*"), ""));
+        assert!(glob_match(&glob_to_pattern("*Macro*"), "My\nMacro"));
     }
 }
