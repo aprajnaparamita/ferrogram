@@ -251,10 +251,12 @@ struct Module {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
     use std::path::PathBuf;
 
-    /// Loader check (P1-04): the committed `commands.yaml` and
-    /// `shortcuts.yaml` pass `Schema::validate_file`.
+    /// Loader check (P1-04, widened by P1-08 goal 2): every committed
+    /// `ui-spec/*.yaml` passes `Schema::validate_file` with the xtask
+    /// validator.
     #[test]
     fn committed_commands_and_shortcuts_pass_schema_validation() {
         let root = crate::util::root();
@@ -264,7 +266,12 @@ mod tests {
             return;
         }
         let schema = schema::Schema::load(&schema_path).expect("schema loads");
-        for name in ["commands.yaml", "shortcuts.yaml"] {
+        for name in [
+            "visio-2016.yaml",
+            "visio-365.yaml",
+            "commands.yaml",
+            "shortcuts.yaml",
+        ] {
             let path = root.join("ui-spec").join(name);
             if !path.is_file() {
                 eprintln!("{name} not present; skipping");
@@ -273,6 +280,58 @@ mod tests {
             schema
                 .validate_file(&path)
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
+        }
+    }
+
+    /// P1-08 goal 2: `ui-spec/shapesheet.toml` parses and carries no
+    /// duplicate section, row or cell names.
+    #[test]
+    fn committed_shapesheet_toml_parses_without_duplicate_names() {
+        let path = crate::util::root().join("ui-spec").join("shapesheet.toml");
+        if !path.is_file() {
+            eprintln!("shapesheet.toml not present; skipping");
+            return;
+        }
+        let text = std::fs::read_to_string(&path).expect("shapesheet.toml reads");
+        let value: toml::Value = toml::from_str(&text).expect("shapesheet.toml parses as TOML");
+
+        let rows = value
+            .get("rows")
+            .and_then(toml::Value::as_array)
+            .expect("shapesheet.toml has [[rows]]");
+        check_unique("row", rows.iter().filter_map(|r| r.get("name")));
+
+        let sections = value
+            .get("sections")
+            .and_then(toml::Value::as_array)
+            .expect("shapesheet.toml has [[sections]]");
+        check_unique("section", sections.iter().filter_map(|s| s.get("name")));
+        for section in sections {
+            let name = section
+                .get("name")
+                .and_then(toml::Value::as_str)
+                .unwrap_or("<unnamed>");
+            let empty = Vec::new();
+            let cells = section
+                .get("cells")
+                .and_then(toml::Value::as_array)
+                .unwrap_or(&empty);
+            check_unique(
+                &format!("cell of section {name}"),
+                cells.iter().filter_map(|c| c.get("name")),
+            );
+        }
+    }
+
+    /// Asserts that every `name` in `values` is a string and appears at
+    /// most once.
+    fn check_unique<'a>(what: &str, values: impl Iterator<Item = &'a toml::Value>) {
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        for value in values {
+            let name = value
+                .as_str()
+                .unwrap_or_else(|| panic!("{what} name is not a string: {value}"));
+            assert!(seen.insert(name), "duplicate {what} name: {name}");
         }
     }
 
