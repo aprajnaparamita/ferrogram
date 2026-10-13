@@ -49,8 +49,10 @@ fn minimal_drawing_reads() {
     assert_eq!(geometry.rows.len(), 5);
     assert_eq!(geometry.rows[0].row_type.as_deref(), Some("RelMoveTo"));
     assert_eq!(geometry.rows[0].ix, Some(1));
-    // The section-level `NoFill` cell has no slot on `Section`.
-    assert_eq!(geometry.preserved.children.len(), 1);
+    // The section-level `NoFill` cell maps to `Section::cells` (P2-06b).
+    assert_eq!(geometry.cells.len(), 1);
+    assert_eq!(geometry.cells[0].name.as_str(), "NoFill");
+    assert!(geometry.preserved.children.is_empty());
 }
 
 #[test]

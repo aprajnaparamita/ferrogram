@@ -284,12 +284,16 @@ fn defines(cell: &Cell) -> bool {
 }
 
 /// The cell named `name` in `sheet` and the section it lives in (`None` for
-/// a direct cell). Direct cells come before row cells, in file order.
+/// a direct cell). Direct cells come first, then each section's own cells
+/// before its row cells, in file order (P2-06b decision 1).
 fn sheet_cell<'a>(sheet: &'a Sheet, name: &CellName) -> Option<(&'a Cell, Option<&'a str>)> {
     if let Some(found) = sheet.cells.iter().find(|c| c.name == *name) {
         return Some((found, None));
     }
     for section in &sheet.sections {
+        if let Some(found) = section.cells.iter().find(|c| c.name == *name) {
+            return Some((found, Some(section.name.as_str())));
+        }
         for row in &section.rows {
             if let Some(found) = row.cells.iter().find(|c| c.name == *name) {
                 return Some((found, Some(section.name.as_str())));
@@ -1358,6 +1362,44 @@ mod tests {
         assert_eq!(found.value.as_ref(), Some(&CellValue::Number(2.0)));
         assert_eq!(hint, Some("Geometry"));
         assert!(sheet_cell(&sheet, &CellName::from_static("Y")).is_none());
+    }
+
+    #[test]
+    fn section_level_cells_match_before_row_cells() {
+        let mut sheet = Sheet::new();
+        let mut section =
+            crate::section::Section::new(crate::name::SectionName::from_static("Geometry"));
+        section.cells.push(number_cell("X", 5.0));
+        let mut row = crate::section::Row::new();
+        row.cells.push(number_cell("X", 2.0));
+        section.rows.push(row);
+        sheet.sections.push(section);
+
+        let (found, hint) = sheet_cell(&sheet, &CellName::from_static("X")).expect("found");
+        assert_eq!(found.value.as_ref(), Some(&CellValue::Number(5.0)));
+        assert_eq!(hint, Some("Geometry"));
+    }
+
+    #[test]
+    fn a_section_level_cell_resolves_as_a_local_cell() {
+        let (mut doc, id) = document_with_shape();
+        let mut section =
+            crate::section::Section::new(crate::name::SectionName::from_static("Geometry"));
+        section.cells.push(number_cell("NoShow", 1.0));
+        let mut row = crate::section::Row::new();
+        row.cells.push(number_cell("NoShow", 0.0));
+        section.rows.push(row);
+        doc.shape_mut(id)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(section);
+
+        let r = doc
+            .resolve(id, &CellName::from_static("NoShow"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(1.0)));
+        assert_eq!(r.source, ValueSource::Local);
     }
 
     #[test]
