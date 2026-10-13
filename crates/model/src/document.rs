@@ -98,6 +98,76 @@ impl Document {
     pub fn style(&self, id: StyleId) -> Option<&crate::style::Style> {
         self.stylesheet.styles.get(id.index as usize)
     }
+
+    /// Appends a shape to the arena and returns its id.
+    ///
+    /// The stored shape's `id` is set to the returned id, so
+    /// `document.shape(id)` gives back the same shape.
+    pub fn add_shape(&mut self, mut shape: Shape) -> ShapeId {
+        let id = ShapeId {
+            index: u32::try_from(self.shapes.len()).unwrap_or(u32::MAX),
+        };
+        shape.id = id;
+        self.shapes.push(shape);
+        id
+    }
+
+    /// Finds a shape by Visio `ID` within a page, or `None`.
+    ///
+    /// The search walks the page's shapes in file order and descends into
+    /// groups; a cyclic or broken `children` list is walked once, never
+    /// looped on.
+    pub fn shape_by_visio_id(&self, page: PageId, visio_id: i32) -> Option<ShapeId> {
+        let page = self.page(page)?;
+        let mut seen = vec![false; self.shapes.len()];
+        let mut stack: Vec<ShapeId> = page.shapes.iter().rev().copied().collect();
+        while let Some(id) = stack.pop() {
+            let Some(shape) = self.shape(id) else {
+                continue;
+            };
+            let Some(slot) = seen.get_mut(id.index as usize) else {
+                continue;
+            };
+            if *slot {
+                continue;
+            }
+            *slot = true;
+            if shape.visio_id == visio_id {
+                return Some(id);
+            }
+            stack.extend(shape.children.iter().rev().copied());
+        }
+        None
+    }
+
+    /// Finds a master by `NameU`, or `None`.
+    ///
+    /// The first master with this `NameU` wins; `Name` is not searched. The
+    /// returned id is the list position, consistent with
+    /// [`Document::master`].
+    pub fn master_by_name_u(&self, name_u: &str) -> Option<MasterId> {
+        self.masters
+            .iter()
+            .position(|m| m.name_u == name_u)
+            .map(|index| MasterId {
+                index: u32::try_from(index).unwrap_or(u32::MAX),
+            })
+    }
+
+    /// Finds a style by `Name`, or `None`.
+    ///
+    /// The first stylesheet row with this `Name` wins; `NameU` is not
+    /// searched. The returned id is the list position, consistent with
+    /// [`Document::style`].
+    pub fn style_by_name(&self, name: &str) -> Option<StyleId> {
+        self.stylesheet
+            .styles
+            .iter()
+            .position(|s| s.name == name)
+            .map(|index| StyleId {
+                index: u32::try_from(index).unwrap_or(u32::MAX),
+            })
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +211,87 @@ mod tests {
         let p = Property::new("title", "Example");
         assert_eq!(p.name, "title");
         assert_eq!(p.value, "Example");
+    }
+
+    #[test]
+    fn add_shape_appends_and_assigns_the_arena_id() {
+        let mut d = Document::new();
+        let first = d.add_shape(Shape::new(ShapeId { index: 99 }, 1));
+        let second = d.add_shape(Shape::new(ShapeId { index: 99 }, 2));
+        assert_eq!(first, ShapeId { index: 0 });
+        assert_eq!(second, ShapeId { index: 1 });
+        assert_eq!(d.shape(first).expect("exists").id, first);
+        assert_eq!(d.shape(second).expect("exists").visio_id, 2);
+    }
+
+    #[test]
+    fn shape_by_visio_id_finds_top_level_and_sub_shapes() {
+        let mut d = Document::new();
+        let root = d.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        let group = d.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        let sub = d.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+        d.shape_mut(group).expect("exists").parent = Some(root);
+        d.shape_mut(sub).expect("exists").parent = Some(group);
+        d.shape_mut(root).expect("exists").children.push(group);
+        d.shape_mut(group).expect("exists").children.push(sub);
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(root);
+        d.pages.push(page);
+
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 1), Some(root));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 2), Some(group));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 3), Some(sub));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 4), None);
+        assert_eq!(d.shape_by_visio_id(PageId { index: 1 }, 1), None);
+    }
+
+    #[test]
+    fn shape_by_visio_id_survives_cyclic_children() {
+        let mut d = Document::new();
+        let a = d.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        let b = d.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        d.shape_mut(a).expect("exists").children.push(b);
+        d.shape_mut(b).expect("exists").children.push(a);
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(a);
+        d.pages.push(page);
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 1), Some(a));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 2), Some(b));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 3), None);
+    }
+
+    #[test]
+    fn shape_by_visio_id_skips_a_broken_child_id() {
+        let mut d = Document::new();
+        let root = d.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        d.shape_mut(root)
+            .expect("exists")
+            .children
+            .push(ShapeId { index: 9 });
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(root);
+        d.pages.push(page);
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 1), Some(root));
+        assert_eq!(d.shape_by_visio_id(PageId { index: 0 }, 5), None);
+    }
+
+    #[test]
+    fn master_by_name_u_and_style_by_name_find_their_rows() {
+        let mut d = Document::new();
+        let mut master = Master::new(MasterId { index: 0 }, 1);
+        master.name = "Box".to_owned();
+        master.name_u = "Box.2".to_owned();
+        d.masters.push(master);
+        let mut style = crate::style::Style::new(StyleId { index: 0 });
+        style.name = "Normal".to_owned();
+        style.name_u = "Normal.2".to_owned();
+        d.stylesheet.styles.push(style);
+
+        assert_eq!(d.master_by_name_u("Box.2"), Some(MasterId { index: 0 }));
+        assert_eq!(d.master_by_name_u("Box"), None);
+        assert_eq!(d.master_by_name_u("Nope"), None);
+        assert_eq!(d.style_by_name("Normal"), Some(StyleId { index: 0 }));
+        assert_eq!(d.style_by_name("Normal.2"), None);
+        assert_eq!(d.style_by_name("Nope"), None);
     }
 }
