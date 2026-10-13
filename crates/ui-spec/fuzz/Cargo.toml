@@ -1,0 +1,25 @@
+[package]
+name = "ferrogram-ui-spec-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.ferrogram-ui-spec]
+path = ".."
+
+# Prevent this from interfering with workspaces (the cargo-fuzz way).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "loader_fuzz"
+path = "fuzz_targets/loader_fuzz.rs"
+test = false
+doc = false
+bench = false
