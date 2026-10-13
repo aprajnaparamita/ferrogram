@@ -366,7 +366,7 @@
         "command": { "$ref": "#/definitions/commandId" },
         "scope": { "$ref": "#/definitions/shortcutScope" },
         "section": {
-          "description": "Optional human-readable section from the source page (e.g. 'Frequently used shortcuts').",
+          "description": "Optional group name of our own (e.g. 'Common', 'Text', 'Navigation'), used to group shortcuts in the UI.",
           "type": "string"
         }
       },

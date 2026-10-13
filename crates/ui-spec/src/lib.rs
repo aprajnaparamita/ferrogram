@@ -702,7 +702,7 @@ pub struct Shortcut {
     pub command: CommandId,
     /// Where the shortcut applies.
     pub scope: ShortcutScope,
-    /// Optional human-readable section from the source page.
+    /// Optional group name of our own (e.g. `Common`, `Text`), used to group shortcuts in the UI.
     #[serde(default)]
     pub section: Option<String>,
 }
@@ -1124,7 +1124,7 @@ mod tests {
             sequence: vec![vec!["Ctrl".into(), "Z".into()]],
             command: CommandId::new("edit.undo"),
             scope: ShortcutScope::Global,
-            section: Some("Frequently used shortcuts".into()),
+            section: Some("Common".into()),
         };
         assert_eq!(s.sequence.len(), 1);
         assert_eq!(s.sequence[0], vec!["Ctrl", "Z"]);
