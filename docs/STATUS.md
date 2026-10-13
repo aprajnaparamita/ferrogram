@@ -13,7 +13,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-02](tasks/P2-02.md) | implementer | P2-01 | merged | agent/P2-02 |
 | [P2-03](tasks/P2-03.md) | implementer | P2-01 | merged (use `UnitKind` for kind-checked conversion) | agent/P2-03 |
 | [P2-05](tasks/P2-05.md) | implementer | P2-01 | merged (XML declaration added on main) | agent/P2-05 |
-| [P2-08](tasks/P2-08.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-08](tasks/P2-08.md) | implementer | P2-01 | merged (ATTRIBUTION row added on main) | agent/P2-08 |
 | [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | ready (group B) | — |
 | [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | waiting (group C) | — |
 | [P2-07](tasks/P2-07.md) | implementer | P2-06 | waiting | — |
