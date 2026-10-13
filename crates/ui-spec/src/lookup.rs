@@ -3,12 +3,12 @@
 //! [`CommandLookup::build`] walks a [`Layout`] once and records, for
 //! every control, its label and the `CommandId` it dispatches, plus
 //! the reverse index from `CommandId` to the Fluent ids that surface
-//! it. [`LayoutSet::command_lookup`] wraps the builder and
-//! [`LayoutSet::select`] is the runtime layout switch.
+//! it. [`LayoutSet::command_lookup`] wraps the builder;
+//! [`LayoutSets::get`](crate::LayoutSets::get) is the layout switch.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{CommandId, CommandLookup, Control, FluentId, Layout, LayoutKind, LayoutSet};
+use crate::{CommandId, CommandLookup, Control, FluentId, Layout, LayoutSet};
 
 /// Iterates every control of the layout exactly once, in a fixed
 /// order: tab groups (tab order, group order, control order), then
@@ -96,21 +96,6 @@ impl LayoutSet {
     /// Builds the [`CommandLookup`] for this set's layout.
     pub fn command_lookup(&self) -> CommandLookup {
         CommandLookup::build(&self.layout)
-    }
-
-    /// Picks the active layout at runtime ("layout switch").
-    ///
-    /// `visio_2016` and `visio_365` are the loaded sets for the two
-    /// Phase 1 layouts; `kind` selects which one is active.
-    pub fn select<'a>(
-        kind: LayoutKind,
-        visio_2016: &'a LayoutSet,
-        visio_365: &'a LayoutSet,
-    ) -> &'a LayoutSet {
-        match kind {
-            LayoutKind::Visio2016 => visio_2016,
-            LayoutKind::Visio365 => visio_365,
-        }
     }
 }
 
@@ -296,16 +281,6 @@ mod tests {
         // UndoQuickAccess.
         assert_eq!(lookup.len(), 10);
         assert!(!lookup.is_empty());
-    }
-
-    #[test]
-    fn select_picks_the_active_layout() {
-        let mut a = LayoutSet::default();
-        a.layout.source = "2016".to_owned();
-        let mut b = LayoutSet::default();
-        b.layout.source = "365".to_owned();
-        assert_eq!(LayoutSet::select(LayoutKind::Visio2016, &a, &b), &a);
-        assert_eq!(LayoutSet::select(LayoutKind::Visio365, &a, &b), &b);
     }
 
     #[test]
