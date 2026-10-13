@@ -14,6 +14,21 @@ impl Point {
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
+
+    /// The component-wise sum of the two points.
+    pub const fn add(self, other: Point) -> Point {
+        Point::new(self.x + other.x, self.y + other.y)
+    }
+
+    /// The component-wise difference of the two points.
+    pub const fn sub(self, other: Point) -> Point {
+        Point::new(self.x - other.x, self.y - other.y)
+    }
+
+    /// The point scaled by `k` about the origin.
+    pub const fn scale(self, k: f64) -> Point {
+        Point::new(self.x * k, self.y * k)
+    }
 }
 
 /// A width and a height, in inches.
@@ -54,5 +69,30 @@ mod tests {
     fn defaults_are_zero() {
         assert_eq!(Point::default(), Point::new(0.0, 0.0));
         assert_eq!(Size::default(), Size::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn add_is_component_wise() {
+        let p = Point::new(1.0, -2.0).add(Point::new(0.5, 3.0));
+        assert_eq!(p, Point::new(1.5, 1.0));
+    }
+
+    #[test]
+    fn sub_is_component_wise() {
+        let p = Point::new(1.0, -2.0).sub(Point::new(0.5, 3.0));
+        assert_eq!(p, Point::new(0.5, -5.0));
+    }
+
+    #[test]
+    fn sub_of_self_is_the_origin() {
+        let a = Point::new(3.25, -7.5);
+        assert_eq!(a.sub(a), Point::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn scale_multiplies_both_components() {
+        assert_eq!(Point::new(1.5, -2.0).scale(2.0), Point::new(3.0, -4.0));
+        assert_eq!(Point::new(1.5, -2.0).scale(0.0), Point::new(0.0, 0.0));
+        assert_eq!(Point::new(1.5, -2.0).scale(-1.0), Point::new(-1.5, 2.0));
     }
 }
