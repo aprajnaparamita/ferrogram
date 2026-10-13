@@ -9,9 +9,21 @@ Task board. Only the master agent edits this file, on `main`.
 
 | Task | Role | Depends on | State | Branch |
 |---|---|---|---|---|
-| [P2-01](tasks/P2-01.md) | architect | phase-1 | ready | — |
+| [P2-01](tasks/P2-01.md) | architect | phase-1 | merged (ADRs 0011–0017, stubs, task files) | agent/P2-01 |
+| [P2-02](tasks/P2-02.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-03](tasks/P2-03.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-05](tasks/P2-05.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-08](tasks/P2-08.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | waiting (group B) | — |
+| [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | waiting (group C) | — |
+| [P2-07](tasks/P2-07.md) | implementer | P2-06 | waiting | — |
+| [P2-09](tasks/P2-09.md) | implementer | P2-07, P2-08 | waiting | — |
+| [P2-10](tasks/P2-10.md) | test-engineer | P2-09 | waiting | — |
+| [P2-11](tasks/P2-11.md) | reviewer | P2-10 | waiting (group D) | — |
+| [P2-12](tasks/P2-12.md) | coverage-auditor | P2-10 | waiting (group D) | — |
+| [P2-13](tasks/P2-13.md) | cleanroom-auditor | P2-10 | waiting (group D) | — |
 
-The architect writes P2-02 onwards; the master adds them here after review.
+Tasks in the same group run in parallel on disjoint files. Fix tasks (P2-14 onward) follow the audits, as in Phase 1.
 
 ## Phase 1 task board
 
@@ -61,3 +73,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P1-14 (decided): a Fluent id is not unique within a layout. The same control appears in several places (ribbon, QAT, backstage), so a placement is identified by its path in the layout, not by its id. Command ids stay unique (enforced). Repeats inside one container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in one group) look like extractor artefacts; review them when Phase 4 builds the ribbon, and record the rule in ADR 0007 then.
 - P1-14: serialized layouts are not schema-valid for write-back (the model lacks `backstage.kind` and `quick_access_toolbar.id`). Fix before the screenshot pass writes layouts back.
 - History rewrite (P1-11 F1), done 2026-10-13 with the user's approval: `git filter-repo` replaced the blob of `docs/tasks/P1-04.md` that held the verbatim support-page text with the cleaned version. The final tree is unchanged; commit hashes from `7097013` onward changed, and hashes quoted in docs were updated. A pre-rewrite mirror is at `/Volumes/Dara/ferrogram/backup/ferrogram-pre-rewrite.git`. Delete it before the first push.
+- P2-01: the canonical angle unit is degrees (ADR 0011); P2-06 checks the cached unit against the corpus and amends the ADR if it is radians. The MS-VSDX XSD licence is checked in P2-09; until then the XSD is never committed. The coverage ratchet for geom, model, vsdx and shapesheet is set at the Phase 2 end.
