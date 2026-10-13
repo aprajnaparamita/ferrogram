@@ -1,0 +1,96 @@
+//! ShapeSheet sections and rows.
+
+use crate::cell::Cell;
+use crate::name::SectionName;
+use crate::raw::Preserved;
+
+/// A ShapeSheet section: one named block of rows (ADR 0011).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Section {
+    /// The section name, e.g. `"Geometry"` or `"Shape Transform"`.
+    pub name: SectionName,
+    /// The rows, in file order.
+    pub rows: Vec<Row>,
+    /// Unmapped attributes and children kept verbatim (ADR 0012).
+    pub preserved: Preserved,
+}
+
+impl Section {
+    /// Creates an empty section with the given name.
+    pub fn new(name: SectionName) -> Self {
+        Self {
+            name,
+            rows: Vec::new(),
+            preserved: Preserved::new(),
+        }
+    }
+}
+
+/// A ShapeSheet row: one line of cells inside a section.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Row {
+    /// The row name (`Row/@N`), e.g. `"Row_1"`, or `None`.
+    pub name: Option<String>,
+    /// The row type (`Row/@T`), e.g. `"MoveTo"`, or `None`.
+    pub row_type: Option<String>,
+    /// The row index (`Row/@IX`), or `None`.
+    pub ix: Option<i32>,
+    /// The cells, in file order.
+    pub cells: Vec<Cell>,
+    /// Unmapped attributes and children kept verbatim (ADR 0012).
+    pub preserved: Preserved,
+}
+
+impl Row {
+    /// Creates an empty row with no name, type or index.
+    pub fn new() -> Self {
+        Self {
+            name: None,
+            row_type: None,
+            ix: None,
+            cells: Vec::new(),
+            preserved: Preserved::new(),
+        }
+    }
+}
+
+impl Default for Row {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::name::CellName;
+
+    #[test]
+    fn new_section_is_empty() {
+        let s = Section::new(SectionName::from_static("Geometry"));
+        assert_eq!(s.name, SectionName::from_static("Geometry"));
+        assert!(s.rows.is_empty());
+        assert!(s.preserved.children.is_empty());
+    }
+
+    #[test]
+    fn new_row_has_no_name_type_or_index() {
+        let r = Row::new();
+        assert_eq!(r.name, None);
+        assert_eq!(r.row_type, None);
+        assert_eq!(r.ix, None);
+        assert!(r.cells.is_empty());
+        assert!(r.preserved.attributes.is_empty());
+        assert_eq!(Row::default(), Row::new());
+    }
+
+    #[test]
+    fn row_holds_its_cells() {
+        let mut r = Row::new();
+        r.row_type = Some("MoveTo".to_owned());
+        r.ix = Some(1);
+        r.cells.push(Cell::new(CellName::from_static("X")));
+        assert_eq!(r.row_type.as_deref(), Some("MoveTo"));
+        assert_eq!(r.cells.len(), 1);
+    }
+}
