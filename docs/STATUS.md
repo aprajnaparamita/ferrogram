@@ -18,10 +18,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | merged | agent/P1-06b |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | merged (oracle built locally, smoke test passes) | agent/P1-07 |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
-| P1-08 | test-engineer | P1-03..07 | not written | — |
-| P1-09 | reviewer | P1-08 | not written | — |
-| P1-10 | coverage-auditor | P1-08 | not written | — |
-| P1-11 | cleanroom-auditor | P1-08 | not written | — |
+| [P1-08](tasks/P1-08.md) | test-engineer | P1-03..07 | ready | — |
+| [P1-09](tasks/P1-09.md) | reviewer | P1-08 | blocked (after P1-08) | — |
+| [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | blocked (after P1-08) | — |
+| [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | blocked (after P1-08) | — |
 
 States: not written · outline · ready · in progress · in review · merged · blocked.
 
