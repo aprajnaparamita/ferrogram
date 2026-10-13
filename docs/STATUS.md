@@ -14,8 +14,8 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-03](tasks/P2-03.md) | implementer | P2-01 | merged (use `UnitKind` for kind-checked conversion) | agent/P2-03 |
 | [P2-05](tasks/P2-05.md) | implementer | P2-01 | merged (XML declaration added on main) | agent/P2-05 |
 | [P2-08](tasks/P2-08.md) | implementer | P2-01 | merged (ATTRIBUTION row added on main) | agent/P2-08 |
-| [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | ready (group B) | — |
-| [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | waiting (group C) | — |
+| [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | merged | agent/P2-04 |
+| [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | ready (also owns the model name aliases) | — |
 | [P2-07](tasks/P2-07.md) | implementer | P2-06 | waiting | — |
 | [P2-09](tasks/P2-09.md) | implementer | P2-07, P2-08 | waiting | — |
 | [P2-10](tasks/P2-10.md) | test-engineer | P2-09 | waiting | — |
@@ -76,3 +76,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-01: the canonical angle unit is degrees (ADR 0011); P2-06 checks the cached unit against the corpus and amends the ADR if it is radians. The MS-VSDX XSD licence is checked in P2-09; until then the XSD is never committed. The coverage ratchet for geom, model, vsdx and shapesheet is set at the Phase 2 end.
 - P2-02: the ShapeSheet table has gaps, so the generated defs use `Option`: 10 of 420 cells have no cell index, the Layer Membership section has no section index, and 8 of 51 rows have no owning section. Fill them if a later source gives the values.
 - P2-05 (decided): the package reader accepts a package without `[Content_Types].xml` and infers declarations, because two libvisio corpus files have none. A dangling internal relationship is recorded, not an error. The XML helpers live in `crates/vsdx/src/package/xml.rs`; there is no `src/xml/` module.
+- P2-04 (decided): the model keeps cell and section names as spelled in the `.vsdx` file; P2-06 adds a name-alias table in `crates/model/src/aliases.rs` for the ShapeSheet-table lookups. `ferrogram_model::Error::NotImplemented` and the `vsdx` one are removed after P2-07. Table defaults are parsed lazily and interned with `Box::leak` (bounded by the static table); move the parsing into codegen once `shapesheet.toml` records default values.
