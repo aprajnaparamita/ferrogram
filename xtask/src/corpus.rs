@@ -309,7 +309,8 @@ pub fn run_opts(opts: &Options) -> Result<()> {
     run_with_root(opts, &crate::util::root())
 }
 
-/// Core of [`run`], separated so tests can point it at a temp root.
+/// Core of the corpus task, separated so tests can point it at a
+/// temp root.
 pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
     let mut fetch = |source: &Source, entry: &FileEntry, dest: &Path| match &opts.offline {
         Some(dir) => copy_offline(dir, &entry.path, dest),
