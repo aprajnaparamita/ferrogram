@@ -18,5 +18,11 @@ quick-xml = "0.41"
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 
+[dev-dependencies]
+# The fixture builder (task P2-08) writes test packages byte by byte. Same
+# crate and features as the runtime dependency, so `cargo deny` sees one zip
+# (ADR 0014).
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+
 [lints]
 workspace = true
