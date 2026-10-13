@@ -37,4 +37,26 @@ Not listed (kept in `reference/corpus-candidates/` only): the larger libvisio fi
 
 | Path | Author | License | Notes |
 |---|---|---|---|
-| _(none yet)_ | | | |
+| `fixtures/minimal-drawing.vsdx` | P2-08 | MIT | Hand-authored minimal drawing (one page, one rectangle shape). Builder output (`crates/vsdx/tests/common/`). |
+| `fixtures/minimal-stencil.vssx` | P2-08 | MIT | Hand-authored minimal stencil (one master, empty pages part). Builder output. |
+| `fixtures/minimal-template.vstx` | P2-08 | MIT | Hand-authored minimal template (one page, one master). Builder output. |
+| `fixtures/malformed-truncated-zip.vsdx` | P2-08 | MIT | Malformed: valid package cut in half. Builder output. |
+| `fixtures/malformed-bad-central-directory.vsdx` | P2-08 | MIT | Malformed: central directory signature destroyed. Builder output. |
+| `fixtures/malformed-no-content-types.vsdx` | P2-08 | MIT | Malformed: `[Content_Types].xml` missing. Builder output. |
+| `fixtures/malformed-dangling-relationship.vsdx` | P2-08 | MIT | Malformed: relationship target `pages/missing.xml` does not exist. Builder output. |
+| `fixtures/malformed-missing-main-part.vsdx` | P2-08 | MIT | Malformed: `/visio/document.xml` missing. Builder output. |
+| `fixtures/malformed-huge-declared-size.vsdx` | P2-08 | MIT | Malformed: `page1.xml` declares 100 MiB uncompressed. Builder output. |
+| `fixtures/malformed-deep-nesting.vsdx` | P2-08 | MIT | Malformed: 200 nested elements in `document.xml`. Builder output. |
+| `fixtures/malformed-bad-content-types.vsdx` | P2-08 | MIT | Malformed: `[Content_Types].xml` is not well-formed XML. Builder output. |
+
+Two more malformed fixtures are generated at test time and never committed:
+`malformed-zip-bomb.vsdx` (8 MiB of zeros deflated; the deflate stream is not
+stable across `flate2` versions) and `malformed-many-entries.vsdx` (8193
+boring zip entries). Same author and license as above.
+
+All rows above are our own work: hand-written XML and a plain zip container
+produced by `crates/vsdx/tests/common/mod.rs` (task P2-08). Element names,
+content types and relationship type URIs are structural facts recorded in
+`docs/vsdx-inventory.md`; no third-party bytes are included. A test
+(`fixtures::committed_fixtures_match_the_builder_output`) proves every
+committed file equals the builder output byte for byte.
