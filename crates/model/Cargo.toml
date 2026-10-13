@@ -10,5 +10,8 @@ publish = false
 [dependencies]
 ferrogram-geom = { path = "../geom" }
 
+[dev-dependencies]
+proptest = "1"
+
 [lints]
 workspace = true
