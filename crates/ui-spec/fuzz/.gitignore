@@ -1,0 +1,5 @@
+# cargo-fuzz output; never committed.
+corpus
+artifacts
+coverage
+target
