@@ -18,10 +18,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-06b](tasks/P1-06b.md) | implementer | P1-06 | merged | agent/P1-06b |
 | [P1-07](tasks/P1-07.md) | implementer | P1-02 | merged (oracle built locally, smoke test passes) | agent/P1-07 |
 | [P1-12](tasks/P1-12.md) | implementer | — | merged | agent/P1-12 |
-| [P1-08](tasks/P1-08.md) | test-engineer | P1-03..07 | ready | — |
-| [P1-09](tasks/P1-09.md) | reviewer | P1-08 | blocked (after P1-08) | — |
-| [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | blocked (after P1-08) | — |
-| [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | blocked (after P1-08) | — |
+| [P1-08](tasks/P1-08.md) | test-engineer | P1-03..07 | merged | agent/P1-08 |
+| [P1-09](tasks/P1-09.md) | reviewer | P1-08 | ready (parallel) | — |
+| [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | ready (parallel) | — |
+| [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | ready (parallel) | — |
 
 States: not written · outline · ready · in progress · in review · merged · blocked.
 
@@ -45,3 +45,5 @@ Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 - P1-04: 15 VisUICmds constants contain underscores (`visCmdSetPageLineJumpCode_None` family and similar) and are skipped because the `commands.yaml` pattern is `^visCmd[A-Za-z0-9]+$`. Widen the pattern if Phase 4 needs them.
 - P1-04: `xtask/src/extract/shortcuts.rs` `ACTION_TO_COMMAND` uses ~61 short phrases from the support page as lookup keys. They are needed to match rows and are not shipped. P1-11 (cleanroom-auditor) must confirm this is acceptable.
 - P1-04: `shapesheet.toml` has no row-type families (MoveTo, LineTo, ...); `shortcuts.yaml` has no way to mark held keys such as "Arrow Keys". Revisit in Phase 2 (codegen) and Phase 4 (shortcuts).
+- P1-08: the fuzz crate `crates/ui-spec/fuzz` uses edition 2021 (cargo-fuzz default); move to 2024 with the next fuzz target. Seed a fuzz corpus for CI runs later.
+- P1-08: `cargo xtask extract --check` is not in the gate (CI has no `reference/`). The master runs it at each phase end.
