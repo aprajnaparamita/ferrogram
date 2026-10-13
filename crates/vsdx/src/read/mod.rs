@@ -83,8 +83,8 @@ mod sheet;
 mod value;
 
 use ferrogram_model::{
-    CellName, Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property,
-    Shape, ShapeId, Style, StyleId, XmlNode,
+    Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property, Shape,
+    ShapeId, Style, StyleId, XmlNode,
 };
 
 use crate::Error;
@@ -248,6 +248,17 @@ fn parse_attr_int(value: &str, part: &str, attribute: &str) -> Result<i32, Error
     })
 }
 
+/// An unsigned integer attribute value (a style reference or a stylesheet
+/// `ID`), or [`Error::InvalidPackage`] naming the part and the attribute
+/// (P2-06b decision 3).
+fn parse_attr_uint(value: &str, part: &str, attribute: &str) -> Result<u32, Error> {
+    value.trim().parse::<u32>().map_err(|_| {
+        Error::InvalidPackage(format!(
+            "{part}: attribute `{attribute}`: not an unsigned integer"
+        ))
+    })
+}
+
 /// A boolean attribute value (`0`/`1`, `false`/`true` in either case), or
 /// [`Error::InvalidPackage`] naming the part and the attribute.
 fn parse_attr_bool(value: &str, part: &str, attribute: &str) -> Result<bool, Error> {
@@ -267,24 +278,6 @@ fn parse_bool(value: &str) -> Result<bool, ()> {
         "0" | "false" | "FALSE" => Ok(false),
         "1" | "true" | "TRUE" => Ok(true),
         _ => Err(()),
-    }
-}
-
-/// The base style of a style: its own `Style` cell (ADR 0011).
-///
-/// The cell is consumed: it moves from the sheet to [`Style::base_style`]. A
-/// `Style` cell without a string value is not a base style and stays a plain
-/// cell.
-fn take_base_style(style: &mut Style) {
-    let position = style.sheet.cells.iter().position(|cell| {
-        cell.name == CellName::from_static("Style")
-            && matches!(cell.value, Some(ferrogram_model::CellValue::Str(_)))
-    });
-    if let Some(position) = position {
-        let removed = style.sheet.cells.remove(position);
-        if let Some(ferrogram_model::CellValue::Str(name)) = removed.value {
-            style.base_style = Some(name);
-        }
     }
 }
 
@@ -422,8 +415,21 @@ impl Mapper<'_> {
                 .filter(|a| !is_namespace_declaration(a))
             {
                 match attribute.name.local.as_str() {
+                    "ID" => style.visio_id = parse_attr_uint(&attribute.value, MAIN_PART, "ID")?,
                     "Name" => style.name = attribute.value.clone(),
                     "NameU" => style.name_u = attribute.value.clone(),
+                    "LineStyle" => {
+                        style.line_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "LineStyle")?)
+                    }
+                    "FillStyle" => {
+                        style.fill_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "FillStyle")?)
+                    }
+                    "TextStyle" => {
+                        style.text_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "TextStyle")?)
+                    }
                     _ => style.preserved.attributes.push(attribute.clone()),
                 }
             }
@@ -434,7 +440,6 @@ impl Mapper<'_> {
                 MAIN_PART,
                 &[],
             )?;
-            take_base_style(&mut style);
             self.document.stylesheet.styles.push(style);
         }
         Ok(())
@@ -652,9 +657,15 @@ impl Mapper<'_> {
                 "ID" => shape.visio_id = parse_attr_int(&attribute.value, part, "ID")?,
                 "Name" => shape.name = attribute.value.clone(),
                 "NameU" => shape.name_u = attribute.value.clone(),
-                "LineStyle" => shape.line_style = Some(attribute.value.clone()),
-                "FillStyle" => shape.fill_style = Some(attribute.value.clone()),
-                "TextStyle" => shape.text_style = Some(attribute.value.clone()),
+                "LineStyle" => {
+                    shape.line_style = Some(parse_attr_uint(&attribute.value, part, "LineStyle")?)
+                }
+                "FillStyle" => {
+                    shape.fill_style = Some(parse_attr_uint(&attribute.value, part, "FillStyle")?)
+                }
+                "TextStyle" => {
+                    shape.text_style = Some(parse_attr_uint(&attribute.value, part, "TextStyle")?)
+                }
                 "Master" => {
                     if master.is_none() {
                         shape.preserved.attributes.push(attribute.clone());
@@ -836,7 +847,7 @@ fn map_connects(
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{CellLookup, QName, XmlAttribute, XmlChild};
+    use ferrogram_model::{CellLookup, CellName, QName, XmlAttribute, XmlChild};
 
     use super::*;
     use crate::package::{ContentType, Part, Relationship, RelationshipId};
@@ -1293,31 +1304,56 @@ mod tests {
     }
 
     #[test]
-    fn take_base_style_consumes_the_style_cell() {
-        let mut style = Style::new(StyleId { index: 0 });
-        style
-            .sheet
-            .cells
-            .push(ferrogram_model::Cell::new(CellName::from_static(
-                "LineWeight",
+    fn styles_carry_their_visio_ids_and_style_links() {
+        let mut package = drawing();
+        // Add a second stylesheet row: `ID="3"`, linking line cells to 0.
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/document.xml")
+            && let PartData::Xml(root) = &mut part.data
+            && let Some(XmlChild::Element(sheets)) = root.children.get_mut(1)
+        {
+            sheets.children.push(XmlChild::Element(element(
+                "StyleSheet",
+                &[
+                    ("ID", "3"),
+                    ("NameU", "Red"),
+                    ("Name", "Red"),
+                    ("LineStyle", "0"),
+                ],
+                &[element("Cell", &[("N", "Style"), ("V", "Normal")], &[])],
             )));
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Style"));
-        cell.value = Some(ferrogram_model::CellValue::Str("Normal".to_owned()));
-        style.sheet.cells.push(cell);
-        take_base_style(&mut style);
-        assert_eq!(style.base_style.as_deref(), Some("Normal"));
+        }
+        let document = to_model(&package).expect("document");
+        assert_eq!(document.stylesheet.styles.len(), 2);
+        let style = document.style_by_visio_id(3).expect("style");
+        assert_eq!(style.name, "Red");
+        assert_eq!(style.line_style, Some(0));
+        assert_eq!(style.fill_style, None);
+        assert_eq!(style.text_style, None);
+        // The first row keeps the `ID` the reference names.
+        assert_eq!(
+            document.style_by_visio_id(0).map(|s| s.name.as_str()),
+            Some("No Style")
+        );
+        // A `Style` cell is a plain cell now (P2-06b decision 3).
         assert_eq!(style.sheet.cells.len(), 1);
+        assert_eq!(style.sheet.cells[0].name.as_str(), "Style");
     }
 
     #[test]
-    fn take_base_style_keeps_a_non_string_style_cell() {
-        let mut style = Style::new(StyleId { index: 0 });
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Style"));
-        cell.value = Some(ferrogram_model::CellValue::Number(3.0));
-        style.sheet.cells.push(cell);
-        take_base_style(&mut style);
-        assert_eq!(style.base_style, None);
-        assert_eq!(style.sheet.cells.len(), 1);
+    fn a_bad_style_reference_is_an_error() {
+        let mut package = drawing();
+        if let Some(shape) = first_shape_mut(&mut package, "/visio/pages/page1.xml")
+            && let Some(attribute) = shape
+                .attributes
+                .iter_mut()
+                .find(|attribute| attribute.name.local == "LineStyle")
+        {
+            attribute.value = "No Style".to_owned();
+        }
+        assert!(matches!(to_model(&package), Err(Error::InvalidPackage(_))));
     }
 
     /// The first `Shape` element of one part, for test surgery.

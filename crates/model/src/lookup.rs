@@ -167,19 +167,22 @@ impl Document {
         }
 
         // 3. Style chain selected by the cell's section (a Geometry cell
-        // never comes from a style).
+        // never comes from a style). A style reference is a Visio style id
+        // (P2-06b decision 3) and each style continues the chain through
+        // its own link of the same kind.
         let mut visited_styles: Vec<StyleId> = Vec::new();
         if let Some(kind) = style_kind_for(table, cell.as_str(), section_hint) {
-            let mut name = match kind {
-                StyleKind::Line => entity.line_style.as_deref(),
-                StyleKind::Fill => entity.fill_style.as_deref(),
-                StyleKind::Text => entity.text_style.as_deref(),
+            let mut link = match kind {
+                StyleKind::Line => entity.line_style,
+                StyleKind::Fill => entity.fill_style,
+                StyleKind::Text => entity.text_style,
             };
-            while let Some(style_name) = name {
-                let Some(id) = self.style_by_name(style_name) else {
-                    // A dangling style name ends the chain.
+            while let Some(visio_id) = link {
+                let Some(style) = self.style_by_visio_id(visio_id) else {
+                    // A dangling style reference ends the chain.
                     break;
                 };
+                let id = style.id;
                 if visited_styles.contains(&id) {
                     // A cyclic style chain: record the repeat and stop it.
                     via.push(ValueSource::Style(id));
@@ -187,9 +190,6 @@ impl Document {
                 }
                 visited_styles.push(id);
                 via.push(ValueSource::Style(id));
-                let Some(style) = self.style(id) else {
-                    break;
-                };
                 if let Some((found, hint)) = sheet_cell(&style.sheet, cell) {
                     section_hint = hint;
                     if defines(found) {
@@ -201,7 +201,11 @@ impl Document {
                         });
                     }
                 }
-                name = style.base_style.as_deref();
+                link = match kind {
+                    StyleKind::Line => style.line_style,
+                    StyleKind::Fill => style.fill_style,
+                    StyleKind::Text => style.text_style,
+                };
             }
         }
 
@@ -1043,16 +1047,18 @@ mod tests {
     }
 
     #[test]
-    fn style_chain_resolves_through_the_base_style() {
+    fn style_chain_resolves_through_the_style_links() {
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").line_style = Some("Red".to_owned());
+        doc.shape_mut(id).expect("exists").line_style = Some(1);
 
         let mut red = Style::new(StyleId { index: 0 });
+        red.visio_id = 1;
         red.name = "Red".to_owned();
-        red.base_style = Some("Normal".to_owned());
+        red.line_style = Some(0);
         doc.stylesheet.styles.push(red);
 
         let mut normal = Style::new(StyleId { index: 1 });
+        normal.visio_id = 0;
         normal.name = "Normal".to_owned();
         normal.sheet.cells.push(number_cell("LineWeight", 0.05));
         doc.stylesheet.styles.push(normal);
@@ -1073,15 +1079,48 @@ mod tests {
     }
 
     #[test]
+    fn the_chain_follows_the_style_link_of_the_cells_kind() {
+        // Style 0 links line cells to style 1 and text cells to style 2:
+        // one chain per kind (P2-06b decision 3).
+        let (mut doc, id) = document_with_shape();
+        doc.shape_mut(id).expect("exists").line_style = Some(0);
+        doc.shape_mut(id).expect("exists").text_style = Some(0);
+        let mut head = Style::new(StyleId { index: 0 });
+        head.visio_id = 0;
+        head.line_style = Some(1);
+        head.text_style = Some(2);
+        doc.stylesheet.styles.push(head);
+        let mut line = Style::new(StyleId { index: 1 });
+        line.visio_id = 1;
+        line.sheet.cells.push(number_cell("LineWeight", 0.05));
+        doc.stylesheet.styles.push(line);
+        let mut text = Style::new(StyleId { index: 2 });
+        text.visio_id = 2;
+        text.sheet.cells.push(number_cell("Size", 12.0));
+        doc.stylesheet.styles.push(text);
+
+        let r = doc
+            .resolve(id, &CellName::from_static("LineWeight"))
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(0.05)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 1 }));
+        let r = doc.resolve(id, &CellName::from_static("Size")).unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(12.0)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 2 }));
+    }
+
+    #[test]
     fn fill_and_text_cells_use_their_own_styles() {
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").fill_style = Some("Fill".to_owned());
-        doc.shape_mut(id).expect("exists").text_style = Some("TextStyle".to_owned());
+        doc.shape_mut(id).expect("exists").fill_style = Some(1);
+        doc.shape_mut(id).expect("exists").text_style = Some(2);
         let mut fill = Style::new(StyleId { index: 0 });
+        fill.visio_id = 1;
         fill.name = "Fill".to_owned();
         fill.sheet.cells.push(number_cell("FillForegnd", 1.0));
         doc.stylesheet.styles.push(fill);
         let mut text = Style::new(StyleId { index: 1 });
+        text.visio_id = 2;
         text.name = "TextStyle".to_owned();
         text.sheet.cells.push(number_cell("Size", 12.0));
         doc.stylesheet.styles.push(text);
@@ -1117,8 +1156,9 @@ mod tests {
             },
         ];
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").line_style = Some("Red".to_owned());
+        doc.shape_mut(id).expect("exists").line_style = Some(1);
         let mut red = Style::new(StyleId { index: 0 });
+        red.visio_id = 1;
         red.name = "Red".to_owned();
         red.sheet.cells.push(number_cell("X", 3.0));
         doc.stylesheet.styles.push(red);
@@ -1143,8 +1183,9 @@ mod tests {
     #[test]
     fn row_cells_carry_their_section_into_the_style_lookup() {
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").text_style = Some("TextStyle".to_owned());
+        doc.shape_mut(id).expect("exists").text_style = Some(1);
         let mut text = Style::new(StyleId { index: 0 });
+        text.visio_id = 1;
         text.name = "TextStyle".to_owned();
         text.sheet.cells.push(number_cell("Size", 12.0));
         doc.stylesheet.styles.push(text);
@@ -1170,14 +1211,16 @@ mod tests {
     #[test]
     fn cyclic_style_chain_terminates_and_falls_through_to_defaults() {
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").line_style = Some("A".to_owned());
+        doc.shape_mut(id).expect("exists").line_style = Some(0);
         let mut a = Style::new(StyleId { index: 0 });
+        a.visio_id = 0;
         a.name = "A".to_owned();
-        a.base_style = Some("B".to_owned());
+        a.line_style = Some(1);
         doc.stylesheet.styles.push(a);
         let mut b = Style::new(StyleId { index: 1 });
+        b.visio_id = 1;
         b.name = "B".to_owned();
-        b.base_style = Some("A".to_owned());
+        b.line_style = Some(0);
         doc.stylesheet.styles.push(b);
 
         let r = doc
@@ -1200,10 +1243,11 @@ mod tests {
     #[test]
     fn self_referencing_style_terminates() {
         let (mut doc, id) = document_with_shape();
-        doc.shape_mut(id).expect("exists").fill_style = Some("Solo".to_owned());
+        doc.shape_mut(id).expect("exists").fill_style = Some(0);
         let mut solo = Style::new(StyleId { index: 0 });
+        solo.visio_id = 0;
         solo.name = "Solo".to_owned();
-        solo.base_style = Some("Solo".to_owned());
+        solo.fill_style = Some(0);
         doc.stylesheet.styles.push(solo);
 
         let r = doc
@@ -1223,10 +1267,10 @@ mod tests {
     }
 
     #[test]
-    fn dangling_master_and_style_names_do_not_error() {
+    fn dangling_master_and_style_references_do_not_error() {
         let (mut doc, id) = document_with_shape();
         doc.shape_mut(id).expect("exists").master = Some(MasterId { index: 9 });
-        doc.shape_mut(id).expect("exists").line_style = Some("Ghost".to_owned());
+        doc.shape_mut(id).expect("exists").line_style = Some(42);
         let r = doc
             .resolve(id, &CellName::from_static("LineWeight"))
             .unwrap();
