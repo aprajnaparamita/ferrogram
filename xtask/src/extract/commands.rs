@@ -375,7 +375,8 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
     // control differs between the two layouts.
     collect_controls(&layout_365, &mut controls);
 
-    let entries = build_entries(&vis_cmds, &controls)?;
+    let visuicmds_path = super::visuicmds::input_path(in_dir);
+    let entries = build_entries(&vis_cmds, &controls, &visuicmds_path)?;
 
     // Hard cross-check (B1): every fluent_id must be a real Fluent
     // control name in at least one layout.
@@ -391,8 +392,8 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
 
     // Fill `command` on the layout controls and rewrite the files.
     let map = fluent_command_map(&entries)?;
-    fill_layout_commands(&mut layout_2016, &map)?;
-    fill_layout_commands(&mut layout_365, &map)?;
+    fill_layout_commands(&mut layout_2016, &map, &path_2016)?;
+    fill_layout_commands(&mut layout_365, &map, &path_365)?;
     let options = yaml_options();
     for (path, value) in [(&path_2016, &layout_2016), (&path_365, &layout_365)] {
         let text = serde_saphyr::to_string_with_options(value, options.clone()).map_err(|e| {
@@ -455,11 +456,15 @@ fn collect_controls(value: &Value, out: &mut BTreeMap<String, ControlMeta>) {
 /// Applies `map` (Fluent id or alias -> command id) to every object in
 /// the tree that carries an `id` and a `command` field. A control
 /// whose id and alias map to different commands is a hard error.
-fn fill_layout_commands(value: &mut Value, map: &BTreeMap<String, String>) -> ExtractResult<()> {
+fn fill_layout_commands(
+    value: &mut Value,
+    map: &BTreeMap<String, String>,
+    source: &Path,
+) -> ExtractResult<()> {
     match value {
         Value::Array(items) => {
             for item in items {
-                fill_layout_commands(item, map)?;
+                fill_layout_commands(item, map, source)?;
             }
             Ok(())
         }
@@ -480,7 +485,7 @@ fn fill_layout_commands(value: &mut Value, map: &BTreeMap<String, String>) -> Ex
                                 Some(existing) if existing == cmd => {}
                                 Some(existing) => {
                                     return Err(ExtractError::Schema {
-                                        path: PathBuf::from("<layout>"),
+                                        path: source.to_path_buf(),
                                         message: format!(
                                             "control {id}: id maps to {existing:?} but alias {a} maps to {cmd:?}"
                                         ),
@@ -495,7 +500,7 @@ fn fill_layout_commands(value: &mut Value, map: &BTreeMap<String, String>) -> Ex
                 }
             }
             for (_, v) in obj.iter_mut() {
-                fill_layout_commands(v, map)?;
+                fill_layout_commands(v, map, source)?;
             }
             Ok(())
         }
@@ -573,6 +578,7 @@ pub fn cross_check_fluent_ids(
 pub fn build_entries(
     vis_cmds: &[VisCmd],
     controls: &BTreeMap<String, ControlMeta>,
+    source: &Path,
 ) -> ExtractResult<Vec<CommandEntry>> {
     // Derive one id per constant; duplicates mean OVERRIDES or the
     // mechanical split collapsed two commands. Report every
@@ -595,7 +601,7 @@ pub fn build_entries(
         .collect();
     if !collisions.is_empty() {
         return Err(ExtractError::Parse {
-            path: PathBuf::from("reference/learn/visuicmds/visuicmds.md"),
+            path: source.to_path_buf(),
             message: format!(
                 "constants share a command id (add OVERRIDES entries): {}",
                 collisions.join("; ")
@@ -708,7 +714,7 @@ pub fn build_entries(
         let id = constant_ids
             .get(&c.constant)
             .ok_or_else(|| ExtractError::Parse {
-                path: PathBuf::from("<in-memory>"),
+                path: source.to_path_buf(),
                 message: format!("no derived id for {}", c.constant),
             })?
             .clone();
@@ -1286,7 +1292,7 @@ mod tests {
             ("TabHome", "tab"),
             ("GroupClipboard", "group"),
         ]);
-        let entries = build_entries(&v, &ctrls).unwrap();
+        let entries = build_entries(&v, &ctrls, Path::new("reference/learn/visuicmds/visuicmds.md")).unwrap();
         assert_eq!(entries.len(), 4);
         let save = entries.iter().find(|e| e.id == "file.save").unwrap();
         assert_eq!(save.fluent_ids, vec!["FileSave"]);
@@ -1321,7 +1327,7 @@ mod tests {
     fn fluent_only_entry_gets_unknown_confidence() {
         let v = vis(&[("visCmdFileSave", 1004)]);
         let ctrls = controls(&[("FileSave", "button"), ("InsertShapeGallery", "gallery")]);
-        let entries = build_entries(&v, &ctrls).unwrap();
+        let entries = build_entries(&v, &ctrls, Path::new("reference/learn/visuicmds/visuicmds.md")).unwrap();
         assert_eq!(entries.len(), 2);
         let insert = entries.iter().find(|e| e.id == "insert.shape").unwrap();
         assert_eq!(insert.visuicmd, None);
@@ -1337,9 +1343,16 @@ mod tests {
     fn duplicate_derived_ids_are_an_error() {
         // Two constants, same mechanical id (`mso.insert.symbol`).
         let v = vis(&[("visCmdMsoInsertSymbol", 1), ("visCmdMSOInsertSymbol", 2)]);
-        let err = build_entries(&v, &BTreeMap::new()).unwrap_err();
+        let err = build_entries(
+            &v,
+            &BTreeMap::new(),
+            Path::new("reference/learn/visuicmds/visuicmds.md"),
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("share a command id"), "{err}");
         assert!(err.to_string().contains("visCmdMsoInsertSymbol"), "{err}");
+        // R3: the error names the real source path, not a placeholder.
+        assert!(err.to_string().contains("visuicmds.md"), "{err}");
     }
 
     #[test]
@@ -1409,7 +1422,7 @@ quick_access_toolbar:
         let mut value: Value = serde_saphyr::from_str(yaml).unwrap();
         let mut map = BTreeMap::new();
         map.insert("Cut".to_string(), "edit.cut".to_string());
-        fill_layout_commands(&mut value, &map).unwrap();
+        fill_layout_commands(&mut value, &map, Path::new("ui-spec/panel-365.yaml")).unwrap();
         let controls = value
             .pointer("/tabs/0/groups/0/controls")
             .and_then(Value::as_array)
@@ -1437,8 +1450,10 @@ controls:
             "GroupIconEditClipboard".to_string(),
             "edit.copy".to_string(),
         );
-        let err = fill_layout_commands(&mut value, &map).unwrap_err();
+        let err = fill_layout_commands(&mut value, &map, Path::new("ui-spec/panel-365.yaml")).unwrap_err();
         assert!(err.to_string().contains("alias"), "{err}");
+        // R3: the error names the real layout path, not `<layout>`.
+        assert!(err.to_string().contains("ui-spec/panel-365.yaml"), "{err}");
     }
 
     #[test]
@@ -1457,7 +1472,7 @@ controls:
   mapping_confidence: exact
 "#;
         let err = schema
-            .validate_str(bad, SchemaKind::Commands)
+            .validate_str(bad, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
             .expect_err("literal \"null\" must fail");
         assert!(err.to_string().contains("schema"), "{err}");
 
@@ -1469,7 +1484,7 @@ controls:
   mapping_confidence: exact
 "#;
         schema
-            .validate_str(good, SchemaKind::Commands)
+            .validate_str(good, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
             .expect("null visuicmd is valid");
 
         let good_str = r#"
@@ -1480,7 +1495,7 @@ controls:
   mapping_confidence: exact
 "#;
         schema
-            .validate_str(good_str, SchemaKind::Commands)
+            .validate_str(good_str, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
             .expect("string visuicmd is valid");
     }
 
@@ -1598,7 +1613,9 @@ controls:
         fn derived_ids_are_schema_valid(constant in "visCmd[A-Za-z0-9]{0,24}") {
             let id = command_id_for_constant(&constant);
             let doc = entry_with_id(&id);
-            let err = schema().validate_json(&doc, SchemaKind::Commands).err();
+            let err = schema()
+                .validate_json(&doc, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
+                .err();
             prop_assert!(err.is_none(), "invalid id {id:?} for {constant:?}: {err:?}");
         }
     }
@@ -1608,13 +1625,13 @@ controls:
         for (constant, id) in OVERRIDES {
             let doc = entry_with_id(id);
             schema()
-                .validate_json(&doc, SchemaKind::Commands)
+                .validate_json(&doc, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
                 .unwrap_or_else(|e| panic!("OVERRIDES {constant} -> {id}: {e}"));
         }
         for (name, id) in FLUENT_OVERRIDES {
             let doc = entry_with_id(id);
             schema()
-                .validate_json(&doc, SchemaKind::Commands)
+                .validate_json(&doc, SchemaKind::Commands, Path::new("ui-spec/commands.yaml"))
                 .unwrap_or_else(|e| panic!("FLUENT_OVERRIDES {name} -> {id}: {e}"));
         }
     }

@@ -95,7 +95,7 @@ impl std::fmt::Display for ExtractError {
                 write!(f, "parse error in {}: {message}", path.display())
             }
             Self::Io { path, source } => {
-                write!(f, "io error writing {}: {source}", path.display())
+                write!(f, "io error on {}: {source}", path.display())
             }
             Self::Schema { path, message } => {
                 write!(
