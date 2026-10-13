@@ -10,7 +10,8 @@
 //! 4. check the document is the kind of document this file should
 //!    hold ([`LoadError::Unknown`]),
 //! 5. decode into the typed model ([`LoadError::Parse`]),
-//! 6. cross-check references between the layouts, `commands.yaml` and
+//! 6. reject a `commands.yaml` id used twice ([`LoadError::Duplicate`]),
+//! 7. cross-check references between the layouts, `commands.yaml` and
 //!    `shortcuts.yaml` ([`LoadError::CrossReference`]).
 //!
 //! `commands.yaml` and `shortcuts.yaml` are shared by both layouts,
@@ -182,8 +183,9 @@ impl Loader {
             &self.data_file(LayoutKind::Visio365.file_name())?,
             DocKind::Layout,
         )?;
-        let entries: Vec<CommandMapping> =
-            self.load_document(&self.data_file(COMMANDS_FILE)?, DocKind::Commands)?;
+        let commands_path = self.data_file(COMMANDS_FILE)?;
+        let entries: Vec<CommandMapping> = self.load_document(&commands_path, DocKind::Commands)?;
+        check_duplicate_command_ids(&entries, &commands_path)?;
         let commands = Commands { entries };
         let entries: Vec<Shortcut> =
             self.load_document(&self.data_file(SHORTCUTS_FILE)?, DocKind::Shortcuts)?;
@@ -243,7 +245,8 @@ impl Loader {
         self.validate(&value, path)?;
         if !document_matches(&value, kind) {
             return Err(LoadError::Unknown {
-                message: format!("{}: expected a {} document", path.display(), kind.noun()),
+                path: path.to_path_buf(),
+                message: format!("expected a {} document", kind.noun()),
             });
         }
         serde_json::from_value(value).map_err(|e| LoadError::Parse {
@@ -407,6 +410,28 @@ fn collect_fluent_ids(layout: &Layout) -> BTreeSet<FluentId> {
         }
     }
     ids
+}
+
+/// Rejects a `commands.yaml` id used twice.
+///
+/// The table is one entry per Ferrogram command id (ADR 0006), so a
+/// duplicate would silently merge two entries in the cross-reference
+/// checks and in `CommandLookup::build`. The layout id space is
+/// *not* checked here: the committed data reuses Fluent ids across
+/// surfaces (see `docs/tasks/P1-14.md`, Open issues), so the master
+/// decides that policy.
+fn check_duplicate_command_ids(entries: &[CommandMapping], path: &Path) -> Result<(), LoadError> {
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for entry in entries {
+        if !seen.insert(entry.id.as_str()) {
+            return Err(LoadError::Duplicate {
+                path: path.to_path_buf(),
+                kind: "command_id",
+                id: entry.id.to_string(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Renders a shortcut's chord sequence for error messages
@@ -897,9 +922,108 @@ mod tests {
             .load_text::<Vec<CommandMapping>>(text, Path::new("commands.yaml"), DocKind::Commands)
             .expect_err("must fail");
         match err {
-            LoadError::Unknown { message } => {
-                assert!(message.contains("commands.yaml"));
-                assert!(message.contains("commands"));
+            LoadError::Unknown { path, message } => {
+                assert_eq!(path, PathBuf::from("commands.yaml"));
+                assert!(message.contains("commands"), "got {message}");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_text_names_layout_when_a_layout_file_holds_a_table() {
+        // A commands/shortcuts table in panel-2016.yaml: the error
+        // says "layout" (DocKind::noun).
+        let text = "[]\n";
+        let err = loader()
+            .load_text::<Layout>(text, Path::new("panel-2016.yaml"), DocKind::Layout)
+            .expect_err("must fail");
+        match err {
+            LoadError::Unknown { path, message } => {
+                assert_eq!(path, PathBuf::from("panel-2016.yaml"));
+                assert_eq!(message, "expected a layout document");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_text_names_shortcuts_when_a_shortcut_file_holds_commands() {
+        // A commands table in shortcuts.yaml: the error says
+        // "shortcuts" (DocKind::noun).
+        let text = "- id: file.save\n  label: Save\n  visuicmd: null\n  fluent_ids: [FileSave]\n  mapping_confidence: exact\n";
+        let err = loader()
+            .load_text::<Vec<Shortcut>>(text, Path::new("shortcuts.yaml"), DocKind::Shortcuts)
+            .expect_err("must fail");
+        match err {
+            LoadError::Unknown { path, message } => {
+                assert_eq!(path, PathBuf::from("shortcuts.yaml"));
+                assert_eq!(message, "expected a shortcuts document");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn data_file_falls_through_a_missing_non_yaml_name() {
+        // A name that does not end in `.yaml` has no `.json`
+        // alternative to try; the miss reports the primary path.
+        let err = loader().data_file("commands.toml").expect_err("must fail");
+        match err {
+            LoadError::Io { path, source } => {
+                assert!(path.ends_with("ui-spec/commands.toml"), "got {path:?}");
+                assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn data_file_prefers_yaml_and_falls_back_to_json() {
+        let dir = std::env::temp_dir().join(format!(
+            "ferrogram-ui-spec-data-file-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("ui-spec")).expect("temp workspace");
+        let loader = Loader::new(&dir).expect("the embedded schema always compiles");
+        // Missing both: the error names the .yaml path.
+        assert!(loader.data_file("commands.yaml").is_err());
+        // Only the .json alternative exists: the fallback finds it.
+        std::fs::write(dir.join("ui-spec/commands.json"), "[]").expect("json file");
+        assert!(
+            loader
+                .data_file("commands.yaml")
+                .expect("the .json fallback")
+                .ends_with("ui-spec/commands.json")
+        );
+        // With both present the primary .yaml path wins.
+        std::fs::write(dir.join("ui-spec/commands.yaml"), "[]").expect("yaml file");
+        assert!(
+            loader
+                .data_file("commands.yaml")
+                .expect("the .yaml primary")
+                .ends_with("ui-spec/commands.yaml")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn duplicate_command_ids_are_a_load_error() {
+        let path = Path::new("ui-spec/commands.yaml");
+        let entries = vec![command("file.save", &[]), command("edit.undo", &[])];
+        assert!(check_duplicate_command_ids(&entries, path).is_ok());
+        let dup = vec![
+            command("file.save", &[]),
+            command("edit.undo", &[]),
+            command("file.save", &["FileSave"]),
+        ];
+        let err = check_duplicate_command_ids(&dup, path).expect_err("must fail");
+        match err {
+            LoadError::Duplicate { path: p, kind, id } => {
+                assert_eq!(p, PathBuf::from("ui-spec/commands.yaml"));
+                assert_eq!(kind, "command_id");
+                assert_eq!(id, "file.save");
             }
             other => panic!("unexpected error: {other:?}"),
         }
