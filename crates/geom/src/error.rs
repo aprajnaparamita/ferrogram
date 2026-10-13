@@ -9,16 +9,20 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
-    /// The operation is a planning stub and is not implemented yet.
+    /// The unit does not measure the expected kind of quantity.
     ///
-    /// The payload names the operation, e.g. `"Unit::to_canonical"`.
-    NotImplemented(&'static str),
+    /// For example, [`crate::Unit::Degrees`] where a length is expected.
+    WrongUnit,
+    /// The transform is not invertible: its linear part is singular
+    /// (determinant zero, or non-finite).
+    Singular,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::NotImplemented(op) => write!(f, "not implemented: {op}"),
+            Error::WrongUnit => write!(f, "unit does not measure the expected kind of quantity"),
+            Error::Singular => write!(f, "transform is singular and cannot be inverted"),
         }
     }
 }
@@ -30,14 +34,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn display_names_the_operation() {
-        let e = Error::NotImplemented("Unit::to_canonical");
-        assert_eq!(e.to_string(), "not implemented: Unit::to_canonical");
+    fn display_describes_the_error() {
+        assert_eq!(
+            Error::WrongUnit.to_string(),
+            "unit does not measure the expected kind of quantity"
+        );
+        assert_eq!(
+            Error::Singular.to_string(),
+            "transform is singular and cannot be inverted"
+        );
     }
 
     #[test]
     fn is_a_std_error() {
-        let e: Box<dyn std::error::Error> = Box::new(Error::NotImplemented("x"));
-        assert!(e.to_string().contains("not implemented"));
+        let e: Box<dyn std::error::Error> = Box::new(Error::WrongUnit);
+        assert!(e.to_string().contains("unit"));
+    }
+
+    #[test]
+    fn errors_are_distinct() {
+        assert_ne!(Error::WrongUnit, Error::Singular);
     }
 }
