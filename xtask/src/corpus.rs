@@ -263,8 +263,20 @@ fn platform_roots() -> ureq::tls::RootCerts {
 
 /// Downloads `entry` from `source`'s raw mirror and writes it atomically.
 pub fn download(source: &Source, entry: &FileEntry, dest: &Path) -> Result<()> {
+    download_with(http_agent(), source, entry, dest)
+}
+
+/// [`download`] with an injectable HTTP agent (C1): the tests drive it
+/// against a local listener; the production path passes
+/// [`http_agent`] and behaves exactly as before.
+fn download_with(
+    agent: &ureq::Agent,
+    source: &Source,
+    entry: &FileEntry,
+    dest: &Path,
+) -> Result<()> {
     let url = template_url(&source.mirror_raw, &source.commit, &entry.path)?;
-    let mut response = http_agent()
+    let mut response = agent
         .get(&url)
         .call()
         .map_err(|e| format!("GET {url}: {e}"))?;
@@ -300,6 +312,22 @@ pub fn run(args: &[String]) -> Result<()> {
 
 /// Core of [`run`], separated so tests can point it at a temp root.
 pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
+    let mut fetch = |source: &Source, entry: &FileEntry, dest: &Path| match &opts.offline {
+        Some(dir) => copy_offline(dir, &entry.path, dest),
+        None => download(source, entry, dest),
+    };
+    run_with_fetch(opts, root, &mut fetch)
+}
+
+/// The fetch loop with the fetch step injected, so the post-fetch
+/// verification arms are testable without a network. The production
+/// fetchers are [`download`] and [`copy_offline`] (see
+/// [`run_with_root`]).
+fn run_with_fetch(
+    opts: &Options,
+    root: &Path,
+    fetch: &mut dyn FnMut(&Source, &FileEntry, &Path) -> Result<()>,
+) -> Result<()> {
     let manifest_path = root.join("corpus").join("manifest.toml");
     let text = fs::read_to_string(&manifest_path)
         .map_err(|e| format!("cannot read {}: {e}", manifest_path.display()))?;
@@ -330,11 +358,7 @@ pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
                     failures.push(format!("{}: missing or mismatched", entry.name));
                     continue;
                 }
-                let fetched_result = match &opts.offline {
-                    Some(dir) => copy_offline(dir, &entry.path, &dest),
-                    None => download(source, entry, &dest),
-                };
-                match fetched_result {
+                match fetch(source, entry, &dest) {
                     Ok(()) => match file_state(&dest, &entry.sha256, entry.size) {
                         Ok(FileState::Valid) => fetched += 1,
                         Ok(FileState::Missing) => {
@@ -571,6 +595,199 @@ size = 41984
             offline: Some(offline),
         };
         assert!(run_with_root(&opts, root.path()).is_err());
+    }
+
+    // ---- C1: `download` against a local HTTP listener ---------------
+
+    /// Serves one canned HTTP response on 127.0.0.1 (plain HTTP) and
+    /// returns `host:port` plus the server thread.
+    fn serve_once(response: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(&response);
+                let _ = stream.flush();
+            }
+        });
+        (addr.to_string(), handle)
+    }
+
+    /// A minimal HTTP response; `content_length` may lie about the
+    /// body length to model a truncated transfer.
+    fn http_response(status: &str, body: &[u8], content_length: usize) -> Vec<u8> {
+        let mut out = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {content_length}\r\nConnection: close\r\n\r\n"
+        )
+        .into_bytes();
+        out.extend_from_slice(body);
+        out
+    }
+
+    fn source_at(addr: &str) -> Source {
+        Source {
+            mirror_raw: format!("http://{addr}/{{commit}}/{{path}}"),
+            commit: "c0ffee".into(),
+        }
+    }
+
+    fn sample_entry() -> FileEntry {
+        FileEntry {
+            name: "vsd/a.vsd".into(),
+            source: "s".into(),
+            path: "src/test/data/a.vsd".into(),
+            sha256: String::new(),
+            size: 0,
+        }
+    }
+
+    #[test]
+    fn download_writes_a_200_response() {
+        let body = b"corpus bytes";
+        let (addr, handle) = serve_once(http_response("200 OK", body, body.len()));
+        let t = TempDir::new("corpus-http-200");
+        let dest = t.join("vsd/a.vsd");
+        download(&source_at(&addr), &sample_entry(), &dest).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), body);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_reports_a_404() {
+        let (addr, handle) = serve_once(http_response("404 Not Found", b"", 0));
+        let t = TempDir::new("corpus-http-404");
+        let dest = t.join("vsd/a.vsd");
+        let err = download(&source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("404"), "{err}");
+        assert!(!dest.exists(), "a failed download keeps no file");
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_checks_the_http_status() {
+        // With an agent that keeps non-2xx responses, `download`'s own
+        // status check reports them.
+        let (addr, handle) = serve_once(http_response("404 Not Found", b"", 0));
+        let t = TempDir::new("corpus-http-status");
+        let dest = t.join("vsd/a.vsd");
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let err = download_with(&agent, &source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("HTTP 404"), "{err}");
+        assert!(!dest.exists(), "a failed download keeps no file");
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_reports_a_truncated_body() {
+        // Content-Length promises 100 bytes; the body has 5.
+        let (addr, handle) = serve_once(http_response("200 OK", b"short", 100));
+        let t = TempDir::new("corpus-http-trunc");
+        let dest = t.join("vsd/a.vsd");
+        let err = download(&source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("read body"), "{err}");
+        assert!(!dest.exists(), "a truncated download keeps no file");
+        handle.join().unwrap();
+    }
+
+    // ---- C2: fetch-loop failure arms --------------------------------
+
+    /// A temp workspace whose manifest has exactly one entry.
+    fn one_file_root(name: &str, source: &str, sha: &str, size: u64) -> TempDir {
+        let root = TempDir::new("corpus-loop");
+        let corpus = root.join("corpus");
+        fs::create_dir_all(&corpus).unwrap();
+        let manifest = format!(
+            "[sources.s]\nmirror_raw = \"https://x/{{commit}}/{{path}}\"\ncommit = \"c\"\n\n[[file]]\nname = \"{name}\"\nsource = \"{source}\"\npath = \"src/a.bin\"\nsha256 = \"{sha}\"\nsize = {size}\n"
+        );
+        fs::write(corpus.join("manifest.toml"), manifest).unwrap();
+        root
+    }
+
+    fn opts() -> Options {
+        Options {
+            verify_only: false,
+            offline: None,
+        }
+    }
+
+    #[test]
+    fn fetch_loop_reports_an_unknown_source() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "not-a-source", &sha, 3);
+        let mut called = false;
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| {
+            called = true;
+            Ok(())
+        };
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("unknown source `not-a-source`"), "{err}");
+        assert!(!called, "an unknown source must not be fetched");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_fetch_that_produced_no_file() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| Ok(());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("fetch produced no file"), "{err}");
+    }
+
+    #[test]
+    fn fetch_loop_deletes_a_file_with_the_wrong_size() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 10);
+        let dest = root.join("corpus/a.bin");
+        let mut fetch =
+            |_s: &Source, _e: &FileEntry, d: &Path| fs::write(d, b"abc").map_err(|e| e.to_string());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("size 3 != expected 10"), "{err}");
+        assert!(!dest.exists(), "the bad file must be deleted");
+    }
+
+    #[test]
+    fn fetch_loop_deletes_a_file_with_the_wrong_sha256() {
+        let sha = sha256_hex(b"the expected bytes");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let dest = root.join("corpus/a.bin");
+        let mut fetch =
+            |_s: &Source, _e: &FileEntry, d: &Path| fs::write(d, b"abc").map_err(|e| e.to_string());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("sha256"), "{err}");
+        assert!(err.contains(&sha), "{err}");
+        assert!(!dest.exists(), "the bad file must be deleted");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_stat_error() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let dest = root.join("corpus/a.bin");
+        // A symlink loop cannot be stat'ed, so verification errors.
+        std::os::unix::fs::symlink("a.bin", &dest).unwrap();
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| Ok(());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("cannot stat"), "{err}");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_stat_error_while_verifying() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let dest = root.join("corpus/a.bin");
+        // The fetch "succeeds" but leaves a symlink loop behind.
+        let mut fetch = |_s: &Source, _e: &FileEntry, d: &Path| {
+            let _ = fs::remove_file(d);
+            std::os::unix::fs::symlink("a.bin", d).map_err(|e| e.to_string())
+        };
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("cannot stat"), "{err}");
     }
 
     #[test]
