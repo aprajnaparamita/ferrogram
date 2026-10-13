@@ -77,21 +77,29 @@ fn main() -> ExitCode {
 fn extract_dispatch(args: &[String]) -> Result<(), String> {
     let parsed = extract::parse_args(args)?;
     if parsed.check {
-        let differing = extract::check(&parsed)?;
-        return if differing.is_empty() {
+        let report = extract::check(&parsed)?;
+        return if report.is_clean() {
             println!("extract --check: OK (every output matches the committed files)");
             Ok(())
         } else {
-            let list: Vec<String> = differing
-                .iter()
-                .map(|p| format!("  {}", p.display()))
-                .collect();
-            Err(format!(
-                "extract --check: {} output file(s) differ from the committed files \
-                 (re-run `cargo xtask extract` and commit):\n{}",
-                differing.len(),
-                list.join("\n")
-            ))
+            let mut lines: Vec<String> = Vec::new();
+            if !report.differing.is_empty() {
+                lines.push(format!(
+                    "{} output file(s) differ from the committed files \
+                     (re-run `cargo xtask extract` and commit):",
+                    report.differing.len()
+                ));
+                lines.extend(report.differing.iter().map(|p| format!("  {}", p.display())));
+            }
+            if !report.stale.is_empty() {
+                lines.push(format!(
+                    "{} committed generated file(s) were produced by no extractor \
+                     (remove them, or list them in GENERATED_OUTPUTS):",
+                    report.stale.len()
+                ));
+                lines.extend(report.stale.iter().map(|p| format!("  {}", p.display())));
+            }
+            Err(format!("extract --check failed:\n{}", lines.join("\n")))
         };
     }
     let results = extract::run(&parsed)?;
