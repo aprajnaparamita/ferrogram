@@ -7,563 +7,563 @@
 # Source commit: web snapshot 20251205120214 (2025-12-05)
 - command: arrange.align_objects
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - F8
 - command: arrange.bring_to_front
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - Shift
       - F
 - command: arrange.bring_to_front
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - F
 - command: arrange.bring_to_front
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - F
 - command: arrange.flip_horizontal
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - H
 - command: arrange.flip_vertical
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - J
 - command: arrange.group
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - G
 - command: arrange.group
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - G
 - command: arrange.group
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - G
 - command: arrange.nudge
   scope: page
-  section: Move from shape to shape in a drawing page
+  section: Navigation
   sequence:
     - - Arrow Keys
 - command: arrange.nudge
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Arrow Keys
 - command: arrange.nudge
   scope: page
-  section: Move from shape to shape in a drawing page
+  section: Navigation
   sequence:
     - - Shift
       - Arrow Keys
 - command: arrange.nudge
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Shift
       - Arrow Keys
 - command: arrange.rotate_left
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - L
 - command: arrange.rotate_left
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - L
 - command: arrange.rotate_right
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - R
 - command: arrange.rotate_right
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - R
 - command: arrange.send_to_back
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - B
 - command: arrange.send_to_back
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - B
 - command: arrange.ungroup
   scope: selection
-  section: Group, rotate, and flip shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - U
 - command: arrange.ungroup
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - U
 - command: connector.auto_connect
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - Arrow Keys
 - command: edit.clear
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Delete
 - command: edit.clear
   scope: window
-  section: Work with stencils in edit mode
+  section: Stencils
   sequence:
     - - Delete
 - command: edit.copy
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - C
 - command: edit.copy
   scope: window
-  section: Work with master shapes in a stencil
+  section: Stencils
   sequence:
     - - Ctrl
       - C
 - command: edit.cut
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - X
 - command: edit.cut
   scope: window
-  section: Work with stencils in edit mode
+  section: Stencils
   sequence:
     - - Ctrl
       - X
 - command: edit.delete_back_word
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - Backspace
 - command: edit.duplicate
   scope: selection
-  section: Work with shapes
+  section: Shapes
   sequence:
     - - Ctrl
       - D
 - command: edit.paste
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - V
 - command: edit.paste
   scope: window
-  section: Work with master shapes in a stencil
+  section: Stencils
   sequence:
     - - Ctrl
       - V
 - command: edit.redo
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - "Y"
 - command: edit.select_all
-  scope: text
-  section: Edit and format text
-  sequence:
-    - - Ctrl
-      - A
-- command: edit.select_all
   scope: global
-  section: Frequently used shortcuts
-  sequence:
-    - - Ctrl
-      - A
-- command: edit.select_all
-  scope: window
-  section: Work with master shapes in a stencil
+  section: Common
   sequence:
     - - Ctrl
       - A
 - command: edit.select_all
   scope: selection
-  section: Work with shapes
+  section: Shapes
+  sequence:
+    - - Ctrl
+      - A
+- command: edit.select_all
+  scope: window
+  section: Stencils
+  sequence:
+    - - Ctrl
+      - A
+- command: edit.select_all
+  scope: text
+  section: Text
   sequence:
     - - Ctrl
       - A
 - command: edit.undo
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - Z
 - command: file.close_window
   scope: window
-  section: Work with windows
+  section: Views
   sequence:
     - - Alt
       - F4
 - command: file.print
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - P
 - command: format.text.align_bottom
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - V
 - command: format.text.align_bottom
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - Z
 - command: format.text.align_center
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - C
 - command: format.text.align_center
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - S
 - command: format.text.align_justify
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - J
 - command: format.text.align_left
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - L
 - command: format.text.align_left
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - L
 - command: format.text.align_middle
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - M
 - command: format.text.align_middle
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - M
 - command: format.text.align_right
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - R
 - command: format.text.align_right
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - R
 - command: format.text.align_top
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - E
 - command: format.text.align_top
   scope: text
-  section: Align text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - T
 - command: format.text.all_caps
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - A
 - command: format.text.bold
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - B
 - command: format.text.bold
   scope: text
-  section: Format text
+  section: Text
   sequence:
     - - Ctrl
       - B
 - command: format.text.decrease_size
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - <
 - command: format.text.increase_size
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - ">"
 - command: format.text.italic
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - I
 - command: format.text.italic
   scope: text
-  section: Format text
+  section: Text
   sequence:
     - - Ctrl
       - I
 - command: format.text.small_caps
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - Shift
       - K
 - command: format.text.subscript
   scope: text
-  section: Edit and format text
+  section: Text
   sequence:
     - - Ctrl
       - "="
 - command: help.contents
   scope: window
-  section: Work with windows
+  section: Views
   sequence:
     - - F1
 - command: shape.arc
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "7"
 - command: shape.ellipse
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "9"
 - command: shape.line
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "6"
 - command: shape.rectangle
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "8"
 - command: shape.spline
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "5"
 - command: tools.connection
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - "1"
 - command: tools.connector
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "3"
 - command: tools.crop
   scope: selection
-  section: Crop a picture
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - "2"
 - command: tools.format_painter
   scope: global
-  section: Use the format painter
+  section: Common
   sequence:
     - - Ctrl
       - Shift
       - C
 - command: tools.format_painter
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - P
 - command: tools.format_painter
   scope: global
-  section: Use the format painter
+  section: Common
   sequence:
     - - Ctrl
       - Shift
       - V
 - command: tools.pencil
   scope: global
-  section: Select drawing tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "4"
 - command: tools.pointer
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - "1"
 - command: tools.pointer
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "1"
 - command: tools.snap_glue_setup
   scope: global
-  section: Use the Snap & Glue features
+  section: Shapes
   sequence:
     - - Alt
       - F9
 - command: tools.text
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - "2"
 - command: tools.text
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - "2"
 - command: tools.text_block
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Ctrl
       - Shift
       - "4"
 - command: tools.text_block
   scope: global
-  section: Select tools
+  section: Shapes
   sequence:
     - - Ctrl
       - Shift
       - "4"
 - command: view.full_screen_mode
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - Esc
 - command: view.full_screen_mode
   scope: global
-  section: Move in the full-screen view mode
+  section: Navigation
   sequence:
     - - Esc
 - command: view.full_screen_mode
   scope: global
-  section: Frequently used shortcuts
+  section: Common
   sequence:
     - - F5
 - command: view.full_screen_mode
   scope: global
-  section: Move in the full-screen view mode
+  section: Navigation
   sequence:
     - - F5
 - command: view.zoom.in
   scope: global
-  section: Zoom
+  section: Views
   sequence:
     - - Alt
       - F6
 - command: view.zoom.in
   scope: page
-  section: Page navigation
+  section: Navigation
   sequence:
     - - Ctrl
       - +
 - command: view.zoom.out
   scope: global
-  section: Zoom
+  section: Views
   sequence:
     - - Alt
       - Shift
       - F6
 - command: view.zoom.out
   scope: page
-  section: Page navigation
+  section: Navigation
   sequence:
     - - Ctrl
       - '-'

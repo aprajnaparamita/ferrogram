@@ -4,9 +4,10 @@
 //! (a Wayback Machine snapshot of the Microsoft Support page; see
 //! `docs/sources.md` source 5) and produces `ui-spec/shortcuts.yaml`.
 //!
-//! Each `<table>` row maps a Microsoft action description ("Undo a
-//! recent action") to a key sequence. The action -> Ferrogram command
-//! mapping is the hand-written [`ACTION_TO_COMMAND`] table; rows that
+//! Each `<table>` row maps a source action description to a key
+//! sequence. The action -> Ferrogram command mapping is the
+//! hand-written [`ACTION_TO_COMMAND`] table (keyed by phrase hashes);
+//! rows that
 //! are not in the table are dropped with a warning on `stderr` and
 //! recorded in the task's Result section. The 365 layout's command
 //! ids are preferred in that table; a 2016-only command is used when
@@ -17,7 +18,7 @@
 //! Clean-room note (AGENTS.md section 4). What this file keeps from
 //! the page: key names and key chords, and *hashes* of the normalised
 //! action phrases ([`ACTION_TO_COMMAND`]) and of the normalised
-//! section headings ([`SECTION_SCOPES`]). No sentence or heading text
+//! section headings ([`SECTION_GROUPS`]). No sentence or heading text
 //! from the page is committed. A maintainer resolves a hash by
 //! looking the phrase up in `reference/` (never tracked). The test
 //! fixtures are original text written for the parsers, not page text.
@@ -388,37 +389,158 @@ pub const ACTION_TO_COMMAND: &[(&str, &str)] = &[
     ),
 ];
 
-/// Normalised section heading -> shortcut scope. Headings not listed
-/// fall back to `global`.
-pub const SECTION_SCOPES: &[(&str, &str)] = &[
-    ("frequently used shortcuts", "global"),
-    ("move in the full-screen view mode", "global"),
-    ("move in a web page drawing", "page"),
-    ("move in text or cells", "text"),
-    ("navigate the ribbon", "ribbon"),
-    ("edit and format text", "text"),
-    ("align text", "text"),
-    ("use the snap & glue features", "global"),
-    ("group, rotate, and flip shapes", "selection"),
-    ("display drawing windows", "window"),
-    ("select tools", "global"),
-    ("select drawing tools", "global"),
-    ("crop a picture", "selection"),
-    ("move from shape to shape in a drawing page", "page"),
-    ("work with master shapes in a stencil", "window"),
-    ("work with stencils in edit mode", "window"),
-    ("work with windows", "window"),
-    ("work with task panes", "window"),
-    ("work with dialog boxes", "window"),
-    ("zoom", "global"),
-    ("page navigation", "page"),
-    ("ribbon navigation", "ribbon"),
-    ("work with shapes", "selection"),
-    ("format text", "text"),
-    ("use the format painter", "global"),
-    ("move the insertion point in text", "text"),
-    ("select content or expand selection", "text"),
-    ("working with mind maps", "selection"),
+/// Normalised section heading -> (our group name, shortcut
+/// scope), keyed by the lowercase hex sha256 of the normalised
+/// heading (F4). The `section` value in `ui-spec/shortcuts.yaml` is
+/// the group name, never the source heading.
+///
+/// To add an entry: normalise the heading from `reference/` (entity
+/// decoded, whitespace collapsed, lower case; [`normalize_heading`]),
+/// hash it with [`super::util::sha256_hex`], and map the hash to one
+/// of the small fixed group names (Common, Text, Shapes, Stencils,
+/// Navigation, Views, Dialogs) and one scope. A heading that is not
+/// in this table is a hard error, so a source change is noticed.
+pub const SECTION_GROUPS: &[(&str, &str, &str)] = &[
+    (
+        "5572ca1041aec06b3b7ccf2257273988076a7ffad68de090bd5125ee931d8039",
+        "Common",
+        "global",
+    ),
+    (
+        "6fcae32dc5399db19528b9a1223280a630f2091a43c2c6ab2e0b9eaae648f552",
+        "Common",
+        "global",
+    ),
+    (
+        "6417cba3ec37e3976fd74cfd76dac47c089df179ce4d5639a22ed9604621e716",
+        "Dialogs",
+        "window",
+    ),
+    (
+        "a1f38a8c7b1de777c51f1f8e70315fc05248a257e9582d76996f234e1f88f098",
+        "Navigation",
+        "global",
+    ),
+    (
+        "80c8d8160e3a6e5c0977ecc184562d9fa7471685c0c0d5f93d62792c5ba47fbd",
+        "Navigation",
+        "page",
+    ),
+    (
+        "820c0dce4b673e252893996c31732a1eb58f01ff155267b597be3b2ed2730792",
+        "Navigation",
+        "page",
+    ),
+    (
+        "9f7b48ba1fc518f4a8ad50631d9e4bc2e86ee30879cc6190240f21ba833e8a5b",
+        "Navigation",
+        "page",
+    ),
+    (
+        "3de01339d82805798df58339567956e83d9f821932d82a67e9d59a3000942de9",
+        "Navigation",
+        "ribbon",
+    ),
+    (
+        "50a41f95a1d3a5f33e0c40abddb1232126249c8f0fd62f1cda3b783a084748ea",
+        "Navigation",
+        "ribbon",
+    ),
+    (
+        "5cb3a04764a310c2ca758bbf66a43895de44ba4ceacb04bfaf050bd19dcab443",
+        "Shapes",
+        "global",
+    ),
+    (
+        "7560506f396a8bc4fb85c85176b66dbcc49b73da892d31e2e2358f1a68d53c4d",
+        "Shapes",
+        "global",
+    ),
+    (
+        "9d8fdd0870ab1cc7c6050b6011ee8b795c78f8d54ed340106affe677a19449c6",
+        "Shapes",
+        "global",
+    ),
+    (
+        "097d30bd2d942f556f5c1491aaf45973381b9c0e0417485a80a0206932211c64",
+        "Shapes",
+        "selection",
+    ),
+    (
+        "2c29f1268929d43f74c43220d5425d133a7e8f621601aa729b0596e4b51cdd7c",
+        "Shapes",
+        "selection",
+    ),
+    (
+        "6dcd1eb0b6ec47e0d12cd5ceecf18c793dd8754ee6fd720088b4c529813a518c",
+        "Shapes",
+        "selection",
+    ),
+    (
+        "ea2ad0ed7dadf91d979283008906d5787c098b9f809cb20873bbb6c7015438d6",
+        "Shapes",
+        "selection",
+    ),
+    (
+        "4eca23fb691590a8ffc6db61144440a83ff08887a7ac508bf9d1f4bce7fb4b25",
+        "Stencils",
+        "window",
+    ),
+    (
+        "ebabb3a2c9a0ed6c0d2dee2fe33d04bdfaa9112552d302c0eb0ff503ebe357f6",
+        "Stencils",
+        "window",
+    ),
+    (
+        "26566e366444e9333b369bdee1e4331fea509b390341a3484599c00b50357f6d",
+        "Text",
+        "text",
+    ),
+    (
+        "396fbaaa6875753e8451515a7975fbb744a4eabb4ef1dac648f03bdd62c88f22",
+        "Text",
+        "text",
+    ),
+    (
+        "4d5784bed640154a0bd267794bb6fe340a8642ce3185826a23fadf6e0f7800a3",
+        "Text",
+        "text",
+    ),
+    (
+        "99e1dc7e316958a184fbefe912ab0ee3e21cb772a72672b9d2e1061d48cadb3f",
+        "Text",
+        "text",
+    ),
+    (
+        "e048a89fb2c48ffbf739d185b2e08d5b1c08dc38e15863f3aeff4187b24640f3",
+        "Text",
+        "text",
+    ),
+    (
+        "e6c2a82c758fda4bb1ca0ff29739f03f8bbd641b29bbc288b552a430d7653c8b",
+        "Text",
+        "text",
+    ),
+    (
+        "d21bb537725d603ee2dbadf9c3d1e291a6b7aed215d36a34e58a1a3b0daa5084",
+        "Views",
+        "global",
+    ),
+    (
+        "50e66aaf121e27fb745af9a7fecbbf94fe7960e96714e1a06459ef3b71cbe681",
+        "Views",
+        "window",
+    ),
+    (
+        "7694ef96999a5d01f77a0e9513a4847733175ac0526516cda13f38933752489b",
+        "Views",
+        "window",
+    ),
+    (
+        "b750cdd3cd6cda85ea55043857fa77664e8021310862c5ff64bbada1f389cd31",
+        "Views",
+        "window",
+    ),
 ];
 
 /// One table row: the action cell and the press cell.
@@ -434,16 +556,17 @@ struct Row {
 
 /// Per-extractor entry point: writes `ui-spec/shortcuts.yaml`.
 pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
-    run_with_actions(in_dir, out_dir, ACTION_TO_COMMAND)
+    run_with_tables(in_dir, out_dir, ACTION_TO_COMMAND, SECTION_GROUPS)
 }
 
-/// [`run`] with an injectable action table (F3): the test fixtures
-/// carry our own phrases, so the tests supply their own hashed table
-/// instead of the source-derived one.
-fn run_with_actions<K: AsRef<str>, V: AsRef<str>>(
+/// [`run`] with an injectable action and section table (F3/F4): the
+/// test fixtures carry our own phrases and headings, so the tests
+/// supply their own hashed tables instead of the source-derived ones.
+fn run_with_tables<K: AsRef<str>, V: AsRef<str>, H: AsRef<str>, G: AsRef<str>, S: AsRef<str>>(
     in_dir: &Path,
     out_dir: &Path,
     actions: &[(K, V)],
+    sections: &[(H, G, S)],
 ) -> ExtractResult<Vec<PathBuf>> {
     let schema = Schema::load_default()?;
     let html_path = in_dir
@@ -470,7 +593,20 @@ fn run_with_actions<K: AsRef<str>, V: AsRef<str>>(
             dropped.push((action, "unparseable key sequence".into()));
             continue;
         };
-        entries.push(shortcut_value(&command, &sequence, &row.section));
+        // F4: an unmapped section heading is a hard error, so a
+        // source change is noticed instead of shipping a silent
+        // fallback.
+        let Some((group, scope)) = lookup_section(sections, &row.section) else {
+            return Err(ExtractError::Parse {
+                path: html_path.clone(),
+                message: format!(
+                    "unmapped section heading {:?} (hash {}): add a SECTION_GROUPS entry",
+                    row.section.trim(),
+                    heading_key(&row.section)
+                ),
+            });
+        };
+        entries.push(shortcut_value(&command, &sequence, &group, &scope));
     }
 
     // Deterministic order: command, then the key sequence, then the
@@ -544,15 +680,13 @@ fn sort_key(v: &Value) -> String {
     format!("{command}\u{0}{seq}\u{0}{section}")
 }
 
-/// Builds one `shortcut` schema object.
-fn shortcut_value(command: &str, sequence: &[Vec<String>], section: &str) -> Value {
+/// Builds one `shortcut` schema object. `group` is our own short
+/// group name and `scope` the shortcut scope (F4).
+fn shortcut_value(command: &str, sequence: &[Vec<String>], group: &str, scope: &str) -> Value {
     let mut obj = Map::new();
     obj.insert("command".into(), Value::String(command.into()));
-    obj.insert(
-        "scope".into(),
-        Value::String(scope_for_section(section).into()),
-    );
-    obj.insert("section".into(), Value::String(normalize_heading(section)));
+    obj.insert("scope".into(), Value::String(scope.into()));
+    obj.insert("section".into(), Value::String(group.into()));
     obj.insert(
         "sequence".into(),
         Value::Array(
@@ -565,20 +699,29 @@ fn shortcut_value(command: &str, sequence: &[Vec<String>], section: &str) -> Val
     Value::Object(obj)
 }
 
-/// Scope for a section heading ([`SECTION_SCOPES`], fallback
-/// `global`).
-fn scope_for_section(section: &str) -> &'static str {
-    let key = section.trim().to_ascii_lowercase();
-    SECTION_SCOPES
-        .iter()
-        .find(|(s, _)| *s == key)
-        .map(|(_, scope)| *scope)
-        .unwrap_or("global")
+/// The hash key of a section heading: the lowercase hex sha256 of the
+/// [`normalize_heading`] form (F4).
+fn heading_key(heading: &str) -> String {
+    super::util::sha256_hex(&normalize_heading(heading))
 }
 
-/// Keeps the heading as a short label, decoding entities.
+/// Normalises a section heading to its hash pre-image: entities
+/// decoded, whitespace collapsed, lower case.
 fn normalize_heading(heading: &str) -> String {
-    collapse(&unescape_entities(heading))
+    collapse(&unescape_entities(heading)).to_ascii_lowercase()
+}
+
+/// Maps a section heading to (group name, scope) through a table
+/// keyed by [`heading_key`] hashes (F4).
+fn lookup_section<K: AsRef<str>, G: AsRef<str>, S: AsRef<str>>(
+    table: &[(K, G, S)],
+    heading: &str,
+) -> Option<(String, String)> {
+    let key = heading_key(heading);
+    table
+        .iter()
+        .find(|(k, _, _)| k.as_ref() == key)
+        .map(|(_, g, s)| (g.as_ref().to_string(), s.as_ref().to_string()))
 }
 
 /// Normalises a "To do this" cell: lower case, collapsed whitespace,
@@ -1027,6 +1170,25 @@ mod tests {
         .collect()
     }
 
+    /// The fixture rows' own section table (F4): keys are the hashes
+    /// of the fixture headings, values are group name and scope.
+    fn fixture_sections() -> Vec<(String, String, String)> {
+        [
+            ("everyday edits", "Common", "global"),
+            ("views", "Views", "global"),
+            ("key tips", "Navigation", "ribbon"),
+        ]
+        .iter()
+        .map(|(heading, group, scope)| {
+            (
+                heading_key(heading),
+                (*group).to_string(),
+                (*scope).to_string(),
+            )
+        })
+        .collect()
+    }
+
     #[test]
     fn walker_finds_tables_rows_and_sections() {
         let rows = table_rows(FIXTURE_HTML);
@@ -1142,7 +1304,7 @@ mod tests {
             vec!["On".to_string()],
             vec!["Off".to_string()],
         ];
-        let entry = shortcut_value("edit.undo", &sequence, "Frequently used shortcuts");
+        let entry = shortcut_value("edit.undo", &sequence, "Common", "global");
         let text = render_shortcuts_yaml(&[entry]).unwrap();
         let back: Value = serde_saphyr::from_str(&text).unwrap();
         let seq = back
@@ -1182,7 +1344,9 @@ mod tests {
             if let Some(cmd) = lookup_action(&table, &action)
                 && let Some(seq) = parse_sequence(&row.press)
             {
-                entries.push(shortcut_value(&cmd, &seq, &row.section));
+                let (group, scope) = lookup_section(&fixture_sections(), &row.section)
+                    .expect("fixture heading maps");
+                entries.push(shortcut_value(&cmd, &seq, &group, &scope));
             }
         }
         entries.sort_by_cached_key(sort_key);
@@ -1200,7 +1364,8 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         std::fs::create_dir_all(out_dir.join("ui-spec")).unwrap();
         std::fs::write(src.join("keyboard-shortcuts-visio.html"), FIXTURE_HTML).unwrap();
-        let outputs = run_with_actions(&in_dir, &out_dir, &fixture_actions()).unwrap();
+        let outputs =
+            run_with_tables(&in_dir, &out_dir, &fixture_actions(), &fixture_sections()).unwrap();
         assert_eq!(outputs.len(), 1);
         let text = std::fs::read_to_string(&outputs[0]).unwrap();
         assert!(text.contains("Snapshot URL:"), "{text}");
@@ -1302,6 +1467,43 @@ mod tests {
         }
     }
 
+    /// F4: the section table uses only the small fixed set of group
+    /// names and the schema's scope values.
+    #[test]
+    fn section_groups_use_the_fixed_vocabulary() {
+        const GROUPS: [&str; 7] = [
+            "Common",
+            "Text",
+            "Shapes",
+            "Stencils",
+            "Navigation",
+            "Views",
+            "Dialogs",
+        ];
+        const SCOPES: [&str; 6] = ["global", "page", "text", "ribbon", "selection", "window"];
+        for (key, group, scope) in SECTION_GROUPS {
+            assert_eq!(key.len(), 64, "section key for {group}");
+            assert!(GROUPS.contains(group), "unknown group {group}");
+            assert!(SCOPES.contains(scope), "unknown scope {scope}");
+        }
+    }
+
+    /// F4: an unmapped section heading is an error, so a source change
+    /// is noticed.
+    #[test]
+    fn unmapped_section_heading_is_an_error() {
+        let tmp = crate::util::test_support::TempDir::new("shortcuts-unmapped");
+        let src = tmp.join("support/shortcuts");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("keyboard-shortcuts-visio.html"), FIXTURE_HTML).unwrap();
+        let empty: [(&str, &str, &str); 0] = [];
+        let err = run_with_tables(tmp.path(), tmp.path(), &fixture_actions(), &empty).unwrap_err();
+        assert!(
+            err.to_string().contains("unmapped section heading"),
+            "{err}"
+        );
+    }
+
     #[test]
     fn every_mapped_row_in_the_fixture_survives_the_run() {
         let table = fixture_actions();
@@ -1387,7 +1589,7 @@ mod tests {
             tokens in proptest::collection::vec(key_token(), 1..8),
         ) {
             let sequence: Vec<Vec<String>> = tokens.iter().map(|t| vec![t.clone()]).collect();
-            let entries = vec![shortcut_value("edit.undo", &sequence, "Frequently used shortcuts")];
+            let entries = vec![shortcut_value("edit.undo", &sequence, "Common", "global")];
             let text = render_shortcuts_yaml(&entries).unwrap();
             let parsed: Value = serde_saphyr::from_str(&text).unwrap();
             let back: Vec<Vec<String>> = parsed[0]
