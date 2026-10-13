@@ -87,9 +87,21 @@ fn committed_data_loads_and_counts_are_pinned() {
     assert_eq!(counts(&sets.visio_2016.layout), PIN_2016, "panel-2016");
     assert_eq!(counts(&sets.visio_365.layout), PIN_365, "panel-365");
     assert_eq!(sets.visio_2016.commands.entries.len(), COMMANDS, "commands");
-    assert_eq!(sets.visio_365.commands.entries.len(), COMMANDS, "commands (365)");
-    assert_eq!(sets.visio_2016.shortcuts.entries.len(), SHORTCUTS, "shortcuts");
-    assert_eq!(sets.visio_365.shortcuts.entries.len(), SHORTCUTS, "shortcuts (365)");
+    assert_eq!(
+        sets.visio_365.commands.entries.len(),
+        COMMANDS,
+        "commands (365)"
+    );
+    assert_eq!(
+        sets.visio_2016.shortcuts.entries.len(),
+        SHORTCUTS,
+        "shortcuts"
+    );
+    assert_eq!(
+        sets.visio_365.shortcuts.entries.len(),
+        SHORTCUTS,
+        "shortcuts (365)"
+    );
 }
 
 /// `CommandLookup` invariants, for both layouts:
