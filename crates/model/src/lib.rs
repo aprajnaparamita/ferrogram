@@ -12,6 +12,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod aliases;
 mod cell;
 mod document;
 mod error;
