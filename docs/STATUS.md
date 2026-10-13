@@ -10,11 +10,11 @@ Task board. Only the master agent edits this file, on `main`.
 | Task | Role | Depends on | State | Branch |
 |---|---|---|---|---|
 | [P2-01](tasks/P2-01.md) | architect | phase-1 | merged (ADRs 0011–0017, stubs, task files) | agent/P2-01 |
-| [P2-02](tasks/P2-02.md) | implementer | P2-01 | ready (group A) | — |
+| [P2-02](tasks/P2-02.md) | implementer | P2-01 | merged | agent/P2-02 |
 | [P2-03](tasks/P2-03.md) | implementer | P2-01 | merged (use `UnitKind` for kind-checked conversion) | agent/P2-03 |
 | [P2-05](tasks/P2-05.md) | implementer | P2-01 | ready (group A) | — |
 | [P2-08](tasks/P2-08.md) | implementer | P2-01 | ready (group A) | — |
-| [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | waiting (group B) | — |
+| [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | ready (group B) | — |
 | [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | waiting (group C) | — |
 | [P2-07](tasks/P2-07.md) | implementer | P2-06 | waiting | — |
 | [P2-09](tasks/P2-09.md) | implementer | P2-07, P2-08 | waiting | — |
@@ -74,3 +74,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P1-14: serialized layouts are not schema-valid for write-back (the model lacks `backstage.kind` and `quick_access_toolbar.id`). Fix before the screenshot pass writes layouts back.
 - History rewrite (P1-11 F1), done 2026-10-13 with the user's approval: `git filter-repo` replaced the blob of `docs/tasks/P1-04.md` that held the verbatim support-page text with the cleaned version. The final tree is unchanged; commit hashes from `7097013` onward changed, and hashes quoted in docs were updated. A pre-rewrite mirror is at `/Volumes/Dara/ferrogram/backup/ferrogram-pre-rewrite.git`. Delete it before the first push.
 - P2-01: the canonical angle unit is degrees (ADR 0011); P2-06 checks the cached unit against the corpus and amends the ADR if it is radians. The MS-VSDX XSD licence is checked in P2-09; until then the XSD is never committed. The coverage ratchet for geom, model, vsdx and shapesheet is set at the Phase 2 end.
+- P2-02: the ShapeSheet table has gaps, so the generated defs use `Option`: 10 of 420 cells have no cell index, the Layer Membership section has no section index, and 8 of 51 rows have no owning section. Fill them if a later source gives the values.
