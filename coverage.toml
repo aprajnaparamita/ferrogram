@@ -25,5 +25,6 @@ ferrogram-cli = 50.0
 [ratchet]
 ferrogram = 66.6
 ferrogram-cli = 66.6
+ferrogram-ui-spec = 99.3
 ferrogram-web = 0.0
-xtask = 55.6
+xtask = 91.3
