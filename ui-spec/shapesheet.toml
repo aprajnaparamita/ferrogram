@@ -1,0 +1,4158 @@
+product = "visio"
+schema_version = 1
+source = "Microsoft Learn ShapeSheet reference (office-developer-client-docs f8c5dfed)"
+source_revision = "2024-04-12 (commit f8c5dfed613fafd2fb8c8f9b1e43454f29517831)"
+
+[enumerations.vis_cell_indices]
+vis1DBeginX = 0
+vis1DBeginY = 1
+vis1DEndX = 2
+vis1DEndY = 3
+visActionAction = 3
+visActionBeginGroup = 8
+visActionButtonFace = 15
+visActionChecked = 4
+visActionDisabled = 5
+visActionInvisible = 7
+visActionMenu = 0
+visActionReadOnly = 6
+visActionSortKey = 16
+visActionTagName = 14
+visAlignBottom = 5
+visAlignCenter = 1
+visAlignLeft = 0
+visAlignMiddle = 4
+visAlignRight = 2
+visAlignTop = 3
+visAnnotationComment = 5
+visAnnotationDate = 4
+visAnnotationLangID = 6
+visAnnotationMarkerIndex = 3
+visAnnotationReviewerID = 2
+visAnnotationX = 0
+visAnnotationY = 1
+visAspectRatio = 5
+visBegTrigger = 11
+visBevelBottomHeight = 5
+visBevelBottomType = 3
+visBevelBottomWidth = 4
+visBevelContourColor = 8
+visBevelContourSize = 9
+visBevelDepthColor = 6
+visBevelDepthSize = 7
+visBevelLightingAngle = 12
+visBevelLightingType = 11
+visBevelMaterialType = 10
+visBevelTopHeight = 2
+visBevelTopType = 0
+visBevelTopWidth = 1
+visBow = 2
+visBulletFont = 9
+visBulletFontSize = 11
+visBulletIndex = 7
+visBulletString = 8
+visCellFirst = 0
+visCellInval = 255
+visCellNone = 255
+visCharacterAsianFont = 51
+visCharacterCase = 3
+visCharacterColor = 1
+visCharacterColorTrans = 17
+visCharacterComplexScriptFont = 52
+visCharacterComplexScriptSize = 54
+visCharacterDblUnderline = 8
+visCharacterDoubleStrikethrough = 13
+visCharacterFont = 0
+visCharacterFontScale = 5
+visCharacterLangID = 57
+visCharacterLetterspace = 16
+visCharacterOverline = 9
+visCharacterPos = 4
+visCharacterSize = 7
+visCharacterStrikethru = 10
+visCharacterStyle = 2
+visCnnctA = 2
+visCnnctAutoGen = 5
+visCnnctB = 3
+visCnnctC = 4
+visCnnctD = 5
+visCnnctDirX = 2
+visCnnctDirY = 3
+visCnnctType = 4
+visCnnctX = 0
+visCnnctY = 1
+visColorSchemeIndex = 0
+visComment = 16
+visCompNoFill = 0
+visCompNoLine = 1
+visCompNoQuickDrag = 5
+visCompNoShow = 2
+visCompNoSnap = 3
+visCompPath = 4
+visCompoundType = 10
+visConnectorSchemeIndex = 2
+visControl1X = 2
+visControl1Y = 3
+visControl2X = 4
+visControl2Y = 5
+visControlX = 2
+visControlY = 3
+visCopyright = 1
+visCtlGlue = 6
+visCtlTip = 8
+visCtlX = 0
+visCtlXCon = 4
+visCtlXDyn = 2
+visCtlY = 1
+visCtlYCon = 5
+visCtlYDyn = 3
+visCustPropsAsk = 7
+visCustPropsCalendar = 15
+visCustPropsDataLinked = 8
+visCustPropsFormat = 3
+visCustPropsInvis = 6
+visCustPropsLabel = 2
+visCustPropsLangID = 14
+visCustPropsPrompt = 1
+visCustPropsSortKey = 4
+visCustPropsType = 5
+visCustPropsValue = 0
+visDistanceFromGround = 5
+visDocAddMarkup = 3
+visDocLangID = 19
+visDocLockDuplicate = 7
+visDocLockPreview = 1
+visDocLockReplace = 5
+visDocNoCoauth = 6
+visDocOutputFormat = 0
+visDocPreviewQuality = 9
+visDocPreviewScope = 10
+visDocViewMarkup = 4
+visDropSource = 17
+visDynFeedback = 8
+visEccentricityAngle = 4
+visEffectSchemeIndex = 1
+visEllipseCenterX = 0
+visEllipseCenterY = 1
+visEllipseMajorX = 2
+visEllipseMajorY = 3
+visEllipseMinorX = 4
+visEllipseMinorY = 5
+visEmbellishmentIndex = 7
+visEndTrigger = 12
+visEvtCellDblClick = 2
+visEvtCellDrop = 4
+visEvtCellMultiDrop = 22
+visEvtCellTheText = 1
+visEvtCellXFMod = 3
+visFieldCalendar = 7
+visFieldCell = 0
+visFieldFormat = 2
+visFieldObjectKind = 10
+visFieldType = 3
+visFieldUICategory = 4
+visFieldUICode = 5
+visFieldUIFormat = 6
+visFillBkgnd = 1
+visFillBkgndTrans = 7
+visFillForegnd = 0
+visFillForegndTrans = 6
+visFillGradientAngle = 3
+visFillGradientDir = 2
+visFillGradientEnabled = 5
+visFillPattern = 2
+visFillShdwBkgnd = 4
+visFillShdwBkgndTrans = 9
+visFillShdwBlur = 15
+visFillShdwForegnd = 3
+visFillShdwForegndTrans = 8
+visFillShdwObliqueAngle = 13
+visFillShdwOffsetX = 11
+visFillShdwOffsetY = 12
+visFillShdwPattern = 5
+visFillShdwScaleFactor = 14
+visFillShdwShow = 16
+visFillShdwType = 10
+visFlags = 13
+visFontSchemeIndex = 3
+visFrgnImgClippingPath = 4
+visFrgnImgHeight = 3
+visFrgnImgOffsetX = 0
+visFrgnImgOffsetY = 1
+visFrgnImgWidth = 2
+visGlowColor = 4
+visGlowColorTrans = 5
+visGlowSize = 6
+visGlueType = 9
+visGradientStopColor = 0
+visGradientStopColorTrans = 1
+visGradientStopPosition = 2
+visGroupDisplayMode = 1
+visGroupDontMoveChildren = 5
+visGroupIsDropTarget = 2
+visGroupIsSnapTarget = 3
+visGroupIsTextEditTarget = 4
+visGroupSelectMode = 0
+visHLinkAddress = 1
+visHLinkDefault = 7
+visHLinkDescription = 0
+visHLinkExtraInfo = 3
+visHLinkFrame = 4
+visHLinkInvisible = 8
+visHLinkNewWin = 5
+visHLinkSortKey = 15
+visHLinkSubAddress = 2
+visHideText = 5
+visHorzAlign = 6
+visImageBlur = 4
+visImageBrightness = 2
+visImageContrast = 1
+visImageDenoise = 5
+visImageGamma = 0
+visImageSharpen = 3
+visImageTransparency = 6
+visIndentFirst = 0
+visIndentLeft = 1
+visIndentRight = 2
+visInfiniteLineX1 = 0
+visInfiniteLineX2 = 2
+visInfiniteLineY1 = 1
+visInfiniteLineY2 = 3
+visKeepTextFlat = 6
+visLOFlags = 13
+visLayerActive = 6
+visLayerColor = 2
+visLayerColorTrans = 11
+visLayerGlue = 9
+visLayerLock = 7
+visLayerMember = 0
+visLayerName = 0
+visLayerNameUniv = 10
+visLayerPrint = 5
+visLayerSnap = 8
+visLayerStatus = 3
+visLayerVisible = 4
+visLineBeginArrow = 5
+visLineBeginArrowSize = 8
+visLineColor = 1
+visLineColorTrans = 9
+visLineEndArrow = 6
+visLineEndArrowSize = 4
+visLineEndCap = 7
+visLineGradientAngle = 1
+visLineGradientDir = 0
+visLineGradientEnabled = 4
+visLinePattern = 2
+visLineRounding = 3
+visLineWeight = 0
+visLockAspect = 4
+visLockBegin = 6
+visLockCalcWH = 14
+visLockCrop = 9
+visLockCustProp = 16
+visLockDelete = 5
+visLockEnd = 7
+visLockFormat = 12
+visLockFromGroupFormat = 17
+visLockGroup = 13
+visLockHeight = 1
+visLockMoveX = 2
+visLockMoveY = 3
+visLockReplace = 23
+visLockRotate = 8
+visLockSelect = 15
+visLockTextEdit = 11
+visLockThemeColors = 18
+visLockThemeConnectors = 20
+visLockThemeEffects = 19
+visLockThemeFonts = 21
+visLockThemeIndex = 22
+visLockVariation = 24
+visLockVtxEdit = 10
+visLockWidth = 0
+visNURBSData = 6
+visNURBSKnot = 2
+visNURBSKnotPrev = 4
+visNURBSWeight = 3
+visNURBSWeightPrev = 5
+visNoAlignBox = 3
+visNoCtlHandles = 2
+visNoLiveDynamics = 18
+visNoObjHandles = 0
+visNonPrinting = 1
+visObjCalendar = 25
+visObjDropOnPageScale = 28
+visObjHelp = 0
+visObjKeywords = 27
+visObjLangID = 26
+visObjLocalizeMerge = 19
+visObjNoProofing = 20
+visObjTheme = 29
+visObjThemeModern = 30
+visPLOAvenueSizeX = 20
+visPLOAvenueSizeY = 21
+visPLOAvoidPageBreaks = 4
+visPLOBlockSizeX = 18
+visPLOBlockSizeY = 19
+visPLOCtrlAsInput = 3
+visPLODynamicsOff = 2
+visPLOEnableGrid = 1
+visPLOJumpCode = 12
+visPLOJumpDirX = 14
+visPLOJumpDirY = 15
+visPLOJumpFactorX = 24
+visPLOJumpFactorY = 25
+visPLOJumpStyle = 13
+visPLOLineAdjustFrom = 26
+visPLOLineAdjustTo = 27
+visPLOLineRouteExt = 29
+visPLOLineToLineX = 22
+visPLOLineToLineY = 23
+visPLOLineToNodeX = 16
+visPLOLineToNodeY = 17
+visPLOPlaceDepth = 10
+visPLOPlaceFlip = 28
+visPLOPlaceStyle = 8
+visPLOPlowCode = 11
+visPLOResizePage = 0
+visPLORouteStyle = 9
+visPLOSplit = 30
+visPageDrawScaleType = 7
+visPageDrawSizeType = 6
+visPageDrawingScale = 5
+visPageHeight = 1
+visPageInhibitSnap = 26
+visPageLockDuplicate = 30
+visPageLockReplace = 28
+visPageScale = 4
+visPageShdwObliqueAngle = 36
+visPageShdwOffsetX = 2
+visPageShdwOffsetY = 3
+visPageShdwScaleFactor = 37
+visPageShdwType = 35
+visPageUIVisibility = 34
+visPageWidth = 0
+visPageZOrderChanged = 39
+visPerspective = 4
+visPolylineData = 2
+visPrintPropertiesBottomMargin = 3
+visPrintPropertiesCenterX = 8
+visPrintPropertiesCenterY = 9
+visPrintPropertiesLeftMargin = 0
+visPrintPropertiesOnPage = 10
+visPrintPropertiesPageOrientation = 16
+visPrintPropertiesPagesX = 6
+visPrintPropertiesPagesY = 7
+visPrintPropertiesPaperKind = 17
+visPrintPropertiesPaperSource = 18
+visPrintPropertiesPrintGrid = 11
+visPrintPropertiesRightMargin = 1
+visPrintPropertiesScaleX = 4
+visPrintPropertiesScaleY = 5
+visPrintPropertiesTopMargin = 2
+visQuickStyleEffectsMatrix = 6
+visQuickStyleFillColor = 1
+visQuickStyleFillMatrix = 5
+visQuickStyleFontColor = 3
+visQuickStyleFontMatrix = 7
+visQuickStyleLineColor = 0
+visQuickStyleLineMatrix = 4
+visQuickStyleShadowColor = 2
+visQuickStyleType = 8
+visQuickStyleVariation = 9
+visReflectionBlur = 3
+visReflectionDist = 2
+visReflectionSize = 1
+visReflectionTrans = 0
+visReplaceCopyCells = 3
+visReplaceLockFormat = 2
+visReplaceLockShapeData = 1
+visReplaceLockText = 0
+visReviewerColor = 2
+visReviewerCurrentIndex = 4
+visReviewerInitials = 1
+visReviewerName = 0
+visReviewerReviewerID = 3
+visRotateGradientWithShape = 6
+visRotationType = 3
+visRotationXAngle = 0
+visRotationYAngle = 1
+visRotationZAngle = 2
+visSLOCategoryChanged = 24
+visSLOConFixedCode = 12
+visSLOFixedCode = 8
+visSLOJumpCode = 13
+visSLOJumpDirX = 16
+visSLOJumpDirY = 17
+visSLOJumpStyle = 14
+visSLOLineRouteExt = 19
+visSLOPermX = 0
+visSLOPermY = 1
+visSLOPermeablePlace = 2
+visSLOPlaceFlip = 18
+visSLOPlaceStyle = 11
+visSLOPlowCode = 9
+visSLORelChanged = 23
+visSLORelationships = 3
+visSLORouteStyle = 10
+visSLOSplit = 20
+visSLOSplittable = 21
+visSLOZOrderChanged = 25
+visScratchA = 2
+visScratchB = 3
+visScratchC = 4
+visScratchD = 5
+visScratchX = 0
+visScratchY = 1
+visSketchAmount = 10
+visSketchEnabled = 9
+visSketchFillChange = 13
+visSketchLineChange = 12
+visSketchLineWeight = 11
+visSketchSeed = 8
+visSmartTagButtonFace = 6
+visSmartTagDescription = 15
+visSmartTagDisabled = 7
+visSmartTagDisplayMode = 5
+visSmartTagName = 2
+visSmartTagX = 0
+visSmartTagXJustify = 3
+visSmartTagY = 1
+visSmartTagYJustify = 4
+visSoftEdgeSize = 7
+visSpaceAfter = 5
+visSpaceBefore = 4
+visSpaceLine = 3
+visSplineDegree = 5
+visSplineKnot = 2
+visSplineKnot2 = 3
+visSplineKnot3 = 4
+visStyleHidden = 3
+visStyleIncludesFill = 1
+visStyleIncludesLine = 0
+visStyleIncludesText = 2
+visTabAlign = 2
+visTabPos = 1
+visTabStopCount = 0
+visTextPosAfterBullet = 12
+visThemeIndex = 4
+visTxtBlkBkgnd = 5
+visTxtBlkBkgndTrans = 11
+visTxtBlkBottomMargin = 3
+visTxtBlkDefaultTabStop = 6
+visTxtBlkDirection = 10
+visTxtBlkLeftMargin = 0
+visTxtBlkRightMargin = 1
+visTxtBlkTopMargin = 2
+visTxtBlkVerticalAlign = 4
+visUpdateAlignBox = 4
+visUseGroupGradient = 7
+visUserPrompt = 1
+visUserValue = 0
+visVariationColorIndex = 5
+visVariationStyleIndex = 6
+visWalkPref = 10
+visX = 0
+visXFormAngle = 6
+visXFormFlipX = 7
+visXFormFlipY = 8
+visXFormHeight = 3
+visXFormLocPinX = 4
+visXFormLocPinY = 5
+visXFormPinX = 0
+visXFormPinY = 1
+visXFormResizeMode = 9
+visXFormWidth = 2
+visXGridDensity = 6
+visXGridOrigin = 10
+visXGridSpacing = 8
+visXRulerDensity = 0
+visXRulerOrigin = 4
+visY = 1
+visYGridDensity = 7
+visYGridOrigin = 11
+visYGridSpacing = 9
+visYRulerDensity = 1
+visYRulerOrigin = 5
+
+[enumerations.vis_row_indices]
+visRow1stHyperlink = 0
+visRow3DRotationProperties = 30
+visRowAction = 0
+visRowAlign = 14
+visRowAnnotation = 0
+visRowBevelProperties = 29
+visRowCharacter = 0
+visRowComponent = 0
+visRowConnectionPts = 0
+visRowControl = 0
+visRowDoc = 20
+visRowEvent = 5
+visRowField = 0
+visRowFill = 3
+visRowFirst = 0
+visRowForeign = 9
+visRowGradientProperties = 26
+visRowGradientStop = 0
+visRowGroup = 22
+visRowHelpCopyright = 16
+visRowImage = 21
+visRowInval = -1
+visRowLast = -2
+visRowLayer = 0
+visRowLayerMem = 6
+visRowLine = 2
+visRowLock = 15
+visRowMisc = 17
+visRowNone = -1
+visRowOtherEffectProperties = 28
+visRowPage = 10
+visRowPageLayout = 24
+visRowParagraph = 0
+visRowPrintProperties = 25
+visRowProp = 0
+visRowQuickStyleProperties = 27
+visRowReplaceBehaviors = 32
+visRowReviewer = 0
+visRowRulerGrid = 18
+visRowScratch = 0
+visRowShapeLayout = 23
+visRowSmartTag = 0
+visRowStyle = 8
+visRowTab = 0
+visRowText = 11
+visRowTextXForm = 12
+visRowThemeProperties = 31
+visRowUser = 0
+visRowVertex = 1
+visRowXForm1D = 4
+visRowXFormOut = 1
+
+[enumerations.vis_section_indices]
+visSectionAction = 240
+visSectionAnnotation = 246
+visSectionCharacter = 3
+visSectionConnectionPts = 7
+visSectionControls = 9
+visSectionFillGradientStops = 249
+visSectionFirst = 0
+visSectionFirstComponent = 10
+visSectionHyperlink = 244
+visSectionInval = 255
+visSectionLast = 252
+visSectionLastComponent = 239
+visSectionLayer = 241
+visSectionLineGradientStops = 248
+visSectionNone = 255
+visSectionObject = 1
+visSectionParagraph = 4
+visSectionProp = 243
+visSectionReviewer = 245
+visSectionScratch = 6
+visSectionSmartTag = 247
+visSectionTab = 5
+visSectionTextField = 8
+visSectionUser = 242
+
+[enumerations.vis_unit_codes]
+visAcre = 36
+visAngleUnits = 80
+visCentimeters = 69
+visCiceros = 54
+visCicerosAndDidots = 52
+visCurrency = 111
+visDate = 40
+visDegreeMinSec = 82
+visDegrees = 81
+visDidots = 53
+visDrawingUnits = 64
+visDurationUnits = 42
+visElapsedDay = 44
+visElapsedHour = 45
+visElapsedMin = 46
+visElapsedSec = 47
+visElapsedWeek = 43
+visFeet = 66
+visFeetAndInches = 67
+visHectare = 37
+visInchFrac = 73
+visInches = 65
+visKilometers = 72
+visMeters = 71
+visMileFrac = 74
+visMiles = 68
+visMillimeters = 70
+visMin = 84
+visNautMiles = 76
+visNoCast = 252
+visNumber = 32
+visPageUnits = 63
+visPercent = 33
+visPicas = 51
+visPicasAndPoints = 49
+visPoints = 50
+visRadians = 83
+visSec = 85
+visTypeUnits = 48
+visUnitsColor = 251
+visUnitsGUID = 95
+visUnitsInval = 255
+visUnitsNURBS = 138
+visUnitsPoint = 225
+visUnitsPolyline = 139
+visUnitsString = 231
+visYards = 75
+
+[[rows]]
+name = "visRow1stHyperlink"
+row_index = 0
+section = "Hyperlinks"
+
+[[rows]]
+name = "visRow3DRotationProperties"
+row_index = 30
+section = "3-D Rotation Properties"
+
+[[rows]]
+name = "visRowAction"
+row_index = 0
+section = "Actions"
+
+[[rows]]
+name = "visRowAlign"
+row_index = 14
+section = "Alignment"
+
+[[rows]]
+name = "visRowAnnotation"
+row_index = 0
+section = "Annotation"
+
+[[rows]]
+name = "visRowBevelProperties"
+row_index = 29
+section = "Bevel Properties"
+
+[[rows]]
+name = "visRowCharacter"
+row_index = 0
+section = "Character"
+
+[[rows]]
+name = "visRowComponent"
+row_index = 0
+section = "Geometry"
+
+[[rows]]
+name = "visRowConnectionPts"
+row_index = 0
+section = "Connection Points"
+
+[[rows]]
+name = "visRowControl"
+row_index = 0
+section = "Controls"
+
+[[rows]]
+name = "visRowDoc"
+row_index = 20
+section = "Document Properties"
+
+[[rows]]
+name = "visRowEvent"
+row_index = 5
+section = "Events"
+
+[[rows]]
+name = "visRowField"
+row_index = 0
+section = "Text Fields"
+
+[[rows]]
+name = "visRowFill"
+row_index = 3
+section = "Fill Format"
+
+[[rows]]
+name = "visRowFirst"
+row_index = 0
+
+[[rows]]
+name = "visRowForeign"
+row_index = 9
+section = "Foreign Image Info"
+
+[[rows]]
+name = "visRowGradientProperties"
+row_index = 26
+section = "Gradient Properties"
+
+[[rows]]
+name = "visRowGradientStop"
+row_index = 0
+
+[[rows]]
+name = "visRowGroup"
+row_index = 22
+section = "Glue Info"
+
+[[rows]]
+name = "visRowHelpCopyright"
+row_index = 16
+
+[[rows]]
+name = "visRowImage"
+row_index = 21
+section = "Image Properties"
+
+[[rows]]
+name = "visRowInval"
+row_index = -1
+
+[[rows]]
+name = "visRowLast"
+row_index = -2
+
+[[rows]]
+name = "visRowLayer"
+row_index = 0
+section = "Layers"
+
+[[rows]]
+name = "visRowLayerMem"
+row_index = 6
+
+[[rows]]
+name = "visRowLine"
+row_index = 2
+section = "Line Format"
+
+[[rows]]
+name = "visRowLock"
+row_index = 15
+section = "Protection"
+
+[[rows]]
+name = "visRowMisc"
+row_index = 17
+section = "Glue Info"
+
+[[rows]]
+name = "visRowNone"
+row_index = -1
+
+[[rows]]
+name = "visRowOtherEffectProperties"
+row_index = 28
+section = "Additional Effect Properties"
+
+[[rows]]
+name = "visRowPage"
+row_index = 10
+section = "Page Properties"
+
+[[rows]]
+name = "visRowPageLayout"
+row_index = 24
+section = "Page Layout"
+
+[[rows]]
+name = "visRowParagraph"
+row_index = 0
+section = "Paragraph"
+
+[[rows]]
+name = "visRowPrintProperties"
+row_index = 25
+section = "Print Properties"
+
+[[rows]]
+name = "visRowProp"
+row_index = 0
+section = "Shape Data"
+
+[[rows]]
+name = "visRowQuickStyleProperties"
+row_index = 27
+section = "Quick Style"
+
+[[rows]]
+name = "visRowReplaceBehaviors"
+row_index = 32
+section = "Change Shape Behavior"
+
+[[rows]]
+name = "visRowReviewer"
+row_index = 0
+section = "Reviewer"
+
+[[rows]]
+name = "visRowRulerGrid"
+row_index = 18
+section = "Ruler & Grid"
+
+[[rows]]
+name = "visRowScratch"
+row_index = 0
+
+[[rows]]
+name = "visRowShapeLayout"
+row_index = 23
+section = "Shape Layout"
+
+[[rows]]
+name = "visRowSmartTag"
+row_index = 0
+section = "Action Tag"
+
+[[rows]]
+name = "visRowStyle"
+row_index = 8
+section = "Style Properties"
+
+[[rows]]
+name = "visRowTab"
+row_index = 0
+section = "Tabs"
+
+[[rows]]
+name = "visRowText"
+row_index = 11
+section = "Text Block Format"
+
+[[rows]]
+name = "visRowTextXForm"
+row_index = 12
+section = "Text Transform"
+
+[[rows]]
+name = "visRowThemeProperties"
+row_index = 31
+section = "Theme Properties"
+
+[[rows]]
+name = "visRowUser"
+row_index = 0
+section = "User-defined Cells"
+
+[[rows]]
+name = "visRowVertex"
+row_index = 1
+section = "Geometry"
+
+[[rows]]
+name = "visRowXForm1D"
+row_index = 4
+section = "1-D Endpoints"
+
+[[rows]]
+name = "visRowXFormOut"
+row_index = 1
+section = "Shape Transform"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "1-d-endpoints-section.md"
+kind = "object"
+name = "1-D Endpoints"
+rows = ["visRowXForm1D"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "beginx-cell-1-d-endpoints-section.md"
+name = "BeginX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "beginy-cell-1-d-endpoints-section.md"
+name = "BeginY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "endx-cell-1-d-endpoints-section.md"
+name = "EndX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "endy-cell-1-d-endpoints-section.md"
+name = "EndY"
+type = "Number"
+
+[[sections]]
+default_unit = "Degrees"
+description_source = "3-d-rotation-properties-section.md"
+kind = "object"
+name = "3-D Rotation Properties"
+rows = ["visRow3DRotationProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Points"
+description_source = "distancefromground-cell-3-d-rotation-properties.md"
+name = "DistanceFromGround"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "keeptextflat-cell-3-d-rotation-properties-section.md"
+name = "KeepTextFlat"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Degrees"
+description_source = "perspective-cell-3-d-rotation-properties-section.md"
+name = "Perspective"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "rotationtype-cell-3-d-rotation-properties-section.md"
+name = "RotationType"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Degrees"
+description_source = "rotationxangle-cell-3-d-rotation-properties-section.md"
+name = "RotationXAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Degrees"
+description_source = "rotationyangle-cell-3-d-rotation-properties-section.md"
+name = "RotationYAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Degrees"
+description_source = "rotationzangle-cell-3-d-rotation-properties-section.md"
+name = "RotationZAngle"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "action-tag-section.md"
+kind = "collection"
+name = "Action Tag"
+rows = ["visRowSmartTag"]
+section_index = 247
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "buttonface-cell-action-tags-section.md"
+name = "ButtonFace"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "String"
+description_source = "description-cell-action-tags-section.md"
+name = "Description"
+type = "String"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "disabled-cell-action-tags-section.md"
+name = "Disabled"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "displaymode-cell-action-tags-section.md"
+name = "DisplayMode"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "String"
+description_source = "tagname-cell-action-tags-section.md"
+name = "TagName"
+type = "String"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "x-cell-action-tags-section.md"
+name = "X"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "x-justify-cell-action-tags-section.md"
+name = "XJustify"
+type = "List"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "y-cell-action-tags-section.md"
+name = "Y"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "y-justify-cell-action-tags-section.md"
+name = "YJustify"
+type = "List"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "actions-section.md"
+kind = "collection"
+name = "Actions"
+rows = ["visRowAction"]
+section_index = 240
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "String"
+description_source = "action-cell-actions-section.md"
+name = "Action"
+type = "String"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "begingroup-cell-actions-section.md"
+name = "BeginGroup"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "Number"
+description_source = "buttonface-cell-actions-section.md"
+name = "ButtonFace"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "checked-cell-actions-section.md"
+name = "Checked"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "disabled-cell-actions-section.md"
+name = "Disabled"
+type = "Bool"
+
+[[sections.cells]]
+default_unit = "NoCast"
+description_source = "flyoutchild-cell-actions-section.md"
+name = "FlyoutChild"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "invisible-cell-actions-section.md"
+name = "Invisible"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "String"
+description_source = "menu-cell-actions-section.md"
+name = "Menu"
+type = "String"
+
+[[sections.cells]]
+default_unit = "Number"
+description_source = "prompt-cell-actions-section.md"
+name = "Prompt"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "readonly-cell-actions-section.md"
+name = "ReadOnly"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "Number"
+description_source = "sortkey-cell-actions-section.md"
+name = "SortKey"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "String"
+description_source = "tagname-cell-actions-section.md"
+name = "TagName"
+type = "String"
+
+[[sections]]
+default_unit = "Points"
+description_source = "additional-effect-properties-section.md"
+kind = "object"
+name = "Additional Effect Properties"
+rows = ["visRowOtherEffectProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Color"
+description_source = "glowcolor-cell-additional-effect-properties-section.md"
+name = "GlowColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Color"
+description_source = "glowcolortrans-cell-additional-effect-properties-section.md"
+name = "GlowColorTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Points"
+description_source = "glowsize-cell-additional-effect-properties-section.md"
+name = "GlowSize"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Points"
+description_source = "reflectionblur-cell-additional-effect-properties-section.md"
+name = "ReflectionBlur"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Points"
+description_source = "reflectiondist-cell-additional-effect-properties-section.md"
+name = "ReflectionDist"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Percent"
+description_source = "reflectionsize-cell-additional-effect-properties-section.md"
+name = "ReflectionSize"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Percent"
+description_source = "reflectiontrans-cell-additional-effect-properties-section.md"
+name = "ReflectionTrans"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "sketchamount-cell-additional-effect-properties-section.md"
+name = "SketchAmount"
+type = "List"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "sketchenabled-cell-additional-effect-properties-section.md"
+name = "SketchEnabled"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "Percent"
+description_source = "sketchfillchange-cell-additional-effect-properties-section.md"
+name = "SketchFillChange"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "Percent"
+description_source = "sketchlinechange-cell-additional-effect-properties-section.md"
+name = "SketchLineChange"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Points"
+description_source = "sketchlineweight-cell-additional-effect-properties-section.md"
+name = "SketchLineWeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "Number"
+description_source = "sketchseed-cell-additional-effect-properties-section.md"
+name = "SketchSeed"
+type = "Number"
+
+[[sections.cells]]
+default_unit = "Points"
+description_source = "softedgessize-cell-additional-effect-properties-section.md"
+name = "SoftEdgesSize"
+type = "Number"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "alignment-section.md"
+kind = "object"
+name = "Alignment"
+rows = ["visRowAlign"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Inches"
+description_source = "alignbottom-cell-alignment-section.md"
+name = "AlignBottom"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "aligncenter-cell-alignment-section.md"
+name = "AlignCenter"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "alignleft-cell-alignment-section.md"
+name = "AlignLeft"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Inches"
+description_source = "alignmiddle-cell-alignment-section.md"
+name = "AlignMiddle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "alignright-cell-alignment-section.md"
+name = "AlignRight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "aligntop-cell-alignment-section.md"
+name = "AlignTop"
+type = "Number"
+
+[[sections]]
+default_unit = "Number"
+description_source = "annotation-section.md"
+kind = "collection"
+name = "Annotation"
+rows = ["visRowAnnotation"]
+section_index = 246
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "comment-cell-annotation-section.md"
+name = "Comment"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "date-cell-annotation-section.md"
+name = "Date"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "langid-cell-annotation-section.md"
+name = "LangID"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "x-cell-annotation-section.md"
+name = "X"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "y-cell-annotation-section.md"
+name = "Y"
+type = "Number"
+
+[[sections]]
+default_unit = "Points"
+description_source = "bevel-properties-section.md"
+kind = "object"
+name = "Bevel Properties"
+rows = ["visRowBevelProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Points"
+description_source = "bevelbottomheight-cell-bevel-properties-section.md"
+name = "BevelBottomHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "bevelbottomtype-cell-bevel-properties-section.md"
+name = "BevelBottomType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Points"
+description_source = "bevelbottomwidth-cell-bevel-properties-section.md"
+name = "BevelBottomWidth"
+type = "Number"
+
+[[sections.cells]]
+default_unit = "Color"
+description_source = "bevelcontourcolor-cell-bevel-properties-section.md"
+name = "BevelContourColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "Points"
+description_source = "bevelcontoursize-cell-bevel-properties-section.md"
+name = "BevelContourSize"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Color"
+description_source = "beveldepthcolor-cell-bevel-properties-section.md"
+name = "BevelDepthColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Points"
+description_source = "beveldepthsize-cell-bevel-properties-section.md"
+name = "BevelDepthSize"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "Degrees"
+description_source = "bevellightingangle-cell-bevel-properties-section.md"
+name = "BevelLightingAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "NoCast"
+description_source = "bevellightingtype-cell-bevel-properties-section.md"
+name = "BevelLightingType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "bevelmaterialtype-cell-bevel-properties-section.md"
+name = "BevelMaterialType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Points"
+description_source = "beveltopheight-cell-bevel-properties-section.md"
+name = "BevelTopHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "beveltoptype-cell-bevel-properties-section.md"
+name = "BevelTopType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Points"
+description_source = "beveltopwidth-cell-bevel-properties-section.md"
+name = "BevelTopWidth"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "change-shape-behavior-section.md"
+kind = "object"
+name = "Change Shape Behavior"
+rows = ["visRowReplaceBehaviors"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "replacecopycells-cell-change-shape-behavior-section.md"
+name = "ReplaceCopyCells"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "replacelockformat-cell-change-shape-behavior-section.md"
+name = "ReplaceLockFormat"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "replacelockshapedata-cell-change-shape-behavior-section.md"
+name = "ReplaceLockShapeData"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "replacelocktext-cell-change-shape-behavior-section.md"
+name = "ReplaceLockText"
+type = "Bool"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "character-section.md"
+kind = "collection"
+name = "Character"
+rows = ["visRowCharacter"]
+section_index = 3
+
+[[sections.cells]]
+cell_index = 51
+default_unit = "Number"
+description_source = "asianfont-cell-character-section.md"
+name = "AsianFont"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "case-cell-character-section.md"
+name = "Case"
+type = "List"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Color"
+description_source = "color-cell-character-section.md"
+name = "Color"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 52
+default_unit = "Number"
+description_source = "complexscriptfont-cell-character-section.md"
+name = "ComplexScriptFont"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 54
+default_unit = "String"
+description_source = "complexscriptsize-cell-character-section.md"
+name = "ComplexScriptSize"
+type = "String"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "doublestrikethrough-cell-character-section.md"
+name = "DoubleStrikethrough"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "doubleuline-cell-character-section.md"
+name = "DoubleULine"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "font-cell-character-section.md"
+name = "Font"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 57
+default_unit = "Number"
+description_source = "langid-cell-character-section.md"
+name = "LangID"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "overline-cell-character-section.md"
+name = "Overline"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "pos-cell-character-section.md"
+name = "Pos"
+type = "List"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Inches"
+description_source = "scale-cell-character-section.md"
+name = "Scale"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Number"
+description_source = "size-cell-character-section.md"
+name = "Size"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "Number"
+description_source = "spacing-cell-character-section.md"
+name = "Spacing"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "strikethru-cell-character-section.md"
+name = "Strikethru"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "style-cell-character-section.md"
+name = "Style"
+type = "List"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "Color"
+description_source = "transparency-cell-character-section.md"
+name = "Transparency"
+type = "Color"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "connection-points-section.md"
+kind = "collection"
+name = "Connection Points"
+rows = ["visRowConnectionPts"]
+section_index = 7
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "String"
+description_source = "d-cell-connection-points-section.md"
+name = "D"
+type = "String"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "dirxa-cell-connection-points-section.md"
+name = "DirX/A"
+type = "List"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "diryb-cell-connection-points-section.md"
+name = "DirY/B"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "typec-cell-connection-points-section.md"
+name = "Type/C"
+type = "List"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "x-cell-connection-points-section.md"
+name = "X"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "y-cell-connection-points-section.md"
+name = "Y"
+type = "Number"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "controls-section.md"
+kind = "collection"
+name = "Controls"
+rows = ["visRowControl"]
+section_index = 9
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "can-glue-cell-controls-section.md"
+name = "CanGlue"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "String"
+description_source = "tip-cell-controls-section.md"
+name = "Tip"
+type = "String"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "x-cell-controls-section.md"
+name = "X"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Inches"
+description_source = "x-behavior-cell-controls-section.md"
+name = "XBehavior"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "x-dynamics-cell-controls-section.md"
+name = "XDynamics"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "y-cell-controls-section.md"
+name = "Y"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "String"
+description_source = "y-behavior-cell-controls-section.md"
+name = "YBehavior"
+type = "String"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "y-dynamics-cell-controls-section.md"
+name = "YDynamics"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "document-properties-section.md"
+kind = "object"
+name = "Document Properties"
+rows = ["visRowDoc"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "addmarkup-cell-document-properties-section.md"
+name = "AddMarkup"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 19
+default_unit = "Number"
+description_source = "doclangid-cell-document-properties-section.md"
+name = "DocLangID"
+type = "Number"
+
+[[sections.cells]]
+default_unit = "NoCast"
+description_source = "doclockduplicatepage-cell-document-properties-section.md"
+name = "DocLockDuplicatePage"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "doclockreplace-cell-document-properties-section.md"
+name = "DocLockReplace"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "lockpreview-cell-document-properties-section.md"
+name = "LockPreview"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "nocoauth-cell-document-properties-section.md"
+name = "NoCoauth"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "outputformat-cell-document-properties-section.md"
+name = "OutputFormat"
+type = "List"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "previewquality-cell-document-properties-section.md"
+name = "PreviewQuality"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "previewscope-cell-document-properties-section.md"
+name = "PreviewScope"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "viewmarkup-cell-document-properties-section.md"
+name = "ViewMarkup"
+type = "Bool"
+
+[[sections]]
+default_unit = "Number"
+description_source = "events-section.md"
+kind = "object"
+name = "Events"
+rows = ["visRowEvent"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "eventdblclick-cell-events-section.md"
+name = "EventDblClick"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "eventdrop-cell-events-section.md"
+name = "EventDrop"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 22
+default_unit = "Number"
+description_source = "eventmultidrop-cell-events-section.md"
+name = "EventMultiDrop"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "eventxfmod-cell-events-section.md"
+name = "EventXFMod"
+type = "Number"
+
+[[sections.cells]]
+default_unit = "Number"
+description_source = "thedata-cell-events-section.md"
+name = "TheData"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Number"
+description_source = "thetext-cell-events-section.md"
+name = "TheText"
+type = "Number"
+
+[[sections]]
+default_unit = "Color"
+description_source = "fill-format-section.md"
+kind = "object"
+name = "Fill Format"
+rows = ["visRowFill"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Color"
+description_source = "fillbkgnd-cell-fill-format-section.md"
+name = "FillBkgnd"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Color"
+description_source = "fillbkgndtrans-cell-fill-format-section.md"
+name = "FillBkgndTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Color"
+description_source = "fillforegnd-cell-fill-format-section.md"
+name = "FillForegnd"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Color"
+description_source = "fillforegndtrans-cell-fill-format-section.md"
+name = "FillForegndTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "fillpattern-cell-fill-format-section.md"
+name = "FillPattern"
+type = "List"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "Points"
+description_source = "shapeshdwblur-cell-fill-format-section.md"
+name = "ShapeShdwBlur"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "Degrees"
+description_source = "shapeshdwobliqueangle-cell-fill-format-section.md"
+name = "ShapeShdwObliqueAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Inches"
+description_source = "shapeshdwoffsetx-cell-fill-format-section.md"
+name = "ShapeShdwOffsetX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "Inches"
+description_source = "shapeshdwoffsety-cell-fill-format-section.md"
+name = "ShapeShdwOffsetY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "Percent"
+description_source = "shapeshdwscalefactor-cell-fill-format-section.md"
+name = "ShapeShdwScaleFactor"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "NoCast"
+description_source = "shapeshdwshow-cell-fill-format-section.md"
+name = "ShapeShdwShow"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "shapeshdwtype-cell-fill-format-section.md"
+name = "ShapeShdwType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Color"
+description_source = "shdwforegnd-cell-fill-format-section.md"
+name = "ShdwForegnd"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "Color"
+description_source = "shdwforegndtrans-cell-fill-format-section.md"
+name = "ShdwForegndTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "shdwpattern-cell-fill-format-section.md"
+name = "ShdwPattern"
+type = "List"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "fill-gradient-section.md"
+kind = "collection"
+name = "Fill Gradient"
+section_index = 249
+
+[[sections]]
+default_unit = "Inches"
+description_source = "foreign-image-info-section.md"
+kind = "object"
+name = "Foreign Image Info"
+rows = ["visRowForeign"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "clippingpath-cell-foreign-image-info-section.md"
+name = "ClippingPath"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "imgheight-cell-foreign-image-info-section.md"
+name = "ImgHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "imgoffsetx-cell-foreign-image-info-section.md"
+name = "ImgOffsetX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "imgoffsety-cell-foreign-image-info-section.md"
+name = "ImgOffsetY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "imgwidth-cell-foreign-image-info-section.md"
+name = "ImgWidth"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "geometry-section.md"
+kind = "collection"
+name = "Geometry"
+rows = [
+    "visRowComponent",
+    "visRowVertex",
+]
+section_index = 10
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "a-cell-geometry-section.md"
+name = "A"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "b-cell-geometry-section.md"
+name = "B"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "c-cell-geometry-section.md"
+name = "C"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "d-cell-geometry-section.md"
+name = "D"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "String"
+description_source = "e-cell-geometry-section.md"
+name = "E"
+type = "String"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "nofill-cell-geometry-section.md"
+name = "NoFill"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "noline-cell-geometry-section.md"
+name = "NoLine"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "noquickdrag-cell-geometry-section.md"
+name = "NoQuickDrag"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "noshow-cell-geometry-section.md"
+name = "NoShow"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "nosnap-cell-geometry-section.md"
+name = "NoSnap"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "x-cell-geometry-section.md"
+name = "X"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "y-cell-geometry-section.md"
+name = "Y"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "glue-info-section.md"
+kind = "object"
+name = "Glue Info"
+rows = [
+    "visRowGroup",
+    "visRowMisc",
+]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "String"
+description_source = "begtrigger-cell-glue-info-section.md"
+name = "BegTrigger"
+type = "String"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "String"
+description_source = "endtrigger-cell-glue-info-section.md"
+name = "EndTrigger"
+type = "String"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "gluetype-cell-glue-info-section.md"
+name = "GlueType"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "walkpreference-cell-glue-info-section.md"
+name = "WalkPreference"
+type = "Bool"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "gradient-properties-section.md"
+kind = "object"
+name = "Gradient Properties"
+rows = ["visRowGradientProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Degrees"
+description_source = "fillgradientangle-cell-gradient-properties-section.md"
+name = "FillGradientAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "fillgradientdir-cell-gradient-properties-section.md"
+name = "FillGradientDir"
+type = "List"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "fillgradientenabled-cell-gradient-properties-section.md"
+name = "FillGradientEnabled"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Degrees"
+description_source = "linegradientangle-cell-gradient-properties-section.md"
+name = "LineGradientAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "linegradientdir-cell-gradient-properties-section.md"
+name = "LineGradientDir"
+type = "List"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "linegradientenabled-cell-gradient-properties-section.md"
+name = "LineGradientEnabled"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "rotategradientwithshape-cell-gradient-properties-section.md"
+name = "RotateGradientWithShape"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "usegroupgradient-cell-gradient-properties-section.md"
+name = "UseGroupGradient"
+type = "Bool"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "group-properties-section.md"
+kind = "object"
+name = "Group Properties"
+rows = ["visRowGroup"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "displaymode-cell-group-properties-section.md"
+name = "DisplayMode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "dontmovechildren-cell-group-properties-section.md"
+name = "DontMoveChildren"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "isdroptarget-cell-group-properties-section.md"
+name = "IsDropTarget"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "issnaptarget-cell-group-properties-section.md"
+name = "IsSnapTarget"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "istextedittarget-cell-group-properties-section.md"
+name = "IsTextEditTarget"
+type = "List"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "selectmode-cell-group-properties-section.md"
+name = "SelectMode"
+type = "List"
+
+[[sections]]
+default_unit = "Number"
+description_source = "hyperlinks-section.md"
+kind = "collection"
+name = "Hyperlinks"
+rows = ["visRow1stHyperlink"]
+section_index = 244
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "String"
+description_source = "address-cell-hyperlinks-section.md"
+name = "Address"
+type = "String"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Number"
+description_source = "default-cell-hyperlinks-section.md"
+name = "Default"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "String"
+description_source = "description-cell-hyperlinks-section.md"
+name = "Description"
+type = "String"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "extrainfo-cell-hyperlinks-section.md"
+name = "ExtraInfo"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "String"
+description_source = "frame-cell-hyperlinks-section.md"
+name = "Frame"
+type = "String"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "invisible-cell-hyperlinks-section.md"
+name = "Invisible"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "newwindow-cell-hyperlinks-section.md"
+name = "NewWindow"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "Number"
+description_source = "sortkey-cell-hyperlinks-section.md"
+name = "SortKey"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "subaddress-cell-hyperlinks-section.md"
+name = "SubAddress"
+type = "Number"
+
+[[sections]]
+default_unit = "Number"
+description_source = "image-properties-section.md"
+kind = "object"
+name = "Image Properties"
+rows = ["visRowImage"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "blur-cell-image-properties-section.md"
+name = "Blur"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "brightness-cell-image-properties-section.md"
+name = "Brightness"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Number"
+description_source = "contrast-cell-image-properties-section.md"
+name = "Contrast"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Color"
+description_source = "denoise-cell-image-properties-section.md"
+name = "Denoise"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "gamma-cell-image-properties-section.md"
+name = "Gamma"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "sharpen-cell-image-properties-section.md"
+name = "Sharpen"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Color"
+description_source = "transparency-cell-image-properties-section.md"
+name = "Transparency"
+type = "Color"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "layer-membership-section.md"
+kind = "collection"
+name = "Layer Membership"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "layers-section.md"
+kind = "collection"
+name = "Layers"
+rows = ["visRowLayer"]
+section_index = 241
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "active-cell-layers-section.md"
+name = "Active"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Color"
+description_source = "color-cell-layers-section.md"
+name = "Color"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "glue-cell-layers-section.md"
+name = "Glue"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "lock-cell-layers-section.md"
+name = "Lock"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "print-cell-layers-section.md"
+name = "Print"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "snap-cell-layers-section.md"
+name = "Snap"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Color"
+description_source = "transparency-cell-layers-section.md"
+name = "Transparency"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "visible-cell-layers-section.md"
+name = "Visible"
+type = "Bool"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "line-format-section.md"
+kind = "object"
+name = "Line Format"
+rows = ["visRowLine"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "beginarrow-cell-line-format-section.md"
+name = "BeginArrow"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "beginarrowsize-cell-line-format-section.md"
+name = "BeginArrowSize"
+type = "List"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "compoundtype-cell-line-format-section.md"
+name = "CompoundType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "endarrow-cell-line-format-section.md"
+name = "EndArrow"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "endarrowsize-cell-line-format-section.md"
+name = "EndArrowSize"
+type = "List"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "linecap-cell-line-format-section.md"
+name = "LineCap"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Color"
+description_source = "linecolor-cell-line-format-section.md"
+name = "LineColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "Color"
+description_source = "linecolortrans-cell-line-format-section.md"
+name = "LineColorTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "linepattern-cell-line-format-section.md"
+name = "LinePattern"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "lineweight-cell-line-format-section.md"
+name = "LineWeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Degrees"
+description_source = "rounding-cell-line-format-section.md"
+name = "Rounding"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "line-gradient-section.md"
+kind = "collection"
+name = "Line Gradient"
+section_index = 248
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "miscellaneous-section.md"
+kind = "object"
+name = "Miscellaneous"
+rows = ["visRowMisc"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 25
+default_unit = "String"
+description_source = "calendar-cell-miscellaneous-section.md"
+name = "Calendar"
+type = "String"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "String"
+description_source = "comment-cell-miscellaneous-section.md"
+name = "Comment"
+type = "String"
+
+[[sections.cells]]
+cell_index = 28
+default_unit = "Percent"
+description_source = "droponpagescale-cell-miscellaneous-section.md"
+name = "DropOnPageScale"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "dynfeedback-cell-miscellaneous-section.md"
+name = "DynFeedback"
+type = "List"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "hidetext-cell-miscellaneous-section.md"
+name = "HideText"
+type = "List"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "NoCast"
+description_source = "isdropsource-cell-miscellaneous-section.md"
+name = "IsDropSource"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 26
+default_unit = "String"
+description_source = "langid-cell-miscellaneous-section.md"
+name = "LangID"
+type = "String"
+
+[[sections.cells]]
+cell_index = 19
+default_unit = "NoCast"
+description_source = "localizemerge-cell-miscellaneous-section.md"
+name = "LocalizeMerge"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Degrees"
+description_source = "noalignbox-cell-miscellaneous-section.md"
+name = "NoAlignBox"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "noctlhandles-cell-miscellaneous-section.md"
+name = "NoCtlHandles"
+type = "List"
+
+[[sections.cells]]
+cell_index = 18
+default_unit = "NoCast"
+description_source = "nolivedynamics-cell-miscellaneous-section.md"
+name = "NoLiveDynamics"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "noobjhandles-cell-miscellaneous-section.md"
+name = "NoObjHandles"
+type = "List"
+
+[[sections.cells]]
+cell_index = 20
+default_unit = "NoCast"
+description_source = "noproofing-cell-miscellaneous-section.md"
+name = "NoProofing"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "nonprinting-cell-miscellaneous-section.md"
+name = "NonPrinting"
+type = "List"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "objtype-cell-miscellaneous-section.md"
+name = "ObjType"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Degrees"
+description_source = "updatealignbox-cell-miscellaneous-section.md"
+name = "UpdateAlignBox"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "page-layout-section.md"
+kind = "object"
+name = "Page Layout"
+rows = ["visRowPageLayout"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 20
+default_unit = "Number"
+description_source = "avenuesizex-cell-page-layout-section.md"
+name = "AvenueSizeX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 21
+default_unit = "Number"
+description_source = "avenuesizey-cell-page-layout-section.md"
+name = "AvenueSizeY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "avoidpagebreaks-cell-page-layout-section.md"
+name = "AvoidPageBreaks"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 18
+default_unit = "Number"
+description_source = "blocksizex-cell-page-layout-section.md"
+name = "BlockSizeX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 19
+default_unit = "Number"
+description_source = "blocksizey-cell-page-layout-section.md"
+name = "BlockSizeY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "ctrlasinput-cell-page-layout-section.md"
+name = "CtrlAsInput"
+type = "List"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "dynamicsoff-cell-page-layout-section.md"
+name = "DynamicsOff"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "enablegrid-cell-page-layout-section.md"
+name = "EnableGrid"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 26
+default_unit = "NoCast"
+description_source = "lineadjustfrom-cell-page-layout-section.md"
+name = "LineAdjustFrom"
+type = "List"
+
+[[sections.cells]]
+cell_index = 27
+default_unit = "NoCast"
+description_source = "lineadjustto-cell-page-layout-section.md"
+name = "LineAdjustTo"
+type = "List"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "NoCast"
+description_source = "linejumpcode-cell-page-layout-section.md"
+name = "LineJumpCode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 24
+default_unit = "Number"
+description_source = "linejumpfactorx-cell-page-layout-section.md"
+name = "LineJumpFactorX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 25
+default_unit = "Number"
+description_source = "linejumpfactory-cell-page-layout-section.md"
+name = "LineJumpFactorY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "linejumpstyle-cell-page-layout-section.md"
+name = "LineJumpStyle"
+type = "List"
+
+[[sections.cells]]
+cell_index = 29
+default_unit = "NoCast"
+description_source = "linerouteext-cell-page-layout-section.md"
+name = "LineRouteExt"
+type = "List"
+
+[[sections.cells]]
+cell_index = 22
+default_unit = "Number"
+description_source = "linetolinex-cell-page-layout-section.md"
+name = "LineToLineX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 23
+default_unit = "Number"
+description_source = "linetoliney-cell-page-layout-section.md"
+name = "LineToLineY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "Number"
+description_source = "linetonodex-cell-page-layout-section.md"
+name = "LineToNodeX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "Number"
+description_source = "linetonodey-cell-page-layout-section.md"
+name = "LineToNodeY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "NoCast"
+description_source = "pagelinejumpdirx-cell-page-layout-section.md"
+name = "PageLineJumpDirX"
+type = "List"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "NoCast"
+description_source = "pagelinejumpdiry-cell-page-layout-section.md"
+name = "PageLineJumpDirY"
+type = "List"
+
+[[sections.cells]]
+cell_index = 30
+default_unit = "NoCast"
+description_source = "pageshapesplit-cell-page-layout-section.md"
+name = "PageShapeSplit"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "placedepth-cell-page-layout-section.md"
+name = "PlaceDepth"
+type = "List"
+
+[[sections.cells]]
+cell_index = 28
+default_unit = "NoCast"
+description_source = "placeflip-cell-page-layout-section.md"
+name = "PlaceFlip"
+type = "List"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "Number"
+description_source = "placestyle-cell-page-layout-section.md"
+name = "PlaceStyle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "NoCast"
+description_source = "plowcode-cell-page-layout-section.md"
+name = "PlowCode"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "resizepage-cell-page-layout-section.md"
+name = "ResizePage"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "routestyle-cell-page-layout-section.md"
+name = "RouteStyle"
+type = "List"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "page-properties-section.md"
+kind = "object"
+name = "Page Properties"
+rows = ["visRowPage"]
+section_index = 1
+
+[[sections.cells]]
+default_unit = "NoCast"
+description_source = "drawingresizetype-cell-page-properties-section.md"
+name = "DrawingResizeType"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "drawingscale-cell-page-properties-section.md"
+name = "DrawingScale"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "drawingscaletype-cell-page-properties-section.md"
+name = "DrawingScaleType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "drawingsizetype-cell-page-properties-section.md"
+name = "DrawingSizeType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 26
+default_unit = "NoCast"
+description_source = "inhibitsnap-cell-page-properties-section.md"
+name = "InhibitSnap"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "pageheight-cell-page-properties-section.md"
+name = "PageHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 30
+default_unit = "NoCast"
+description_source = "pagelockduplicate-cell-page-properties-section.md"
+name = "PageLockDuplicate"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 28
+default_unit = "NoCast"
+description_source = "pagelockreplace-cell-page-properties-section.md"
+name = "PageLockReplace"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "pagescale-cell-page-properties-section.md"
+name = "PageScale"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "pagewidth-cell-page-properties-section.md"
+name = "PageWidth"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 36
+default_unit = "Degrees"
+description_source = "shdwobliqueangle-cell-page-properties-section.md"
+name = "ShdwObliqueAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "shdwoffsetx-cell-page-properties-section.md"
+name = "ShdwOffsetX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "shdwoffsety-cell-page-properties-section.md"
+name = "ShdwOffsetY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 37
+default_unit = "Percent"
+description_source = "shdwscalefactor-cell-page-properties-section.md"
+name = "ShdwScaleFactor"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 35
+default_unit = "NoCast"
+description_source = "shdwtype-cell-page-properties-section.md"
+name = "ShdwType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 34
+default_unit = "NoCast"
+description_source = "uivisibility-cell-page-properties-section.md"
+name = "UIVisibility"
+type = "Bool"
+
+[[sections]]
+default_unit = "Number"
+description_source = "paragraph-section.md"
+kind = "collection"
+name = "Paragraph"
+rows = ["visRowParagraph"]
+section_index = 4
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "bullet-cell-paragraph-section.md"
+name = "Bullet"
+type = "List"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "Number"
+description_source = "bulletfont-cell-paragraph-section.md"
+name = "BulletFont"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Number"
+description_source = "bulletsize-cell-paragraph-section.md"
+name = "BulletSize"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "Number"
+description_source = "bulletstring-cell-paragraph-section.md"
+name = "BulletString"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "flags-cell-paragraph-section.md"
+name = "Flags"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "halign-cell-paragraph-section.md"
+name = "HAlign"
+type = "List"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "indfirst-cell-paragraph-section.md"
+name = "IndFirst"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "indleft-cell-paragraph-section.md"
+name = "IndLeft"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "indright-cell-paragraph-section.md"
+name = "IndRight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "spafter-cell-paragraph-section.md"
+name = "SpAfter"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "spbefore-cell-paragraph-section.md"
+name = "SpBefore"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Percent"
+description_source = "spline-cell-paragraph-section.md"
+name = "SpLine"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "Inches"
+description_source = "textposafterbullet-cell-paragraph-section.md"
+name = "TextPosAfterBullet"
+type = "Number"
+
+[[sections]]
+default_unit = "Number"
+description_source = "print-properties-section.md"
+kind = "object"
+name = "Print Properties"
+rows = ["visRowPrintProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "centerx-cell-print-properties-section.md"
+name = "CenterX"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "centery-cell-print-properties-section.md"
+name = "CenterY"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "onpage-cell-print-properties-section.md"
+name = "OnPage"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "pagebottommargin-cell-print-properties-section.md"
+name = "PageBottomMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "pageleftmargin-cell-print-properties-section.md"
+name = "PageLeftMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Number"
+description_source = "pagerightmargin-cell-print-properties-section.md"
+name = "PageRightMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "pagetopmargin-cell-print-properties-section.md"
+name = "PageTopMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "pagesx-cell-print-properties-section.md"
+name = "PagesX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Number"
+description_source = "pagesy-cell-print-properties-section.md"
+name = "PagesY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "Number"
+description_source = "paperkind-cell-print-properties-section.md"
+name = "PaperKind"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 18
+default_unit = "Number"
+description_source = "papersource-cell-printproperties-section.md"
+name = "PaperSource"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "NoCast"
+description_source = "printgrid-cell-print-properties-section.md"
+name = "PrintGrid"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "NoCast"
+description_source = "printpageorientation-cell-print-properties-section.md"
+name = "PrintPageOrientation"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Percent"
+description_source = "scalex-cell-print-properties-section.md"
+name = "ScaleX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Percent"
+description_source = "scaley-cell-print-properties-section.md"
+name = "ScaleY"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "protection-section.md"
+kind = "object"
+name = "Protection"
+rows = ["visRowLock"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "lockaspect-cell-protection-section.md"
+name = "LockAspect"
+type = "List"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "lockbegin-cell-protection-section.md"
+name = "LockBegin"
+type = "List"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "Degrees"
+description_source = "lockcalcwh-cell-protection-section.md"
+name = "LockCalcWH"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "lockcrop-cell-protection-section.md"
+name = "LockCrop"
+type = "List"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "NoCast"
+description_source = "lockcustprop-cell-protection-section.md"
+name = "LockCustProp"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "lockdelete-cell-protection-section.md"
+name = "LockDelete"
+type = "List"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "lockend-cell-protection-section.md"
+name = "LockEnd"
+type = "List"
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "NoCast"
+description_source = "lockformat-cell-protection-section.md"
+name = "LockFormat"
+type = "List"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "Number"
+description_source = "lockfromgroupformat-cell-protection-section.md"
+name = "LockFromGroupFormat"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "lockgroup-cell-protection-section.md"
+name = "LockGroup"
+type = "List"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "lockheight-cell-protection-section.md"
+name = "LockHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "lockmovex-cell-protection-section.md"
+name = "LockMoveX"
+type = "List"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "lockmovey-cell-protection-section.md"
+name = "LockMoveY"
+type = "List"
+
+[[sections.cells]]
+cell_index = 23
+default_unit = "NoCast"
+description_source = "lockreplace-cell-protection-section.md"
+name = "LockReplace"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "lockrotate-cell-protection-section.md"
+name = "LockRotate"
+type = "List"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "NoCast"
+description_source = "lockselect-cell-protection-section.md"
+name = "LockSelect"
+type = "List"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "NoCast"
+description_source = "locktextedit-cell-protection-section.md"
+name = "LockTextEdit"
+type = "List"
+
+[[sections.cells]]
+cell_index = 18
+default_unit = "Color"
+description_source = "lockthemecolors-cell-protection-section.md"
+name = "LockThemeColors"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 20
+default_unit = "NoCast"
+description_source = "lockthemeconnectors-cell-protection-section.md"
+name = "LockThemeConnectors"
+type = "List"
+
+[[sections.cells]]
+cell_index = 19
+default_unit = "Number"
+description_source = "lockthemeeffects-cell-protection-section.md"
+name = "LockThemeEffects"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 21
+default_unit = "String"
+description_source = "lockthemefonts-cell-protection-section.md"
+name = "LockThemeFonts"
+type = "String"
+
+[[sections.cells]]
+cell_index = 22
+default_unit = "NoCast"
+description_source = "lockthemeindex-cell-protection-section.md"
+name = "LockThemeIndex"
+type = "List"
+
+[[sections.cells]]
+cell_index = 24
+default_unit = "NoCast"
+description_source = "lockvariation-cell-protection-section.md"
+name = "LockVariation"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "lockvtxedit-cell-protection-section.md"
+name = "LockVtxEdit"
+type = "List"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "lockwidth-cell-protection-section.md"
+name = "LockWidth"
+type = "Number"
+
+[[sections]]
+default_unit = "Color"
+description_source = "quick-style-section.md"
+kind = "object"
+name = "Quick Style"
+rows = ["visRowQuickStyleProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "quickstyleeffectsmatrix-cell-quick-style-section.md"
+name = "QuickStyleEffectsMatrix"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Color"
+description_source = "quickstylefillcolor-cell-quick-style-section.md"
+name = "QuickStyleFillColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "quickstylefillmatrix-cell-quick-style-section.md"
+name = "QuickStyleFillMatrix"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Color"
+description_source = "quickstylefontcolor-cell-quick-style-section.md"
+name = "QuickStyleFontColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "String"
+description_source = "quickstylefontmatrix-cell-quick-style-section.md"
+name = "QuickStyleFontMatrix"
+type = "String"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Color"
+description_source = "quickstylelinecolor-cell-quick-style-section.md"
+name = "QuickStyleLineColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "quickstylelinematrix-cell-quick-style-section.md"
+name = "QuickStyleLineMatrix"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Color"
+description_source = "quickstyleshadowcolor-cell-quick-style-section.md"
+name = "QuickStyleShadowColor"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "quickstyletype-cell-quick-style-section.md"
+name = "QuickStyleType"
+type = "List"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "Color"
+description_source = "quickstylevariation-cell-quick-style-section.md"
+name = "QuickStyleVariation"
+type = "Color"
+
+[[sections]]
+default_unit = "Color"
+description_source = "reviewer-section.md"
+kind = "collection"
+name = "Reviewer"
+rows = ["visRowReviewer"]
+section_index = 245
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Color"
+description_source = "color-cell-reviewer-section.md"
+name = "Color"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Number"
+description_source = "initials-cell-reviewer-section.md"
+name = "Initials"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "String"
+description_source = "name-cell-reviewer-section.md"
+name = "Name"
+type = "String"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "rulergrid-section.md"
+kind = "object"
+name = "Ruler & Grid"
+rows = ["visRowRulerGrid"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "xgriddensity-cell-rulergrid-section.md"
+name = "XGridDensity"
+type = "List"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "Inches"
+description_source = "xgridorigin-cell-rulergrid-section.md"
+name = "XGridOrigin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "Inches"
+description_source = "xgridspacing-cell-rulergrid-section.md"
+name = "XGridSpacing"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "xrulerdensity-cell-rulergrid-section.md"
+name = "XRulerDensity"
+type = "List"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "xrulerorigin-cell-rulergrid-section.md"
+name = "XRulerOrigin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "ygriddensity-cell-rulergrid-section.md"
+name = "YGridDensity"
+type = "List"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Number"
+description_source = "ygridorigin-cell-rulergrid-section.md"
+name = "YGridOrigin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "Inches"
+description_source = "ygridspacing-cell-rulergrid-section.md"
+name = "YGridSpacing"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "yrulerdensity-cell-rulergrid-section.md"
+name = "YRulerDensity"
+type = "List"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "yrulerorigin-cell-rulergrid-section.md"
+name = "YRulerOrigin"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "scratch-section.md"
+kind = "collection"
+name = "Scratch"
+section_index = 6
+
+[[sections]]
+default_unit = "Number"
+description_source = "shape-data-section.md"
+kind = "collection"
+name = "Shape Data"
+rows = ["visRowProp"]
+section_index = 243
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "ask-cell-shape-data-section.md"
+name = "Ask"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 15
+default_unit = "Number"
+description_source = "calendar-cell-shape-data-section.md"
+name = "Calendar"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "format-cell-shape-data-section.md"
+name = "Format"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "NoCast"
+description_source = "invisible-cell-shape-data-section.md"
+name = "Invisible"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "label-cell-shape-data-section.md"
+name = "Label"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "Number"
+description_source = "langid-cell-shape-data-section.md"
+name = "LangID"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Number"
+description_source = "prompt-cell-shape-data-section.md"
+name = "Prompt"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "String"
+description_source = "sortkey-cell-shape-data-section.md"
+name = "SortKey"
+type = "String"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "NoCast"
+description_source = "type-cell-shape-data-section.md"
+name = "Type"
+type = "List"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "value-cell-shape-data-section.md"
+name = "Value"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "shape-layout-section.md"
+kind = "object"
+name = "Shape Layout"
+rows = ["visRowShapeLayout"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 12
+default_unit = "NoCast"
+description_source = "confixedcode-cell-shape-layout-section.md"
+name = "ConFixedCode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 13
+default_unit = "NoCast"
+description_source = "conlinejumpcode-cell-shape-layout-section.md"
+name = "ConLineJumpCode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 16
+default_unit = "NoCast"
+description_source = "conlinejumpdirx-cell-shape-layout-section.md"
+name = "ConLineJumpDirX"
+type = "List"
+
+[[sections.cells]]
+cell_index = 17
+default_unit = "NoCast"
+description_source = "conlinejumpdiry-cell-shape-layout-section.md"
+name = "ConLineJumpDirY"
+type = "List"
+
+[[sections.cells]]
+cell_index = 14
+default_unit = "NoCast"
+description_source = "conlinejumpstyle-cell-shape-layout-section.md"
+name = "ConLineJumpStyle"
+type = "List"
+
+[[sections.cells]]
+cell_index = 19
+default_unit = "NoCast"
+description_source = "conlinerouteext-cell-shape-layout-section.md"
+name = "ConLineRouteExt"
+type = "List"
+
+[[sections.cells]]
+default_unit = "Number"
+description_source = "displaylevel-cell-shape-layout-section.md"
+name = "DisplayLevel"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Number"
+description_source = "relationships-cell-shape-layout-section.md"
+name = "Relationships"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "shapefixedcode-cell-shape-layout-section.md"
+name = "ShapeFixedCode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "shapepermeableplace-cell-shape-layout-section.md"
+name = "ShapePermeablePlace"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "shapepermeablex-cell-shape-layout-section.md"
+name = "ShapePermeableX"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "shapepermeabley-cell-shape-layout-section.md"
+name = "ShapePermeableY"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 18
+default_unit = "NoCast"
+description_source = "shapeplaceflip-cell-shape-layout-section.md"
+name = "ShapePlaceFlip"
+type = "List"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "NoCast"
+description_source = "shapeplacestyle-cell-shape-layout-section.md"
+name = "ShapePlaceStyle"
+type = "List"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "shapeplowcode-cell-shape-layout-section.md"
+name = "ShapePlowCode"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "shaperoutestyle-cell-shape-layout-section.md"
+name = "ShapeRouteStyle"
+type = "List"
+
+[[sections.cells]]
+cell_index = 20
+default_unit = "NoCast"
+description_source = "shapesplit-cell-shape-layout-section.md"
+name = "ShapeSplit"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 21
+default_unit = "NoCast"
+description_source = "shapesplittable-cell-shape-layout-section.md"
+name = "ShapeSplittable"
+type = "Bool"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "shape-transform-section.md"
+kind = "object"
+name = "Shape Transform"
+rows = ["visRowXFormOut"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Degrees"
+description_source = "angle-cell-shape-transform-section.md"
+name = "Angle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "NoCast"
+description_source = "flipx-cell-shape-transform-section.md"
+name = "FlipX"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 8
+default_unit = "NoCast"
+description_source = "flipy-cell-shape-transform-section.md"
+name = "FlipY"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "height-cell-shape-transform-section.md"
+name = "Height"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Inches"
+description_source = "locpinx-cell-shape-transform-section.md"
+name = "LocPinX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Inches"
+description_source = "locpiny-cell-shape-transform-section.md"
+name = "LocPinY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "pinx-cell-shape-transform-section.md"
+name = "PinX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "piny-cell-shape-transform-section.md"
+name = "PinY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 9
+default_unit = "NoCast"
+description_source = "resizemode-cell-shape-transform-section.md"
+name = "ResizeMode"
+type = "List"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "width-cell-shape-transform-section.md"
+name = "Width"
+type = "Number"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "style-properties-section.md"
+kind = "object"
+name = "Style Properties"
+rows = ["visRowStyle"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "enablefillprops-cell-style-properties-section.md"
+name = "EnableFillProps"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "NoCast"
+description_source = "enablelineprops-cell-style-properties-section.md"
+name = "EnableLineProps"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "enabletextprops-cell-style-properties-section.md"
+name = "EnableTextProps"
+type = "Bool"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "hideforapply-cell-style-properties-section.md"
+name = "HideForApply"
+type = "List"
+
+[[sections]]
+default_unit = "NoCast"
+description_source = "tabs-section.md"
+kind = "collection"
+name = "Tabs"
+rows = ["visRowTab"]
+section_index = 5
+
+[[sections.cells]]
+default_unit = "NoCast"
+description_source = "alignment-cell-tabs-section.md"
+name = "Alignment"
+type = "List"
+
+[[sections.cells]]
+default_unit = "Number"
+description_source = "position-cell-tabs-section.md"
+name = "Position"
+type = "Number"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "text-block-format-section.md"
+kind = "object"
+name = "Text Block Format"
+rows = ["visRowText"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "bottommargin-cell-text-block-format-section.md"
+name = "BottomMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "defaulttabstop-cell-text-block-format-section.md"
+name = "DefaultTabstop"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "leftmargin-cell-text-block-format-section.md"
+name = "LeftMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "rightmargin-cell-text-block-format-section.md"
+name = "RightMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Color"
+description_source = "textbkgnd-cell-text-block-format-section.md"
+name = "TextBkgnd"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 11
+default_unit = "Color"
+description_source = "textbkgndtrans-cell-text-block-format-section.md"
+name = "TextBkgndTrans"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "textdirection-cell-text-block-format-section.md"
+name = "TextDirection"
+type = "List"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "topmargin-cell-text-block-format-section.md"
+name = "TopMargin"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "NoCast"
+description_source = "verticalalign-cell-text-block-format-section.md"
+name = "VerticalAlign"
+type = "List"
+
+[[sections]]
+default_unit = "Number"
+description_source = "text-fields-section.md"
+kind = "collection"
+name = "Text Fields"
+rows = ["visRowField"]
+section_index = 8
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Number"
+description_source = "calendar-cell-text-fields-section.md"
+name = "Calendar"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Number"
+description_source = "format-cell-text-fields-section.md"
+name = "Format"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 10
+default_unit = "NoCast"
+description_source = "objectkind-cell-text-fields-section.md"
+name = "ObjectKind"
+type = "List"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "NoCast"
+description_source = "type-cell-text-fields-section.md"
+name = "Type"
+type = "List"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "uicategory-cell-text-fields-section.md"
+name = "UICategory"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Number"
+description_source = "uicode-cell-text-fields-section.md"
+name = "UICode"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "uiformat-cell-text-fields-section.md"
+name = "UIFormat"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "value-cell-text-fields-section.md"
+name = "Value"
+type = "Number"
+
+[[sections]]
+default_unit = "Inches"
+description_source = "text-transform-section.md"
+kind = "object"
+name = "Text Transform"
+rows = ["visRowTextXForm"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Degrees"
+description_source = "txtangle-cell-text-transform-section.md"
+name = "TxtAngle"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "Inches"
+description_source = "txtheight-cell-text-transform-section.md"
+name = "TxtHeight"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Inches"
+description_source = "txtlocpinx-cell-text-transform-section.md"
+name = "TxtLocPinX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Inches"
+description_source = "txtlocpiny-cell-text-transform-section.md"
+name = "TxtLocPinY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Inches"
+description_source = "txtpinx-cell-text-transform-section.md"
+name = "TxtPinX"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "Inches"
+description_source = "txtpiny-cell-text-transform-section.md"
+name = "TxtPinY"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "Inches"
+description_source = "txtwidth-cell-text-transform-section.md"
+name = "TxtWidth"
+type = "Number"
+
+[[sections]]
+default_unit = "Number"
+description_source = "theme-properties-section.md"
+kind = "object"
+name = "Theme Properties"
+rows = ["visRowThemeProperties"]
+section_index = 1
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Color"
+description_source = "colorschemeindex-cell-theme-properties-section.md"
+name = "ColorSchemeIndex"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 2
+default_unit = "NoCast"
+description_source = "connectorschemeindex-cell-theme-properties-section.md"
+name = "ConnectorSchemeIndex"
+type = "List"
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "NoCast"
+description_source = "effectschemeindex-cell-theme-properties-section.md"
+name = "EffectSchemeIndex"
+type = "List"
+
+[[sections.cells]]
+cell_index = 7
+default_unit = "Number"
+description_source = "embellishmentindex-cell-theme-properties-section.md"
+name = "EmbellishmentIndex"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 3
+default_unit = "String"
+description_source = "fontschemeindex-cell-theme-properties-section.md"
+name = "FontSchemeIndex"
+type = "String"
+
+[[sections.cells]]
+cell_index = 4
+default_unit = "Number"
+description_source = "themeindex-cell-theme-properties-section.md"
+name = "ThemeIndex"
+type = "Number"
+
+[[sections.cells]]
+cell_index = 5
+default_unit = "Color"
+description_source = "variationcolorindex-cell-theme-properties-section.md"
+name = "VariationColorIndex"
+type = "Color"
+
+[[sections.cells]]
+cell_index = 6
+default_unit = "Number"
+description_source = "variationstyleindex-cell-theme-properties-section.md"
+name = "VariationStyleIndex"
+type = "Number"
+
+[[sections]]
+default_unit = "Number"
+description_source = "user-defined-cells-section.md"
+kind = "collection"
+name = "User-defined Cells"
+rows = ["visRowUser"]
+section_index = 242
+
+[[sections.cells]]
+cell_index = 1
+default_unit = "String"
+description_source = "prompt-cell-user-defined-cells-section.md"
+name = "Prompt"
+type = "String"
+
+[[sections.cells]]
+cell_index = 0
+default_unit = "Number"
+description_source = "value-cell-user-defined-cells-section.md"
+name = "Value"
+type = "Number"
