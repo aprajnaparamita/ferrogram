@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **1 in progress**
+- Current phase: **1 complete; paused for the user's "continue"** (CHECKPOINT_MODE=pause)
 - Phase 1 goal: gather resources and definitions (KICKOFF.md)
 
 ## Phase 1 task board
@@ -32,10 +32,11 @@ States: not written · outline · ready · in progress · in review · merged ·
 | Phase | Report | Gate |
 |---|---|---|
 | 0 | [phase-0.md](progress/phase-0.md) | green (2026-10-12) |
+| 1 | [phase-1.md](progress/phase-1.md) | green (2026-10-13) |
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 
 ## Deferred minor findings (for the phase report)
 
