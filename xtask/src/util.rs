@@ -1,4 +1,5 @@
-//! Shared helpers: workspace root, running commands, cargo metadata.
+//! Shared helpers: workspace root, running commands, cargo metadata,
+//! atomic file writes, and the test temp-dir helper.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -55,6 +56,119 @@ pub fn has_cargo_subcommand(sub: &str) -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+/// Writes `bytes` to `path` atomically: a temp file in the same
+/// directory (unique per call, so concurrent writes never collide)
+/// is renamed over `path` only after it is fully written.
+pub fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("path has no parent: {}", path.display()))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    let tmp = unique_temp_path(path)?;
+    {
+        let mut f = std::fs::File::create(&tmp)
+            .map_err(|e| format!("cannot create {}: {e}", tmp.display()))?;
+        f.write_all(bytes)
+            .map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
+        f.sync_all()
+            .map_err(|e| format!("cannot sync {}: {e}", tmp.display()))?;
+    }
+    finalize(&tmp, path)
+}
+
+/// A unique temp file name next to `dest` (pid + a per-process
+/// counter + the file name), so concurrent runs never collide.
+pub fn unique_temp_path(dest: &Path) -> Result<PathBuf> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let file_name = dest
+        .file_name()
+        .map(|n| n.to_os_string())
+        .ok_or_else(|| format!("path has no file name: {}", dest.display()))?;
+    let mut name = std::ffi::OsString::from(format!(".tmp.{}-{n}.", std::process::id()));
+    name.push(file_name);
+    name.push(".tmp");
+    Ok(dest.with_file_name(name))
+}
+
+/// Renames `tmp` over `dest`, removing the temp file on failure.
+pub fn finalize(tmp: &Path, dest: &Path) -> Result<()> {
+    match std::fs::rename(tmp, dest) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(tmp);
+            Err(format!(
+                "cannot move {} -> {}: {e}",
+                tmp.display(),
+                dest.display()
+            ))
+        }
+    }
+}
+
+/// Test-only temp directories. Every xtask test temp dir goes through
+/// [`test_support::TempDir`], whose name carries the pid and a
+/// counter so parallel test runs never delete each other's trees.
+#[cfg(test)]
+pub mod test_support {
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A unique temp directory, removed when it is dropped.
+    pub struct TempDir(PathBuf);
+
+    /// A unique temp path name: `ferrogram-xtask-<label>-<pid>-<n>`,
+    /// where the counter makes every call unique. The one naming
+    /// helper for xtask test temp dirs.
+    pub fn temp_path(label: &str) -> PathBuf {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "ferrogram-xtask-{label}-{}-{n}",
+            std::process::id()
+        ))
+    }
+
+    impl TempDir {
+        /// Creates a fresh temp directory tagged with `label`.
+        pub fn new(label: &str) -> Self {
+            let path = temp_path(label);
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).expect("test temp dir");
+            TempDir(path)
+        }
+
+        /// The directory path.
+        pub fn path(&self) -> &Path {
+            &self.0
+        }
+
+        /// Joins a relative path under the directory.
+        pub fn join(&self, rel: impl AsRef<Path>) -> PathBuf {
+            self.0.join(rel)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn temp_dirs_are_unique_per_call() {
+        let a = TempDir::new("uniq");
+        let b = TempDir::new("uniq");
+        assert_ne!(a.path(), b.path());
+        assert!(a.path().is_dir());
+        assert!(b.path().is_dir());
+    }
 }
 
 /// A workspace package from `cargo metadata`.

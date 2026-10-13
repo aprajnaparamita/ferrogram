@@ -40,6 +40,19 @@ const CONFIG_FILE: &str = "coverage.toml";
 /// Tolerance for float noise when comparing to the ratchet.
 const EPSILON: f64 = 0.05;
 
+/// Parses `cargo xtask coverage` arguments. Only `--update-ratchet`
+/// is accepted (C3: the dispatcher validates arguments before running).
+pub fn parse_args(args: &[String]) -> Result<bool> {
+    let mut update_ratchet = false;
+    for a in args {
+        match a.as_str() {
+            "--update-ratchet" => update_ratchet = true,
+            other => return Err(format!("unknown coverage argument `{other}`")),
+        }
+    }
+    Ok(update_ratchet)
+}
+
 /// Runs coverage, prints a table, and checks it. Optionally rewrites the ratchet.
 pub fn run(update_ratchet: bool) -> Result<()> {
     if !util::has_cargo_subcommand("llvm-cov") {

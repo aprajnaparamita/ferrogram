@@ -1,0 +1,12 @@
+# Generated outputs and test fixtures always check out with LF, on
+# every platform, so `cargo xtask extract --check` and the fixture
+# tests see the same bytes the emitters write (P1-13 R6).
+ui-spec/panel-2016.yaml text eol=lf
+ui-spec/panel-365.yaml text eol=lf
+ui-spec/commands.yaml text eol=lf
+ui-spec/shortcuts.yaml text eol=lf
+ui-spec/shapesheet.toml text eol=lf
+ui-spec/diff-2016-vs-365.md text eol=lf
+docs/parity/controls.md text eol=lf
+docs/vsdx-inventory.md text eol=lf
+crates/ui-spec/tests/fixtures/** text eol=lf

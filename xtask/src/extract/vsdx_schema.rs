@@ -1555,10 +1555,7 @@ mod tests {
     /// Every call gets its own directory: tests run in parallel and
     /// must not rewrite each other's fixture files.
     fn fixture_tree(name: &str) -> PathBuf {
-        static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("ferrogram-p105-{}-{name}-{n}", std::process::id()));
+        let dir = crate::util::test_support::temp_path(&format!("vsdx-schema-{name}"));
         let visio = dir.join("ms-vsdx/office-developer-client-docs/docs/visio");
         fs::create_dir_all(&visio).expect("fixture dir");
         fs::write(
@@ -2022,12 +2019,10 @@ mod tests {
             Some(PageKind::TypePage("Actions_Type".into()))
         );
         assert_eq!(
-            page_kind(
-                "# AttachedToolbars element (DocumentSettings_Type complexType) (Visio XML)\n"
-            ),
+            page_kind("# Widget123 element (Gadget_Type complexType) (Visio XML)\n"),
             Some(PageKind::ElementPage {
-                name: "AttachedToolbars".into(),
-                parent: "DocumentSettings_Type".into(),
+                name: "Widget123".into(),
+                parent: "Gadget_Type".into(),
             })
         );
         assert_eq!(page_kind("# A page about nothing\n"), None);
@@ -2063,7 +2058,7 @@ mod tests {
         if !schema.is_file() {
             return;
         }
-        let out = std::env::temp_dir().join(format!("ferrogram-p105-real-{}", std::process::id()));
+        let out = crate::util::test_support::temp_path("vsdx-schema-real");
         let written = run(&reference, &out).expect("run on real source");
         let fresh = fs::read_to_string(&written[0]).expect("fresh output");
         // The strict three; `Copyright` may only appear as the schema's

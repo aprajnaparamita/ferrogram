@@ -231,10 +231,10 @@ pub fn copy_offline(offline_dir: &Path, path: &str, dest: &Path) -> Result<()> {
     }
     let parent = parent_of(dest);
     fs::create_dir_all(&parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let tmp = temp_path(dest);
+    let tmp = crate::util::unique_temp_path(dest)?;
     fs::copy(&src, &tmp)
         .map_err(|e| format!("cannot copy {} -> {}: {e}", src.display(), tmp.display()))?;
-    finalize(&tmp, dest)
+    crate::util::finalize(&tmp, dest)
 }
 
 /// A shared HTTP agent using rustls with the platform's root certificate store
@@ -263,8 +263,20 @@ fn platform_roots() -> ureq::tls::RootCerts {
 
 /// Downloads `entry` from `source`'s raw mirror and writes it atomically.
 pub fn download(source: &Source, entry: &FileEntry, dest: &Path) -> Result<()> {
+    download_with(http_agent(), source, entry, dest)
+}
+
+/// [`download`] with an injectable HTTP agent (C1): the tests drive it
+/// against a local listener; the production path passes
+/// [`http_agent`] and behaves exactly as before.
+fn download_with(
+    agent: &ureq::Agent,
+    source: &Source,
+    entry: &FileEntry,
+    dest: &Path,
+) -> Result<()> {
     let url = template_url(&source.mirror_raw, &source.commit, &entry.path)?;
-    let mut response = http_agent()
+    let mut response = agent
         .get(&url)
         .call()
         .map_err(|e| format!("GET {url}: {e}"))?;
@@ -278,28 +290,12 @@ pub fn download(source: &Source, entry: &FileEntry, dest: &Path) -> Result<()> {
     write_atomic(dest, &body)
 }
 
-/// Writes `bytes` to `dest` atomically (temp file + rename).
+/// Writes `bytes` to `dest` atomically (temp file + rename). The one
+/// atomic writer shared with the extractors
+/// ([`crate::util::write_atomic_bytes`]); temp names are unique per
+/// call, so concurrent `cargo xtask corpus` runs never collide.
 pub fn write_atomic(dest: &Path, bytes: &[u8]) -> Result<()> {
-    let parent = parent_of(dest);
-    fs::create_dir_all(&parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let tmp = temp_path(dest);
-    fs::write(&tmp, bytes).map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
-    finalize(&tmp, dest)
-}
-
-/// Renames `tmp` over `dest`, cleaning up the temp file on failure.
-fn finalize(tmp: &Path, dest: &Path) -> Result<()> {
-    match fs::rename(tmp, dest) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = fs::remove_file(tmp);
-            Err(format!(
-                "cannot move {} -> {}: {e}",
-                tmp.display(),
-                dest.display()
-            ))
-        }
-    }
+    crate::util::write_atomic_bytes(dest, bytes)
 }
 
 fn parent_of(dest: &Path) -> PathBuf {
@@ -308,24 +304,30 @@ fn parent_of(dest: &Path) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Temp file name next to `dest` so the final rename is atomic.
-fn temp_path(dest: &Path) -> PathBuf {
-    let mut name = dest
-        .file_name()
-        .map(|n| n.to_os_string())
-        .unwrap_or_default();
-    name.push(".tmp");
-    dest.with_file_name(name)
+/// Runs the corpus task with already-parsed options.
+pub fn run_opts(opts: &Options) -> Result<()> {
+    run_with_root(opts, &crate::util::root())
 }
 
-/// Runs the corpus task against the workspace root.
-pub fn run(args: &[String]) -> Result<()> {
-    let opts = parse_args(args)?;
-    run_with_root(&opts, &crate::util::root())
-}
-
-/// Core of [`run`], separated so tests can point it at a temp root.
+/// Core of the corpus task, separated so tests can point it at a
+/// temp root.
 pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
+    let mut fetch = |source: &Source, entry: &FileEntry, dest: &Path| match &opts.offline {
+        Some(dir) => copy_offline(dir, &entry.path, dest),
+        None => download(source, entry, dest),
+    };
+    run_with_fetch(opts, root, &mut fetch)
+}
+
+/// The fetch loop with the fetch step injected, so the post-fetch
+/// verification arms are testable without a network. The production
+/// fetchers are [`download`] and [`copy_offline`] (see
+/// [`run_with_root`]).
+fn run_with_fetch(
+    opts: &Options,
+    root: &Path,
+    fetch: &mut dyn FnMut(&Source, &FileEntry, &Path) -> Result<()>,
+) -> Result<()> {
     let manifest_path = root.join("corpus").join("manifest.toml");
     let text = fs::read_to_string(&manifest_path)
         .map_err(|e| format!("cannot read {}: {e}", manifest_path.display()))?;
@@ -356,11 +358,7 @@ pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
                     failures.push(format!("{}: missing or mismatched", entry.name));
                     continue;
                 }
-                let fetched_result = match &opts.offline {
-                    Some(dir) => copy_offline(dir, &entry.path, &dest),
-                    None => download(source, entry, &dest),
-                };
-                match fetched_result {
+                match fetch(source, entry, &dest) {
                     Ok(()) => match file_state(&dest, &entry.sha256, entry.size) {
                         Ok(FileState::Valid) => fetched += 1,
                         Ok(FileState::Missing) => {
@@ -397,30 +395,7 @@ pub fn run_with_root(opts: &Options, root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    /// A unique temp directory removed on drop.
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new() -> Self {
-            static N: AtomicUsize = AtomicUsize::new(0);
-            let n = N.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("ferrogram-xtask-corpus-{}-{n}", std::process::id()));
-            fs::create_dir_all(&path).unwrap();
-            TempDir(path)
-        }
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use crate::util::test_support::TempDir;
 
     const SAMPLE: &str = r#"[sources.libvisio]
 repo = "https://git.libreoffice.org/libvisio"
@@ -502,7 +477,7 @@ size = 41984
 
     #[test]
     fn verifies_files() {
-        let t = TempDir::new();
+        let t = TempDir::new("corpus");
         let data = b"hello, corpus\n";
         let expected_sha = sha256_hex(data);
 
@@ -564,7 +539,7 @@ size = 41984
     /// the file, and runs the fetch end-to-end without network.
     #[test]
     fn offline_run_fetches_and_is_idempotent() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let data = b"offline corpus bytes";
         let sha = sha256_hex(data);
 
@@ -605,7 +580,7 @@ size = 41984
 
     #[test]
     fn offline_run_rejects_missing_source_file() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let corpus = root.path().join("corpus");
         fs::create_dir_all(&corpus).unwrap();
         fs::write(
@@ -622,9 +597,201 @@ size = 41984
         assert!(run_with_root(&opts, root.path()).is_err());
     }
 
+    // ---- C1: `download` against a local HTTP listener ---------------
+
+    /// Serves one canned HTTP response on 127.0.0.1 (plain HTTP) and
+    /// returns `host:port` plus the server thread.
+    fn serve_once(response: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(&response);
+                let _ = stream.flush();
+            }
+        });
+        (addr.to_string(), handle)
+    }
+
+    /// A minimal HTTP response; `content_length` may lie about the
+    /// body length to model a truncated transfer.
+    fn http_response(status: &str, body: &[u8], content_length: usize) -> Vec<u8> {
+        let mut out = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {content_length}\r\nConnection: close\r\n\r\n"
+        )
+        .into_bytes();
+        out.extend_from_slice(body);
+        out
+    }
+
+    fn source_at(addr: &str) -> Source {
+        Source {
+            mirror_raw: format!("http://{addr}/{{commit}}/{{path}}"),
+            commit: "c0ffee".into(),
+        }
+    }
+
+    fn sample_entry() -> FileEntry {
+        FileEntry {
+            name: "vsd/a.vsd".into(),
+            source: "s".into(),
+            path: "src/test/data/a.vsd".into(),
+            sha256: String::new(),
+            size: 0,
+        }
+    }
+
+    #[test]
+    fn download_writes_a_200_response() {
+        let body = b"corpus bytes";
+        let (addr, handle) = serve_once(http_response("200 OK", body, body.len()));
+        let t = TempDir::new("corpus-http-200");
+        let dest = t.join("vsd/a.vsd");
+        download(&source_at(&addr), &sample_entry(), &dest).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), body);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_reports_a_404() {
+        let (addr, handle) = serve_once(http_response("404 Not Found", b"", 0));
+        let t = TempDir::new("corpus-http-404");
+        let dest = t.join("vsd/a.vsd");
+        let err = download(&source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("404"), "{err}");
+        assert!(!dest.exists(), "a failed download keeps no file");
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_checks_the_http_status() {
+        // With an agent that keeps non-2xx responses, `download`'s own
+        // status check reports them.
+        let (addr, handle) = serve_once(http_response("404 Not Found", b"", 0));
+        let t = TempDir::new("corpus-http-status");
+        let dest = t.join("vsd/a.vsd");
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let err = download_with(&agent, &source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("HTTP 404"), "{err}");
+        assert!(!dest.exists(), "a failed download keeps no file");
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn download_reports_a_truncated_body() {
+        // Content-Length promises 100 bytes; the body has 5.
+        let (addr, handle) = serve_once(http_response("200 OK", b"short", 100));
+        let t = TempDir::new("corpus-http-trunc");
+        let dest = t.join("vsd/a.vsd");
+        let err = download(&source_at(&addr), &sample_entry(), &dest).unwrap_err();
+        assert!(err.contains("read body"), "{err}");
+        assert!(!dest.exists(), "a truncated download keeps no file");
+        handle.join().unwrap();
+    }
+
+    // ---- C2: fetch-loop failure arms --------------------------------
+
+    /// A temp workspace whose manifest has exactly one entry.
+    fn one_file_root(name: &str, source: &str, sha: &str, size: u64) -> TempDir {
+        let root = TempDir::new("corpus-loop");
+        let corpus = root.join("corpus");
+        fs::create_dir_all(&corpus).unwrap();
+        let manifest = format!(
+            "[sources.s]\nmirror_raw = \"https://x/{{commit}}/{{path}}\"\ncommit = \"c\"\n\n[[file]]\nname = \"{name}\"\nsource = \"{source}\"\npath = \"src/a.bin\"\nsha256 = \"{sha}\"\nsize = {size}\n"
+        );
+        fs::write(corpus.join("manifest.toml"), manifest).unwrap();
+        root
+    }
+
+    fn opts() -> Options {
+        Options {
+            verify_only: false,
+            offline: None,
+        }
+    }
+
+    #[test]
+    fn fetch_loop_reports_an_unknown_source() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "not-a-source", &sha, 3);
+        let mut called = false;
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| {
+            called = true;
+            Ok(())
+        };
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("unknown source `not-a-source`"), "{err}");
+        assert!(!called, "an unknown source must not be fetched");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_fetch_that_produced_no_file() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| Ok(());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("fetch produced no file"), "{err}");
+    }
+
+    #[test]
+    fn fetch_loop_deletes_a_file_with_the_wrong_size() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 10);
+        let dest = root.join("corpus/a.bin");
+        let mut fetch =
+            |_s: &Source, _e: &FileEntry, d: &Path| fs::write(d, b"abc").map_err(|e| e.to_string());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("size 3 != expected 10"), "{err}");
+        assert!(!dest.exists(), "the bad file must be deleted");
+    }
+
+    #[test]
+    fn fetch_loop_deletes_a_file_with_the_wrong_sha256() {
+        let sha = sha256_hex(b"the expected bytes");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let dest = root.join("corpus/a.bin");
+        let mut fetch =
+            |_s: &Source, _e: &FileEntry, d: &Path| fs::write(d, b"abc").map_err(|e| e.to_string());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("sha256"), "{err}");
+        assert!(err.contains(&sha), "{err}");
+        assert!(!dest.exists(), "the bad file must be deleted");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_stat_error() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        let dest = root.join("corpus/a.bin");
+        // A symlink loop cannot be stat'ed, so verification errors.
+        std::os::unix::fs::symlink("a.bin", &dest).unwrap();
+        let mut fetch = |_s: &Source, _e: &FileEntry, _d: &Path| Ok(());
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("cannot stat"), "{err}");
+    }
+
+    #[test]
+    fn fetch_loop_reports_a_stat_error_while_verifying() {
+        let sha = sha256_hex(b"abc");
+        let root = one_file_root("a.bin", "s", &sha, 3);
+        // The fetch "succeeds" but leaves a symlink loop behind.
+        let mut fetch = |_s: &Source, _e: &FileEntry, d: &Path| {
+            let _ = fs::remove_file(d);
+            std::os::unix::fs::symlink("a.bin", d).map_err(|e| e.to_string())
+        };
+        let err = run_with_fetch(&opts(), root.path(), &mut fetch).unwrap_err();
+        assert!(err.contains("cannot stat"), "{err}");
+    }
+
     #[test]
     fn rejects_hostile_manifest_names() {
-        let root = TempDir::new();
+        let root = TempDir::new("corpus");
         let corpus = root.path().join("corpus");
         fs::create_dir_all(&corpus).unwrap();
         fs::write(

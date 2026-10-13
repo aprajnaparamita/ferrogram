@@ -366,9 +366,7 @@ mod tests {
         // Run the extractor pointing at the workspace as `out_dir`,
         // so the input layout files exist. Capture the produced
         // diff into a tmp dir, then re-run.
-        let tmp = std::env::temp_dir().join("ferrogram-diff-test");
-        std::fs::create_dir_all(&tmp).unwrap();
-        let _ = std::fs::remove_file(tmp.join("ui-spec").join("diff-2016-vs-365.md"));
+        let tmp = crate::util::test_support::TempDir::new("diff");
         let out_a = run(Path::new("."), &ws()).unwrap();
         let first = out_a
             .iter()
@@ -384,6 +382,5 @@ mod tests {
         assert_eq!(ta, tb);
         assert!(ta.contains("TabHome"));
         assert!(ta.contains("Summary"));
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
