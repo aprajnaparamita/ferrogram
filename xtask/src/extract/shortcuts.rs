@@ -434,6 +434,17 @@ struct Row {
 
 /// Per-extractor entry point: writes `ui-spec/shortcuts.yaml`.
 pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
+    run_with_actions(in_dir, out_dir, ACTION_TO_COMMAND)
+}
+
+/// [`run`] with an injectable action table (F3): the test fixtures
+/// carry our own phrases, so the tests supply their own hashed table
+/// instead of the source-derived one.
+fn run_with_actions<K: AsRef<str>, V: AsRef<str>>(
+    in_dir: &Path,
+    out_dir: &Path,
+    actions: &[(K, V)],
+) -> ExtractResult<Vec<PathBuf>> {
     let schema = Schema::load_default()?;
     let html_path = in_dir
         .join("support")
@@ -451,7 +462,7 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
         if action.is_empty() {
             continue;
         }
-        let Some(command) = command_for_action(&action) else {
+        let Some(command) = lookup_action(actions, &action) else {
             dropped.push((action, "unmapped action".into()));
             continue;
         };
@@ -459,7 +470,7 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
             dropped.push((action, "unparseable key sequence".into()));
             continue;
         };
-        entries.push(shortcut_value(command, &sequence, &row.section));
+        entries.push(shortcut_value(&command, &sequence, &row.section));
     }
 
     // Deterministic order: command, then the key sequence, then the
@@ -495,13 +506,16 @@ fn action_key(normalised: &str) -> String {
 
 /// Looks up the normalised action in a mapping table keyed by
 /// [`action_key`] hashes.
-fn lookup_action<'a>(table: &'a [(&str, &str)], action: &str) -> Option<&'a str> {
+fn lookup_action<K: AsRef<str>, V: AsRef<str>>(table: &[(K, V)], action: &str) -> Option<String> {
     let key = action_key(action);
-    table.iter().find(|(k, _)| *k == key).map(|(_, c)| *c)
+    table
+        .iter()
+        .find(|(k, _)| k.as_ref() == key)
+        .map(|(_, c)| c.as_ref().to_string())
 }
 
 /// Looks up the normalised action in [`ACTION_TO_COMMAND`].
-fn command_for_action(action: &str) -> Option<&'static str> {
+fn command_for_action(action: &str) -> Option<String> {
     lookup_action(ACTION_TO_COMMAND, action)
 }
 
@@ -976,37 +990,52 @@ fn render_shortcuts_yaml(entries: &[Value]) -> ExtractResult<String> {
 mod tests {
     use super::*;
 
+    /// The fixture page: our own text in the source's markup shape
+    /// (F3: no sentence here comes from `reference/`).
     const FIXTURE_HTML: &str = r#"<!DOCTYPE html>
 <html><body>
-<h2>Frequently used shortcuts</h2>
+<h2>Everyday edits</h2>
 <table class="banded">
   <thead><tr><th><p>To do this</p></th><th><p>Press</p></th></tr></thead>
   <tbody>
-    <tr><td><p>Undo a recent action</p></td><td><p>Ctrl+Z</p></td></tr>
-    <tr><td><p>Group the selected shapes.</p></td><td><p>Ctrl+G or Ctrl+Shift+G</p></td></tr>
+    <tr><td><p>Undo the last edit</p></td><td><p>Ctrl+Z</p></td></tr>
+    <tr><td><p>Bundle the chosen shapes.</p></td><td><p>Ctrl+G or Ctrl+Shift+G</p></td></tr>
   </tbody>
 </table>
-<h2>Zoom</h2>
+<h2>Views</h2>
 <table class="banded">
-  <tr><td><p>Zoom in.</p></td><td><p>Alt+F6</p></td></tr>
-  <tr><td><p>Not a command we know.</p></td><td><p>F12</p></td></tr>
+  <tr><td><p>Zoom in on the drawing.</p></td><td><p>Alt+F6</p></td></tr>
+  <tr><td><p>Handle the wibble widget.</p></td><td><p>F12</p></td></tr>
 </table>
-<h2>Ribbon navigation</h2>
+<h2>Key tips</h2>
 <table>
-  <tr><td><p>Open the submenu for a selected command.</p></td><td><p>Alt+H, F, S to open the Save As dialog box</p></td></tr>
+  <tr><td><p>Open a submenu for the active command.</p></td><td><p>Alt+H, F, S to reach the export panel</p></td></tr>
 </table>
 </body></html>
 "#;
+
+    /// The fixture rows' own action table (F3): keys are the hashes
+    /// of the fixture phrases, values are command ids.
+    fn fixture_actions() -> Vec<(String, String)> {
+        [
+            ("undo the last edit", "edit.undo"),
+            ("bundle the chosen shapes", "arrange.group"),
+            ("zoom in on the drawing", "view.zoom.in"),
+        ]
+        .iter()
+        .map(|(phrase, cmd)| (action_key(phrase), (*cmd).to_string()))
+        .collect()
+    }
 
     #[test]
     fn walker_finds_tables_rows_and_sections() {
         let rows = table_rows(FIXTURE_HTML);
         assert_eq!(rows.len(), 5, "{rows:?}");
-        assert_eq!(rows[0].section, "Frequently used shortcuts");
-        assert_eq!(rows[0].action, "Undo a recent action");
+        assert_eq!(rows[0].section, "Everyday edits");
+        assert_eq!(rows[0].action, "Undo the last edit");
         assert_eq!(rows[0].press, "Ctrl+Z");
-        assert_eq!(rows[2].section, "Zoom");
-        assert_eq!(rows[4].section, "Ribbon navigation");
+        assert_eq!(rows[2].section, "Views");
+        assert_eq!(rows[4].section, "Key tips");
     }
 
     #[test]
@@ -1043,9 +1072,9 @@ mod tests {
                 vec!["O".into()]
             ])
         );
-        // The page's own spelling of the same idea.
+        // The same idea with a prose tail to cut.
         assert_eq!(
-            parse_sequence("Alt+H, F, S to open the Save As dialog box"),
+            parse_sequence("Alt+H, F, S to reach the export panel"),
             Some(vec![
                 vec!["Alt".into(), "H".into()],
                 vec!["F".into()],
@@ -1065,7 +1094,7 @@ mod tests {
             Some(vec![vec!["Ctrl".into(), "Shift".into(), ">".into()]])
         );
         assert_eq!(
-            parse_sequence("F6 (You might have to press F6 more than once.)"),
+            parse_sequence("F6 (you may need to press it twice.)"),
             Some(vec![vec!["F6".into()]])
         );
     }
@@ -1074,7 +1103,7 @@ mod tests {
     fn prose_sequences_are_rejected() {
         assert_eq!(parse_sequence(""), None);
         assert_eq!(
-            parse_sequence("The first letter of an option in a dropdown list"),
+            parse_sequence("Any run of ordinary prose is not a key sequence"),
             None
         );
         assert_eq!(parse_sequence("Ctrl+This is not a key"), None);
@@ -1096,7 +1125,7 @@ mod tests {
     fn ctrl_z_row_keeps_the_sequence_shape() {
         let rows = table_rows(FIXTURE_HTML);
         let undo = rows.iter().find(|r| r.action.contains("Undo")).unwrap();
-        let cmd = command_for_action(&normalize_action(&undo.action)).unwrap();
+        let cmd = lookup_action(&fixture_actions(), &normalize_action(&undo.action)).unwrap();
         assert_eq!(cmd, "edit.undo");
         let seq = parse_sequence(&undo.press).unwrap();
         // m2: a single-chord shortcut is a one-element sequence.
@@ -1133,26 +1162,27 @@ mod tests {
     #[test]
     fn normalize_action_is_stable() {
         assert_eq!(
-            normalize_action("Select the Pointer Tool ."),
-            "select the pointer tool"
+            normalize_action("Pick the pointer tool ."),
+            "pick the pointer tool"
         );
         assert_eq!(
             normalize_action(
-                "Nudge the selected shape one pixel at a time. Note: Scroll lock must be turned off."
+                "Move the chosen shape one pixel at a time. Note: scroll lock must be off."
             ),
-            "nudge the selected shape one pixel at a time"
+            "move the chosen shape one pixel at a time"
         );
     }
 
     #[test]
     fn output_is_deterministic() {
+        let table = fixture_actions();
         let mut entries = Vec::new();
         for row in table_rows(FIXTURE_HTML) {
             let action = normalize_action(&row.action);
-            if let Some(cmd) = command_for_action(&action)
+            if let Some(cmd) = lookup_action(&table, &action)
                 && let Some(seq) = parse_sequence(&row.press)
             {
-                entries.push(shortcut_value(cmd, &seq, &row.section));
+                entries.push(shortcut_value(&cmd, &seq, &row.section));
             }
         }
         entries.sort_by_cached_key(sort_key);
@@ -1170,7 +1200,7 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         std::fs::create_dir_all(out_dir.join("ui-spec")).unwrap();
         std::fs::write(src.join("keyboard-shortcuts-visio.html"), FIXTURE_HTML).unwrap();
-        let outputs = run(&in_dir, &out_dir).unwrap();
+        let outputs = run_with_actions(&in_dir, &out_dir, &fixture_actions()).unwrap();
         assert_eq!(outputs.len(), 1);
         let text = std::fs::read_to_string(&outputs[0]).unwrap();
         assert!(text.contains("Snapshot URL:"), "{text}");
@@ -1274,10 +1304,11 @@ mod tests {
 
     #[test]
     fn every_mapped_row_in_the_fixture_survives_the_run() {
+        let table = fixture_actions();
         let rows = table_rows(FIXTURE_HTML);
         let mapped: Vec<&Row> = rows
             .iter()
-            .filter(|r| command_for_action(&normalize_action(&r.action)).is_some())
+            .filter(|r| lookup_action(&table, &normalize_action(&r.action)).is_some())
             .collect();
         assert_eq!(mapped.len(), 3, "{mapped:?}");
     }
