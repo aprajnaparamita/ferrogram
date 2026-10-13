@@ -13,6 +13,10 @@ use crate::Error;
 /// The part name of the content-types part, as a zip entry.
 const CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
 
+/// The XML declaration every written XML part starts with. `XmlNode` has no
+/// slot for the source's declaration, so the writer always emits this one.
+const XML_DECLARATION: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+
 /// Serializes a package to the bytes of a `.vsdx`, `.vssx` or `.vstx` file.
 ///
 /// Parts are written in `Package::parts` order, relationships and
@@ -29,7 +33,8 @@ pub fn write_package(package: &Package) -> Result<Vec<u8>, Error> {
         let name = entry_name(&part.name)?;
         match &part.data {
             PartData::Xml(node) => {
-                let text = write_xml(node);
+                let mut text = String::from(XML_DECLARATION);
+                text.push_str(&write_xml(node));
                 write_entry(&mut writer, &name, text.as_bytes())?;
             }
             PartData::Binary(data) => write_entry(&mut writer, &name, data)?,
@@ -98,7 +103,7 @@ fn group_relationships(relationships: &[Relationship]) -> Vec<(&str, Vec<&Relati
 /// Generates `[Content_Types].xml` from the declarations.
 fn content_types_xml(decls: &[ContentTypeDecl]) -> String {
     let mut out = String::new();
-    out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
+    out.push_str(XML_DECLARATION);
     out.push_str("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">");
     for decl in decls {
         let (element, name_attribute) = if decl.kind == ContentTypeKind::Default {
@@ -123,7 +128,7 @@ fn content_types_xml(decls: &[ContentTypeDecl]) -> String {
 /// Generates one relationships part from its entries.
 fn relationships_xml(relationships: &[&Relationship]) -> String {
     let mut out = String::new();
-    out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
+    out.push_str(XML_DECLARATION);
     out.push_str(
         "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">",
     );
@@ -278,6 +283,15 @@ mod tests {
         let bytes = write_package(&package).expect("write");
         let reread = crate::read_package(&bytes, &Limits::DEFAULT).expect("read");
         assert_eq!(reread, package);
+
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).expect("zip");
+        let mut text = String::new();
+        std::io::Read::read_to_string(
+            &mut archive.by_name("visio/document.xml").expect("entry"),
+            &mut text,
+        )
+        .expect("utf-8");
+        assert!(text.starts_with(XML_DECLARATION), "{text}");
     }
 
     #[test]
