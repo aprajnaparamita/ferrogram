@@ -324,9 +324,13 @@ fn style_kind_of_section(section: &str) -> Option<StyleKind> {
 /// The style kind for one cell: its section when known, otherwise the kind
 /// of the table sections the cell name appears in (a name shared by several
 /// kinds has no style).
+///
+/// Names are translated from their `.vsdx` spelling to their ShapeSheet-table
+/// spelling first (crate::aliases), so file spellings find the same entries.
 fn style_kind_for(table: &[CellDef], name: &str, section_hint: Option<&str>) -> Option<StyleKind> {
+    let name = crate::aliases::table_name(name);
     if let Some(hint) = section_hint {
-        return style_kind_of_section(hint);
+        return style_kind_of_section(crate::aliases::table_name(hint));
     }
     let mut found = None;
     for def in table {
@@ -346,11 +350,16 @@ fn style_kind_for(table: &[CellDef], name: &str, section_hint: Option<&str>) -> 
 /// The catalogue entry of one cell: its section when known, otherwise the
 /// first entry with this name (the table is sorted, so the choice is
 /// deterministic).
+///
+/// Names are translated from their `.vsdx` spelling to their ShapeSheet-table
+/// spelling first (crate::aliases), so file spellings find the same entries.
 fn find_def<'t>(
     table: &'t [CellDef],
     name: &str,
     section_hint: Option<&str>,
 ) -> Option<&'t CellDef> {
+    let name = crate::aliases::table_name(name);
+    let section_hint = section_hint.map(crate::aliases::table_name);
     let mut fallback = None;
     for def in table {
         if def.name != name {
