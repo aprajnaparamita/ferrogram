@@ -8,6 +8,15 @@ license = "MIT"
 publish = false
 
 [dependencies]
+ferrogram-geom = { path = "../geom" }
+ferrogram-model = { path = "../model" }
+# XML reader/writer (task P2-06, P2-07). MIT/Apache-2.0; version already in
+# `Cargo.lock` via xtask's calamine dependency (ADR 0014).
+quick-xml = "0.41"
+# Zip container (task P2-05). MIT; only the deflate codec is enabled, through
+# flate2's pure-Rust miniz_oxide backend (ADR 0014).
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 
 [lints]
 workspace = true
