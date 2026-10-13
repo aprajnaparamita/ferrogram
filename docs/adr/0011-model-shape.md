@@ -62,12 +62,24 @@ pub struct Cell {
 ```
 
 **Canonical units** (used for `CellValue::Number`): lengths in **inches**,
-angles in **degrees**, percentages as a fraction (`0.5` = 50%), and
+angles in **radians**, percentages as a fraction (`0.5` = 50%), and
 `Unitsless` values as plain numbers. The `unit` field records the unit the
-file wrote (`Unit::Feet`, `Unit::Radians`, ...), so a write can restore the
-file's own spelling. P2-03 implements the conversions in `ferrogram-geom`;
-P2-06 checks the degree assumption against the corpus and the spec, and
-amends this ADR if the cached angle unit turns out to be radians.
+file wrote (`Unit::Feet`, `Unit::Degrees`, ...), so a write can restore the
+file's own spelling. P2-03 implements the conversions in `ferrogram-geom`.
+
+**Amended by P2-06 (2026-10-13): the canonical angle unit is radians, not
+degrees.** A `.vsdx` file caches values in canonical units whatever `U`
+declares, and the corpus shows angles among them: `Angle
+V='1.5707963267949' U='DEG'` is a right angle written in radians,
+`PageWidth V='11.69291338582677' U='MM'` is a 297 mm page width written in
+inches, and `Value V='0.8' U='PER'` is 80% written as a fraction. [MS-VSDX]
+2.2.5.3.3.1 reads the same way: the cell default value of a cell whose `U`
+is `DEG`, `DA`, `AD` or `RAD` is "0.00 radians" and of a `MM`, `PT`, `IN_F`
+cell is "0.00 inches". The reader therefore uses the cached value as
+written; neither read nor write converts. `ferrogram_geom::UnitKind::Angle`
+still counts degrees as the canonical unit of *conversions*; that mismatch
+touches only callers that convert (the ShapeSheet table's `default_value`
+parsing in `ferrogram-model`), not the model itself.
 
 `CellValue` is `Number(f64) | Str(String) | Bool(bool) | Color(Color) |
 List(String) | Error(String)`. List and error cached values stay raw strings:
