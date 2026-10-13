@@ -9,7 +9,7 @@ use crate::{coverage, layers};
 
 /// Gate steps in execution order.
 pub const STEPS: &[&str] = &[
-    "fmt", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm", "fuzz",
+    "codegen", "fmt", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm", "fuzz",
 ];
 
 /// Steps skipped by `--quick`.
@@ -91,6 +91,8 @@ fn cargo() -> Command {
 
 fn run_step(step: &str) -> Outcome {
     let result = match step {
+        // ADR 0015: `--quick` does not skip this step (it is fast).
+        "codegen" => crate::codegen::run(&crate::codegen::Options { check: true }),
         "fmt" => util::run(cargo().args(["fmt", "--all", "--", "--check"])),
         "clippy" => util::run(cargo().args([
             "clippy",
@@ -189,6 +191,18 @@ mod tests {
     #[test]
     fn quick_skips_slow_steps() {
         assert_eq!(parse_args(&s(&["--quick"])).unwrap(), s(SLOW_STEPS));
+    }
+
+    /// ADR 0015: the `codegen` step is fast and never skipped by `--quick`.
+    #[test]
+    fn quick_does_not_skip_codegen() {
+        assert!(STEPS.contains(&"codegen"));
+        assert!(!SLOW_STEPS.contains(&"codegen"));
+        assert!(
+            !parse_args(&s(&["--quick"]))
+                .unwrap()
+                .contains(&"codegen".to_owned())
+        );
     }
 
     #[test]
