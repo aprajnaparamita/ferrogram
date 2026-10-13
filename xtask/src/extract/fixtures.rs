@@ -32,17 +32,18 @@ fn enum_md(rows: &[(&str, i64)]) -> String {
     out
 }
 
-/// The keyboard-shortcuts page fixture. Two actions map onto the
-/// hand-written action table, one is unmapped and dropped.
+/// The keyboard-shortcuts page fixture: our own rows in the source's
+/// markup shape (F3). Two rows carry short command labels that the
+/// hand-written action table maps; one row is unmapped and dropped.
 const SHORTCUTS_HTML: &str = r#"<!DOCTYPE html>
 <html><body>
-<h2>Frequently used shortcuts</h2>
+<h2>Zoom</h2>
 <table class="banded">
   <thead><tr><th><p>To do this</p></th><th><p>Press</p></th></tr></thead>
   <tbody>
-    <tr><td><p>Undo a recent action</p></td><td><p>Ctrl+Z</p></td></tr>
-    <tr><td><p>Group the selected shapes.</p></td><td><p>Ctrl+G or Ctrl+Shift+G</p></td></tr>
-    <tr><td><p>Not a command we know.</p></td><td><p>F12</p></td></tr>
+    <tr><td><p>Copy</p></td><td><p>Ctrl+C</p></td></tr>
+    <tr><td><p>Paste</p></td><td><p>Ctrl+V or Ctrl+P</p></td></tr>
+    <tr><td><p>Handle the wibble widget.</p></td><td><p>F12</p></td></tr>
   </tbody>
 </table>
 </body></html>
@@ -200,11 +201,7 @@ fn workbook_rows<'a>(extra: &[Vec<&'a str>]) -> Vec<Vec<&'a str>> {
 /// directory. Every call gets its own directory: tests run in
 /// parallel and must not rewrite each other's fixture files.
 pub fn reference_tree(name: &str) -> PathBuf {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let root =
-        std::env::temp_dir().join(format!("ferrogram-p108-{}-{name}-{n}", std::process::id()));
+    let root = crate::util::test_support::temp_path(&format!("fixture-{name}"));
     let _ = std::fs::remove_dir_all(&root);
     write(&root, "learn/visuicmds/visuicmds.md", VISUICMDS_MD);
     write(

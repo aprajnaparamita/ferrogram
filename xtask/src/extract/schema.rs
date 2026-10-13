@@ -59,7 +59,8 @@ impl Schema {
 
     /// Validates a YAML file already on disk. P1-03 implementation
     /// parses the YAML, then validates the chosen
-    /// `$defs/{layout,commands,shortcuts}` definition.
+    /// `$defs/{layout,commands,shortcuts}` definition. Every error
+    /// names `path` (the data file), never the schema file.
     pub fn validate_file(&self, path: &Path) -> ExtractResult<()> {
         let text = std::fs::read_to_string(path).map_err(|e| ExtractError::Io {
             path: path.to_path_buf(),
@@ -69,20 +70,23 @@ impl Schema {
             path: path.to_path_buf(),
             message: "cannot infer schema kind from file name".into(),
         })?;
-        self.validate_str(&text, kind)
+        self.validate_str(&text, kind, path)
     }
 
-    /// Validates an in-memory YAML string.
-    pub fn validate_str(&self, text: &str, kind: SchemaKind) -> ExtractResult<()> {
+    /// Validates an in-memory YAML string. `path` is the data file the
+    /// string came from; it is used in every error message.
+    pub fn validate_str(&self, text: &str, kind: SchemaKind, path: &Path) -> ExtractResult<()> {
         let value = parse_yaml_to_json(text).map_err(|e| ExtractError::Parse {
-            path: self.source.clone(),
+            path: path.to_path_buf(),
             message: e,
         })?;
-        self.validate_json(&value, kind)
+        self.validate_json(&value, kind, path)
     }
 
-    /// Validates an already-parsed JSON value.
-    pub fn validate_json(&self, value: &Value, kind: SchemaKind) -> ExtractResult<()> {
+    /// Validates an already-parsed JSON value that came from `path`.
+    /// Only the two schema-file failures (a missing definition, a
+    /// sub-schema that does not compile) name `self.source`.
+    pub fn validate_json(&self, value: &Value, kind: SchemaKind, path: &Path) -> ExtractResult<()> {
         let def_name = kind.def_name();
         if self
             .raw
@@ -137,7 +141,7 @@ impl Schema {
         }
         if !msgs.is_empty() {
             return Err(ExtractError::Schema {
-                path: self.source.clone(),
+                path: path.to_path_buf(),
                 message: msgs.join("; "),
             });
         }
@@ -276,7 +280,7 @@ quick_access_toolbar:
   id: qat
   controls: []
 "#;
-        s.validate_str(yaml, SchemaKind::Layout)
+        s.validate_str(yaml, SchemaKind::Layout, Path::new("/data/visio-365.yaml"))
             .expect("minimal layout is valid");
     }
 
@@ -335,9 +339,47 @@ quick_access_toolbar:
   controls: []
 "#;
         let err = s
-            .validate_str(yaml, SchemaKind::Layout)
+            .validate_str(yaml, SchemaKind::Layout, Path::new("/data/visio-365.yaml"))
             .expect_err("leading-digit id should fail");
         let msg = format!("{err}");
         assert!(msg.contains("schema"), "got: {msg}");
+    }
+
+    /// R1: schema validation and parse errors name the data file, not
+    /// `ui-spec/schema.json`.
+    #[test]
+    fn errors_name_the_data_file_not_the_schema_file() {
+        let schema_path = workspace_root().join("ui-spec").join("schema.json");
+        if !schema_path.is_file() {
+            eprintln!("schema.json not present; skipping");
+            return;
+        }
+        let s = Schema::load(&schema_path).expect("schema loads");
+        let data = Path::new("/data/commands.yaml");
+
+        // A YAML syntax error names the data file.
+        let err = s
+            .validate_str(":: not yaml ::", SchemaKind::Commands, data)
+            .expect_err("bad YAML fails");
+        assert_eq!(error_path(&err), Some(data), "{err}");
+        assert!(!format!("{err}").contains("schema.json"), "{err}");
+
+        // A schema violation names the data file.
+        let err = s
+            .validate_str("- bogus: 1\n", SchemaKind::Commands, data)
+            .expect_err("bad commands fail");
+        assert_eq!(error_path(&err), Some(data), "{err}");
+        assert!(!format!("{err}").contains("schema.json"), "{err}");
+    }
+
+    /// The path carried by an error variant (R1 regression helper).
+    fn error_path(err: &ExtractError) -> Option<&Path> {
+        match err {
+            ExtractError::Parse { path, .. }
+            | ExtractError::Io { path, .. }
+            | ExtractError::Schema { path, .. }
+            | ExtractError::Missing { path } => Some(path),
+            ExtractError::Unimplemented { .. } => None,
+        }
     }
 }

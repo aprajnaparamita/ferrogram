@@ -40,6 +40,7 @@ pub mod vsdx_schema;
 #[cfg(test)]
 mod fixtures;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::util::Result;
@@ -95,7 +96,7 @@ impl std::fmt::Display for ExtractError {
                 write!(f, "parse error in {}: {message}", path.display())
             }
             Self::Io { path, source } => {
-                write!(f, "io error writing {}: {source}", path.display())
+                write!(f, "io error on {}: {source}", path.display())
             }
             Self::Schema { path, message } => {
                 write!(
@@ -166,6 +167,37 @@ pub fn parse_args(args: &[String]) -> Result<ExtractArgs> {
         }
     }
     Ok(out)
+}
+
+/// Every generated output path, relative to the workspace root. The
+/// one list to update when an extractor gains or loses an output;
+/// [`check`] compares exactly these and flags committed generated
+/// files outside the produced set (R5).
+pub const GENERATED_OUTPUTS: &[&str] = &[
+    "ui-spec/visio-2016.yaml",
+    "ui-spec/visio-365.yaml",
+    "ui-spec/commands.yaml",
+    "ui-spec/shortcuts.yaml",
+    "ui-spec/shapesheet.toml",
+    "ui-spec/diff-2016-vs-365.md",
+    "docs/parity/controls.md",
+    "docs/vsdx-inventory.md",
+];
+
+/// Hand-maintained files that live next to the generated outputs.
+/// `--check` never flags them (R5): they are inputs or documentation,
+/// not extractor outputs.
+pub const HAND_MAINTAINED: &[&str] = &[
+    "ui-spec/schema.json",
+    "ui-spec/out-of-scope.txt",
+    "ui-spec/README.md",
+];
+
+/// True when `rel` is a hand-maintained file (one of
+/// [`HAND_MAINTAINED`] or any `ui-spec/*.txt` input).
+fn is_hand_maintained(rel: &Path) -> bool {
+    let shown = rel.display().to_string().replace('\\', "/");
+    HAND_MAINTAINED.contains(&shown.as_str()) || shown.ends_with(".txt")
 }
 
 /// Outcome of one extractor in a run.
@@ -262,16 +294,17 @@ struct Module {
 /// byte-for-byte with the committed file of the same relative path
 /// under `args.out`.
 ///
-/// Returns the sorted relative paths that differ; a committed file
-/// that is missing or unreadable counts as differing. `Err` means the
-/// check could not run at all (no `reference/`, or an extractor
-/// failed). Skipped (unimplemented) extractors produce no outputs and
-/// are not compared.
+/// The report lists the relative paths whose bytes differ, and the
+/// committed generated files that no extractor produced (R5: a
+/// renamed or dropped output would otherwise survive every check).
+/// `Err` means the check could not run at all (no `reference/`, or an
+/// extractor failed). Skipped (unimplemented) extractors produce no
+/// outputs and are not compared.
 ///
 /// The scratch tree is seeded with `ui-spec/out-of-scope.txt` when the
 /// committed tree has one: that file is a hand-maintained *input* to
 /// [`parity`], not a generated output.
-pub fn check(args: &ExtractArgs) -> Result<Vec<PathBuf>> {
+pub fn check(args: &ExtractArgs) -> Result<CheckReport> {
     let scratch = scratch_dir()?;
     seed_input(&args.out, &scratch, "ui-spec/out-of-scope.txt");
     let mut scratch_args = args.clone();
@@ -279,14 +312,16 @@ pub fn check(args: &ExtractArgs) -> Result<Vec<PathBuf>> {
     scratch_args.check = false;
     let results = run(&scratch_args)?;
 
-    let mut differing: Vec<PathBuf> = Vec::new();
+    let mut report = CheckReport::default();
+    let mut produced: BTreeSet<PathBuf> = BTreeSet::new();
     for (name, outcome) in &results {
         match outcome {
             Outcome::Ok { outputs } => {
                 for generated in outputs {
                     let rel = generated.strip_prefix(&scratch).unwrap_or(generated);
+                    produced.insert(rel.to_path_buf());
                     if !same_bytes(generated, &args.out.join(rel)) {
-                        differing.push(rel.to_path_buf());
+                        report.differing.push(rel.to_path_buf());
                     }
                 }
             }
@@ -296,18 +331,81 @@ pub fn check(args: &ExtractArgs) -> Result<Vec<PathBuf>> {
             }
         }
     }
-    differing.sort();
-    differing.dedup();
-    Ok(differing)
+    report.differing.sort();
+    report.differing.dedup();
+    report.stale = stale_generated(&produced, &args.out);
+    Ok(report)
 }
 
-/// True when both paths hold the same bytes. A missing or unreadable
-/// file is never equal to anything.
+/// Result of `cargo xtask extract --check`.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct CheckReport {
+    /// Committed files whose content differs from the regenerated one.
+    pub differing: Vec<PathBuf>,
+    /// Committed generated files that no extractor produced (R5).
+    pub stale: Vec<PathBuf>,
+}
+
+impl CheckReport {
+    /// True when every output matches and nothing is stale.
+    pub fn is_clean(&self) -> bool {
+        self.differing.is_empty() && self.stale.is_empty()
+    }
+}
+
+/// Committed generated files that the run did not produce (R5): every
+/// path in [`GENERATED_OUTPUTS`] that exists in the committed tree but
+/// was not regenerated, plus every generated-looking file under
+/// `ui-spec/` (`*.yaml`, `*.toml`, `*.md`) outside the produced set.
+/// Hand-maintained inputs are never stale.
+fn stale_generated(produced: &BTreeSet<PathBuf>, committed_root: &Path) -> Vec<PathBuf> {
+    let mut stale: Vec<PathBuf> = Vec::new();
+    for rel in GENERATED_OUTPUTS {
+        let path = Path::new(rel);
+        if committed_root.join(path).is_file() && !produced.contains(path) {
+            stale.push(path.to_path_buf());
+        }
+    }
+    let ui_dir = committed_root.join("ui-spec");
+    if let Ok(entries) = std::fs::read_dir(&ui_dir) {
+        for entry in entries.flatten() {
+            if !entry.path().is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            let is_generated_ext = [".yaml", ".toml", ".md"]
+                .iter()
+                .any(|ext| name.ends_with(ext));
+            if !is_generated_ext {
+                continue;
+            }
+            let rel = PathBuf::from("ui-spec").join(name);
+            if produced.contains(&rel) || is_hand_maintained(&rel) {
+                continue;
+            }
+            stale.push(rel);
+        }
+    }
+    stale.sort();
+    stale.dedup();
+    stale
+}
+
+/// True when both paths hold the same content. A missing or
+/// unreadable file is never equal to anything. Line endings do not
+/// count: a Windows checkout with `core.autocrlf` compares equal to
+/// the LF the emitters write (R6).
 fn same_bytes(a: &Path, b: &Path) -> bool {
     match (std::fs::read(a), std::fs::read(b)) {
-        (Ok(x), Ok(y)) => x == y,
+        (Ok(x), Ok(y)) => strip_cr(&x) == strip_cr(&y),
         _ => false,
     }
+}
+
+/// Drops carriage returns, so CRLF and LF compare equal.
+fn strip_cr(bytes: &[u8]) -> Vec<u8> {
+    bytes.iter().copied().filter(|b| *b != b'\r').collect()
 }
 
 /// Copies one committed input file into the scratch tree. Missing
@@ -448,21 +546,17 @@ mod tests {
             eprintln!("committed ui-spec not complete; skipping");
             return;
         }
-        let tmp =
-            std::env::temp_dir().join(format!("ferrogram-p1-04-loader-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("ui-loader");
         let data = tmp.join("ui-spec");
         std::fs::create_dir_all(&data).unwrap();
         for f in files {
             std::fs::copy(ui.join(f), data.join(f)).unwrap();
         }
 
-        let loader = Loader::new(&tmp).expect("loader compiles");
+        let loader = Loader::new(tmp.path()).expect("loader compiles");
         let sets = loader.load_all().expect("the committed quartet loads");
         assert!(!sets.visio_365.commands.entries.is_empty());
         assert!(!sets.visio_365.shortcuts.entries.is_empty());
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
@@ -537,8 +631,7 @@ mod tests {
     /// fails on the fixture tree.
     fn fixture_outputs(name: &str) -> (PathBuf, PathBuf) {
         let reference = fixtures::reference_tree(name);
-        let out =
-            std::env::temp_dir().join(format!("ferrogram-p108-out-{}-{name}", std::process::id()));
+        let out = crate::util::test_support::temp_path(&format!("check-out-{name}"));
         let _ = std::fs::remove_dir_all(&out);
         std::fs::create_dir_all(&out).unwrap();
         let args = ExtractArgs {
@@ -569,8 +662,8 @@ mod tests {
     #[test]
     fn check_passes_on_a_pristine_fixture_tree() {
         let (reference, out) = fixture_outputs("pristine");
-        let differing = check(&check_args(reference, out)).unwrap();
-        assert!(differing.is_empty(), "unexpected diffs: {differing:?}");
+        let report = check(&check_args(reference, out)).unwrap();
+        assert!(report.is_clean(), "unexpected report: {report:?}");
     }
 
     #[test]
@@ -579,8 +672,9 @@ mod tests {
         // One committed file changed, one gone missing.
         std::fs::write(out.join("ui-spec").join("commands.yaml"), b"# tampered\n").unwrap();
         std::fs::remove_file(out.join("docs").join("parity").join("controls.md")).unwrap();
-        let differing = check(&check_args(reference, out)).unwrap();
-        let names: Vec<String> = differing
+        let report = check(&check_args(reference, out)).unwrap();
+        let names: Vec<String> = report
+            .differing
             .iter()
             .map(|p| p.display().to_string().replace('\\', "/"))
             .collect();
@@ -610,10 +704,10 @@ mod tests {
             check: false,
         };
         run(&regen).unwrap();
-        let differing = check(&check_args(reference, out.clone())).unwrap();
+        let report = check(&check_args(reference, out.clone())).unwrap();
         assert!(
-            differing.is_empty(),
-            "out-of-scope.txt must be seeded into the scratch tree: {differing:?}"
+            report.is_clean(),
+            "out-of-scope.txt must be seeded into the scratch tree: {report:?}"
         );
         // Sanity: the input really does change the parity output, so
         // the test above is not vacuous.
@@ -629,25 +723,137 @@ mod tests {
         );
     }
 
+    /// R6: `--check` treats CRLF and LF as equal.
+    #[test]
+    fn check_treats_crlf_and_lf_as_equal() {
+        let tmp = crate::util::test_support::TempDir::new("crlf");
+        let lf = tmp.join("a.txt");
+        let crlf = tmp.join("b.txt");
+        std::fs::write(&lf, b"one\ntwo\n").unwrap();
+        std::fs::write(&crlf, b"one\r\ntwo\r\n").unwrap();
+        assert!(same_bytes(&lf, &crlf));
+        std::fs::write(&crlf, b"one\r\ntoo\r\n").unwrap();
+        assert!(!same_bytes(&lf, &crlf));
+    }
+
+    // ---- stale outputs (P1-13 goal 5 / R5) --------------------------
+
+    /// The generated-path list is complete: the fixture run writes
+    /// exactly the paths in [`GENERATED_OUTPUTS`].
+    #[test]
+    fn generated_outputs_list_matches_what_extractors_write() {
+        let reference = fixtures::reference_tree("gen-list");
+        let out = crate::util::test_support::TempDir::new("gen-list-out");
+        let args = ExtractArgs {
+            reference,
+            out: out.path().to_path_buf(),
+            allow_unimplemented: false,
+            check: false,
+        };
+        let results = run(&args).unwrap();
+        let mut produced: BTreeSet<String> = BTreeSet::new();
+        for (_, outcome) in &results {
+            match outcome {
+                Outcome::Ok { outputs } => {
+                    for p in outputs {
+                        let rel = p.strip_prefix(out.path()).unwrap_or(p);
+                        produced.insert(rel.display().to_string().replace('\\', "/"));
+                    }
+                }
+                other => panic!("extractor failed on the fixture tree: {other:?}"),
+            }
+        }
+        let listed: BTreeSet<String> = GENERATED_OUTPUTS.iter().map(|s| (*s).to_string()).collect();
+        assert_eq!(produced, listed);
+    }
+
+    /// R5: a committed generated file that no extractor produced is
+    /// flagged; hand-maintained inputs never are.
+    #[test]
+    fn check_flags_committed_files_no_extractor_produced() {
+        let (reference, out) = fixture_outputs("stale");
+        std::fs::write(
+            out.join("ui-spec").join("legacy-layout.yaml"),
+            b"# gone
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("legacy-tables.toml"),
+            b"# gone
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("schema.json"),
+            b"{}
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("notes.txt"),
+            b"notes
+",
+        )
+        .unwrap();
+        std::fs::write(
+            out.join("ui-spec").join("README.md"),
+            b"# readme
+",
+        )
+        .unwrap();
+        let report = check(&check_args(reference, out)).unwrap();
+        let names: Vec<String> = report
+            .stale
+            .iter()
+            .map(|p| p.display().to_string().replace('\\', "/"))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "ui-spec/legacy-layout.yaml".to_string(),
+                "ui-spec/legacy-tables.toml".to_string()
+            ]
+        );
+    }
+
+    /// R5: a committed file at a generated output path that the run
+    /// did not produce is stale, whatever its name.
+    #[test]
+    fn stale_generated_flags_unproduced_generated_outputs() {
+        let root = crate::util::test_support::TempDir::new("stale-gen");
+        std::fs::create_dir_all(root.join("ui-spec")).unwrap();
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(root.join("ui-spec").join("shapesheet.toml"), b"# x\n").unwrap();
+        std::fs::write(root.join("docs").join("vsdx-inventory.md"), b"# y\n").unwrap();
+
+        let empty = BTreeSet::new();
+        let stale = stale_generated(&empty, root.path());
+        assert_eq!(stale.len(), 2, "{stale:?}");
+
+        let mut produced = BTreeSet::new();
+        produced.insert(PathBuf::from("ui-spec/shapesheet.toml"));
+        let stale = stale_generated(&produced, root.path());
+        assert_eq!(
+            stale,
+            vec![PathBuf::from("docs/vsdx-inventory.md")],
+            "produced files are never stale"
+        );
+    }
+
     #[test]
     fn seed_input_copies_and_tolerates_missing_files() {
-        let from = std::env::temp_dir().join(format!("ferrogram-p108-seed-{}", std::process::id()));
-        let to =
-            std::env::temp_dir().join(format!("ferrogram-p108-seed-to-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&from);
-        let _ = std::fs::remove_dir_all(&to);
+        let from = crate::util::test_support::TempDir::new("seed");
+        let to = crate::util::test_support::TempDir::new("seed-to");
         std::fs::create_dir_all(from.join("ui-spec")).unwrap();
-        std::fs::create_dir_all(&to).unwrap();
         std::fs::write(from.join("ui-spec").join("out-of-scope.txt"), b"X\n").unwrap();
-        seed_input(&from, &to, "ui-spec/out-of-scope.txt");
+        seed_input(from.path(), to.path(), "ui-spec/out-of-scope.txt");
         assert_eq!(
             std::fs::read_to_string(to.join("ui-spec").join("out-of-scope.txt")).unwrap(),
             "X\n"
         );
         // A missing source is a no-op, not an error.
-        seed_input(&from, &to, "ui-spec/not-there.txt");
+        seed_input(from.path(), to.path(), "ui-spec/not-there.txt");
         assert!(!to.join("ui-spec").join("not-there.txt").exists());
-        let _ = std::fs::remove_dir_all(&from);
-        let _ = std::fs::remove_dir_all(&to);
     }
 }

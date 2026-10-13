@@ -40,9 +40,10 @@ pub struct VisCmd {
 /// This entry point writes nothing; [`super::commands::run`] consumes
 /// the result when it builds `ui-spec/commands.yaml`.
 pub fn run(in_dir: &Path) -> ExtractResult<Vec<VisCmd>> {
-    let path = in_dir.join("learn").join("visuicmds").join("visuicmds.md");
-    let text =
-        std::fs::read_to_string(&path).map_err(|_| ExtractError::Missing { path: path.clone() })?;
+    let path = input_path(in_dir);
+    // R2: only a missing file is `Missing`; every other read error
+    // keeps the io error text.
+    let text = super::util::read_source(&path)?;
     parse_visuicmds_md(&text, &path)
 }
 
@@ -116,9 +117,9 @@ fn parse_visuicmds_md(text: &str, path: &Path) -> ExtractResult<Vec<VisCmd>> {
 }
 
 /// Resolves the `reference/learn/visuicmds/visuicmds.md` path so the
-/// tests can assert the documented input location.
-#[allow(dead_code)]
-fn input_path(in_dir: &Path) -> PathBuf {
+/// tests can assert the documented input location and error messages
+/// can name the real source file.
+pub fn input_path(in_dir: &Path) -> PathBuf {
     in_dir.join("learn").join("visuicmds").join("visuicmds.md")
 }
 
@@ -195,25 +196,46 @@ Some intro prose.
     fn run_reads_the_documented_path() {
         // With a temp reference root that lacks the file: a clean
         // Missing error naming the documented path.
-        let tmp = std::env::temp_dir().join(format!("ferrogram-visuicmds-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let err = run(&tmp).unwrap_err();
+        let tmp = crate::util::test_support::TempDir::new("visuicmds");
+        let err = run(tmp.path()).unwrap_err();
         assert!(matches!(err, ExtractError::Missing { .. }), "{err}");
         assert!(err.to_string().contains("visuicmds.md"), "{err}");
-        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// R2: a directory in the way is an Io error naming the file.
+    #[test]
+    fn run_with_a_directory_in_the_way_is_an_io_error() {
+        let tmp = crate::util::test_support::TempDir::new("visuicmds-dir");
+        std::fs::create_dir_all(tmp.join("learn/visuicmds/visuicmds.md")).unwrap();
+        let err = run(tmp.path()).unwrap_err();
+        assert!(matches!(err, ExtractError::Io { .. }), "{err}");
+        assert!(err.to_string().contains("visuicmds.md"), "{err}");
+    }
+
+    /// R2: a non-UTF-8 source is an Io error keeping the io error text.
+    #[test]
+    fn run_with_non_utf8_input_is_an_io_error() {
+        let tmp = crate::util::test_support::TempDir::new("visuicmds-bin");
+        let dir = tmp.join("learn/visuicmds");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("visuicmds.md"), [0xff, 0xfe, 0xfd]).unwrap();
+        let err = run(tmp.path()).unwrap_err();
+        assert!(matches!(err, ExtractError::Io { .. }), "{err}");
+        assert!(
+            err.to_string()
+                .contains("stream did not contain valid UTF-8"),
+            "{err}"
+        );
     }
 
     #[test]
     fn run_parses_a_staged_file() {
-        let tmp = std::env::temp_dir().join(format!("ferrogram-visuicmds2-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("visuicmds2");
         let dir = tmp.join("learn").join("visuicmds");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("visuicmds.md"), FIXTURE).unwrap();
-        let rows = run(&tmp).unwrap();
+        let rows = run(tmp.path()).unwrap();
         assert_eq!(rows.len(), 3);
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// Real-data smoke test: the committed reference yields the 664

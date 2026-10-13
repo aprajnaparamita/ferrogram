@@ -20,10 +20,9 @@ use std::path::{Path, PathBuf};
 
 use calamine::{Data, Range, Reader, open_workbook_auto};
 use serde_json::{Map, Value, json};
-use serde_saphyr::SerializerOptions;
 
 use super::schema::Schema;
-use super::util::write_atomic;
+use super::util::{emit_yaml, write_and_validate};
 use super::{ExtractError, ExtractResult};
 
 /// Per-extractor entry point. Reads from `in_dir` (the
@@ -62,17 +61,8 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
 
     let path_2016 = out_dir.join("ui-spec").join("visio-2016.yaml");
     let path_365 = out_dir.join("ui-spec").join("visio-365.yaml");
-    write_atomic(&path_2016, &layout_2016.text).map_err(|msg| ExtractError::Io {
-        path: path_2016.clone(),
-        source: msg,
-    })?;
-    write_atomic(&path_365, &layout_365.text).map_err(|msg| ExtractError::Io {
-        path: path_365.clone(),
-        source: msg,
-    })?;
-
-    schema.validate_file(&path_2016)?;
-    schema.validate_file(&path_365)?;
+    write_and_validate(&schema, &path_2016, &layout_2016.text)?;
+    write_and_validate(&schema, &path_365, &layout_365.text)?;
 
     Ok(vec![path_2016, path_365])
 }
@@ -80,7 +70,10 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
 // ---- Row model --------------------------------------------------------
 
 /// One row from the Fluent UI xlsx. All fields are normalised
-/// strings (Policy ID is i64). Empty cells become `""`.
+/// strings (Policy ID is i64). Empty cells become `""`; an empty
+/// `Policy ID` cell becomes [`NO_POLICY_ID`] (the source does not
+/// order the control) and a non-empty cell that does not parse is an
+/// [`ExtractError::Parse`] naming the row.
 #[derive(Debug, Clone)]
 struct Row {
     /// 1-based row number in the worksheet (header is row 1).
@@ -93,6 +86,11 @@ struct Row {
     parent: String,
     policy_id: i64,
 }
+
+/// Sort key for a row whose `Policy ID` cell is empty: the source
+/// does not order that control, so it sorts after every numbered
+/// control (and never collides with a real parse failure).
+const NO_POLICY_ID: i64 = i64::MAX;
 
 impl Row {
     fn section(&self) -> Section {
@@ -184,25 +182,10 @@ fn build_layout(
 ) -> ExtractResult<BuiltLayout> {
     let rows = parse_xlsx(xlsx_path)?;
     let row_refs: Vec<&Row> = rows.iter().collect();
-    let layout = assemble_layout(&row_refs, source, source_url, source_revision)?;
-    // serde-saphyr 1.x defaults differ from 0.0.16 in two ways that
-    // affect the diff:
-    //
-    // - `compact_list_indent = true`: the list dash is put at the
-    //   parent's indent. Disable to keep the older
-    //   `tabs:\n  - bounds: null` style.
-    // - `prefer_block_scalars = true`: long single-line strings and
-    //   strings with newlines are written as block scalars
-    //   (`| ... |`). Disable to keep plain (and quoted) inline
-    //   scalars.
-    let mut options = SerializerOptions::default();
-    options.compact_list_indent = false;
-    options.prefer_block_scalars = false;
-    let text = serde_saphyr::to_string_with_options(&layout, options).map_err(|e| {
-        ExtractError::Parse {
-            path: xlsx_path.to_path_buf(),
-            message: format!("YAML serialize: {e}"),
-        }
+    let layout = assemble_layout(&row_refs, xlsx_path, source, source_url, source_revision)?;
+    let text = emit_yaml(&layout).map_err(|msg| ExtractError::Parse {
+        path: xlsx_path.to_path_buf(),
+        message: msg,
     })?;
     Ok(BuiltLayout { text })
 }
@@ -256,6 +239,20 @@ fn rows_from_range(range: &Range<Data>, path: &Path) -> ExtractResult<Vec<Row>> 
             // Spacer row; skip silently.
             continue;
         }
+        // R4: a non-empty Policy ID that does not parse means the
+        // source changed under us; an empty cell means "unordered"
+        // ([`NO_POLICY_ID`]).
+        let policy_raw = get(cols.policy_id);
+        let policy_id = if policy_raw.trim().is_empty() {
+            NO_POLICY_ID
+        } else {
+            policy_raw.parse::<i64>().map_err(|_| ExtractError::Parse {
+                path: path.to_path_buf(),
+                message: format!(
+                    "row {sheet_row} (cn={control_name:?}): Policy ID {policy_raw:?} is not an integer"
+                ),
+            })?
+        };
         rows.push(Row {
             sheet_row,
             control_name,
@@ -264,7 +261,7 @@ fn rows_from_range(range: &Range<Data>, path: &Path) -> ExtractResult<Vec<Row>> 
             tab: get(cols.tab),
             group: get(cols.group),
             parent: get(cols.parent),
-            policy_id: get(cols.policy_id).parse::<i64>().unwrap_or(i64::MAX),
+            policy_id,
         });
     }
     Ok(rows)
@@ -336,6 +333,7 @@ fn cell_to_string(c: &Data) -> String {
 
 fn assemble_layout(
     rows: &[&Row],
+    xlsx_path: &Path,
     source: &str,
     source_url: &str,
     source_revision: &str,
@@ -344,7 +342,7 @@ fn assemble_layout(
     for r in rows {
         if r.mapped_type().is_none() {
             return Err(ExtractError::Parse {
-                path: PathBuf::from("<in-memory>"),
+                path: xlsx_path.to_path_buf(),
                 message: format!(
                     "row {} (cn={:?}) has unknown control type {:?}",
                     r.sheet_row, r.control_name, r.control_type
@@ -819,6 +817,24 @@ mod tests {
         }
     }
 
+    /// R3: the unknown-control-type error names the workbook, not an
+    /// `<in-memory>` placeholder.
+    #[test]
+    fn unknown_control_type_error_names_the_source_file() {
+        let range = rows_from_strings(&[vec!["X", "explodingButton", "", "", "", "", "1"]]);
+        let rows = rows_from_range(&range, Path::new("/data/visio-2016.xlsx")).unwrap();
+        let refs = collect(&rows);
+        let err = assemble_layout(
+            &refs,
+            Path::new("/data/visio-2016.xlsx"),
+            "s",
+            "https://e/",
+            "r",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("/data/visio-2016.xlsx"), "{err}");
+    }
+
     #[test]
     fn mapped_type_rejects_unknown() {
         let r = Row {
@@ -881,8 +897,22 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let a = assemble_layout(&refs, "test", "https://example.invalid/", "rev").unwrap();
-        let b = assemble_layout(&refs, "test", "https://example.invalid/", "rev").unwrap();
+        let a = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
+        let b = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
         let ya = serde_saphyr::to_string(&a).unwrap();
         let yb = serde_saphyr::to_string(&b).unwrap();
         assert_eq!(ya, yb);
@@ -897,12 +927,60 @@ mod tests {
             rows_from_strings(&[vec!["TabHome", "tab", "None (Core Tab)", "", "", "", "1"]]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, "src", "https://example/", "rev").unwrap();
+        let layout = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "src",
+            "https://example/",
+            "rev",
+        )
+        .unwrap();
         let tabs = layout.get("tabs").unwrap().as_array().unwrap();
         let first = &tabs[0];
         let id = first.get("id").unwrap();
         assert_eq!(id, "TabHome");
         assert_ne!(id, "home");
+    }
+
+    /// R4: an empty Policy ID cell means "unordered" (sorts last);
+    /// a non-empty unparsable cell is a Parse error naming the row.
+    #[test]
+    fn policy_id_parsing() {
+        let all: Vec<Vec<Data>> = vec![
+            hdr(),
+            vec![
+                cell("FileSave"),
+                cell("button"),
+                cell("None (Quick Access Toolbar)"),
+                cell("Quick Access Toolbar"),
+                cell(""),
+                cell(""),
+                cell(""),
+            ],
+        ];
+        let range = make_range_from_rows(&all);
+        let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
+        assert_eq!(rows[0].policy_id, NO_POLICY_ID, "empty cell sorts last");
+
+        let all: Vec<Vec<Data>> = vec![
+            hdr(),
+            vec![
+                cell("FileSave"),
+                cell("button"),
+                cell("None (Quick Access Toolbar)"),
+                cell("Quick Access Toolbar"),
+                cell(""),
+                cell(""),
+                cell("not-a-number"),
+            ],
+        ];
+        let range = make_range_from_rows(&all);
+        let err = rows_from_range(&range, Path::new("test.xlsx")).unwrap_err();
+        assert!(matches!(err, ExtractError::Parse { .. }), "{err}");
+        let msg = err.to_string();
+        assert!(msg.contains("row 2"), "{msg}");
+        assert!(msg.contains("Policy ID"), "{msg}");
+        assert!(msg.contains("test.xlsx"), "{msg}");
     }
 
     #[test]
@@ -977,7 +1055,14 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, "test", "https://example.invalid/", "rev").unwrap();
+        let layout = assemble_layout(
+            &refs,
+            Path::new("test.xlsx"),
+            "test",
+            "https://example.invalid/",
+            "rev",
+        )
+        .unwrap();
         let text = serde_saphyr::to_string(&layout).unwrap();
 
         // Sanity: tabs[0].id is TabHome (Fluent name).
@@ -996,7 +1081,11 @@ mod tests {
         if schema_path.is_file() {
             let schema = Schema::load(&schema_path).unwrap();
             schema
-                .validate_str(&text, crate::extract::schema::SchemaKind::Layout)
+                .validate_str(
+                    &text,
+                    crate::extract::schema::SchemaKind::Layout,
+                    Path::new("ui-spec/visio-2016.yaml"),
+                )
                 .unwrap();
         }
     }
@@ -1064,7 +1153,8 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, "s", "https://e/", "r").unwrap();
+        let layout =
+            assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
         let controls = layout.get("tabs").unwrap().as_array().unwrap()[0]
             .get("groups")
             .unwrap()
@@ -1125,7 +1215,8 @@ mod tests {
         ]);
         let rows = rows_from_range(&range, Path::new("test.xlsx")).unwrap();
         let refs = collect(&rows);
-        let layout = assemble_layout(&refs, "s", "https://e/", "r").unwrap();
+        let layout =
+            assemble_layout(&refs, Path::new("test.xlsx"), "s", "https://e/", "r").unwrap();
         let tabs = layout.get("tabs").unwrap().as_array().unwrap();
         let home = tabs
             .iter()
@@ -1167,9 +1258,7 @@ mod tests {
 
         // Build a temp workspace that mirrors the layout directory
         // shape: ui-spec/{visio-2016.yaml, visio-365.yaml, commands.yaml, shortcuts.yaml}.
-        let tmp =
-            std::env::temp_dir().join(format!("ferrogram-p1-03-loader-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
+        let tmp = crate::util::test_support::TempDir::new("fluent-loader");
         let data_dir = tmp.join("ui-spec");
         std::fs::create_dir_all(&data_dir).unwrap();
         std::fs::copy(&committed_2016, data_dir.join("visio-2016.yaml")).unwrap();
@@ -1188,7 +1277,7 @@ mod tests {
             }
         }
 
-        let loader = Loader::new(&tmp).expect("loader compiles");
+        let loader = Loader::new(tmp.path()).expect("loader compiles");
         let set_2016 = loader.load(LayoutKind::Visio2016).expect("2016 loads");
         let set_365 = loader.load(LayoutKind::Visio365).expect("365 loads");
 
@@ -1224,7 +1313,5 @@ mod tests {
             9,
             "365 QAT controls"
         );
-
-        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
