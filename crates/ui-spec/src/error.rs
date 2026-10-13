@@ -2,8 +2,11 @@
 //!
 //! Every failure of [`Loader::new`](crate::Loader::new) and
 //! [`Loader::load`](crate::Loader::load) is one of the [`LoadError`]
-//! variants. There is no catch-all panic path: malformed input is an
-//! error, never a crash (AGENTS.md section 6).
+//! variants. [`IdError`] is the failure of the id parsers
+//! ([`CommandId::parse`](crate::CommandId::parse),
+//! [`FluentId::parse`](crate::FluentId::parse)). There is no
+//! catch-all panic path: malformed input is an error, never a crash
+//! (AGENTS.md section 6).
 
 use std::path::PathBuf;
 
@@ -65,14 +68,62 @@ pub enum LoadError {
         referenced_by: String,
     },
 
+    /// One id is used twice where it must be unique.
+    #[error("duplicate {kind}: {id} (in {})", path.display())]
+    Duplicate {
+        /// The file that uses the id twice.
+        path: PathBuf,
+        /// Which id space is duplicated:
+        ///
+        /// - `"command_id"`: a command `id` appears twice in
+        ///   `commands.yaml` (the table is one entry per command id,
+        ///   ADR 0006).
+        kind: &'static str,
+        /// The duplicated id.
+        id: String,
+    },
+
     /// The document is well-formed and schema-valid, but it is not the
     /// kind of document expected at this path (e.g. `commands.yaml`
     /// holding a shortcuts list).
-    #[error("{message}")]
+    #[error("{}: {message}", path.display())]
     Unknown {
+        /// The file that holds the wrong kind of document.
+        path: PathBuf,
         /// What was expected and what was found.
         message: String,
     },
+}
+
+/// A rejected id string, from [`CommandId::parse`](crate::CommandId::parse)
+/// or [`FluentId::parse`](crate::FluentId::parse).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{reason}: {value:?}")]
+pub struct IdError {
+    /// What is wrong with the id.
+    reason: &'static str,
+    /// The rejected string.
+    value: String,
+}
+
+impl IdError {
+    /// Builds an error naming `value` and the rule it broke.
+    pub(crate) fn new(reason: &'static str, value: &str) -> Self {
+        Self {
+            reason,
+            value: value.to_owned(),
+        }
+    }
+
+    /// The rejected string.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    /// What is wrong with the id.
+    pub fn reason(&self) -> &'static str {
+        self.reason
+    }
 }
 
 /// The `Display` text of a [`LoadError::CrossReference`].
@@ -104,6 +155,39 @@ mod tests {
             "cross-reference (fluent_id): GhostControl \
              (referenced by file.save) is not in any layout"
         );
+    }
+
+    #[test]
+    fn duplicate_names_the_kind_id_and_file() {
+        let err = LoadError::Duplicate {
+            path: PathBuf::from("ui-spec/commands.yaml"),
+            kind: "command_id",
+            id: "file.save".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "duplicate command_id: file.save (in ui-spec/commands.yaml)"
+        );
+    }
+
+    #[test]
+    fn unknown_names_the_file_and_the_problem() {
+        let err = LoadError::Unknown {
+            path: PathBuf::from("commands.yaml"),
+            message: "expected a commands document".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "commands.yaml: expected a commands document"
+        );
+    }
+
+    #[test]
+    fn id_error_exposes_value_and_reason() {
+        let err = IdError::new("id is empty", "");
+        assert_eq!(err.value(), "");
+        assert_eq!(err.reason(), "id is empty");
+        assert_eq!(err.to_string(), "id is empty: \"\"");
     }
 
     #[test]

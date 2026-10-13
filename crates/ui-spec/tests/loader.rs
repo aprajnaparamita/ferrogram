@@ -103,18 +103,14 @@ fn command_lookup_indexes_labels_commands_and_reverse() {
 }
 
 #[test]
-fn select_switches_between_the_two_layouts() {
+fn get_switches_between_the_two_layouts() {
+    // LayoutSets::get is the one layout switch (P1-14: LayoutSet::select is gone).
     let loader = Loader::new(fixtures().join("good")).unwrap();
+    let sets = loader.load_all().unwrap();
     let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
     let set_365 = loader.load(LayoutKind::Visio365).unwrap();
-    assert_eq!(
-        LayoutSet::select(LayoutKind::Visio2016, &set_2016, &set_365),
-        &set_2016
-    );
-    assert_eq!(
-        LayoutSet::select(LayoutKind::Visio365, &set_2016, &set_365),
-        &set_365
-    );
+    assert_eq!(sets.get(LayoutKind::Visio2016), &set_2016);
+    assert_eq!(sets.get(LayoutKind::Visio365), &set_365);
 }
 
 #[test]
@@ -386,10 +382,23 @@ fn json_data_files_load_too() {
     .unwrap();
 
     let loader = Loader::new(&dir).unwrap();
+    // No `.yaml` data file exists in this workspace: every read goes
+    // through the `.json` fallback of `data_file`.
+    for name in [
+        "panel-2016.yaml",
+        "panel-365.yaml",
+        "commands.yaml",
+        "shortcuts.yaml",
+    ] {
+        assert!(!data.join(name).exists(), "{name} must not exist");
+    }
     let set = loader.load(LayoutKind::Visio2016).unwrap();
     assert!(set.layout.tabs.is_empty());
     assert_eq!(set.commands.entries.len(), 1);
     assert_eq!(set.shortcuts.entries.len(), 1);
+    let sets = loader.load_all().unwrap();
+    assert_eq!(sets.get(LayoutKind::Visio2016).commands, set.commands);
+    assert_eq!(sets.get(LayoutKind::Visio365).commands, set.commands);
 }
 
 #[test]
@@ -435,11 +444,48 @@ fn wrong_document_kind_is_rejected() {
 
     let loader = Loader::new(&dir).unwrap();
     match loader.load(LayoutKind::Visio2016) {
-        Err(LoadError::Unknown { message }) => {
-            assert!(message.contains("commands.yaml"), "message: {message}");
+        Err(LoadError::Unknown { path, message }) => {
+            assert!(path.ends_with("ui-spec/commands.yaml"), "path: {path:?}");
+            assert!(message.contains("commands"), "message: {message}");
         }
         other => panic!("expected LoadError::Unknown, got {other:?}"),
     }
+}
+
+#[test]
+fn duplicate_command_id_is_rejected() {
+    // commands.yaml defines `file.save` twice (P1-14 goal 1).
+    let loader = Loader::new(fixtures().join("duplicate-command")).unwrap();
+    let results = [
+        loader.load(LayoutKind::Visio2016).map(|_| ()),
+        loader.load_all().map(|_| ()),
+    ];
+    for loader_result in results {
+        match loader_result {
+            Err(LoadError::Duplicate { path, kind, id }) => {
+                assert!(path.ends_with("ui-spec/commands.yaml"), "path: {path:?}");
+                assert_eq!(kind, "command_id");
+                assert_eq!(id, "file.save");
+            }
+            other => panic!("expected LoadError::Duplicate, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn duplicate_fluent_id_currently_loads() {
+    // The 2016 fixture uses FileSaveQuickAccess as a primary id
+    // twice. The committed data reuses Fluent ids across surfaces the
+    // same way (see docs/tasks/P1-14.md, Open issues), so the loader
+    // does not reject layout-side duplicates yet. This test pins that
+    // behaviour until the master decides the policy.
+    let loader = Loader::new(fixtures().join("duplicate-fluent")).unwrap();
+    let set = loader.load(LayoutKind::Visio2016).expect("loads today");
+    assert!(
+        set.command_lookup()
+            .labels
+            .contains_key(&FluentId::new("FileSaveQuickAccess"))
+    );
 }
 
 #[test]
