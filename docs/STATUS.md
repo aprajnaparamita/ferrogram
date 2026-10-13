@@ -2,8 +2,16 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **1 complete; paused for the user's "continue"** (CHECKPOINT_MODE=pause)
-- Phase 1 goal: gather resources and definitions (KICKOFF.md)
+- Current phase: **2 in progress** (planning)
+- Phase 2 goal: document model and .vsdx I/O (KICKOFF.md). Exit: every corpus .vsdx file round-trips without loss and without panics.
+
+## Phase 2 task board
+
+| Task | Role | Depends on | State | Branch |
+|---|---|---|---|---|
+| [P2-01](tasks/P2-01.md) | architect | phase-1 | ready | — |
+
+The architect writes P2-02 onwards; the master adds them here after review.
 
 ## Phase 1 task board
 
@@ -36,7 +44,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
+Open master items: none (the codegen task is part of the P2-01 plan).
 
 ## Deferred minor findings (for the phase report)
 
