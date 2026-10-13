@@ -14,7 +14,7 @@
 //! | `/visio/pages/pages.xml` | [`Document::pages`] |
 //! | `/visio/pages/page{N}.xml` | the page's shapes (the shape arena), its `Connect` records and its [`Preserved`] |
 //! | `/visio/masters/masters.xml` | [`Document::masters`] |
-//! | `/visio/masters/master{N}.xml` | the master's content shape (the shape arena) |
+//! | `/visio/masters/master{N}.xml` | the master's top-level shapes (the shape arena) |
 //! | everything else | untouched in the package |
 //!
 //! The main document part is found through the package root relationship
@@ -70,7 +70,7 @@
 //! a panic:
 //!
 //! - a missing or dangling part, relationship or `Rel` reference leaves the
-//!   entity empty (`Master::shape` is `None`, a page has no shapes);
+//!   entity empty (`Master::shapes` is empty, a page has no shapes);
 //! - a `Master` or `BackPage` reference that names nothing stays in
 //!   `Preserved` instead of being resolved;
 //! - a `Connect` element carrying anything the model does not hold (there is
@@ -490,9 +490,9 @@ impl Mapper<'_> {
             if let Some(master) = self.document.masters.get_mut(position) {
                 master.preserved.attributes.extend(preserved.attributes);
                 master.preserved.children.extend(preserved.children);
-                // A master has one content shape field; a master with several
-                // top-level shapes keeps the first (the corpus has one each).
-                master.shape = shapes.first().copied();
+                // Every top-level shape of the master part is kept, in
+                // document order (P2-06b decision 2).
+                master.shapes = shapes;
             }
         }
         Ok(())
@@ -1198,7 +1198,32 @@ mod tests {
         assert_eq!(master.visio_id, 2);
         assert_eq!(master.name, "Box");
         assert!(!master.hidden);
-        assert!(master.shape.is_some());
+        assert_eq!(master.shapes.len(), 1);
+    }
+
+    #[test]
+    fn a_master_keeps_every_top_level_shape() {
+        let mut package = drawing();
+        // Append a second top-level shape to the master's `Shapes` wrapper.
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/masters/master1.xml")
+            && let PartData::Xml(root) = &mut part.data
+            && let Some(XmlChild::Element(shapes)) = root.children.first_mut()
+        {
+            shapes
+                .children
+                .push(XmlChild::Element(element("Shape", &[("ID", "2")], &[])));
+        }
+        let document = to_model(&package).expect("document");
+        // Both shapes are kept, in document order (P2-06b decision 2).
+        let master = &document.masters[0];
+        assert_eq!(master.shapes.len(), 2);
+        let first = document.shape(master.shapes[0]).expect("shape");
+        let second = document.shape(master.shapes[1]).expect("shape");
+        assert_eq!(first.visio_id, 1);
+        assert_eq!(second.visio_id, 2);
     }
 
     #[test]
@@ -1361,7 +1386,7 @@ mod tests {
         assert_eq!(document.pages.len(), 1);
         assert!(document.pages[0].shapes.is_empty());
         assert_eq!(document.masters.len(), 1);
-        assert_eq!(document.masters[0].shape, None);
+        assert!(document.masters[0].shapes.is_empty());
     }
 
     /// Pushes a `Width` cell onto the master's content shape and turns the

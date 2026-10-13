@@ -20,9 +20,10 @@ pub struct Master {
     pub prompt: Option<String>,
     /// Whether the master is hidden (`Hidden="1"`).
     pub hidden: bool,
-    /// The arena id of the master's content shape, or `None` when the master
-    /// part is missing (a malformed but recoverable file).
-    pub shape: Option<ShapeId>,
+    /// The arena ids of the master's top-level shapes, in document order. A
+    /// master part is missing when the list is empty (a malformed but
+    /// recoverable file).
+    pub shapes: Vec<ShapeId>,
     /// Unmapped attributes and children of the `Master` element kept
     /// verbatim (ADR 0012).
     pub preserved: Preserved,
@@ -40,7 +41,7 @@ impl Master {
             unique_id: None,
             prompt: None,
             hidden: false,
-            shape: None,
+            shapes: Vec::new(),
             preserved: Preserved::new(),
         }
     }
@@ -60,7 +61,7 @@ mod tests {
         assert_eq!(m.unique_id, None);
         assert_eq!(m.prompt, None);
         assert!(!m.hidden);
-        assert_eq!(m.shape, None);
+        assert!(m.shapes.is_empty());
         assert!(m.preserved.children.is_empty());
     }
 }

@@ -67,7 +67,10 @@ mod tests {
     #[test]
     fn degrees_convert_to_radians() {
         assert_approx(Angle::from_degrees(180.0).radians(), core::f64::consts::PI);
-        assert_approx(Angle::from_degrees(90.0).radians(), core::f64::consts::FRAC_PI_2);
+        assert_approx(
+            Angle::from_degrees(90.0).radians(),
+            core::f64::consts::FRAC_PI_2,
+        );
     }
 
     #[test]

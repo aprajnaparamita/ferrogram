@@ -32,7 +32,7 @@ fn an_instance_resolves_against_its_master() {
         .sheet
         .cells
         .push(number_cell("PinX", 7.0));
-    master.shape = Some(content);
+    master.shapes = vec![content];
     doc.masters.push(master);
     doc.shape_mut(id).expect("shape exists").master = Some(MasterId { index: 0 });
 
@@ -61,7 +61,7 @@ fn a_local_edit_overrides_the_master() {
         .sheet
         .cells
         .push(number_cell("PinX", 7.0));
-    master.shape = Some(content);
+    master.shapes = vec![content];
     doc.masters.push(master);
     doc.shape_mut(id).expect("shape exists").master = Some(MasterId { index: 0 });
     doc.shape_mut(id)
