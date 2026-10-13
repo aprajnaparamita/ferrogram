@@ -122,9 +122,12 @@ impl Document {
             }
         }
 
-        // 2. Master chain, with the sub-shape rule (ADR 0013).
+        // 2. Master chain, with the sub-shape rule (ADR 0013) and the
+        // position rule for masters with several top-level shapes (P2-06b
+        // decision 2).
         let mut visited_masters: Vec<MasterId> = Vec::new();
-        if let Some((first, mut path)) = self.instance_chain_start(shape) {
+        if let Some((first, root, mut path)) = self.instance_chain_start(shape) {
+            let position = self.sibling_position(root);
             let mut current = first;
             loop {
                 if visited_masters.contains(&current) {
@@ -137,8 +140,7 @@ impl Document {
                 let mut chained = None;
                 if let Some(content) = self
                     .master(current)
-                    .and_then(|master| master.shape)
-                    .and_then(|id| self.shape(id))
+                    .and_then(|m| self.master_shape(m, position))
                 {
                     let target = walk_down(self, content, &path).unwrap_or(content);
                     if let Some((found, hint)) = sheet_cell(&target.sheet, cell) {
@@ -230,12 +232,12 @@ impl Document {
     }
 
     /// The master chain that applies to `shape`: the master of the nearest
-    /// shape that is an instance (the shape itself or an ancestor), with the
-    /// child positions from that instance root down to `shape`.
+    /// shape that is an instance (the shape itself or an ancestor), that
+    /// instance root, and the child positions from the root down to `shape`.
     ///
     /// Returns `None` when no ancestor is a master instance, and when the
     /// parent chain is missing or cyclic (a malformed file must not loop).
-    fn instance_chain_start(&self, shape: ShapeId) -> Option<(MasterId, Vec<usize>)> {
+    fn instance_chain_start(&self, shape: ShapeId) -> Option<(MasterId, ShapeId, Vec<usize>)> {
         let mut path = Vec::new();
         let mut visited = Vec::new();
         let mut current = shape;
@@ -247,7 +249,7 @@ impl Document {
             let shape = self.shape(current)?;
             if let Some(master) = shape.master {
                 path.reverse();
-                return Some((master, path));
+                return Some((master, current, path));
             }
             let parent = shape.parent?;
             let position = self
@@ -257,6 +259,44 @@ impl Document {
                 .position(|c| *c == current)?;
             path.push(position);
             current = parent;
+        }
+    }
+
+    /// The position of `shape` among its siblings: its parent's children, or
+    /// the page's top-level shapes when it has no parent. `None` when the
+    /// shape is unreachable from any page (a malformed file).
+    fn sibling_position(&self, shape: ShapeId) -> Option<usize> {
+        let node = self.shape(shape)?;
+        if let Some(parent) = node.parent {
+            return self
+                .shape(parent)?
+                .children
+                .iter()
+                .position(|c| *c == shape);
+        }
+        self.pages
+            .iter()
+            .find_map(|page| page.shapes.iter().position(|s| *s == shape))
+    }
+
+    /// The master shape an instance at `position` matches (P2-06b decision
+    /// 2): the master's only shape when it has exactly one top-level shape,
+    /// the shape at `position` otherwise. A position the master does not
+    /// have degrades to the master's first shape.
+    fn master_shape(
+        &self,
+        master: &crate::master::Master,
+        position: Option<usize>,
+    ) -> Option<&crate::shape::Shape> {
+        match master.shapes.as_slice() {
+            [] => None,
+            [only] => self.shape(*only),
+            many => {
+                let picked = position
+                    .and_then(|p| many.get(p))
+                    .or_else(|| many.first())?;
+                self.shape(*picked)
+            }
         }
     }
 }
@@ -701,7 +741,7 @@ mod tests {
             .sheet
             .cells
             .push(number_cell("PinX", 7.0));
-        master.shape = Some(content);
+        master.shapes = vec![content];
         master.name_u = "Box".to_owned();
         doc.masters.push(master);
         doc.shape_mut(id).expect("shape exists").master = Some(MasterId { index: mid as u32 });
@@ -755,7 +795,7 @@ mod tests {
             .sheet
             .cells
             .push(number_cell("PinX", 2.0));
-        master.shape = Some(m_root);
+        master.shapes = vec![m_root];
         doc.masters.push(master);
         doc.shape_mut(root).expect("exists").master = Some(MasterId { index: mid as u32 });
 
@@ -810,7 +850,7 @@ mod tests {
             .sheet
             .cells
             .push(number_cell("PinX", 9.0));
-        master.shape = Some(m_root);
+        master.shapes = vec![m_root];
         doc.masters.push(master);
         doc.shape_mut(root).expect("exists").master = Some(MasterId { index: mid as u32 });
 
@@ -825,6 +865,112 @@ mod tests {
     }
 
     #[test]
+    fn a_master_with_one_shape_matches_any_instance_position() {
+        // The first page shape is a plain shape; the instance sits at
+        // position 1 and still matches the master's only shape.
+        let (mut doc, plain) = document_with_shape();
+        let id = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.pages[0].shapes.push(id);
+        let mid = doc.masters.len();
+        let mut master = crate::master::Master::new(MasterId { index: mid as u32 }, 1);
+        let content = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(content)
+            .expect("content exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 7.0));
+        master.shapes = vec![content];
+        doc.masters.push(master);
+        doc.shape_mut(id).expect("exists").master = Some(MasterId { index: mid as u32 });
+        assert_eq!(doc.sibling_position(id), Some(1));
+        assert_eq!(doc.sibling_position(plain), Some(0));
+
+        let r = doc
+            .resolve_with_table(id, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(7.0)));
+        assert_eq!(
+            r.source,
+            ValueSource::Master(MasterId { index: mid as u32 })
+        );
+    }
+
+    #[test]
+    fn a_master_with_several_shapes_matches_by_position() {
+        let (mut doc, first) = document_with_shape();
+        let second = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.pages[0].shapes.push(second);
+        let mid = doc.masters.len();
+        let mut master = crate::master::Master::new(MasterId { index: mid as u32 }, 1);
+        let m_first = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        let m_second = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.shape_mut(m_first)
+            .expect("exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 1.0));
+        doc.shape_mut(m_second)
+            .expect("exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 2.0));
+        master.shapes = vec![m_first, m_second];
+        doc.masters.push(master);
+        doc.shape_mut(first).expect("exists").master = Some(MasterId { index: mid as u32 });
+        doc.shape_mut(second).expect("exists").master = Some(MasterId { index: mid as u32 });
+
+        let r = doc
+            .resolve_with_table(first, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(1.0)));
+        let r = doc
+            .resolve_with_table(second, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(2.0)));
+    }
+
+    #[test]
+    fn an_out_of_range_position_degrades_to_the_first_master_shape() {
+        let (mut doc, _) = document_with_shape();
+        let id = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.pages[0].shapes.push(id);
+        let mid = doc.masters.len();
+        let mut master = crate::master::Master::new(MasterId { index: mid as u32 }, 1);
+        let m_first = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        let m_second = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.shape_mut(m_first)
+            .expect("exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 1.0));
+        doc.shape_mut(m_second)
+            .expect("exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 2.0));
+        master.shapes = vec![m_first, m_second];
+        doc.masters.push(master);
+        // The instance sits at position 1, the master has a shape there;
+        // a master with one shape keeps its single shape for any position.
+        doc.shape_mut(id).expect("exists").master = Some(MasterId { index: mid as u32 });
+        assert_eq!(doc.sibling_position(id), Some(1));
+
+        let r = doc
+            .resolve_with_table(id, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(2.0)));
+
+        // A shape no page reaches has no position: the master's first shape.
+        let orphan = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 3));
+        doc.shape_mut(orphan).expect("exists").master = Some(MasterId { index: mid as u32 });
+        assert_eq!(doc.sibling_position(orphan), None);
+        let r = doc
+            .resolve_with_table(orphan, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(1.0)));
+    }
+
+    #[test]
     fn nested_instance_continues_the_master_chain() {
         let (mut doc, id) = document_with_shape();
         // Master 1 content is itself an instance of master 2.
@@ -836,14 +982,14 @@ mod tests {
             .cells
             .push(number_cell("PinX", 4.0));
         let mut master2 = crate::master::Master::new(MasterId { index: m2 as u32 }, 2);
-        master2.shape = Some(m2_content);
+        master2.shapes = vec![m2_content];
         doc.masters.push(master2);
 
         let m1 = doc.masters.len();
         let m1_content = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
         doc.shape_mut(m1_content).expect("exists").master = Some(MasterId { index: m2 as u32 });
         let mut master1 = crate::master::Master::new(MasterId { index: m1 as u32 }, 3);
-        master1.shape = Some(m1_content);
+        master1.shapes = vec![m1_content];
         doc.masters.push(master1);
 
         doc.shape_mut(id).expect("exists").master = Some(MasterId { index: m1 as u32 });
@@ -873,9 +1019,9 @@ mod tests {
         doc.shape_mut(c0).expect("exists").master = Some(MasterId { index: m1 as u32 });
         doc.shape_mut(c1).expect("exists").master = Some(MasterId { index: m0 as u32 });
         let mut master0 = crate::master::Master::new(MasterId { index: m0 as u32 }, 1);
-        master0.shape = Some(c0);
+        master0.shapes = vec![c0];
         let mut master1 = crate::master::Master::new(MasterId { index: m1 as u32 }, 2);
-        master1.shape = Some(c1);
+        master1.shapes = vec![c1];
         doc.masters.push(master0);
         doc.masters.push(master1);
         doc.shape_mut(id).expect("exists").master = Some(MasterId { index: m0 as u32 });
@@ -1286,7 +1432,10 @@ mod tests {
         // written. `parse_default_value` itself does not change.
         match parse_default_value("90", "Degrees", "Number") {
             Some(CellValue::Number(value)) => {
-                assert!((value - core::f64::consts::FRAC_PI_2).abs() <= 1.0e-12, "{value}");
+                assert!(
+                    (value - core::f64::consts::FRAC_PI_2).abs() <= 1.0e-12,
+                    "{value}"
+                );
             }
             other => panic!("expected a number, got {other:?}"),
         }

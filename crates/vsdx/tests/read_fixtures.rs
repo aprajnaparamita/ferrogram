@@ -73,7 +73,7 @@ fn minimal_stencil_reads_with_the_stencil_kind() {
     );
     assert!(!master.hidden);
     let shape = document
-        .shape(master.shape.expect("master shape"))
+        .shape(master.shapes.first().copied().expect("master shape"))
         .expect("shape");
     assert_eq!(shape.sheet.cells.len(), 6);
 }
