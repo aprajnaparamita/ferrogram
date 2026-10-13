@@ -284,12 +284,12 @@ fn count_model_cells(document: &Document) -> usize {
     count
 }
 
-/// The cells of one sheet: direct cells, row cells, and the cells kept
-/// verbatim in sections and rows.
+/// The cells of one sheet: direct cells, section-level cells, row cells, and
+/// the cells kept verbatim in sections and rows.
 fn sheet_cells(sheet: &ferrogram_model::Sheet) -> usize {
     let mut count = sheet.cells.len();
     for section in &sheet.sections {
-        count += preserved_cells(&section.preserved);
+        count += section.cells.len() + preserved_cells(&section.preserved);
         for row in &section.rows {
             count += row.cells.len() + preserved_cells(&row.preserved);
         }

@@ -5,10 +5,17 @@ use crate::name::SectionName;
 use crate::raw::Preserved;
 
 /// A ShapeSheet section: one named block of rows (ADR 0011).
+///
+/// A section can also carry `Cell` children outside its rows (`Geometry`
+/// writes `NoFill`, `NoLine`, `NoShow`, `NoSnap` and `NoQuickDrag` there);
+/// they are the `cells`, and a lookup matches them before the row cells.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Section {
     /// The section name, e.g. `"Geometry"` or `"Shape Transform"`.
     pub name: SectionName,
+    /// The cells written outside the rows (`Cell` children of the `Section`
+    /// element), in file order.
+    pub cells: Vec<Cell>,
     /// The rows, in file order.
     pub rows: Vec<Row>,
     /// Unmapped attributes and children kept verbatim (ADR 0012).
@@ -20,6 +27,7 @@ impl Section {
     pub fn new(name: SectionName) -> Self {
         Self {
             name,
+            cells: Vec::new(),
             rows: Vec::new(),
             preserved: Preserved::new(),
         }
@@ -69,8 +77,17 @@ mod tests {
     fn new_section_is_empty() {
         let s = Section::new(SectionName::from_static("Geometry"));
         assert_eq!(s.name, SectionName::from_static("Geometry"));
+        assert!(s.cells.is_empty());
         assert!(s.rows.is_empty());
         assert!(s.preserved.children.is_empty());
+    }
+
+    #[test]
+    fn section_holds_its_level_cells() {
+        let mut s = Section::new(SectionName::from_static("Geometry"));
+        s.cells.push(Cell::new(CellName::from_static("NoFill")));
+        assert_eq!(s.cells.len(), 1);
+        assert_eq!(s.cells[0].name, CellName::from_static("NoFill"));
     }
 
     #[test]

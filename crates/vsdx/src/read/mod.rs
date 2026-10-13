@@ -39,9 +39,9 @@
 //! kept verbatim instead.
 //!
 //! The cells a `Section` writes *outside* its rows (`Geometry` writes
-//! `NoFill`, `NoLine`, `NoShow`, `NoSnap`, `NoQuickDrag` there) have no slot
-//! on [`Section`](ferrogram_model::Section) and are kept verbatim in its
-//! [`Preserved`].
+//! `NoFill`, `NoLine`, `NoShow`, `NoSnap`, `NoQuickDrag` there) map to
+//! [`Section::cells`](ferrogram_model::Section) (P2-06b decision 1), where
+//! the lookup sees them before the row cells.
 //!
 //! # Preservation (ADR 0012)
 //!
@@ -1253,7 +1253,7 @@ mod tests {
     }
 
     #[test]
-    fn to_model_keeps_section_level_cells_verbatim() {
+    fn to_model_maps_section_level_cells() {
         let document = to_model(&drawing()).expect("document");
         let style = document
             .style(ferrogram_model::StyleId { index: 0 })
@@ -1261,9 +1261,10 @@ mod tests {
         let section = style.sheet.sections.first().expect("section");
         assert_eq!(section.name.as_str(), "Geometry");
         assert_eq!(section.rows.len(), 1);
-        // `NoFill` has no slot on `Section` and is preserved verbatim.
-        assert_eq!(section.preserved.children.len(), 1);
-        assert_eq!(section.preserved.children[0].name.local, "Cell");
+        // `NoFill` is a section-level cell (P2-06b decision 1).
+        assert_eq!(section.cells.len(), 1);
+        assert_eq!(section.cells[0].name.as_str(), "NoFill");
+        assert!(section.preserved.children.is_empty());
     }
 
     #[test]
