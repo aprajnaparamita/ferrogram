@@ -35,7 +35,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
-Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). Before the first push: rewrite history to drop the verbatim support-page text in `docs/tasks/P1-04.md` at `c5d2652` (P1-11 F1; approved by the user on 2026-10-13, to run after P1-13 and P1-14 merge, with no worktrees open and a backup branch). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
+Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008). At phase end: update the coverage ratchet, run `cargo xtask extract --check`, write `docs/progress/phase-1.md`.
 
 ## Deferred minor findings (for the phase report)
 
@@ -51,3 +51,4 @@ Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 - P1-08: `cargo xtask extract --check` is not in the gate (CI has no `reference/`). The master runs it at each phase end.
 - P1-14 (decided): a Fluent id is not unique within a layout. The same control appears in several places (ribbon, QAT, backstage), so a placement is identified by its path in the layout, not by its id. Command ids stay unique (enforced). Repeats inside one container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in one group) look like extractor artefacts; review them when Phase 4 builds the ribbon, and record the rule in ADR 0007 then.
 - P1-14: serialized layouts are not schema-valid for write-back (the model lacks `backstage.kind` and `quick_access_toolbar.id`). Fix before the screenshot pass writes layouts back.
+- History rewrite (P1-11 F1), done 2026-10-13 with the user's approval: `git filter-repo` replaced the blob of `docs/tasks/P1-04.md` that held the verbatim support-page text with the cleaned version. The final tree is unchanged; commit hashes from `7097013` onward changed, and hashes quoted in docs were updated. A pre-rewrite mirror is at `/Volumes/Dara/ferrogram/backup/ferrogram-pre-rewrite.git`. Delete it before the first push.
