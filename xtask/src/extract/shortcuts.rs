@@ -1087,4 +1087,99 @@ mod tests {
             .collect();
         assert_eq!(mapped.len(), 3, "{mapped:?}");
     }
+
+    // ---- P1-08 goal 4: property tests -------------------------------
+
+    use proptest::prelude::*;
+
+    /// Key tokens the writer must quote: YAML 1.1 boolean scalars and
+    /// other ambiguous plain scalars, plus ordinary canonical keys.
+    const KEY_TOKENS: &[&str] = &[
+        "Y",
+        "N",
+        "On",
+        "Off",
+        "y",
+        "n",
+        "on",
+        "off",
+        "Yes",
+        "No",
+        "True",
+        "false",
+        "null",
+        "~",
+        "0x1F",
+        "0123",
+        "1.5",
+        "-",
+        "+",
+        "*",
+        "=",
+        "Ctrl",
+        "Shift",
+        "Z",
+        "F5",
+        "Spacebar",
+        "Left Arrow",
+    ];
+
+    fn key_token() -> impl Strategy<Value = String> {
+        proptest::sample::select(KEY_TOKENS.to_vec()).prop_map(|s| s.to_string())
+    }
+
+    proptest! {
+        /// The key-sequence parser is total: arbitrary "Press" text
+        /// yields a sequence or `None`, never a panic.
+        #[test]
+        fn sequence_parser_never_panics(press in ".*") {
+            let _ = parse_sequence(&press);
+        }
+
+        /// Every chord the parser emits passes the schema's `keyChord`
+        /// rule: a string of 1 to 32 characters.
+        #[test]
+        fn emitted_chords_pass_the_keychord_rule(press in ".*") {
+            if let Some(sequence) = parse_sequence(&press) {
+                for chord in &sequence {
+                    prop_assert!(!chord.is_empty(), "empty chord for {press:?}");
+                    for key in chord {
+                        prop_assert!(!key.is_empty(), "empty key for {press:?}");
+                        prop_assert!(
+                            key.chars().count() <= 32,
+                            "key {key:?} longer than keyChord maxLength"
+                        );
+                    }
+                }
+            }
+        }
+
+        /// Quoted YAML 1.1 boolean tokens (and other ambiguous plain
+        /// scalars) survive a write-then-read round trip through
+        /// `ui-spec/shortcuts.yaml`.
+        #[test]
+        fn key_tokens_survive_a_yaml_round_trip(
+            tokens in proptest::collection::vec(key_token(), 1..8),
+        ) {
+            let sequence: Vec<Vec<String>> = tokens.iter().map(|t| vec![t.clone()]).collect();
+            let entries = vec![shortcut_value("edit.undo", &sequence, "Frequently used shortcuts")];
+            let text = render_shortcuts_yaml(&entries).unwrap();
+            let parsed: Value = serde_saphyr::from_str(&text).unwrap();
+            let back: Vec<Vec<String>> = parsed[0]
+                .get("sequence")
+                .and_then(Value::as_array)
+                .unwrap()
+                .iter()
+                .map(|chord| {
+                    chord
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|key| key.as_str().unwrap_or_default().to_string())
+                        .collect()
+                })
+                .collect();
+            prop_assert_eq!(back, sequence, "tokens lost in the YAML round trip");
+        }
+    }
 }

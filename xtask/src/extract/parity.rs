@@ -327,4 +327,22 @@ mod tests {
         assert!(glob_match(&glob_to_pattern("*"), ""));
         assert!(glob_match(&glob_to_pattern("*Macro*"), "My\nMacro"));
     }
+    // ---- P1-08 goal 4: property tests -------------------------------
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// The out-of-scope glob matcher is total: arbitrary patterns
+        /// and ids never panic.
+        #[test]
+        fn glob_matching_never_panics(glob in ".*", s in ".*") {
+            let _ = glob_match(&glob_to_pattern(&glob), &s);
+        }
+
+        /// `*` matches any string.
+        #[test]
+        fn star_matches_any_string(s in ".*") {
+            prop_assert!(glob_match(&glob_to_pattern("*"), &s));
+        }
+    }
 }

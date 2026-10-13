@@ -451,4 +451,73 @@ mod tests {
         assert!(kv_pairs("").is_empty());
         assert_eq!(cell_text(""), "");
     }
+    // ---- P1-08 goal 4: property tests -------------------------------
+
+    use proptest::prelude::*;
+
+    /// Cells whose text survives render + parse unchanged: no line
+    /// breaks, no leading/trailing whitespace, and never a
+    /// delimiter-row look-alike (the `|---|` alphabet is excluded).
+    fn cell_strategy() -> impl Strategy<Value = String> {
+        "[A-Za-z0-9 _.,;=+*()|\\\\]{0,12}".prop_map(|s| s.trim().to_string())
+    }
+
+    /// Renders one table row with `\|` and `\\` escapes and a closing
+    /// pipe.
+    fn render_row(cells: &[String]) -> String {
+        let mut out = String::from("|");
+        for cell in cells {
+            for ch in cell.chars() {
+                match ch {
+                    '\\' => out.push_str("\\\\"),
+                    '|' => out.push_str("\\|"),
+                    other => out.push(other),
+                }
+            }
+            out.push('|');
+        }
+        out
+    }
+
+    /// Renders a whole pipe table: header row, delimiter row, body
+    /// rows.
+    fn render_table(rows: &[Vec<String>]) -> String {
+        let cols = rows.first().map(Vec::len).unwrap_or(0);
+        let mut out = String::new();
+        out.push_str(&render_row(&rows[0]));
+        out.push('\n');
+        out.push_str(&"|---".repeat(cols));
+        out.push_str("|\n");
+        for row in &rows[1..] {
+            out.push_str(&render_row(row));
+            out.push('\n');
+        }
+        out
+    }
+
+    proptest! {
+        /// Every markdown entry point is total: arbitrary input
+        /// yields fewer or shorter results, never a panic.
+        #[test]
+        fn markdown_parsers_never_panic(text in ".*") {
+            let _ = fenced_blocks(&text);
+            let _ = tables(&text);
+            let _ = cell_text(&text);
+            let _ = kv_pairs(&text);
+        }
+
+        /// A table that is rendered and parsed again keeps its cells.
+        #[test]
+        fn rendered_tables_round_trip(rows in proptest::collection::vec(
+            proptest::collection::vec(cell_strategy(), 1..5),
+            1..5,
+        )) {
+            let text = render_table(&rows);
+            let parsed = tables(&text);
+            prop_assert_eq!(parsed.len(), 1, "one table must be parsed from {:?}", text);
+            let table = &parsed[0];
+            prop_assert_eq!(&table.header, &rows[0]);
+            prop_assert_eq!(&table.rows, &rows[1..]);
+        }
+    }
 }

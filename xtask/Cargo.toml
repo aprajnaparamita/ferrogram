@@ -40,6 +40,8 @@ ferrogram-ui-spec = { path = "../crates/ui-spec" }
 # fixture builder writes tiny .xlsx workbooks for the extract --check
 # tests.
 zip = "8.6"
+# Property tests (P1-08 goal 4).
+proptest = "1"
 
 [lints]
 workspace = true
