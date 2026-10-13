@@ -23,7 +23,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | merged (pass: 0 blocker, 2 major, 7 minor) | agent/P1-10 |
 | [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | merged (pass with findings: 0 blocker, 1 major, 4 minor) | agent/P1-11 |
 | [P1-13](tasks/P1-13.md) | implementer | P1-09..11 | ready (parallel) | — |
-| [P1-14](tasks/P1-14.md) | implementer | P1-09..10 | ready (parallel) | — |
+| [P1-14](tasks/P1-14.md) | implementer | P1-09..10 | merged | agent/P1-14 |
 
 States: not written · outline · ready · in progress · in review · merged · blocked.
 
@@ -49,3 +49,5 @@ Open master items: create the Phase 2 task for `cargo xtask codegen` (ADR 0008).
 - P1-04: `shapesheet.toml` has no row-type families (MoveTo, LineTo, ...); `shortcuts.yaml` has no way to mark held keys such as "Arrow Keys". Revisit in Phase 2 (codegen) and Phase 4 (shortcuts).
 - P1-08: the fuzz crate `crates/ui-spec/fuzz` uses edition 2021 (cargo-fuzz default); move to 2024 with the next fuzz target. Seed a fuzz corpus for CI runs later.
 - P1-08: `cargo xtask extract --check` is not in the gate (CI has no `reference/`). The master runs it at each phase end.
+- P1-14 (decided): a Fluent id is not unique within a layout. The same control appears in several places (ribbon, QAT, backstage), so a placement is identified by its path in the layout, not by its id. Command ids stay unique (enforced). Repeats inside one container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in one group) look like extractor artefacts; review them when Phase 4 builds the ribbon, and record the rule in ADR 0007 then.
+- P1-14: serialized layouts are not schema-valid for write-back (the model lacks `backstage.kind` and `quick_access_toolbar.id`). Fix before the screenshot pass writes layouts back.
