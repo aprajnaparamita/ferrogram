@@ -1,0 +1,14 @@
+# Test fixture for crates/ui-spec. Not real Microsoft data.
+# Note: key tokens like Y and N must be quoted; plain `Y` is a YAML
+# 1.1 boolean.
+- sequence: [[Ctrl, Z]]
+  command: edit.undo
+  scope: global
+  section: Frequently used shortcuts
+- sequence: [[Ctrl, "Y"]]
+  command: edit.redo
+  scope: global
+- sequence: [[Alt, H], [F, O]]
+  command: file.save
+  scope: ribbon
+  section: Ribbon keytips
