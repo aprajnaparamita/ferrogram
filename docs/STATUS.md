@@ -21,7 +21,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P1-08](tasks/P1-08.md) | test-engineer | P1-03..07 | merged | agent/P1-08 |
 | [P1-09](tasks/P1-09.md) | reviewer | P1-08 | merged (approve with fixes: 0 blocker, 2 major, 8 minor) | agent/P1-09 |
 | [P1-10](tasks/P1-10.md) | coverage-auditor | P1-08 | merged (pass: 0 blocker, 2 major, 7 minor) | agent/P1-10 |
-| [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | ready (parallel) | — |
+| [P1-11](tasks/P1-11.md) | cleanroom-auditor | P1-08 | merged (pass with findings: 0 blocker, 1 major, 4 minor) | agent/P1-11 |
 
 States: not written · outline · ready · in progress · in review · merged · blocked.
 
