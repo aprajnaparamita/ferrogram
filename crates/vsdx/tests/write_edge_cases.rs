@@ -1220,3 +1220,118 @@ fn sheet_level_preservation_fallbacks_survive_the_round_trip() {
     assert_eq!(attr(row_cells[0], "V"), Some("7"));
     assert_eq!(children_named(rows[1], "RefBy").len(), 1);
 }
+
+/// Strips the writer's generated `Rel` markers from pages and masters: a new
+/// contents relationship brings a `Rel` element the reader keeps in the
+/// entity's preserved content. It is writer furniture, not document content
+/// (the property tests normalize the same way).
+fn without_rel_markers(document: &mut Document) {
+    for page in &mut document.pages {
+        page.preserved
+            .children
+            .retain(|child| child.name.local != "Rel");
+    }
+    for master in &mut document.masters {
+        master
+            .preserved
+            .children
+            .retain(|child| child.name.local != "Rel");
+    }
+}
+
+/// A document with content in every list, built in the arena order the
+/// reader builds (master shapes first, then page shapes).
+fn plumbing_document() -> Document {
+    let mut document = Document::new();
+    let master_shape = document.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+    let first = document.add_shape(Shape::new(ShapeId { index: 1 }, 1));
+    let second = document.add_shape(Shape::new(ShapeId { index: 2 }, 2));
+    let mut master = Master::new(MasterId { index: 0 }, 30);
+    master.name_u = "Box".to_owned();
+    master.shapes.push(master_shape);
+    document.masters.push(master);
+    let mut page = Page::new(PageId { index: 0 }, 10);
+    page.name = "P1".to_owned();
+    page.shapes.push(first);
+    document.pages.push(page);
+    let mut page = Page::new(PageId { index: 1 }, 20);
+    page.name = "P2".to_owned();
+    page.shapes.push(second);
+    document.pages.push(page);
+    document
+}
+
+/// Coverage (audit major 2): `write_document` into an empty package
+/// generates the parts from the model alone, and the result reads back to
+/// the same model.
+#[test]
+fn writing_into_an_empty_package_reads_back_the_same_model() {
+    let document = plumbing_document();
+    let bytes = write_document(&document, &Package::new()).expect("writes");
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("the written package reads");
+    let mut model = to_model(&package).expect("maps");
+    without_rel_markers(&mut model);
+    assert_eq!(model, document);
+}
+
+/// Coverage (audit major 2): a package without `[Content_Types].xml` (the
+/// reader infers its declarations) writes back to the same model.
+#[test]
+fn writing_into_a_package_without_content_types_reads_back_the_same_model() {
+    let bytes = common::build(common::Fixture::Malformed(
+        common::Malformed::NoContentTypes,
+    ));
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("the fixture reads");
+    let document = to_model(&package).expect("maps");
+    let out = write_document(&document, &package).expect("writes");
+    let reread = read_package(&out, &Limits::DEFAULT).expect("the written package reads");
+    assert_eq!(to_model(&reread).expect("maps"), document);
+}
+
+/// Coverage (audit major 2): a package with only a main part and no
+/// `[Content_Types].xml` gets the missing pages and masters plumbing built,
+/// and reads back to the same model. A stale relationship id exercises the
+/// fresh-id collision loop.
+#[test]
+fn writing_builds_the_missing_index_parts_and_relationships() {
+    let document = plumbing_document();
+    let mut bare = Package::new();
+    bare.parts.push(Part {
+        name: PartName::new("/visio/document.xml"),
+        content_type: ContentType::new("application/xml"),
+        data: PartData::Xml(element("VisioDocument", &[], &[])),
+    });
+    bare.relationships.push(Relationship {
+        source: PartName::new("/"),
+        id: RelationshipId::new("rId1"),
+        rel_type: "http://schemas.microsoft.com/visio/2010/relationships/document".to_owned(),
+        target: "visio/document.xml".to_owned(),
+        target_mode: TargetMode::Internal,
+        preserved: Preserved::new(),
+    });
+    // A stale id on the (missing) pages index: the next fresh id must skip
+    // it.
+    bare.relationships.push(Relationship {
+        source: PartName::new("/visio/pages/pages.xml"),
+        id: RelationshipId::new("rId2"),
+        rel_type: "http://schemas.microsoft.com/visio/2010/relationships/page".to_owned(),
+        target: "page1.xml".to_owned(),
+        target_mode: TargetMode::Internal,
+        preserved: Preserved::new(),
+    });
+
+    let out = write_document(&document, &bare).expect("writes");
+    let reread = read_package(&out, &Limits::DEFAULT).expect("the written package reads");
+    for name in [
+        "/visio/pages/pages.xml",
+        "/visio/pages/page1.xml",
+        "/visio/pages/page2.xml",
+        "/visio/masters/masters.xml",
+        "/visio/masters/master1.xml",
+    ] {
+        assert!(reread.part(&PartName::new(name)).is_some(), "{name} exists");
+    }
+    let mut model = to_model(&reread).expect("maps");
+    without_rel_markers(&mut model);
+    assert_eq!(model, document);
+}
