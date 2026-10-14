@@ -117,6 +117,14 @@ pub(crate) fn visio_root(style: &NameStyle, local: &str) -> XmlNode {
 }
 
 /// An empty Visio element with no attributes or children.
+///
+/// Every `map_or_else(|| emit::empty(...), ...)` miss arm in the patcher
+/// lands here (coverage audit minor 6): those arms are defensive and
+/// unreachable today, because `sync_children` enumerates the same entity
+/// list the `build` closure indexes (so the index is always in range). They
+/// exist to satisfy `clippy::indexing_slicing` without a panic; a future
+/// refactor that makes one reachable gets an empty element of the right
+/// kind rather than an element guessed at wrong.
 pub(crate) fn empty(style: &NameStyle, local: &str) -> XmlNode {
     XmlNode {
         name: style.visio(local),
