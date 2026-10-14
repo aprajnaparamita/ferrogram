@@ -23,6 +23,7 @@ use crate::document::Document;
 use crate::generated::{CELLS, CellDef};
 use crate::id::{MasterId, ShapeId, StyleId};
 use crate::name::CellName;
+use crate::section::Section;
 use crate::sheet::Sheet;
 
 /// Where a resolved cell value came from (ADR 0013).
@@ -92,15 +93,14 @@ impl CellLookup for Document {
 impl Document {
     /// Resolves one cell of one row of a repeated section (ADR 0019).
     ///
-    /// `row` is the row's position in the section. The rungs are the local
-    /// row's cell, the master's row at the same position in the same
-    /// section (matched by `IX` when both sides have one), no style rung
-    /// (a `Geometry` cell never comes from a style), the section default
-    /// and the hard default. `Inh` does not define (ADR 0013 amendment);
+    /// `row` is the row's position in the section, and `section` names the
+    /// section (the first section with that name when a sheet has several).
+    /// The rungs are the local row's cell, the master's row at the same
+    /// position in the same section (matched by `IX` when both sides have
+    /// one, else by position), **no style rung** (a `Geometry` cell never
+    /// comes from a style, ADR 0019 decision 5), the section default and
+    /// the hard default. `Inh` does not define (ADR 0013 amendment);
     /// cycles are cut as in [`CellLookup::resolve`].
-    ///
-    /// Returns [`crate::Error::NotImplemented`] until the model work lands
-    /// (P3-02).
     pub fn resolve_row_cell(
         &self,
         sheet: crate::values::SheetRef,
@@ -108,22 +108,250 @@ impl Document {
         row: usize,
         cell: &CellName,
     ) -> Result<Resolved<'_>, crate::Error> {
-        let _ = (sheet, section, row, cell);
-        Err(crate::Error::NotImplemented)
+        self.resolve_repeated_with_table(
+            sheet,
+            &RepeatedCell {
+                section,
+                section_ix: None,
+                section_pos: Some(0),
+                row: Some(row),
+                row_ix: None,
+            },
+            cell,
+            CELLS,
+        )
     }
 
     /// Resolves a page-sheet cell (ADR 0019): the page's own cell, the
-    /// style chain, the section default, the hard default.
-    ///
-    /// Returns [`crate::Error::NotImplemented`] until the model work lands
-    /// (P3-02).
+    /// style chain selected by the cell's kind (through the page sheet's
+    /// `LineStyle`/`FillStyle`/`TextStyle` links, which the read side keeps
+    /// in [`Preserved`](crate::Preserved)), the section default and the
+    /// hard default.
     pub fn resolve_page_cell(
         &self,
         page: crate::id::PageId,
         cell: &CellName,
     ) -> Result<Resolved<'_>, crate::Error> {
-        let _ = (page, cell);
-        Err(crate::Error::NotImplemented)
+        self.resolve_page_cell_with_table(page, cell, CELLS)
+    }
+}
+
+/// The identity of one cell of a repeated section for a lookup: the
+/// section by name, `IX` and position among same-named sections, and the
+/// row by position and `IX` (ADR 0019 decision 5). `row: None` names a
+/// section-level cell (the `NoFill` family of `Geometry`).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RepeatedCell<'a> {
+    /// The section name as written.
+    pub(crate) section: &'a str,
+    /// The section's `IX`, when both sides have one.
+    pub(crate) section_ix: Option<i32>,
+    /// The section's position among the same-named sections of its sheet.
+    pub(crate) section_pos: Option<usize>,
+    /// The row's position in the section, or `None` for a section-level
+    /// cell.
+    pub(crate) row: Option<usize>,
+    /// The row's `IX`, when both sides have one.
+    pub(crate) row_ix: Option<i32>,
+}
+
+impl Document {
+    /// Resolves one cell of one row of a repeated section against `table`,
+    /// identifying the section by name and by its `IX` / position among
+    /// same-named sections (so a sheet with several `Geometry` sections
+    /// resolves each section's rows against the master's matching section).
+    ///
+    /// `row` is the row's position in the section and `row_ix` the row's own
+    /// `IX` (used to match the master's row "by `IX` when both sides have
+    /// one", ADR 0019 decision 5). `row: None` resolves a section-level cell
+    /// (the `NoFill` family of `Geometry`).
+    pub(crate) fn resolve_repeated_with_table(
+        &self,
+        sheet: crate::values::SheetRef,
+        repeated: &RepeatedCell<'_>,
+        cell: &CellName,
+        table: &[CellDef],
+    ) -> Result<Resolved<'_>, crate::Error> {
+        let entity_sheet = self.sheet_of(sheet)?;
+        let mut via = Vec::new();
+
+        // The local section and the row's `IX` when the caller did not pass
+        // one: the master rung matches "by `IX` when both sides have one".
+        let local_section = match_repeated_section(
+            entity_sheet,
+            repeated.section,
+            repeated.section_ix,
+            repeated.section_pos,
+        );
+        let row_ix = match (repeated.row_ix, repeated.row) {
+            (None, Some(row)) => local_section
+                .and_then(|local| local.rows.get(row))
+                .and_then(|local_row| local_row.ix),
+            (row_ix, _) => row_ix,
+        };
+
+        // 1. Local: the row's own cell (or the section's own cell).
+        via.push(ValueSource::Local);
+        if let Some(found) =
+            local_section.and_then(|local| repeated_cell(local, repeated.row, cell))
+            && defines(found)
+        {
+            return Ok(Resolved {
+                value: found.value.as_ref(),
+                source: ValueSource::Local,
+                formula: found.formula.as_deref(),
+                via,
+            });
+        }
+
+        // 2. Master chain, with the sub-shape rule (ADR 0013) and the
+        //    position rule for masters with several top-level shapes
+        //    (P2-06b decision 2). There is no style rung: a repeated-section
+        //    cell like `Geometry`'s never comes from a style (ADR 0019
+        //    decision 5).
+        if let crate::values::SheetRef::Shape(shape) = sheet {
+            let mut visited_masters: Vec<MasterId> = Vec::new();
+            if let Some((first, root, mut path)) = self.instance_chain_start(shape) {
+                let position = self.sibling_position(root);
+                let mut current = first;
+                loop {
+                    if visited_masters.contains(&current) {
+                        // A cyclic master chain: record the repeat and stop it.
+                        via.push(ValueSource::Master(current));
+                        break;
+                    }
+                    visited_masters.push(current);
+                    via.push(ValueSource::Master(current));
+                    let mut chained = None;
+                    if let Some(content) = self
+                        .master(current)
+                        .and_then(|m| self.master_shape(m, position))
+                    {
+                        let target = walk_down(self, content, &path).unwrap_or(content);
+                        if let Some(found) = match_repeated_section(
+                            &target.sheet,
+                            repeated.section,
+                            repeated.section_ix,
+                            repeated.section_pos,
+                        )
+                        .and_then(|master_section| {
+                            matched_row_cell(master_section, repeated.row, row_ix, cell)
+                        })
+                        .filter(|found| defines(found))
+                        {
+                            return Ok(Resolved {
+                                value: found.value.as_ref(),
+                                source: ValueSource::Master(current),
+                                formula: found.formula.as_deref(),
+                                via,
+                            });
+                        }
+                        // A master shape that is itself an instance continues
+                        // the chain at that master's own root.
+                        chained = target.master;
+                        path.clear();
+                    }
+                    match chained {
+                        Some(next) => current = next,
+                        None => break,
+                    }
+                }
+            }
+        }
+
+        // 3. No style rung (ADR 0019 decision 5).
+        Ok(fall_through(
+            table,
+            cell.as_str(),
+            Some(repeated.section),
+            via,
+        ))
+    }
+
+    /// Resolves a page-sheet cell against `table` (ADR 0019): the page's own
+    /// cell, the style chain selected by the cell's kind, the section
+    /// default, the hard default.
+    pub(crate) fn resolve_page_cell_with_table(
+        &self,
+        page: crate::id::PageId,
+        cell: &CellName,
+        table: &[CellDef],
+    ) -> Result<Resolved<'_>, crate::Error> {
+        let entity = self.page(page).ok_or(crate::Error::UnknownPage(page))?;
+        let mut via = Vec::new();
+        // The section the cell lives in, when a find saw it; it selects the
+        // style and disambiguates table entries.
+        let mut section_hint: Option<&str> = None;
+
+        // 1. Local: the cell on the page sheet itself.
+        via.push(ValueSource::Local);
+        if let Some((found, hint)) = sheet_cell(&entity.sheet, cell) {
+            section_hint = hint;
+            if defines(found) {
+                return Ok(Resolved {
+                    value: found.value.as_ref(),
+                    source: ValueSource::Local,
+                    formula: found.formula.as_deref(),
+                    via,
+                });
+            }
+        }
+
+        // 2. Style chain from the page sheet's style links (P2-06b decision
+        //    3); the links are read from the preserved `PageSheet`
+        //    attributes (ADR 0019 decision 1, read-side only).
+        let mut visited_styles: Vec<StyleId> = Vec::new();
+        if let Some(kind) = style_kind_for(table, cell.as_str(), section_hint) {
+            let mut link = page_style_link(entity, kind);
+            while let Some(visio_id) = link {
+                let Some(style) = self.style_by_visio_id(visio_id) else {
+                    // A dangling style reference ends the chain.
+                    break;
+                };
+                let id = style.id;
+                if visited_styles.contains(&id) {
+                    // A cyclic style chain: record the repeat and stop it.
+                    via.push(ValueSource::Style(id));
+                    break;
+                }
+                visited_styles.push(id);
+                via.push(ValueSource::Style(id));
+                if let Some((found, hint)) = sheet_cell(&style.sheet, cell) {
+                    section_hint = hint;
+                    if defines(found) {
+                        return Ok(Resolved {
+                            value: found.value.as_ref(),
+                            source: ValueSource::Style(id),
+                            formula: found.formula.as_deref(),
+                            via,
+                        });
+                    }
+                }
+                link = match kind {
+                    StyleKind::Line => style.line_style,
+                    StyleKind::Fill => style.fill_style,
+                    StyleKind::Text => style.text_style,
+                };
+            }
+        }
+
+        // 3. Section default from the ShapeSheet table, 4. hard default.
+        Ok(fall_through(table, cell.as_str(), section_hint, via))
+    }
+
+    /// The sheet of a [`SheetRef`](crate::values::SheetRef), or the id error
+    /// of a stale reference (a caller bug, not file data).
+    pub(crate) fn sheet_of(&self, sheet: crate::values::SheetRef) -> Result<&Sheet, crate::Error> {
+        match sheet {
+            crate::values::SheetRef::Shape(shape) => self
+                .shape(shape)
+                .map(|entity| &entity.sheet)
+                .ok_or(crate::Error::UnknownShape(shape)),
+            crate::values::SheetRef::Page(page) => self
+                .page(page)
+                .map(|entity| &entity.sheet)
+                .ok_or(crate::Error::UnknownPage(page)),
+        }
     }
 }
 
@@ -247,30 +475,8 @@ impl Document {
             }
         }
 
-        // 4. Section default from the ShapeSheet table.
-        via.push(ValueSource::SectionDefault);
-        let def = find_def(table, cell.as_str(), section_hint);
-        if let Some(value) = def
-            .and_then(|d| d.default_value.map(|text| (text, d)))
-            .and_then(|(text, d)| interned_default(text, d.default_unit, d.kind))
-        {
-            return Ok(Resolved {
-                value: Some(value),
-                source: ValueSource::SectionDefault,
-                formula: None,
-                via,
-            });
-        }
-
-        // 5. Hard default: the default of the cell's type.
-        via.push(ValueSource::HardDefault);
-        let value = def.and_then(|d| hard_default(d.kind));
-        Ok(Resolved {
-            value,
-            source: ValueSource::HardDefault,
-            formula: None,
-            via,
-        })
+        // 4. Section default from the ShapeSheet table, 5. hard default.
+        Ok(fall_through(table, cell.as_str(), section_hint, via))
     }
 
     /// The master chain that applies to `shape`: the master of the nearest
@@ -279,7 +485,10 @@ impl Document {
     ///
     /// Returns `None` when no ancestor is a master instance, and when the
     /// parent chain is missing or cyclic (a malformed file must not loop).
-    fn instance_chain_start(&self, shape: ShapeId) -> Option<(MasterId, ShapeId, Vec<usize>)> {
+    pub(crate) fn instance_chain_start(
+        &self,
+        shape: ShapeId,
+    ) -> Option<(MasterId, ShapeId, Vec<usize>)> {
         let mut path = Vec::new();
         let mut visited = Vec::new();
         let mut current = shape;
@@ -307,7 +516,7 @@ impl Document {
     /// The position of `shape` among its siblings: its parent's children, or
     /// the page's top-level shapes when it has no parent. `None` when the
     /// shape is unreachable from any page (a malformed file).
-    fn sibling_position(&self, shape: ShapeId) -> Option<usize> {
+    pub(crate) fn sibling_position(&self, shape: ShapeId) -> Option<usize> {
         let node = self.shape(shape)?;
         if let Some(parent) = node.parent {
             return self
@@ -325,7 +534,7 @@ impl Document {
     /// 2): the master's only shape when it has exactly one top-level shape,
     /// the shape at `position` otherwise. A position the master does not
     /// have degrades to the master's first shape.
-    fn master_shape(
+    pub(crate) fn master_shape(
         &self,
         master: &crate::master::Master,
         position: Option<usize>,
@@ -346,7 +555,7 @@ impl Document {
 /// The corresponding shape of `root` at the child positions `path`, or
 /// `None` when the structure does not match. The walk is bounded by
 /// `path.len()`.
-fn walk_down<'a>(
+pub(crate) fn walk_down<'a>(
     doc: &'a Document,
     root: &'a crate::shape::Shape,
     path: &[usize],
@@ -362,6 +571,131 @@ fn walk_down<'a>(
 /// The formula `.vsdx` writes on a cell whose value is inherited. Its cached
 /// value is only a snapshot of the inherited one.
 const INHERIT_FORMULA: &str = "Inh";
+
+/// The last two rungs of every lookup (ADR 0013): the ShapeSheet table's
+/// `default_value` (rung 4) and the default of the cell's type (rung 5).
+fn fall_through(
+    table: &[CellDef],
+    name: &str,
+    section_hint: Option<&str>,
+    mut via: Vec<ValueSource>,
+) -> Resolved<'static> {
+    via.push(ValueSource::SectionDefault);
+    let def = find_def(table, name, section_hint);
+    if let Some(value) = def
+        .and_then(|d| d.default_value.map(|text| (text, d)))
+        .and_then(|(text, d)| interned_default(text, d.default_unit, d.kind))
+    {
+        return Resolved {
+            value: Some(value),
+            source: ValueSource::SectionDefault,
+            formula: None,
+            via,
+        };
+    }
+    via.push(ValueSource::HardDefault);
+    let value = def.and_then(|d| hard_default(d.kind));
+    Resolved {
+        value,
+        source: ValueSource::HardDefault,
+        formula: None,
+        via,
+    }
+}
+
+/// The section of `sheet` that matches a repeated section of the same name,
+/// matched by `IX` when both sides have one, else by position among the
+/// same-named sections (ADR 0019 decision 5).
+pub(crate) fn match_repeated_section<'a>(
+    sheet: &'a Sheet,
+    name: &str,
+    section_ix: Option<i32>,
+    section_pos: Option<usize>,
+) -> Option<&'a Section> {
+    let same_name = || {
+        sheet
+            .sections
+            .iter()
+            .filter(|section| section.name.as_str() == name)
+    };
+    if let Some(section_ix) = section_ix
+        && let Some(found) = same_name().find(|section| section_ix_of(section) == Some(section_ix))
+    {
+        return Some(found);
+    }
+    match section_pos {
+        Some(position) => same_name().nth(position),
+        None => same_name().next(),
+    }
+}
+
+/// The `IX` attribute of a section, kept in its preserved attributes
+/// (`Section` has no field for it).
+pub(crate) fn section_ix_of(section: &Section) -> Option<i32> {
+    section
+        .preserved
+        .attributes
+        .iter()
+        .find(|attribute| attribute.name.local == "IX")
+        .and_then(|attribute| attribute.value.trim().parse::<i32>().ok())
+}
+
+/// The cell of one row of a repeated section, or of the section itself when
+/// `row` is `None` (a section-level cell like `NoFill`).
+fn repeated_cell<'a>(
+    section: &'a Section,
+    row: Option<usize>,
+    cell: &CellName,
+) -> Option<&'a Cell> {
+    match row {
+        None => section.cells.iter().find(|c| c.name == *cell),
+        Some(row) => section
+            .rows
+            .get(row)?
+            .cells
+            .iter()
+            .find(|c| c.name == *cell),
+    }
+}
+
+/// The cell of the master's row that matches a local row at `row` with `IX`
+/// `row_ix`: by `IX` when both sides have one, else by position (ADR 0019
+/// decision 5).
+fn matched_row_cell<'a>(
+    section: &'a Section,
+    row: Option<usize>,
+    row_ix: Option<i32>,
+    cell: &CellName,
+) -> Option<&'a Cell> {
+    let Some(row) = row else {
+        return repeated_cell(section, None, cell);
+    };
+    let matched = match row_ix {
+        Some(row_ix) => section
+            .rows
+            .iter()
+            .find(|candidate| candidate.ix == Some(row_ix))
+            .or_else(|| section.rows.get(row)),
+        None => section.rows.get(row),
+    };
+    matched?.cells.iter().find(|c| c.name == *cell)
+}
+
+/// The style link of a page sheet for one style kind (ADR 0019): the
+/// `LineStyle`/`FillStyle`/`TextStyle` attribute of the `PageSheet`
+/// element, which the read side keeps in the page's preserved attributes.
+fn page_style_link(page: &crate::page::Page, kind: StyleKind) -> Option<u32> {
+    let wanted = match kind {
+        StyleKind::Line => "LineStyle",
+        StyleKind::Fill => "FillStyle",
+        StyleKind::Text => "TextStyle",
+    };
+    page.preserved
+        .attributes
+        .iter()
+        .find(|attribute| attribute.name.local == wanted)
+        .and_then(|attribute| attribute.value.trim().parse::<u32>().ok())
+}
 
 /// Whether a cell defines the value of its source: it carries a formula or
 /// a cached value (ADR 0013, "the first that defines the cell"). A cell
@@ -570,7 +904,7 @@ fn parse_default_value(text: &str, default_unit: &str, kind: &str) -> Option<Cel
 }
 
 /// Removes one layer of matching quotes.
-fn unquote(text: &str) -> String {
+pub(crate) fn unquote(text: &str) -> String {
     for quote in ['"', '\''] {
         if text.len() >= 2
             && text.starts_with(quote)
@@ -1825,28 +2159,595 @@ mod tests {
 }
 
 #[cfg(test)]
-mod phase3_stub_tests {
-    use super::*;
+mod phase3_tests {
+    use crate::generated::CellDef;
     use crate::id::PageId;
+    use crate::page::Page;
+    use crate::raw::{QName, XmlAttribute};
+    use crate::section::{Row, Section};
     use crate::values::SheetRef;
 
+    use super::*;
+
+    /// A cell with a cached number.
+    fn number_cell(name: &str, value: f64) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Number(value));
+        cell
+    }
+
+    /// A cell whose formula is `Inh`: it does not define (ADR 0013).
+    fn inherited_cell(name: &str) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.formula = Some(INHERIT_FORMULA.to_owned());
+        cell.value = Some(CellValue::Number(99.0));
+        cell
+    }
+
+    /// A `Geometry` section with one row of `cells`.
+    fn geometry(cells: Vec<Cell>) -> Section {
+        let mut section = Section::new(crate::name::SectionName::from_static("Geometry"));
+        let mut row = Row::new();
+        row.row_type = Some("LineTo".to_owned());
+        row.ix = Some(1);
+        row.cells = cells;
+        section.rows.push(row);
+        section
+    }
+
+    /// A document with one master (`Box`) whose only shape carries
+    /// `master_cells`, and one instance of it.
+    fn instance_of_master(master_cells: Vec<Cell>) -> (Document, ShapeId) {
+        let mut doc = Document::new();
+        let master_shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(master_shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(master_cells));
+        doc.masters
+            .push(crate::master::Master::new(MasterId { index: 0 }, 1));
+        doc.masters[0].shapes.push(master_shape);
+        let instance = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let shape = doc.shape_mut(instance).expect("exists");
+            shape.master = Some(MasterId { index: 0 });
+        }
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        (doc, instance)
+    }
+
     #[test]
-    fn resolve_row_cell_is_not_implemented_yet() {
-        let doc = Document::new();
-        let cell = CellName::from_static("X");
+    fn row_cells_resolve_from_the_local_row_first() {
+        let mut doc = Document::new();
+        let shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(vec![number_cell("X", 1.5)]));
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(shape),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(1.5)));
+        assert_eq!(resolved.source, ValueSource::Local);
+        assert_eq!(resolved.via, vec![ValueSource::Local]);
+    }
+
+    #[test]
+    fn an_instance_with_no_rows_resolves_the_masters_rows() {
+        // Acceptance: an instance with no geometry rows resolves the
+        // master's rows.
+        let (mut doc, instance) = instance_of_master(vec![number_cell("X", 4.0)]);
+        // The instance gets an empty Geometry section: no local rows.
+        doc.shape_mut(instance)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(Vec::new()));
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(4.0)));
+        assert_eq!(resolved.source, ValueSource::Master(MasterId { index: 0 }));
         assert_eq!(
-            doc.resolve_row_cell(SheetRef::Shape(ShapeId { index: 0 }), "Geometry", 0, &cell),
-            Err(crate::Error::NotImplemented)
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 0 })
+            ]
         );
     }
 
     #[test]
-    fn resolve_page_cell_is_not_implemented_yet() {
-        let doc = Document::new();
-        let cell = CellName::from_static("PageWidth");
+    fn an_inh_cell_does_not_define() {
+        // Acceptance: `Inh` cells do not define; the cached snapshot (99)
+        // is never used.
+        let (mut doc, instance) = instance_of_master(vec![number_cell("X", 4.0)]);
+        doc.shape_mut(instance)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(vec![inherited_cell("X")]));
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(4.0)));
+        assert_eq!(resolved.source, ValueSource::Master(MasterId { index: 0 }));
+    }
+
+    #[test]
+    fn a_style_rung_never_applies_to_geometry_cells() {
+        // Acceptance: a style rung never applies to `Geometry` cells (ADR
+        // 0019 decision 5), even when the shape's links reach a style that
+        // defines the cell.
+        let (mut doc, instance) = instance_of_master(Vec::new());
+        {
+            let shape = doc.shape_mut(instance).expect("exists");
+            shape.line_style = Some(7);
+            shape.fill_style = Some(7);
+            shape.text_style = Some(7);
+            shape
+                .sheet
+                .sections
+                .push(geometry(vec![inherited_cell("X")]));
+        }
+        let mut style = crate::style::Style::new(StyleId { index: 0 });
+        style.visio_id = 7;
+        style
+            .sheet
+            .sections
+            .push(geometry(vec![number_cell("X", 5.0)]));
+        doc.stylesheet.styles.push(style);
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(resolved.value, Some(&CellValue::Number(0.0)));
         assert_eq!(
-            doc.resolve_page_cell(PageId { index: 0 }, &cell),
-            Err(crate::Error::NotImplemented)
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 0 }),
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
         );
+    }
+
+    #[test]
+    fn rows_match_by_ix_when_both_sides_have_one() {
+        // The master's row carries `IX = 5` at position 0; the instance's
+        // row is at position 0 with `IX = 1`. The master rung matches by
+        // `IX` first (no match here) and degrades to position.
+        let (mut doc, instance) = instance_of_master(vec![number_cell("X", 4.0)]);
+        {
+            let shape = doc.shape_mut(instance).expect("exists");
+            let mut section = geometry(Vec::new());
+            section.rows[0].ix = Some(1);
+            section.rows[0].cells.push(inherited_cell("X"));
+            shape.sheet.sections.push(section);
+        }
+        // No master row with IX 1: position 0 matches.
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(4.0)));
+
+        // Now give the master row IX 1 and add a second master row.
+        let master_shape = doc.masters[0].shapes[0];
+        {
+            let shape = doc.shape_mut(master_shape).expect("exists");
+            let section = &mut shape.sheet.sections[0];
+            section.rows[0].ix = Some(5);
+            section.rows[0].cells[0].value = Some(CellValue::Number(4.0));
+            let mut second = Row::new();
+            second.ix = Some(1);
+            second.cells.push(number_cell("X", 6.0));
+            section.rows.push(second);
+        }
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(6.0)));
+    }
+
+    #[test]
+    fn several_geometry_sections_match_by_ix() {
+        // Two `Geometry` sections on both sides, disambiguated by `IX`.
+        let mut doc = Document::new();
+        let master_shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(master_shape).expect("exists");
+            shape
+                .sheet
+                .sections
+                .push(geometry(vec![number_cell("X", 1.0)]));
+            let mut second = geometry(vec![number_cell("X", 2.0)]);
+            second.preserved.attributes.push(XmlAttribute {
+                name: QName {
+                    prefix: None,
+                    uri: None,
+                    local: "IX".to_owned(),
+                },
+                value: "1".to_owned(),
+            });
+            shape.sheet.sections.push(second);
+        }
+        doc.masters
+            .push(crate::master::Master::new(MasterId { index: 0 }, 1));
+        doc.masters[0].shapes.push(master_shape);
+        let instance = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.shape_mut(instance).expect("exists").master = Some(MasterId { index: 0 });
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+
+        let first = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: None,
+                    section_pos: Some(0),
+                    row: Some(0),
+                    row_ix: None,
+                },
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(first.value, Some(&CellValue::Number(1.0)));
+        let second = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: Some(1),
+                    section_pos: Some(1),
+                    row: Some(0),
+                    row_ix: None,
+                },
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(second.value, Some(&CellValue::Number(2.0)));
+    }
+
+    #[test]
+    fn row_cells_fall_through_to_the_table_default() {
+        // A table that records a `default_value` for the row cell.
+        const TWO: &[CellDef] = &[
+            CellDef {
+                name: "X",
+                section: "Geometry",
+                cell_index: None,
+                kind: "Number",
+                default_unit: "Inches",
+                default_value: Some("2 in"),
+            },
+            CellDef {
+                name: "Other",
+                section: "Geometry",
+                cell_index: None,
+                kind: "Number",
+                default_unit: "Number",
+                default_value: None,
+            },
+        ];
+        let doc = Document::new();
+        let resolved = doc.resolve_repeated_with_table(
+            SheetRef::Shape(ShapeId { index: 9 }),
+            &RepeatedCell {
+                section: "Geometry",
+                section_ix: None,
+                section_pos: Some(0),
+                row: Some(0),
+                row_ix: None,
+            },
+            &CellName::from_static("X"),
+            TWO,
+        );
+        // A stale shape id is a caller error even with a table.
+        assert_eq!(
+            resolved,
+            Err(crate::Error::UnknownShape(ShapeId { index: 9 }))
+        );
+        let (mut doc, shape) = instance_of_master(Vec::new());
+        doc.shape_mut(shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(Vec::new()));
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(shape),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: None,
+                    section_pos: Some(0),
+                    row: Some(0),
+                    row_ix: None,
+                },
+                &CellName::from_static("X"),
+                TWO,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::SectionDefault);
+        assert_eq!(resolved.value, Some(&CellValue::Number(2.0)));
+        // A cell the table knows without a default gets the hard default.
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(shape),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: None,
+                    section_pos: Some(0),
+                    row: Some(0),
+                    row_ix: None,
+                },
+                &CellName::from_static("Other"),
+                TWO,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(resolved.value, Some(&CellValue::Number(0.0)));
+    }
+
+    #[test]
+    fn a_cyclic_master_chain_terminates() {
+        let (mut doc, instance) = instance_of_master(Vec::new());
+        // The master's shape is itself an instance of the same master.
+        let master_shape = doc.masters[0].shapes[0];
+        doc.shape_mut(master_shape).expect("exists").master = Some(MasterId { index: 0 });
+        doc.shape_mut(instance)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(Vec::new()));
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(instance),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 0 }),
+                ValueSource::Master(MasterId { index: 0 }),
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+    }
+
+    #[test]
+    fn section_level_cells_resolve_without_a_row() {
+        // `NoFill` is a section-level cell (row `None`).
+        let mut doc = Document::new();
+        let shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(shape).expect("exists");
+            let mut section = geometry(Vec::new());
+            section.cells.push({
+                let mut cell = Cell::new(CellName::from_static("NoFill"));
+                cell.value = Some(CellValue::Bool(true));
+                cell
+            });
+            shape.sheet.sections.push(section);
+        }
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(shape),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: None,
+                    section_pos: Some(0),
+                    row: None,
+                    row_ix: None,
+                },
+                &CellName::from_static("NoFill"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Local);
+        assert_eq!(resolved.value, Some(&CellValue::Bool(true)));
+    }
+
+    // --- page sheets ---------------------------------------------------
+
+    /// A document with one page whose sheet has `cells`, and one style
+    /// (`ID = 7`) with `style_cells`.
+    fn page_with_style(cells: Vec<Cell>, style_cells: Vec<Cell>) -> (Document, PageId) {
+        let mut doc = Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.sheet.cells = cells;
+        page.preserved.attributes.push(XmlAttribute {
+            name: QName {
+                prefix: None,
+                uri: None,
+                local: "LineStyle".to_owned(),
+            },
+            value: "7".to_owned(),
+        });
+        doc.pages.push(page);
+        let mut style = crate::style::Style::new(StyleId { index: 0 });
+        style.visio_id = 7;
+        style.sheet.cells = style_cells;
+        doc.stylesheet.styles.push(style);
+        (doc, PageId { index: 0 })
+    }
+
+    #[test]
+    fn resolve_page_cell_reads_the_page_cell_first() {
+        let (doc, page) = page_with_style(vec![number_cell("PageWidth", 11.0)], Vec::new());
+        let resolved = doc
+            .resolve_page_cell(page, &CellName::from_static("PageWidth"))
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(11.0)));
+        assert_eq!(resolved.source, ValueSource::Local);
+    }
+
+    #[test]
+    fn resolve_page_cell_follows_the_page_style_links() {
+        // A `Line Format` cell the page sheet does not define comes from
+        // the style named by the page sheet's `LineStyle` link.
+        let (doc, page) = page_with_style(
+            vec![inherited_cell("LineWeight")],
+            vec![number_cell("LineWeight", 0.02)],
+        );
+        let resolved = doc
+            .resolve_page_cell(page, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(0.02)));
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 0 }));
+    }
+
+    #[test]
+    fn resolve_page_cell_stops_a_cyclic_or_dangling_style_chain() {
+        // The style links to itself: the chain stops at the repeat.
+        let (mut doc, page) = page_with_style(Vec::new(), vec![inherited_cell("LineWeight")]);
+        doc.stylesheet.styles[0].line_style = Some(7);
+        let resolved = doc
+            .resolve_page_cell(page, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Style(StyleId { index: 0 }),
+                ValueSource::Style(StyleId { index: 0 }),
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+        // A link that names no style ends the chain quietly.
+        let (mut doc, page) = page_with_style(Vec::new(), Vec::new());
+        doc.preserved = doc.preserved.clone();
+        doc.pages[0].preserved.attributes[0].value = "8".to_owned();
+        let resolved = doc
+            .resolve_page_cell(page, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+    }
+
+    #[test]
+    fn resolve_page_cell_reads_the_section_default_with_a_table() {
+        const TWO: &[CellDef] = &[CellDef {
+            name: "PageWidth",
+            section: "Page Sheet",
+            cell_index: None,
+            kind: "Number",
+            default_unit: "Inches",
+            default_value: Some("8.5 in"),
+        }];
+        let mut doc = Document::new();
+        doc.pages.push(Page::new(PageId { index: 0 }, 1));
+        let resolved = doc
+            .resolve_page_cell_with_table(
+                PageId { index: 0 },
+                &CellName::from_static("PageWidth"),
+                TWO,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::SectionDefault);
+        assert_eq!(resolved.value, Some(&CellValue::Number(8.5)));
+        assert_eq!(
+            doc.resolve_page_cell_with_table(
+                PageId { index: 1 },
+                &CellName::from_static("PageWidth"),
+                TWO
+            ),
+            Err(crate::Error::UnknownPage(PageId { index: 1 }))
+        );
+    }
+
+    #[test]
+    fn resolve_row_cell_reports_a_stale_shape() {
+        let doc = Document::new();
+        assert_eq!(
+            doc.resolve_row_cell(
+                SheetRef::Shape(ShapeId { index: 2 }),
+                "Geometry",
+                0,
+                &CellName::from_static("X")
+            ),
+            Err(crate::Error::UnknownShape(ShapeId { index: 2 }))
+        );
+        assert_eq!(
+            doc.resolve_repeated_with_table(
+                SheetRef::Page(PageId { index: 2 }),
+                &RepeatedCell {
+                    section: "Geometry",
+                    section_ix: None,
+                    section_pos: Some(0),
+                    row: Some(0),
+                    row_ix: None,
+                },
+                &CellName::from_static("X"),
+                CELLS,
+            ),
+            Err(crate::Error::UnknownPage(PageId { index: 2 }))
+        );
+    }
+
+    #[test]
+    fn match_repeated_section_falls_back_to_the_first_named() {
+        let mut sheet = Sheet::new();
+        let mut first = Section::new(crate::name::SectionName::from_static("Geometry"));
+        first.rows.push(Row::new());
+        let mut other = Section::new(crate::name::SectionName::from_static("Connection"));
+        other.rows.push(Row::new());
+        let mut second = Section::new(crate::name::SectionName::from_static("Geometry"));
+        second.rows.push(Row::new());
+        sheet.sections.push(first);
+        sheet.sections.push(other);
+        sheet.sections.push(second);
+        // No IX on either side: the position among same-named sections wins.
+        assert!(std::ptr::eq(
+            match_repeated_section(&sheet, "Geometry", None, Some(1)).expect("found"),
+            &sheet.sections[2]
+        ));
+        assert!(match_repeated_section(&sheet, "Geometry", None, Some(9)).is_none());
+        assert!(match_repeated_section(&sheet, "Missing", None, Some(0)).is_none());
     }
 }

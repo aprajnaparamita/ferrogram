@@ -14,8 +14,6 @@ pub enum Error {
     UnknownShape(ShapeId),
     /// The list id does not name a page of the document.
     UnknownPage(PageId),
-    /// The operation is not implemented yet (a Phase 3 stub).
-    NotImplemented,
 }
 
 impl fmt::Display for Error {
@@ -23,7 +21,6 @@ impl fmt::Display for Error {
         match self {
             Error::UnknownShape(id) => write!(f, "unknown shape id {}", id.index),
             Error::UnknownPage(id) => write!(f, "unknown page id {}", id.index),
-            Error::NotImplemented => write!(f, "not implemented yet"),
         }
     }
 }
@@ -44,10 +41,5 @@ mod tests {
     fn unknown_page_names_the_id() {
         let e = Error::UnknownPage(PageId { index: 3 });
         assert_eq!(e.to_string(), "unknown page id 3");
-    }
-
-    #[test]
-    fn not_implemented_says_so() {
-        assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
     }
 }
