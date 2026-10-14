@@ -5,9 +5,11 @@
 
 use std::io::Write as _;
 
-use ferrogram_vsdx::{Error, Limits, PartData, read_package};
+use ferrogram_vsdx::{ContentTypeKind, Error, Limits, PartData, read_package};
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
+
+mod common;
 
 const TYPES_XML: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"xml\" ContentType=\"application/xml\"/><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"bin\" ContentType=\"application/octet-stream\"/></Types>";
 
@@ -344,4 +346,79 @@ fn cap_errors_never_leak_file_content() {
         other => panic!("expected a limit error, got {other:?}"),
     };
     assert!(!message.contains("secret"));
+}
+
+#[test]
+fn the_streaming_size_cap_refuses_a_lying_declared_size() {
+    // Coverage (audit minor 1): the declared size passes the pre-checks, so
+    // only the inflate loop's own cap can stop the entry.
+    let bytes = build_zip(&[
+        ("[Content_Types].xml", TYPES_XML.as_bytes().to_vec()),
+        ("big.bin", noise(4096)),
+    ]);
+    let bytes = common::declare_huge_size(bytes, "big.bin", 8);
+    let mut limits = Limits::DEFAULT;
+    limits.max_part_uncompressed = 1024;
+    assert!(matches!(
+        read_package(&bytes, &limits),
+        Err(Error::LimitExceeded {
+            limit: "max_part_uncompressed",
+            max: 1024,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn an_extensionless_part_infers_an_override() {
+    // Coverage (audit minor 3): a package without `[Content_Types].xml` and
+    // a part with no usable extension gets an `Override` for it.
+    let bytes = build_zip(&[
+        ("_rels/.rels", ROOT_RELS_XML.as_bytes().to_vec()),
+        ("weird", noise(16)),
+    ]);
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("inferred package");
+    assert_eq!(
+        package.parts[0].content_type.as_str(),
+        "application/octet-stream"
+    );
+    assert!(
+        package
+            .content_types
+            .iter()
+            .any(|decl| { decl.kind == ContentTypeKind::Override && decl.name == "/weird" })
+    );
+}
+
+#[test]
+fn a_relationships_part_with_no_directory_part_maps_to_the_root() {
+    // Coverage (audit minor 3): `_rels/page.xml.rels` names `/page.xml` and
+    // `_rels/.rels` names the package root.
+    let bytes = build_zip(&[
+        ("[Content_Types].xml", TYPES_XML.as_bytes().to_vec()),
+        ("_rels/.rels", ROOT_RELS_XML.as_bytes().to_vec()),
+        ("_rels/page.xml.rels", ROOT_RELS_XML.as_bytes().to_vec()),
+    ]);
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("reads");
+    let sources: Vec<&str> = package
+        .relationships
+        .iter()
+        .map(|relationship| relationship.source.as_str())
+        .collect();
+    assert_eq!(sources, ["/", "/page.xml"]);
+}
+
+#[test]
+fn a_relationships_part_with_an_unmappable_name_is_an_error() {
+    // Coverage (audit minor 3): a relationships part outside any `_rels`
+    // directory names no source and cannot be mapped.
+    let types = "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/></Types>";
+    let bytes = build_zip(&[
+        ("[Content_Types].xml", types.as_bytes().to_vec()),
+        ("weird.rels", ROOT_RELS_XML.as_bytes().to_vec()),
+    ]);
+    assert!(matches!(
+        read_package(&bytes, &Limits::DEFAULT),
+        Err(Error::InvalidPackage(_))
+    ));
 }

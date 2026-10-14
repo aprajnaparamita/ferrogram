@@ -1027,4 +1027,29 @@ mod tests {
             Some(ferrogram_model::CellValue::Str("Themed".to_owned()))
         );
     }
+
+    #[test]
+    fn newlines_in_text_and_attributes_round_trip() {
+        // Coverage (audit minor 4): a newline in text and a newline or a
+        // carriage return in an attribute value survive the write (the
+        // attribute escapes are `&#xA;` and `&#xD;`).
+        let mut document = sample();
+        document
+            .properties
+            .push(ferrogram_model::Property::new("title", "line1\nline2"));
+        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Note"));
+        cell.value = Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()));
+        if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
+            shape.sheet.cells.push(cell);
+        }
+        let package = from_model(&document).expect("package");
+        let bytes = write_package(&package).expect("bytes");
+        let reread = crate::read_document(&bytes, &crate::Limits::DEFAULT).expect("read");
+        assert_eq!(reread.properties[0].value, "line1\nline2");
+        let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
+        assert_eq!(
+            shape.sheet.cells[0].value,
+            Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()))
+        );
+    }
 }

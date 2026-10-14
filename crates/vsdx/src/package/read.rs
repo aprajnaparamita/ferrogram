@@ -521,4 +521,28 @@ mod tests {
         assert_eq!(part_extension("/visio/2.5/data"), None);
         assert_eq!(part_extension("/noextension"), None);
     }
+
+    #[test]
+    fn non_element_children_of_content_types_are_skipped() {
+        // Coverage (audit minor 2): a comment, a processing instruction or
+        // pretty-printing text next to a declaration is not data.
+        let text = "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><!--note--> <?pi d?> <Default Extension=\"xml\" ContentType=\"application/xml\"/> </Types>";
+        let root = parse_xml(text, &Limits::DEFAULT).expect("parses");
+        let decls = parse_content_types(&root).expect("non-element children are skipped");
+        assert_eq!(decls.len(), 1);
+        assert_eq!(decls[0].name, "xml");
+    }
+
+    #[test]
+    fn an_unknown_element_in_content_types_is_an_error() {
+        // Coverage (audit minor 2): an element that is neither `Default` nor
+        // `Override` is rejected (the BadContentTypes fixture truncates the
+        // file instead and never reaches this arm).
+        let text = "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Nope/></Types>";
+        let root = parse_xml(text, &Limits::DEFAULT).expect("parses");
+        assert!(matches!(
+            parse_content_types(&root),
+            Err(Error::InvalidPackage(_))
+        ));
+    }
 }
