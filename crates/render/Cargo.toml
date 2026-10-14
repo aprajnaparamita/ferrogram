@@ -17,5 +17,8 @@ tiny-skia = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde-saphyr = "1.3"
 
+[dev-dependencies]
+quick-xml = "0.41" # parses the SVG output in tests (P3-07)
+
 [lints]
 workspace = true
