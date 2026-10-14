@@ -13,7 +13,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-01](tasks/P3-01.md) | architect | phase-2 | — | merged (ADRs 0019–0027, stubs, task files) | agent/P3-01 |
 | [P3-02](tasks/P3-02.md) | implementer | P3-01 | A | ready (master note: `Themed` values, palette) | — |
 | [P3-03](tasks/P3-03.md) | implementer | P3-01 | A | ready | — |
-| [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | ready (master note: Selawik italics) | — |
+| [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | merged (sources rows renumbered 11–12 on main) | agent/P3-04 |
 | [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | merged (added `Error::InvalidStyleData` in `error.rs`) | agent/P3-08 |
 | [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | waits for A | — |
 | [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | waits for A | — |
@@ -110,3 +110,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-01 (open): the fixed palette 0..23 is not transcribed yet (P3-02). Per-shape `ThemeIndex` is deferred; the renderer uses `themes[0]`. The `Ellipse` row reading (conjugate semi-diameters) needs a black-box check for the oblique case. Linux golden drift may need the metric loosened in `tests/golden.rs`. Corpus colour cells cache `Themed` and palette indices; ADR 0021 did not cover them (master note in P3-02).
 - P3-08 (open): dashes scale with line width (ADR 0023), which may not match Visio; line ends 25..45, fill patterns 25..40 (gradients) and patterned shadow bodies are undefined and return `None` with a warning; the `.vsd` corpus was not scanned for style indices. The scene builder (P3-05) must follow the unit-box and tile-box conventions documented in `styles.rs` and `visual-styles.yaml`.
 - Master (2026-10-14): new advisories RUSTSEC-2026-0346..0349 against `rustls` 0.23.45 (xtask via `ureq`) failed the deny step; fixed with `cargo update -p rustls` (0.23.46).
+- P3-04 (decided, ADR 0024 amendment): `layout` bakes the block rotation into glyph positions, and the backends (P3-06, P3-07) rotate each glyph outline; `Warning::MissingGlyph` carries the `char`; a bullet sits at `indent_left + bullet.indent`; Selawik has no italic faces, so an italic Segoe UI run falls back to Carlito Italic with a `MissingFont` warning (a synthetic slant needs an API extension). The bundled fonts are 2.96 MB and are compiled into every binary, including the web build; revisit lazy loading in Phase 6.
