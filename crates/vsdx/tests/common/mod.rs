@@ -439,7 +439,10 @@ fn master1_xml() -> String {
     )
 }
 
-/// A 2 by 1 rectangle with its own geometry rows. Our own values.
+/// A 2 by 1 rectangle with its own geometry rows. The unit-square path
+/// (relative coordinates 0 and 1) is the generic way to draw any rectangle
+/// and matches the [MS-VSDX] example only because there is no other choice;
+/// the shape values are our own.
 fn rect_shape(id: u32) -> String {
     format!(
         "<Shape ID=\"{id}\" Type=\"Shape\" LineStyle=\"0\" FillStyle=\"0\" TextStyle=\"0\">\
