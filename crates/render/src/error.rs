@@ -18,6 +18,8 @@ pub enum Error {
     /// is a build bug in `crates/render/data/visual-styles.yaml`, not
     /// file input.
     InvalidStyleData,
+    /// The rendered raster could not be encoded (PNG encoding failed).
+    Encode,
 }
 
 impl fmt::Display for Error {
@@ -26,6 +28,7 @@ impl fmt::Display for Error {
             Error::TooLarge => write!(f, "output is larger than the allowed caps"),
             Error::NotImplemented => write!(f, "not implemented yet"),
             Error::InvalidStyleData => write!(f, "committed visual style data is not valid"),
+            Error::Encode => write!(f, "the output could not be encoded"),
         }
     }
 }
@@ -47,5 +50,6 @@ mod tests {
             Error::InvalidStyleData.to_string(),
             "committed visual style data is not valid"
         );
+        assert_eq!(Error::Encode.to_string(), "the output could not be encoded");
     }
 }
