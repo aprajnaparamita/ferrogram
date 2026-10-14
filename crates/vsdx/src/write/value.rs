@@ -16,6 +16,8 @@
 use ferrogram_geom::Unit;
 use ferrogram_model::{CellValue, Color};
 
+use crate::value_parse::parse_color;
+
 /// The `U` code that `unit` spells, or `None` when the unit has no code
 /// ([`Unit::Unitsless`] and codes the reader keeps preserved).
 ///
@@ -87,36 +89,6 @@ fn number_text(number: f64) -> String {
 /// The `#rrggbb` spelling of a color.
 fn color_text(color: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
-}
-
-/// The color of a `#RGB` or `#RRGGBB` literal (any case), or `None`.
-///
-/// Mirrors the reader's color parser so a written color matches its source
-/// spelling.
-fn parse_color(text: &str) -> Option<Color> {
-    let digits = text.strip_prefix('#')?.as_bytes();
-    match digits {
-        [r1, r2, g1, g2, b1, b2] => {
-            Some(Color::new(hex(*r1, *r2)?, hex(*g1, *g2)?, hex(*b1, *b2)?))
-        }
-        [r, g, b] => Some(Color::new(hex(*r, *r)?, hex(*g, *g)?, hex(*b, *b)?)),
-        _ => None,
-    }
-}
-
-/// The value of one hexadecimal digit pair.
-fn hex(high: u8, low: u8) -> Option<u8> {
-    Some(digit(high)? * 16 + digit(low)?)
-}
-
-/// The value of one hexadecimal digit.
-fn digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -204,15 +176,6 @@ mod tests {
         assert!(!value_matches("", &CellValue::Str("x".to_owned())));
         assert!(!value_matches("a;b", &CellValue::List("a".to_owned())));
         assert!(!value_matches("2", &CellValue::Str("2 ".to_owned())));
-    }
-
-    #[test]
-    fn colors_parse_like_the_reader() {
-        assert_eq!(parse_color("#4d4d4d"), Some(Color::new(77, 77, 77)));
-        assert_eq!(parse_color("#abc"), Some(Color::new(170, 187, 204)));
-        assert_eq!(parse_color("#gggggg"), None);
-        assert_eq!(parse_color("#12345"), None);
-        assert_eq!(parse_color("4d4d4d"), None);
     }
 
     #[test]
