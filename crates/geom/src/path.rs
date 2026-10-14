@@ -7,6 +7,7 @@
 //! (ADR 0022).
 
 use crate::point::Point;
+use crate::rect::Rect;
 
 /// One segment of a [`Path`].
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,6 +63,38 @@ impl Path {
     pub fn is_empty(&self) -> bool {
         self.segments.is_empty()
     }
+
+    /// The bounding box of the path's control points, or [`None`] when the
+    /// path holds no points (empty, or only [`Segment::Close`] segments).
+    ///
+    /// The box covers the control points, so it covers the path itself but
+    /// is not tight for curved segments.
+    pub fn bounds(&self) -> Option<Rect> {
+        let mut bounds: Option<Rect> = None;
+        let mut add = |p: Point| {
+            let r = Rect::new(p, p);
+            bounds = Some(match bounds {
+                Some(b) => b.union(r),
+                None => r,
+            });
+        };
+        for segment in &self.segments {
+            match segment {
+                Segment::MoveTo(p) | Segment::LineTo(p) => add(*p),
+                Segment::QuadTo { ctrl, to } => {
+                    add(*ctrl);
+                    add(*to);
+                }
+                Segment::CubicTo { ctrl1, ctrl2, to } => {
+                    add(*ctrl1);
+                    add(*ctrl2);
+                    add(*to);
+                }
+                Segment::Close => {}
+            }
+        }
+        bounds
+    }
 }
 
 #[cfg(test)]
@@ -103,5 +136,44 @@ mod tests {
         p.push(q);
         p.push(c);
         assert_eq!(p.segments().len(), 2);
+    }
+
+    #[test]
+    fn bounds_of_an_empty_path_is_none() {
+        assert_eq!(Path::new().bounds(), None);
+        let mut p = Path::new();
+        p.push(Segment::Close);
+        assert_eq!(p.bounds(), None);
+    }
+
+    #[test]
+    fn bounds_cover_every_control_point() {
+        let mut p = Path::new();
+        p.push(Segment::MoveTo(Point::new(1.0, 2.0)));
+        p.push(Segment::LineTo(Point::new(-3.0, 5.0)));
+        p.push(Segment::QuadTo {
+            ctrl: Point::new(4.0, -1.0),
+            to: Point::new(0.0, 0.0),
+        });
+        p.push(Segment::CubicTo {
+            ctrl1: Point::new(-2.0, -2.0),
+            ctrl2: Point::new(6.0, 6.0),
+            to: Point::new(3.0, 3.0),
+        });
+        p.push(Segment::Close);
+        let b = p.bounds().expect("has points");
+        assert_eq!(b.min, Point::new(-3.0, -2.0));
+        assert_eq!(b.max, Point::new(6.0, 6.0));
+        assert_eq!(b.width(), 9.0);
+        assert_eq!(b.height(), 8.0);
+    }
+
+    #[test]
+    fn bounds_of_one_point_is_that_point() {
+        let mut p = Path::new();
+        p.push(Segment::MoveTo(Point::new(1.5, -1.5)));
+        let b = p.bounds().expect("has points");
+        assert_eq!(b.min, Point::new(1.5, -1.5));
+        assert_eq!(b.max, Point::new(1.5, -1.5));
     }
 }
