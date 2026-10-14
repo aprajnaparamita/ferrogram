@@ -9,10 +9,6 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
-    /// The operation is a planning stub and is not implemented yet.
-    ///
-    /// The payload names the operation, e.g. `"read_package"`.
-    NotImplemented(&'static str),
     /// An input exceeded one of the [`crate::Limits`] caps.
     LimitExceeded {
         /// The name of the cap, e.g. `"max_part_uncompressed"`.
@@ -36,7 +32,6 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::NotImplemented(op) => write!(f, "not implemented: {op}"),
             Error::LimitExceeded { limit, value, max } => {
                 write!(f, "limit `{limit}` exceeded: {value} > {max}")
             }
@@ -63,10 +58,6 @@ mod tests {
     #[test]
     fn display_covers_every_variant() {
         assert_eq!(
-            Error::NotImplemented("read_package").to_string(),
-            "not implemented: read_package"
-        );
-        assert_eq!(
             Error::LimitExceeded {
                 limit: "max_entries",
                 value: 9,
@@ -88,14 +79,19 @@ mod tests {
             "invalid package: bad zip"
         );
         assert_eq!(
-            Error::Model(ferrogram_model::Error::NotImplemented("x")).to_string(),
-            "model error: not implemented: x"
+            Error::Model(ferrogram_model::Error::UnknownShape(
+                ferrogram_model::ShapeId { index: 2 }
+            ))
+            .to_string(),
+            "model error: unknown shape id 2"
         );
     }
 
     #[test]
     fn model_errors_convert() {
-        let e: Error = ferrogram_model::Error::NotImplemented("x").into();
-        assert_eq!(e, Error::Model(ferrogram_model::Error::NotImplemented("x")));
+        let model: ferrogram_model::Error =
+            ferrogram_model::Error::UnknownShape(ferrogram_model::ShapeId { index: 2 });
+        let e: Error = model.into();
+        assert_eq!(e, Error::Model(model));
     }
 }
