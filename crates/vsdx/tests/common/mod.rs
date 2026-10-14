@@ -396,7 +396,8 @@ fn pages_xml(has_pages_contents: bool) -> String {
     )
 }
 
-fn pages_rels() -> String {
+/// The `pages.xml` relationships part of a drawing fixture.
+pub fn pages_rels() -> String {
     format!(
         "{XML_DECL}\n<Relationships xmlns=\"{XMLNS_RELS}\">\
          <Relationship Id=\"rId1\" Type=\"{REL_PAGE}\" Target=\"page1.xml\"/>\
@@ -474,7 +475,7 @@ fn deep_document_xml(depth: u32) -> String {
 }
 
 /// Adds a relationship whose target part does not exist.
-fn add_dangling_relationship(rels: &[u8]) -> Vec<u8> {
+pub fn add_dangling_relationship(rels: &[u8]) -> Vec<u8> {
     let text = String::from_utf8_lossy(rels);
     let extra = "<Relationship Id=\"rId9\" Type=\"http://example.invalid/dangling\" \
                  Target=\"pages/missing.xml\"/>";
@@ -506,14 +507,19 @@ fn zip_entries(entries: &[Entry]) -> Vec<u8> {
 }
 
 // Byte surgery on the zip container: the `zip` crate writes honest headers,
-// and some failure modes need a lie.
+// and some failure modes need a lie. The helpers are `pub` so their unit tests
+// live in `tests/fixtures.rs` and run once per `cargo test`, not once per test
+// binary that includes this module (task P2-09).
 
-const LOCAL_SIG: &[u8] = b"PK\x03\x04";
-const CENTRAL_SIG: &[u8] = b"PK\x01\x02";
-const EOCD_SIG: &[u8] = b"PK\x05\x06";
+/// The zip local-file-header signature.
+pub const LOCAL_SIG: &[u8] = b"PK\x03\x04";
+/// The zip central-directory-header signature.
+pub const CENTRAL_SIG: &[u8] = b"PK\x01\x02";
+/// The zip end-of-central-directory signature.
+pub const EOCD_SIG: &[u8] = b"PK\x05\x06";
 
 /// The start offset of the last subslice equal to `needle`.
-fn rfind_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+pub fn rfind_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
     }
@@ -524,7 +530,7 @@ fn rfind_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// The start offset of the zip header with `sig` whose file-name field
 /// (`name_at` bytes into the header) is `name`.
-fn find_header(bytes: &[u8], sig: &[u8], name: &str, name_at: usize) -> Option<usize> {
+pub fn find_header(bytes: &[u8], sig: &[u8], name: &str, name_at: usize) -> Option<usize> {
     if sig.is_empty() {
         return None;
     }
@@ -541,12 +547,15 @@ fn find_header(bytes: &[u8], sig: &[u8], name: &str, name_at: usize) -> Option<u
     None
 }
 
-fn read_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+/// The little-endian `u32` at `offset`, or `None` when it does not fit.
+pub fn read_u32(bytes: &[u8], offset: usize) -> Option<u32> {
     let slot = bytes.get(offset..offset + 4)?;
     Some(u32::from_le_bytes([slot[0], slot[1], slot[2], slot[3]]))
 }
 
-fn patch_u32(bytes: &mut [u8], offset: usize, value: u32) {
+/// Writes `value` as a little-endian `u32` at `offset`, or does nothing when
+/// it does not fit.
+pub fn patch_u32(bytes: &mut [u8], offset: usize, value: u32) {
     if let Some(slot) = bytes.get_mut(offset..offset + 4) {
         slot.copy_from_slice(&value.to_le_bytes());
     }
@@ -554,7 +563,7 @@ fn patch_u32(bytes: &mut [u8], offset: usize, value: u32) {
 
 /// Declares `declared` uncompressed bytes for `name` in both its local and
 /// central-directory header, while the entry data stays as it is.
-fn declare_huge_size(mut zip_bytes: Vec<u8>, name: &str, declared: u32) -> Vec<u8> {
+pub fn declare_huge_size(mut zip_bytes: Vec<u8>, name: &str, declared: u32) -> Vec<u8> {
     // Local file header: file name at +30, uncompressed size at +22.
     if let Some(start) = find_header(&zip_bytes, LOCAL_SIG, name, 30) {
         patch_u32(&mut zip_bytes, start + 22, declared);
@@ -568,72 +577,11 @@ fn declare_huge_size(mut zip_bytes: Vec<u8>, name: &str, declared: u32) -> Vec<u
 
 /// Destroys the first central-directory header signature the end-of-central-
 /// directory record points at.
-fn corrupt_central_directory(mut zip_bytes: Vec<u8>) -> Vec<u8> {
+pub fn corrupt_central_directory(mut zip_bytes: Vec<u8>) -> Vec<u8> {
     if let Some(offset) =
         rfind_subslice(&zip_bytes, EOCD_SIG).and_then(|eocd| read_u32(&zip_bytes, eocd + 16))
     {
         patch_u32(&mut zip_bytes, offset as usize, 0xFFFF_FFFF);
     }
     zip_bytes
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // The builder itself is exercised by `tests/fixtures.rs`; these unit
-    // tests cover the zip byte-surgery helpers.
-
-    #[test]
-    fn rfind_subslice_finds_the_last_occurrence() {
-        assert_eq!(rfind_subslice(b"abXabX", b"X"), Some(5));
-        assert_eq!(rfind_subslice(b"abc", b"abcd"), None);
-        assert_eq!(rfind_subslice(b"abc", b""), None);
-    }
-
-    #[test]
-    fn find_header_matches_the_file_name_field() {
-        let bytes = build(Fixture::Drawing);
-        let local = find_header(&bytes, LOCAL_SIG, "[Content_Types].xml", 30);
-        let central = find_header(&bytes, CENTRAL_SIG, "[Content_Types].xml", 46);
-        assert!(local.is_some());
-        assert!(central.is_some());
-        assert_ne!(local, central);
-        assert!(find_header(&bytes, LOCAL_SIG, "nope.xml", 30).is_none());
-    }
-
-    #[test]
-    fn read_and_patch_u32_round_trip() {
-        let mut bytes = vec![0, 1, 2, 3, 4, 5];
-        patch_u32(&mut bytes, 1, 0x0640_0000);
-        assert_eq!(read_u32(&bytes, 1), Some(0x0640_0000));
-        assert_eq!(read_u32(&bytes, 4), None); // out of range, no panic
-        patch_u32(&mut bytes, 99, 7); // out of range, no panic
-    }
-
-    #[test]
-    fn corrupt_central_directory_breaks_the_signature() {
-        let bytes = corrupt_central_directory(build(Fixture::Drawing));
-        let eocd = rfind_subslice(&bytes, EOCD_SIG).unwrap();
-        let cd_offset = read_u32(&bytes, eocd + 16).unwrap() as usize;
-        assert_eq!(read_u32(&bytes, cd_offset), Some(0xFFFF_FFFF));
-    }
-
-    #[test]
-    fn declare_huge_size_patches_both_headers() {
-        let bytes = declare_huge_size(build(Fixture::Drawing), "visio/pages/page1.xml", 77);
-        let local = find_header(&bytes, LOCAL_SIG, "visio/pages/page1.xml", 30).unwrap();
-        let central = find_header(&bytes, CENTRAL_SIG, "visio/pages/page1.xml", 46).unwrap();
-        assert_eq!(read_u32(&bytes, local + 22), Some(77));
-        assert_eq!(read_u32(&bytes, central + 24), Some(77));
-    }
-
-    #[test]
-    fn add_dangling_relationship_keeps_the_rest() {
-        let rels = pages_rels().into_bytes();
-        let out = add_dangling_relationship(&rels);
-        let text = String::from_utf8(out).unwrap();
-        assert!(text.contains("Target=\"pages/missing.xml\""));
-        assert!(text.contains("Target=\"page1.xml\""));
-    }
 }
