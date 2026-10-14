@@ -1502,7 +1502,7 @@ fn model_connects_get_a_new_connects_wrapper() {
     let page_root = root(&written, "/visio/pages/page1.xml");
     let wrappers = children_named(page_root, "Connects");
     assert_eq!(wrappers.len(), 1);
-    let wrapped = children_named(&wrappers[0], "Connect");
+    let wrapped = children_named(wrappers[0], "Connect");
     assert_eq!(wrapped.len(), 1);
     assert_eq!(attr(wrapped[0], "ToSheet"), Some("2"));
     // The loose `Connect` is still a direct child of the root.
