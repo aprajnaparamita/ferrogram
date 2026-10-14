@@ -3,6 +3,7 @@
 use crate::id::{MasterId, ShapeId};
 use crate::raw::Preserved;
 use crate::sheet::Sheet;
+use crate::text::TextContent;
 
 /// One shape of a page or master.
 ///
@@ -33,6 +34,8 @@ pub struct Shape {
     pub parent: Option<ShapeId>,
     /// The sub-shapes, in file order (empty for a non-group shape).
     pub children: Vec<ShapeId>,
+    /// The shape's text (`Text` element), mapped read-side (ADR 0019).
+    pub text: Option<TextContent>,
     /// The ShapeSheet content of this shape.
     pub sheet: Sheet,
     /// Unmapped attributes and children of the `Shape` element kept verbatim
@@ -55,6 +58,7 @@ impl Shape {
             text_style: None,
             parent: None,
             children: Vec::new(),
+            text: None,
             sheet: Sheet::new(),
             preserved: Preserved::new(),
         }
