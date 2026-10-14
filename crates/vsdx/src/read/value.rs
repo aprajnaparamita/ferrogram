@@ -32,6 +32,10 @@
 //! | `COLOR` | `Color` for a `#RGB`/`#RRGGBB` literal, `Str` otherwise (a themed or indexed color is kept as written) |
 //! | `STR`, `DATE`, `GUID`, `PNT` | `Str` |
 //!
+//! One spelling overrides every kind rule: a `V` of exactly `Themed` is the
+//! theme marker and maps to `Str("Themed")` whatever `U` declares (ADR 0021
+//! amendment).
+//!
 //! When `E` is present the cached value is the error itself
 //! (`CellValue::Error`), and `V` and `U` are kept in `Preserved` instead:
 //! the model has one value slot per cell and an error cell keeps the value
@@ -119,6 +123,12 @@ pub(crate) fn value(
     part: &str,
     cell: &str,
 ) -> Result<CellValue, Error> {
+    // The `Themed` marker: the value comes from the theme whatever the
+    // declared kind (ADR 0021 amendment). It is kept as the string and
+    // resolved later by `ferrogram_model::CellReader`.
+    if v.trim() == THEMED {
+        return Ok(CellValue::Str(THEMED.to_owned()));
+    }
     match kind(unit_code) {
         Kind::Number => match v.trim().parse::<f64>() {
             Ok(number) => Ok(CellValue::Number(number)),
@@ -144,6 +154,10 @@ pub(crate) fn value(
 
 // What a value of unknown declared kind looks like, and the shape rules
 // that classify one, live in `crate::value_parse` (shared with the writer).
+
+/// The literal cached value of a cell whose value comes from the theme
+/// (ADR 0021 amendment).
+const THEMED: &str = "Themed";
 
 /// An [`Error::InvalidPackage`] naming the part and the cell of a bad cached
 /// value. The message carries the part name and the cell name only, never the
@@ -223,7 +237,7 @@ mod tests {
 
     #[test]
     fn a_bad_number_is_an_error_naming_part_and_cell() {
-        let error = value("Themed", Some("MM"), "/visio/pages/page1.xml", "PinX");
+        let error = value("word", Some("MM"), "/visio/pages/page1.xml", "PinX");
         assert_eq!(
             error,
             Err(Error::InvalidPackage(
@@ -311,6 +325,27 @@ mod tests {
         assert_eq!(
             value(";Not Started;Done", Some("XYZ"), "p", "c"),
             Ok(CellValue::Str(";Not Started;Done".to_owned()))
+        );
+    }
+
+    #[test]
+    fn the_themed_marker_overrides_the_declared_kind() {
+        // ADR 0021 amendment: `Themed` is a marker, not a bad number.
+        assert_eq!(
+            value("Themed", Some("MM"), "p", "c"),
+            Ok(CellValue::Str("Themed".to_owned()))
+        );
+        assert_eq!(
+            value("Themed", Some("PER"), "p", "c"),
+            Ok(CellValue::Str("Themed".to_owned()))
+        );
+        assert_eq!(
+            value("Themed", Some("BOOL"), "p", "c"),
+            Ok(CellValue::Str("Themed".to_owned()))
+        );
+        assert_eq!(
+            value("themed", None, "p", "c"),
+            Ok(CellValue::Str("themed".to_owned()))
         );
     }
 }
