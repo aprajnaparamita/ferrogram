@@ -1335,3 +1335,184 @@ fn writing_builds_the_missing_index_parts_and_relationships() {
     without_rel_markers(&mut model);
     assert_eq!(model, document);
 }
+
+/// The one-page source with two unit cells both tests below share.
+fn unit_source() -> Package {
+    package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                element("Cell", &[("N", "W1"), ("U", "IN"), ("V", "2")], &[]),
+                                element("Cell", &[("N", "W2"), ("U", "MM"), ("V", "3")], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    )
+}
+
+/// Coverage (audit minor 10): when the model takes a cell's unit over, the
+/// file's `U` follows — it goes when the new unit has no code, and it is
+/// rewritten when it has one.
+#[test]
+fn the_model_takes_a_unit_over_and_the_file_u_follows() {
+    let source = unit_source();
+    let mut document = to_model(&source).expect("reads");
+    let shape_id = document.pages[0].shapes[0];
+    {
+        let shape = document.shape_mut(shape_id).expect("shape");
+        for cell in &mut shape.sheet.cells {
+            match cell.name.as_str() {
+                "W1" => {
+                    assert_eq!(cell.unit, Unit::Inches);
+                    cell.unit = Unit::Unitsless;
+                }
+                "W2" => {
+                    assert_eq!(cell.unit, Unit::Millimeters);
+                    cell.unit = Unit::Points;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let (written, model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    // The unitless value loses `U`; the new unit rewrites it.
+    assert_eq!(attr(cells[0], "V"), Some("2"));
+    assert!(attr(cells[0], "U").is_none());
+    assert_eq!(attr(cells[1], "V"), Some("3"));
+    assert_eq!(attr(cells[1], "U"), Some("PT"));
+
+    let reread = model.shape(shape_id).expect("shape");
+    assert_eq!(reread.sheet.cells[0].unit, Unit::Unitsless);
+    assert_eq!(reread.sheet.cells[1].unit, Unit::Points);
+}
+
+/// Coverage (audit minor 10): model connects with no `Connects` wrapper in
+/// the source are wrapped in a new one; a loose preserved `Connect` element
+/// stays where the source put it.
+#[test]
+fn model_connects_get_a_new_connects_wrapper() {
+    let mut loose = element(
+        "Connect",
+        &[
+            ("FromSheet", "1"),
+            ("FromCell", "PinX"),
+            ("FromPart", "9"),
+            ("ToSheet", "1"),
+            ("ToCell", "PinX"),
+            ("ToPart", "3"),
+        ],
+        &[],
+    );
+    loose.self_closing = true;
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[
+                        element("Shapes", &[], &[element("Shape", &[("ID", "1")], &[])]),
+                        loose,
+                    ],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let mut document = to_model(&source).expect("reads");
+    // The loose element is preserved, not modeled.
+    assert!(document.pages[0].connects.is_empty());
+    let mut connect = Connect::new();
+    connect.from_sheet = 1;
+    connect.from_cell = "PinX".to_owned();
+    connect.from_part = 9;
+    connect.to_sheet = 2;
+    connect.to_cell = "PinY".to_owned();
+    connect.to_part = 3;
+    document.pages[0].connects.push(connect);
+
+    let (written, model) = round_trip(&document, &source);
+    let page_root = root(&written, "/visio/pages/page1.xml");
+    let wrappers = children_named(page_root, "Connects");
+    assert_eq!(wrappers.len(), 1);
+    let wrapped = children_named(&wrappers[0], "Connect");
+    assert_eq!(wrapped.len(), 1);
+    assert_eq!(attr(wrapped[0], "ToSheet"), Some("2"));
+    // The loose `Connect` is still a direct child of the root.
+    assert_eq!(children_named(page_root, "Connect").len(), 1);
+    assert_eq!(model.pages[0].connects.len(), 1);
+    let preserved_connects = model.pages[0]
+        .preserved
+        .children
+        .iter()
+        .filter(|child| child.name.local == "Connect")
+        .count();
+    assert_eq!(preserved_connects, 1);
+}
