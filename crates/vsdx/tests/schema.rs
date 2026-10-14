@@ -206,10 +206,12 @@ fn normalize_error(line: &str) -> Option<String> {
         // `<file>:<line>: ` prefix.
         None => {
             let after_line = trimmed.split_once(": ").and_then(|(head, rest)| {
-                head.rsplit(':').next().is_some_and(|line| {
-                    !line.is_empty() && line.chars().all(|c| c.is_ascii_digit())
-                })
-                .then_some(rest)
+                head.rsplit(':')
+                    .next()
+                    .is_some_and(|line| {
+                        !line.is_empty() && line.chars().all(|c| c.is_ascii_digit())
+                    })
+                    .then_some(rest)
             });
             after_line.map(str::to_owned)
         }
@@ -641,7 +643,10 @@ fn written_parts_add_no_new_schema_errors() {
             let source_part = source_errors
                 .iter()
                 .find(|candidate| candidate.part == part.part);
-            let known = source_part.map(|part| &part.errors).cloned().unwrap_or_default();
+            let known = source_part
+                .map(|part| &part.errors)
+                .cloned()
+                .unwrap_or_default();
             let mut fresh: Vec<&String> = part
                 .errors
                 .iter()

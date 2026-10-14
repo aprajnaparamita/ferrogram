@@ -23,6 +23,9 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 # crate and features as the runtime dependency, so `cargo deny` sees one zip
 # (ADR 0014).
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+# Property tests (task P2-10, ADR 0017 section 2). MIT/Apache-2.0, already in
+# `Cargo.lock` via `ferrogram-geom` and `ferrogram-model`.
+proptest = "1"
 
 [lints]
 workspace = true
