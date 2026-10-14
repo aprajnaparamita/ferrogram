@@ -1067,3 +1067,156 @@ fn a_patched_value_writes_the_u_its_kind_needs() {
         Some(CellValue::Str("2".to_owned()))
     );
 }
+
+/// Coverage (audit major 1): the reader's sheet-level preservation fallbacks
+/// (read/sheet.rs) keep an unmapped `Cell`, `Row` or `Section` child and an
+/// unknown cell attribute in `Preserved`, and a write puts every one of them
+/// back where the source had it.
+#[test]
+fn sheet_level_preservation_fallbacks_survive_the_round_trip() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                // No `N`: cannot be named, kept verbatim.
+                                element("Cell", &[("V", "9")], &[]),
+                                // Unknown cell attribute.
+                                element(
+                                    "Cell",
+                                    &[("N", "PinX"), ("V", "2"), ("Future", "yes")],
+                                    &[],
+                                ),
+                                element(
+                                    "Section",
+                                    &[("N", "Geometry")],
+                                    &[
+                                        element("Cell", &[("N", "NoFill"), ("V", "0")], &[]),
+                                        // Unmapped `Cell` child of the section.
+                                        element("Cell", &[("V", "3")], &[]),
+                                        // A `Row` with loose content is kept verbatim.
+                                        {
+                                            let mut row = element("Row", &[("IX", "1")], &[]);
+                                            row.children.push(XmlChild::Comment("note".to_owned()));
+                                            row
+                                        },
+                                        element(
+                                            "Row",
+                                            &[("IX", "2"), ("Del", "1")],
+                                            &[
+                                                // Unmapped `Cell` and unknown child of the row.
+                                                element("Cell", &[("V", "7")], &[]),
+                                                element("RefBy", &[("ID", "1")], &[]),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                // No `N`: cannot be named, kept verbatim.
+                                element("Section", &[], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let document = to_model(&source).expect("reads");
+    let shape = document.shape(document.pages[0].shapes[0]).expect("shape");
+
+    // The reader keeps what it cannot map.
+    let kept: Vec<&str> = shape
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "Section"]);
+    let pinx = shape
+        .sheet
+        .cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "PinX")
+        .expect("PinX");
+    assert_eq!(pinx.preserved.attributes.len(), 1);
+    assert_eq!(pinx.preserved.attributes[0].name.local, "Future");
+    let section = &shape.sheet.sections[0];
+    let kept: Vec<&str> = section
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "Row"]);
+    let row = &section.rows[0];
+    assert_eq!(row.preserved.attributes[0].name.local, "Del");
+    let kept: Vec<&str> = row
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "RefBy"]);
+
+    // The writer puts every one of them back.
+    let (written, _model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    assert_eq!(cells.len(), 2);
+    assert!(attr(cells[0], "N").is_none());
+    assert_eq!(attr(cells[0], "V"), Some("9"));
+    assert_eq!(attr(cells[1], "Future"), Some("yes"));
+    let sections = children_named(shape[0], "Section");
+    assert_eq!(sections.len(), 2);
+    assert!(attr(sections[1], "N").is_none());
+    let section_cells = children_named(sections[0], "Cell");
+    assert_eq!(section_cells.len(), 2);
+    assert!(attr(section_cells[1], "N").is_none());
+    assert_eq!(attr(section_cells[1], "V"), Some("3"));
+    let rows = children_named(sections[0], "Row");
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows[0]
+            .children
+            .iter()
+            .any(|child| matches!(child, XmlChild::Comment(_)))
+    );
+    assert_eq!(attr(rows[1], "Del"), Some("1"));
+    let row_cells = children_named(rows[1], "Cell");
+    assert_eq!(attr(row_cells[0], "V"), Some("7"));
+    assert_eq!(children_named(rows[1], "RefBy").len(), 1);
+}
