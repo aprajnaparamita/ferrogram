@@ -1,25 +1,18 @@
-//! Ferrogram command-line tool: inspect, render, export, run-command.
+//! Ferrogram command-line tool: `inspect`, `render`, `export` (ADR 0026).
 //!
-//! Alpha placeholder; the real implementation lands in a later phase.
+//! `run-command` arrives with the Phase 4 command registry. Part of
+//! Ferrogram. Alpha.
 
 #![forbid(unsafe_code)]
 
+use ferrogram_cli::cli;
+
 fn main() {
-    println!("{}", banner());
-}
-
-/// Startup message shown until the real app exists.
-fn banner() -> String {
-    format!(
-        "ferrogram-cli {} (alpha): no subcommands yet",
-        env!("CARGO_PKG_VERSION")
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn banner_names_version() {
-        assert!(super::banner().contains(env!("CARGO_PKG_VERSION")));
+    match cli::main_from(std::env::args_os().skip(1)) {
+        Ok(code) => std::process::exit(code),
+        Err(error) => {
+            eprintln!("error: {error}");
+            std::process::exit(cli::exit::RENDER);
+        }
     }
 }

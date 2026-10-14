@@ -6,6 +6,7 @@ use crate::page::Page;
 use crate::raw::Preserved;
 use crate::shape::Shape;
 use crate::style::{Style, Stylesheet};
+use crate::theme::{ColorTableEntry, Theme};
 
 /// What kind of package a document was read from (`.vsdx`, `.vssx`, `.vstx`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -60,6 +61,10 @@ pub struct Document {
     pub stylesheet: Stylesheet,
     /// The core and extended document properties.
     pub properties: Vec<Property>,
+    /// The theme parts, in part order (ADR 0019).
+    pub themes: Vec<Theme>,
+    /// The document colour table (`Colors`/`ColorEntry`, ADR 0019).
+    pub color_table: Vec<ColorTableEntry>,
     /// Unmapped attributes and children of the root `VisioDocument` element
     /// kept verbatim (ADR 0012).
     pub preserved: Preserved,
