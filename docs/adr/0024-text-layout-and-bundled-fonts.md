@@ -141,3 +141,83 @@ font's default line height.
   rule.
 - **Substitute a system font at runtime (fontconfig/DirectWrite).**
   Rejected: platform code, non-deterministic goldens, and wasm has none.
+
+## Amendment (P3-04, 2026-10-14): bundled faces, style fallback, rotation
+
+Recorded when the fonts and the layout landed. The font facts below come
+from the committed files themselves (sources 9 and 10 in
+`docs/sources.md`).
+
+### Bundled faces
+
+Carlito ships Regular, Bold, Italic and BoldItalic as planned. The
+Selawik release 1.01 ships Light, Semilight, Regular, Semibold and Bold
+and **no italics**; those five faces are bundled (the release's `.ttf`
+files, unmodified). `Format` has only a bold flag, so Light, Semilight
+and Semibold are picked only by weight distance when nothing closer
+exists.
+
+### Family aliases
+
+A face answers to its own family name and to substitute names
+(`Font::with_alias`): Carlito answers to `Calibri`, Selawik to
+`Segoe UI`. `default_fonts()` registers them, so a Visio run's `Font`
+cell matches without warnings. Family names compare case-insensitively
+and ignore ASCII spaces and hyphens.
+
+### Style fallback (the italic rule)
+
+`FontStack::resolve_styled(family, bold, italic)` picks, in order:
+
+1. a face of the family with the requested style, closest in weight
+   (400 or 700);
+2. a face of the requested style from any family, closest in weight —
+   this is where an italic `Segoe UI` run draws in **Carlito Italic**;
+3. a face of the family with any style, closest in weight;
+4. the first face in the stack.
+
+Steps 2–4 warn `Warning::MissingFont { family }`. We chose Carlito
+Italic over a synthetic slant of Selawik upright: a slanted outline
+needs a per-glyph flag or an outline hook, and the fixed `GlyphPos` has
+no room for one. If Phase 4 needs metric-exact italic Segoe UI, extend
+the output API first.
+
+### Warnings
+
+`Warning::MissingGlyph` gains a `char: char` field. The fixed
+`glyph: GlyphId` cannot name a character that has no glyph in any
+bundled face (a missing glyph has no id); `glyph` records the `.notdef`
+glyph used instead. Both warnings are deduplicated on the `Layout`.
+Missing fonts and glyphs never fail a layout (unchanged).
+
+### Rotation
+
+`layout` **applies `Block::rotation`** to the glyph positions: a rigid
+rotation about the box centre in the y-down layout space (a positive
+angle turns the x axis toward positive y). The scene builder must not
+rotate positions again; it rotates each glyph outline by the same angle
+about the glyph origin. Outlines come out of `Font::outline` in font
+orientation (y up), em units. `Line::baseline`, `Line::width`,
+`Layout::width` and `Layout::height` stay in the unrotated text space.
+This replaces the "scene builder maps them through the shape transform
+and the text rotation" sentence above.
+
+### Placement rules made precise
+
+- **Bullets** render as their own glyph run at `indent_left +
+  bullet.indent` (from the text-area left edge), on the paragraph's
+  first line; those glyphs carry `BULLET_RUN` (`usize::MAX`) as their
+  run index. Paragraph text starts at `indent_first` as usual. The
+  earlier "at `indent_first`" wording put the bullet on top of the text
+  for the common values (`indent_first` 0.25, `bullet.indent` 0.1).
+- **Tab stops** are measured from the text-area left edge (the pen
+  position includes the indents); overflow advances to the next
+  multiple of 0.5 inches.
+- **Trailing spaces** at a line end are not rendered and not counted in
+  the line width.
+- **Empty lines** take the paragraph's first run size and the line
+  metrics of the first resolved face (0.8/0.2 em when no font is
+  available at all).
+- **Invalid input** (non-finite or negative box dimensions, sizes,
+  spacing or margins) returns `Error::InvalidBlock`; indents and tab
+  stops may be negative.
