@@ -87,7 +87,7 @@ fn package(parts: &[(&str, XmlNode)], relationships: &[(&str, &str, &str)]) -> P
 
 /// The written package of `document` patched into `source`, and the model
 /// read back from it.
-#[allow(clippy::expect_used)] // test helper: a failing call is the bug under test
+#[allow(clippy::expect_used, clippy::panic)] // test helper: the panic reports the unstable write
 fn round_trip(document: &Document, source: &Package) -> (Package, Document) {
     let first = write_document(document, source).expect("write_document succeeds");
     let written = read_package(&first, &Limits::DEFAULT).expect("the written package reads");
