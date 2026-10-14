@@ -2,17 +2,30 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **3 in progress** (planning)
+- Current phase: **3 in progress** (group A)
 - Phase 3 goal: rendering from cached values, plus the CLI (KICKOFF.md). Exit: every corpus file renders without panics, and every geometry row type has tests.
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
 
 ## Phase 3 task board
 
-| Task | Role | Depends on | State | Branch |
-|---|---|---|---|---|
-| [P3-01](tasks/P3-01.md) | architect | phase-2 | ready | — |
+| Task | Role | Depends on | Group | State | Branch |
+|---|---|---|---|---|---|
+| [P3-01](tasks/P3-01.md) | architect | phase-2 | — | merged (ADRs 0019–0027, stubs, task files) | agent/P3-01 |
+| [P3-02](tasks/P3-02.md) | implementer | P3-01 | A | ready (master note: `Themed` values, palette) | — |
+| [P3-03](tasks/P3-03.md) | implementer | P3-01 | A | ready | — |
+| [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | ready (master note: Selawik italics) | — |
+| [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | ready | — |
+| [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | waits for A | — |
+| [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | waits for A | — |
+| [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | waits for A | — |
+| [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | waits for B | — |
+| [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08 | C | waits for B | — |
+| [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | waits for C | — |
+| [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | waits | — |
+| [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | waits | — |
+| [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | waits | — |
 
-The architect writes P3-02 onwards; the master adds them here after review.
+Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
 ## Phase 2 task board
 
@@ -94,3 +107,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-09 (decided): the only public XSD (Office developer docs) is XSD 1.1, uses an older namespace and is out of sync with files Visio writes; 3 of 106 corpus source parts validate against the derived schema. The schema test checks that the writer adds no new validation errors, not that parts are valid. The libvisio oracle compares only page counts and page sizes for `.vsdx`; full comparison waits for Phase 7.
 - P2-10 (open, for the audits and fix tasks): a model built in memory loses `Bool`, `List` and number-like `Str` kinds on write then read, because the writer emits no `U` for them; the arena holds nested sub-shapes in wrapper order, not document order; the schema test skips without `xmllint` and `reference/` (CI should install libxml2 and set `FERROGRAM_REQUIRE_SCHEMA=1`).
 - P2-14 (open): a hand-built `Color`/`List` value with a unit, or a `Bool`/`Str` with a real unit, does not read back the same (formula-engine task); the relationships writer always uses the default namespace for the relationships vocabulary.
+- P3-01 (open): the fixed palette 0..23 is not transcribed yet (P3-02). Per-shape `ThemeIndex` is deferred; the renderer uses `themes[0]`. The `Ellipse` row reading (conjugate semi-diameters) needs a black-box check for the oblique case. Linux golden drift may need the metric loosened in `tests/golden.rs`. Corpus colour cells cache `Themed` and palette indices; ADR 0021 did not cover them (master note in P3-02).
