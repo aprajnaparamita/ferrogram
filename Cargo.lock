@@ -466,6 +466,7 @@ dependencies = [
  "ferrogram-geom",
  "ferrogram-model",
  "flate2",
+ "proptest",
  "quick-xml",
  "zip",
 ]
