@@ -1087,6 +1087,22 @@ fn property_rank(local: &str) -> u8 {
 // Part roots
 // ---------------------------------------------------------------------------
 
+/// Drops the generated `Rel` child of a new list entity that has no
+/// contents relationship.
+///
+/// An entity without content and without a preserved `Rel` must get none: a
+/// stray `Rel` would name a relationship that does not exist, the next read
+/// would keep it as preserved content, and the next write would grow a
+/// contents part for it (`write -> read -> write` would not be stable).
+fn without_stray_rel(mut node: XmlNode, rel: Option<&str>) -> XmlNode {
+    if rel.is_none() {
+        node.children.retain(
+            |child| !matches!(child, XmlChild::Element(element) if element.name.local == "Rel"),
+        );
+    }
+    node
+}
+
 /// Patches the `Pages` root of a page list part.
 ///
 /// `rel_ids` names the relationship of each page (`None` when the page has
@@ -1115,8 +1131,11 @@ pub(crate) fn patch_pages_root(root: &mut XmlNode, ctx: &Ctx, rel_ids: &[Option<
                 || emit::empty(&ctx.style, "Page"),
                 |page| {
                     let rel = rel_ids.get(index).and_then(Option::as_deref);
-                    let rel = rel.map_or_else(|| "rId1".to_owned(), str::to_owned);
-                    emit::page_element(ctx.document, &ctx.style, page, &rel)
+                    let rel_id = rel.map_or_else(|| "rId1".to_owned(), str::to_owned);
+                    without_stray_rel(
+                        emit::page_element(ctx.document, &ctx.style, page, &rel_id),
+                        rel,
+                    )
                 },
             )
         },
@@ -1150,8 +1169,8 @@ pub(crate) fn patch_masters_root(root: &mut XmlNode, ctx: &Ctx, rel_ids: &[Optio
                 || emit::empty(&ctx.style, "Master"),
                 |master| {
                     let rel = rel_ids.get(index).and_then(Option::as_deref);
-                    let rel = rel.map_or_else(|| "rId1".to_owned(), str::to_owned);
-                    emit::master_element(&ctx.style, master, &rel)
+                    let rel_id = rel.map_or_else(|| "rId1".to_owned(), str::to_owned);
+                    without_stray_rel(emit::master_element(&ctx.style, master, &rel_id), rel)
                 },
             )
         },
