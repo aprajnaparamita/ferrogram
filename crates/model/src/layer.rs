@@ -230,4 +230,14 @@ mod tests {
             Err(Error::UnknownShape(ShapeId { index: 9 }))
         );
     }
+
+    #[test]
+    fn a_visible_cell_of_another_kind_falls_back_to_visible() {
+        let mut row = Row::new();
+        row.cells
+            .push(cell("Visible", CellValue::Str("x".to_owned())));
+        let (doc, page) = document_with_layers(vec![row]);
+        let layers = doc.page_layers(page).expect("reads");
+        assert!(layers[0].visible);
+    }
 }
