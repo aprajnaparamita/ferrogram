@@ -20,7 +20,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-07](tasks/P2-07.md) | implementer | P2-06b | merged (exit criterion met: 15/15 corpus files round-trip) | agent/P2-07 |
 | [P2-09](tasks/P2-09.md) | implementer | P2-06, P2-08 | merged (docs XSD is 1.1 and out of date; see P2-10 rule) | agent/P2-09 |
 | [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | merged (1 writer bug fixed; vsdx 97.1%) | agent/P2-10 |
-| [P2-11](tasks/P2-11.md) | reviewer | P2-10 | ready (group D) | — |
+| [P2-11](tasks/P2-11.md) | reviewer | P2-10 | merged (approve with fixes: 0 blocker, 1 major, 6 minor; finding 7 fixed on main) | agent/P2-11 |
 | [P2-12](tasks/P2-12.md) | coverage-auditor | P2-10 | ready (group D) | — |
 | [P2-13](tasks/P2-13.md) | cleanroom-auditor | P2-10 | merged (pass: 0 blocker, 0 major, 2 minor; F1 fixed on main) | agent/P2-13 |
 

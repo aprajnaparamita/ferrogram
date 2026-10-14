@@ -18,7 +18,7 @@ now or left as text.
 
 | Crate | Layer | Phase 2 content |
 |---|---|---|
-| `geom` | L0 | `Point`, `Size`, `Rect`, `Angle`, `Transform`, `Unit` and the unit conversions to canonical units (inches, degrees, fraction). Path/arc/NURBS/spline types wait for Phase 3 geometry rows. |
+| `geom` | L0 | `Point`, `Size`, `Rect`, `Angle`, `Transform`, `Unit` and the unit conversions to canonical units (inches, radians, fraction; radians since the ADR 0011 amendment). Path/arc/NURBS/spline types wait for Phase 3 geometry rows. |
 | `model` | L1 | ADR 0011 shape: `Document`, `Page`, `Master`, `Shape`, `Stylesheet`/`Style`, `Sheet`/`Section`/`Row`/`Cell`, ids, the preserved-XML tree (`XmlNode`, `Preserved`) and the equivalence `diff`, and the lookup API (ADR 0013). Depends on `geom` only. |
 | `vsdx` | L2 | `package/`: pure OPC (zip container, `[Content_Types].xml`, relationships, `Limits` caps). `read/`: package to model. `write/`: model to parts to bytes. Depends on `model`, `geom`, `quick-xml`, `zip`, `flate2`. |
 | `shapesheet` | L2 | Types only: `Formula` (source text), `CellRef`, opaque `Expr` and the `parse` signature. Parsing and evaluation are later phases. No dependency on `model` yet. |
