@@ -371,7 +371,14 @@ pub(crate) fn parse_relationships(
                 .filter(|a| !is_relationship_field(&a.name.local))
                 .cloned()
                 .collect(),
-            children: Vec::new(),
+            children: element
+                .children
+                .iter()
+                .filter_map(|child| match child {
+                    XmlChild::Element(element) => Some(element.clone()),
+                    _ => None,
+                })
+                .collect(),
         };
         relationships.push(Relationship {
             source: source.clone(),
