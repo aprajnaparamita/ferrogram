@@ -47,7 +47,7 @@ The relation is defined by these rules, which the round-trip test uses:
 | Element name | Equal when local name **and namespace URI** are equal. |
 | Namespace prefix | **Ignored.** `a:Cell` and `Cell` in the same URI are equal. Namespace declarations are not attributes for comparison. |
 | Attribute set | Compared by (namespace URI, local name). Order is **ignored**. |
-| Attribute value | Strings compare exactly, except a value that parses as a number compares numerically (`0.5` = `.50`). An omitted attribute is a presence difference, never equal to an empty one. |
+| Attribute value | Strings compare exactly, except a value that starts with a number literal (with an optional unit suffix) compares numerically against another such value with the same suffix (`0.5` = `.50`, `0.5 in` = `.50 in`). An omitted attribute is a presence difference, never equal to an empty one. |
 | Child elements | Compared **in document order**: same length, pairwise equivalent. Reordering is a difference. |
 | Text | Character data compares exactly after entity decoding. Whitespace inside element-only content is ignorable and normalized away; whitespace inside mixed content (text-bearing elements of `docProps`) is significant. |
 | Self-closing | `<a/>` and `<a></a>` are equivalent. The flag is kept only for faithful rewrites. |
@@ -57,6 +57,13 @@ Whitespace rule in practice: a text node that is entirely whitespace and sits
 between two element children is ignored (pretty-printing); any other text is
 significant. This is the standard XML "element-only content" rule and it is
 what `diff` implements.
+
+**Amended 2026-10-14, P2-14** (review finding 6): the attribute-value rule is
+stated as implemented. Two attribute values compare numerically only when both
+start with a number literal and their suffixes match exactly; a suffix is
+whatever follows the literal (a unit in practice) and units never convert.
+Every other value — all text included — compares exactly; text is never
+numeric-normalized.
 
 Number comparison is the only value normalization. Lengths do **not** convert
 units for equivalence: `1 in` and `25.4 mm` are different spellings and a
