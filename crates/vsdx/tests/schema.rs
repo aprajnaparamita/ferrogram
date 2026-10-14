@@ -36,7 +36,9 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ferrogram_vsdx::{Package, PartData, read_package, write_package};
+use ferrogram_vsdx::{
+    Limits, Package, PartData, read_document, read_package, write_document, write_package,
+};
 use zip::ZipArchive;
 
 /// The namespace the XSD is written against, as extracted.
@@ -119,6 +121,99 @@ fn read_entry(
         .read_to_end(&mut out)
         .map_err(|why| format!("{name}: {why}"))?;
     Ok(out)
+}
+
+/// Every normalized validation error of one part (P2-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartErrors {
+    /// The part name as written in the package.
+    pub part: String,
+    /// The normalized validation errors, in `xmllint`'s order.
+    pub errors: Vec<String>,
+}
+
+/// Validates the regenerated XML parts of `package` like [`validate_package`]
+/// but returns **every** validation error of each part, normalized for
+/// comparison (P2-10 rule).
+///
+/// One error normalizes to its element name and error kind with the file name
+/// and line number removed, so the same error in a source part and in a
+/// written part normalizes to the same string and only genuinely new problems
+/// differ. A schema `xmllint` cannot load is an `Err`, never a silent pass.
+pub fn validate_package_errors(
+    package: &Package,
+    schema: &Path,
+) -> Result<Vec<PartErrors>, String> {
+    let bytes = write_package(package).map_err(|why| format!("write_package failed: {why}"))?;
+    let mut written = ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|why| format!("written package does not reopen: {why}"))?;
+    let xmllint = find_xmllint().ok_or_else(|| "xmllint is not installed".to_owned())?;
+    let scratch = ScratchDir::new();
+    let mut out = Vec::new();
+    for part in &package.parts {
+        let PartData::Xml(root) = &part.data else {
+            continue;
+        };
+        if !REGENERATED_ROOTS.contains(&root.name.local.as_str()) {
+            continue;
+        }
+        let entry_name = part.name.as_str().trim_start_matches('/').to_owned();
+        let text = read_entry(&mut written, &entry_name)?;
+        let file = scratch.write(&entry_name, &text);
+        let message = xmllint_message(&xmllint, schema, &file)?;
+        let errors = message.lines().filter_map(normalize_error).collect();
+        out.push(PartErrors {
+            part: entry_name,
+            errors,
+        });
+    }
+    Ok(out)
+}
+
+/// The full `xmllint --noout --schema` message for one file, or the reason
+/// the schema is unusable.
+fn xmllint_message(xmllint: &Path, schema: &Path, file: &Path) -> Result<String, String> {
+    let output = Command::new(xmllint)
+        .args(["--noout", "--schema"])
+        .arg(schema)
+        .arg(file)
+        .output()
+        .map_err(|why| why.to_string())?;
+    let mut message = String::from_utf8_lossy(&output.stderr).into_owned();
+    message.push_str(&String::from_utf8_lossy(&output.stdout));
+    if message.contains("parser error") {
+        return Err(first_line(&message).to_owned());
+    }
+    Ok(message)
+}
+
+/// One `xmllint` message line as a comparable error, or `None` for anything
+/// that is not a validation error (the trailing "fails to validate" line,
+/// blank lines).
+///
+/// The normalization drops the file name and the line number (`P2-10` rule:
+/// compare by element path and error kind). A line reads
+/// `<file>:<line>: element <name>: Schemas validity error : <detail>`; what
+/// is left is `element <name>: Schemas validity error : <detail>`.
+fn normalize_error(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if !trimmed.contains("Schemas validity error") {
+        return None;
+    }
+    match trimmed.split_once(": element ") {
+        Some((_, rest)) => Some(format!("element {rest}")),
+        // No element name (a schema-level complaint): strip only the
+        // `<file>:<line>: ` prefix.
+        None => {
+            let after_line = trimmed.split_once(": ").and_then(|(head, rest)| {
+                head.rsplit(':').next().is_some_and(|line| {
+                    !line.is_empty() && line.chars().all(|c| c.is_ascii_digit())
+                })
+                .then_some(rest)
+            });
+            after_line.map(str::to_owned)
+        }
+    }
 }
 
 /// Runs `xmllint --noout --schema` on one file and classifies the outcome.
@@ -491,6 +586,84 @@ fn source_parts_validate_against_the_embedded_xsd() {
     );
 }
 
+/// The writer adds no new schema problems (P2-10 rule, master's note).
+///
+/// The docs XSD is out of sync with what Visio writes (the P2-09 finding:
+/// only 3 of 106 source parts validate against the derived schema), so the
+/// test does **not** require written parts to be valid. It requires that a
+/// P2-07 round-trip adds no new problems: for every regenerated part, each
+/// validation error of the written part must also occur for the source part,
+/// compared by element path and error kind with the line numbers and the
+/// file name removed (see [`normalize_error`]). A new error fails the test
+/// and names the part.
+#[test]
+fn written_parts_add_no_new_schema_errors() {
+    let (markdown, _xmllint) = match schema_tools() {
+        Ok(tools) => tools,
+        Err(why) => return skip_or_fail(&why),
+    };
+    let files = corpus_files();
+    if files.is_empty() {
+        assert!(
+            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+        );
+        eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
+        return;
+    }
+    let text = std::fs::read_to_string(&markdown).expect("the markdown reads");
+    let xsd = extract_xsd(&text).expect("the markdown has a fenced schema");
+    let scratch = ScratchDir::new();
+    let derived = scratch.write("schema-derived.xsd", adjust_for_xmllint(&xsd).as_bytes());
+
+    let mut checked = 0;
+    let mut recorded = 0;
+    for path in files {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let bytes = std::fs::read(&path).expect("corpus file reads");
+        let source =
+            read_package(&bytes, &Limits::DEFAULT).unwrap_or_else(|why| panic!("{name}: {why}"));
+        let document =
+            read_document(&bytes, &Limits::DEFAULT).unwrap_or_else(|why| panic!("{name}: {why}"));
+        let written_bytes = write_document(&document, &source)
+            .unwrap_or_else(|why| panic!("{name}: write_document: {why}"));
+        let written = read_package(&written_bytes, &Limits::DEFAULT)
+            .unwrap_or_else(|why| panic!("{name}: written package reads: {why}"));
+
+        let source_errors = validate_package_errors(&source, &derived)
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
+        let written_errors = validate_package_errors(&written, &derived)
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
+        for part in &written_errors {
+            let source_part = source_errors
+                .iter()
+                .find(|candidate| candidate.part == part.part);
+            let known = source_part.map(|part| &part.errors).cloned().unwrap_or_default();
+            let mut fresh: Vec<&String> = part
+                .errors
+                .iter()
+                .filter(|error| !known.contains(error))
+                .collect();
+            fresh.dedup();
+            assert!(
+                fresh.is_empty(),
+                "{name}: the writer added new schema problems in {}:\n  \
+                 new: {fresh:#?}\n  source errors: {known:#?}",
+                part.part
+            );
+            checked += 1;
+            recorded += part.errors.len();
+        }
+    }
+    eprintln!(
+        "written parts checked against their source errors: {checked} ({recorded} validation \
+         errors recorded)"
+    );
+}
+
 /// The `.vsdx` files of the corpus, sorted for a stable order.
 fn corpus_files() -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -553,5 +726,35 @@ mod tests {
     fn first_line_skips_leading_blanks() {
         assert_eq!(first_line("\n\nboom\nmore"), "boom");
         assert_eq!(first_line(""), "(no message)");
+    }
+
+    #[test]
+    fn normalize_error_strips_the_file_name_and_line_number() {
+        let line = "/tmp/scratch_visio_pages.xml:12: element Pages: Schemas validity error : \
+                   Element 'Pages': The attribute 'xml:space' is not allowed.";
+        assert_eq!(
+            normalize_error(line),
+            Some(
+                "element Pages: Schemas validity error : Element 'Pages': The attribute \
+                 'xml:space' is not allowed."
+                    .to_owned()
+            )
+        );
+        // The same error in another part at another line compares equal.
+        assert_eq!(
+            normalize_error("/tmp/a.xml:3: element Cell: Schemas validity error : boom"),
+            normalize_error("other.xml:99: element Cell: Schemas validity error : boom")
+        );
+    }
+
+    #[test]
+    fn normalize_error_keeps_only_validation_errors() {
+        assert_eq!(normalize_error("/tmp/a.xml fails to validate"), None);
+        assert_eq!(normalize_error("parser error : ..."), None);
+        assert_eq!(normalize_error(""), None);
+        assert_eq!(
+            normalize_error("3: Schemas validity error : schema-level complaint"),
+            Some("Schemas validity error : schema-level complaint".to_owned())
+        );
     }
 }
