@@ -150,7 +150,15 @@ fn relationships_xml(relationships: &[&Relationship]) -> String {
             escape_attribute(&attribute.value, &mut out);
             out.push('"');
         }
-        out.push_str("/>");
+        if relationship.preserved.children.is_empty() {
+            out.push_str("/>");
+        } else {
+            out.push('>');
+            for child in &relationship.preserved.children {
+                out.push_str(&write_xml(child));
+            }
+            out.push_str("</Relationship>");
+        }
     }
     out.push_str("</Relationships>");
     out
@@ -158,7 +166,7 @@ fn relationships_xml(relationships: &[&Relationship]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{Preserved, QName, XmlAttribute, XmlNode};
+    use ferrogram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
 
     use super::*;
     use crate::package::{ContentType, Limits, Part, PartName, RelationshipId};
@@ -259,6 +267,54 @@ mod tests {
             },
         });
 
+        let bytes = write_package(&package).expect("write");
+        let reread = crate::read_package(&bytes, &Limits::DEFAULT).expect("read");
+        assert_eq!(reread, package);
+    }
+
+    #[test]
+    fn relationship_children_round_trip() {
+        // Review finding 5: an unknown child element of a `Relationship` is
+        // preserved content and must survive read -> write -> read.
+        let mut package = empty_package();
+        package.content_types.push(ContentTypeDecl {
+            kind: ContentTypeKind::Override,
+            name: "/visio/document.xml".to_owned(),
+            content_type: "image/png".to_owned(),
+        });
+        package.parts.push(Part {
+            name: PartName::new("/visio/document.xml"),
+            content_type: ContentType::new("image/png"),
+            data: PartData::Binary(b"not xml".to_vec()),
+        });
+        package.relationships.push(Relationship {
+            source: PartName::new("/"),
+            id: RelationshipId::new("rId1"),
+            rel_type: "http://rel/officeDocument".to_owned(),
+            target: "visio/document.xml".to_owned(),
+            target_mode: TargetMode::Internal,
+            preserved: Preserved {
+                attributes: Vec::new(),
+                children: vec![XmlNode {
+                    name: QName {
+                        // The relationships part declares its namespace as
+                        // the default one, so an unprefixed child takes it.
+                        prefix: None,
+                        uri: Some(
+                            "http://schemas.openxmlformats.org/package/2006/relationships"
+                                .to_owned(),
+                        ),
+                        local: "Extra".to_owned(),
+                    },
+                    attributes: vec![XmlAttribute {
+                        name: QName::local("note"),
+                        value: "kept".to_owned(),
+                    }],
+                    children: vec![XmlChild::Text("text".to_owned())],
+                    self_closing: false,
+                }],
+            },
+        });
         let bytes = write_package(&package).expect("write");
         let reread = crate::read_package(&bytes, &Limits::DEFAULT).expect("read");
         assert_eq!(reread, package);

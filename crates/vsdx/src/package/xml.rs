@@ -388,7 +388,16 @@ fn write_node(node: &XmlNode, out: &mut String) {
         return;
     }
     out.push('>');
-    for child in &node.children {
+    write_children(&node.children, out);
+    out.push_str("</");
+    write_qualified_name(&node.name, out);
+    out.push('>');
+}
+
+/// Serializes children (elements, text, comments and processing
+/// instructions) into `out`, in document order.
+fn write_children(children: &[XmlChild], out: &mut String) {
+    for child in children {
         match child {
             XmlChild::Element(element) => write_node(element, out),
             XmlChild::Text(text) => escape_text(text, out),
@@ -411,9 +420,6 @@ fn write_node(node: &XmlNode, out: &mut String) {
             _ => {}
         }
     }
-    out.push_str("</");
-    write_qualified_name(&node.name, out);
-    out.push('>');
 }
 
 /// Writes a qualified name with its prefix spelling.
