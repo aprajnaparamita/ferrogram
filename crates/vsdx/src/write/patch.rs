@@ -216,9 +216,11 @@ fn blank(text: &str) -> bool {
 
 /// Removes the children at these indices.
 ///
-/// When nothing but whitespace text is left, that pretty-printing whitespace
-/// goes too: [`diff`](ferrogram_model::diff) would otherwise read it as
-/// significant text (ADR 0012 whitespace rule).
+/// When elements were dropped and nothing but whitespace text is left, that
+/// pretty-printing whitespace goes too: [`diff`](ferrogram_model::diff) would
+/// otherwise read it as significant text (ADR 0012 whitespace rule). When
+/// nothing was dropped, blank text is the element's own significant content
+/// and stays.
 fn remove_children(children: &mut Vec<XmlChild>, drop: &[usize]) {
     let mut kept: Vec<XmlChild> = Vec::with_capacity(children.len());
     for (index, child) in children.iter().enumerate() {
@@ -229,7 +231,7 @@ fn remove_children(children: &mut Vec<XmlChild>, drop: &[usize]) {
     let only_whitespace = kept
         .iter()
         .all(|child| matches!(child, XmlChild::Text(text) if blank(text)));
-    if only_whitespace {
+    if only_whitespace && !drop.is_empty() {
         kept.clear();
     }
     *children = kept;
@@ -1500,6 +1502,16 @@ mod tests {
         ];
         remove_children(&mut children, &[1]);
         assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn remove_children_keeps_blank_text_when_nothing_was_dropped() {
+        // Blank text with no element sibling is the element's own content
+        // (ADR 0012 whitespace rule: only element-like content makes
+        // whitespace ignorable).
+        let mut children = vec![XmlChild::Text("   ".to_owned())];
+        remove_children(&mut children, &[]);
+        assert_eq!(children, vec![XmlChild::Text("   ".to_owned())]);
     }
 
     #[test]

@@ -932,3 +932,48 @@ fn a_new_entity_without_contents_gets_no_rel_marker() {
     assert!(model.pages.iter().all(|page| page.shapes.is_empty()));
     assert!(model.masters.iter().all(|master| master.shapes.is_empty()));
 }
+
+/// Regression (review finding 2): blank text is significant content when an
+/// element has no element children (ADR 0012 whitespace rule), so a write
+/// keeps it even when it syncs the element's children.
+#[test]
+fn blank_text_only_content_survives_a_write() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element("PageContents", &[], &[text_element("Shapes", &[], "   ")]),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let document = to_model(&source).expect("reads");
+    let (written, _model) = round_trip(&document, &source);
+    let shapes = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    assert_eq!(shapes.len(), 1);
+    assert_eq!(shapes[0].children, vec![XmlChild::Text("   ".to_owned())]);
+}
