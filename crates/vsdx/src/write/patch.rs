@@ -28,6 +28,7 @@ use ferrogram_model::{
 
 use super::emit::{self, NameStyle};
 use super::value;
+use crate::read::node::text_content;
 
 /// The patcher's shared inputs: the model and the part's name spelling.
 pub(crate) struct Ctx<'d> {
@@ -434,22 +435,6 @@ fn style_sheets_rank(local: &str) -> u8 {
 // ---------------------------------------------------------------------------
 // Sheet content: cells and sections
 // ---------------------------------------------------------------------------
-
-/// The concatenated text of an element and its descendants.
-fn text_content(node: &XmlNode) -> String {
-    let mut text = String::new();
-    let mut stack = vec![node];
-    while let Some(node) = stack.pop() {
-        for child in node.children.iter().rev() {
-            match child {
-                XmlChild::Text(value) => text.push_str(value),
-                XmlChild::Element(element) => stack.push(element),
-                _ => {}
-            }
-        }
-    }
-    text
-}
 
 /// Patches one `Cell` element from a model cell.
 fn patch_cell(node: &mut XmlNode, cell: &Cell) {
@@ -1716,18 +1701,5 @@ mod tests {
         let mut node = element("Properties", &[], vec![pairs]);
         patch_properties(&mut node, &mut pool, &preserved);
         assert_eq!(node.children.len(), 1);
-    }
-
-    #[test]
-    fn text_content_concatenates_descendants() {
-        let node = raw(
-            "X",
-            &[],
-            vec![
-                XmlChild::Text("a".to_owned()),
-                XmlChild::Element(text_element("Y", &[], "b")),
-            ],
-        );
-        assert_eq!(text_content(&node), "ab");
     }
 }

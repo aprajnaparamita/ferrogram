@@ -28,6 +28,10 @@ mod value;
 use ferrogram_model::{Document, DocumentKind, Master, Page, Preserved, XmlNode};
 
 use crate::Error;
+use crate::package::discovery::{
+    CT_DRAWING_MAIN, CT_STENCIL_MAIN, CT_TEMPLATE_MAIN, MAIN_PART, is_main_content_type, main_part,
+    rel_type_local, resolve_target,
+};
 use crate::package::{
     ContentType, ContentTypeDecl, ContentTypeKind, Package, Part, PartData, PartName, Relationship,
     RelationshipId, TargetMode, write_package,
@@ -35,12 +39,6 @@ use crate::package::{
 use crate::write::emit::NameStyle;
 use crate::write::patch::{Ctx, PropertyPool};
 
-/// The content type of the main drawing document part.
-const CT_DRAWING_MAIN: &str = "application/vnd.ms-visio.drawing.main+xml";
-/// The content type of the main stencil document part.
-const CT_STENCIL_MAIN: &str = "application/vnd.ms-visio.stencil.main+xml";
-/// The content type of the main template document part.
-const CT_TEMPLATE_MAIN: &str = "application/vnd.ms-visio.template.main+xml";
 /// The content type of the page list part.
 const CT_PAGES: &str = "application/vnd.ms-visio.pages+xml";
 /// The content type of a page contents part.
@@ -50,8 +48,6 @@ const CT_MASTERS: &str = "application/vnd.ms-visio.masters+xml";
 /// The content type of a master contents part.
 const CT_MASTER: &str = "application/vnd.ms-visio.master+xml";
 
-/// The part name of the main document part.
-const MAIN_PART: &str = "/visio/document.xml";
 /// The page list part.
 const PAGES_PART: &str = "/visio/pages/pages.xml";
 /// The master list part.
@@ -109,40 +105,8 @@ fn package_for(document: &Document, preserve: &Package) -> Result<Package, Error
 }
 
 // ---------------------------------------------------------------------------
-// Package discovery (the same rules as the reader)
+// Package discovery (the shared rules of `crate::package::discovery`)
 // ---------------------------------------------------------------------------
-
-/// The main document part of the package: the root relationship of a
-/// `document` type wins, a main content type is the fallback.
-fn main_part(package: &Package) -> Result<PartName, Error> {
-    let root = PartName::new("/");
-    for relationship in package.relationships_from(&root) {
-        if relationship.target_mode != TargetMode::Internal {
-            continue;
-        }
-        if rel_type_local(&relationship.rel_type) != "document" {
-            continue;
-        }
-        let name = resolve_target(root.as_str(), &relationship.target);
-        if package.part(&name).is_some() {
-            return Ok(name);
-        }
-    }
-    for part in &package.parts {
-        if is_main_content_type(part.content_type.as_str()) {
-            return Ok(part.name.clone());
-        }
-    }
-    Err(Error::MissingPart(MAIN_PART.to_owned()))
-}
-
-/// Whether a content type names a main document part (ADR 0016).
-fn is_main_content_type(content_type: &str) -> bool {
-    matches!(
-        content_type,
-        CT_DRAWING_MAIN | CT_STENCIL_MAIN | CT_TEMPLATE_MAIN
-    )
-}
 
 /// The content type of the main part for a document kind (ADR 0016).
 fn kind_content_type(kind: DocumentKind) -> &'static str {
@@ -151,33 +115,6 @@ fn kind_content_type(kind: DocumentKind) -> &'static str {
         DocumentKind::Template => CT_TEMPLATE_MAIN,
         _ => CT_DRAWING_MAIN,
     }
-}
-
-/// The last segment of a relationship type.
-fn rel_type_local(rel_type: &str) -> &str {
-    match rel_type.rsplit('/').next() {
-        Some(local) => local,
-        None => rel_type,
-    }
-}
-
-/// The absolute part name a relationship `target` points at.
-fn resolve_target(from: &str, target: &str) -> PartName {
-    if target.starts_with('/') {
-        return PartName::new(target.to_owned());
-    }
-    let directory = from.rsplit_once('/').map_or("", |(dir, _)| dir);
-    let mut path: Vec<&str> = Vec::new();
-    for segment in directory.split('/').chain(target.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                path.pop();
-            }
-            other => path.push(other),
-        }
-    }
-    PartName::new(format!("/{}", path.join("/")))
 }
 
 /// The target part of the relationship with this type from `source`.
