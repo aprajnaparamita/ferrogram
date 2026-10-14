@@ -698,11 +698,10 @@ fn points_from_tokens(tokens: &[String]) -> Option<PolylineData> {
         return None;
     }
     let mut points = Vec::new();
+    // `chunks_exact(2)` guarantees both indices (AGENTS.md section 6
+    // allows direct indexing in `model`; the parser crates deny it).
     for pair in tokens.chunks_exact(2) {
-        let (Some(x), Some(y)) = (pair.first(), pair.get(1)) else {
-            return None;
-        };
-        points.push(Point::new(number_arg(x)?, number_arg(y)?));
+        points.push(Point::new(number_arg(&pair[0])?, number_arg(&pair[1])?));
     }
     Some(PolylineData { points })
 }
@@ -742,6 +741,24 @@ mod tests {
             row.cells.push(number_cell(name, *value));
         }
         row
+    }
+
+    /// The NURBS data of a typed row and its end point, or `None` for any
+    /// other row kind.
+    fn nurbs(row: &GeometryRow) -> Option<(Option<&NurbsData>, f64, f64)> {
+        match row {
+            GeometryRow::NurbsTo { data, x, y, .. } => Some((data.as_ref(), *x, *y)),
+            _ => None,
+        }
+    }
+
+    /// The polyline data of a typed row and its end point, or `None` for
+    /// any other row kind.
+    fn polyline(row: &GeometryRow) -> Option<(Option<&PolylineData>, f64, f64)> {
+        match row {
+            GeometryRow::PolylineTo { data, x, y } => Some((data.as_ref(), *x, *y)),
+            _ => None,
+        }
     }
 
     /// A `Geometry` section with `rows`.
@@ -1104,30 +1121,23 @@ mod tests {
         }
         let geometry = doc.shape_geometry(id).expect("reads");
         let rows = &geometry.paths[0].rows;
-        match &rows[0] {
-            GeometryRow::NurbsTo { data, .. } => {
-                let data = data.as_ref().expect("parses");
-                assert_eq!(data.knot_last, 1.0);
-                assert_eq!(data.degree, 3);
-                assert_eq!(data.x_type, 0);
-                assert_eq!(data.y_type, 1);
-                assert_eq!(data.points.len(), 2);
-                assert_eq!(data.points[0].x, 0.25);
-                assert_eq!(data.points[0].y, 0.5);
-                assert_eq!(data.points[0].knot, 0.0);
-                assert_eq!(data.points[0].weight, 1.0);
-                assert_eq!(data.points[1].knot, 1.0);
-            }
-            other => panic!("expected a NURBSTo row, got {other:?}"),
-        }
+        let (data, x, y) = nurbs(&rows[0]).expect("a NURBSTo row");
+        assert_eq!((x, y), (1.0, 1.0));
+        let data = data.expect("parses");
+        assert_eq!(data.knot_last, 1.0);
+        assert_eq!(data.degree, 3);
+        assert_eq!(data.x_type, 0);
+        assert_eq!(data.y_type, 1);
+        assert_eq!(data.points.len(), 2);
+        assert_eq!(data.points[0].x, 0.25);
+        assert_eq!(data.points[0].y, 0.5);
+        assert_eq!(data.points[0].knot, 0.0);
+        assert_eq!(data.points[0].weight, 1.0);
+        assert_eq!(data.points[1].knot, 1.0);
         // Unparsable E: the row degrades to its cells (ADR 0022).
-        match &rows[1] {
-            GeometryRow::NurbsTo { data, x, y, .. } => {
-                assert_eq!(*data, None);
-                assert_eq!((*x, *y), (2.0, 2.0));
-            }
-            other => panic!("expected a NURBSTo row, got {other:?}"),
-        }
+        let (data, x, y) = nurbs(&rows[1]).expect("a NURBSTo row");
+        assert_eq!(data, None);
+        assert_eq!((x, y), (2.0, 2.0));
     }
 
     #[test]
@@ -1145,15 +1155,11 @@ mod tests {
             shape.sheet.sections.push(section);
         }
         let geometry = doc.shape_geometry(id).expect("reads");
-        match &geometry.paths[0].rows[0] {
-            GeometryRow::NurbsTo { data, .. } => {
-                let data = data.as_ref().expect("parses");
-                assert_eq!(data.degree, 2);
-                assert_eq!(data.x_type, 1);
-                assert_eq!(data.points.len(), 1);
-            }
-            other => panic!("expected a NURBSTo row, got {other:?}"),
-        }
+        let (data, _, _) = nurbs(&geometry.paths[0].rows[0]).expect("a NURBSTo row");
+        let data = data.expect("parses");
+        assert_eq!(data.degree, 2);
+        assert_eq!(data.x_type, 1);
+        assert_eq!(data.points.len(), 1);
     }
 
     #[test]
@@ -1177,33 +1183,23 @@ mod tests {
         }
         let geometry = doc.shape_geometry(id).expect("reads");
         let rows = &geometry.paths[0].rows;
-        match &rows[0] {
-            GeometryRow::PolylineTo { data, .. } => {
-                let data = data.as_ref().expect("parses");
-                assert_eq!(
-                    data.points,
-                    vec![
-                        Point::new(0.0, 0.0),
-                        Point::new(0.0, 1.0),
-                        Point::new(1.0, 1.0)
-                    ]
-                );
-            }
-            other => panic!("expected a PolylineTo row, got {other:?}"),
-        }
-        match &rows[1] {
-            GeometryRow::PolylineTo { data, .. } => {
-                let data = data.as_ref().expect("parses");
-                assert_eq!(data.points.len(), 3);
-                assert_eq!(data.points[2], Point::new(0.5, 0.25));
-            }
-            other => panic!("expected a PolylineTo row, got {other:?}"),
-        }
+        let (data, _, _) = polyline(&rows[0]).expect("a PolylineTo row");
+        let data = data.expect("parses");
+        assert_eq!(
+            data.points,
+            vec![
+                Point::new(0.0, 0.0),
+                Point::new(0.0, 1.0),
+                Point::new(1.0, 1.0)
+            ]
+        );
+        let (data, _, _) = polyline(&rows[1]).expect("a PolylineTo row");
+        let data = data.expect("parses");
+        assert_eq!(data.points.len(), 3);
+        assert_eq!(data.points[2], Point::new(0.5, 0.25));
         // An odd token count is unparsable: no data (ADR 0022).
-        match &rows[2] {
-            GeometryRow::PolylineTo { data, .. } => assert_eq!(*data, None),
-            other => panic!("expected a PolylineTo row, got {other:?}"),
-        }
+        let (data, _, _) = polyline(&rows[2]).expect("a PolylineTo row");
+        assert_eq!(data, None);
     }
 
     #[test]
@@ -1384,5 +1380,270 @@ mod tests {
         assert_eq!(parse_polyline_data("0 0;1 x"), None);
         assert_eq!(parse_polyline_data(""), None);
         assert_eq!(parse_polyline_data("NURBS(1, 3, 0, 0, 0, 0, 0, 1)"), None);
+    }
+
+    // --- row sources and degrading values -----------------------------
+
+    #[test]
+    fn row_accessors_return_none_for_other_rows() {
+        assert!(nurbs(&GeometryRow::MoveTo { x: 0.0, y: 0.0 }).is_none());
+        assert!(polyline(&GeometryRow::MoveTo { x: 0.0, y: 0.0 }).is_none());
+    }
+
+    #[test]
+    fn index_arguments_must_fit_u32() {
+        assert_eq!(
+            parse_nurbs_data("NURBS(1, 4294967296, 0, 0, 0, 0, 0, 1)"),
+            None
+        );
+        assert_eq!(parse_nurbs_data("NURBS(1, 3, -1, 0, 0, 0, 0, 1)"), None);
+        assert_eq!(parse_nurbs_data("NURBS(1, 3, 0, 1.5, 0, 0, 0, 1)"), None);
+    }
+
+    /// A document with one master (`master_cells` on its shape) and one
+    /// instance of it on a page.
+    fn instance_of(master_cells: &[(&str, f64)]) -> (Document, ShapeId) {
+        let mut doc = Document::new();
+        let master_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        if let Some(shape) = doc.shape_mut(master_shape) {
+            shape
+                .sheet
+                .sections
+                .push(geometry(vec![row("MoveTo", 1, master_cells)]));
+        }
+        doc.masters.push(crate::master::Master::new(
+            crate::id::MasterId { index: 0 },
+            1,
+        ));
+        doc.masters[0].shapes.push(master_shape);
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        if let Some(shape) = doc.shape_mut(instance) {
+            shape.master = Some(crate::id::MasterId { index: 0 });
+        }
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        (doc, instance)
+    }
+
+    #[test]
+    fn rows_come_from_the_master_when_the_shape_has_no_geometry_section() {
+        let (doc, instance) = instance_of(&[("X", 3.0), ("Y", 4.0)]);
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert_eq!(geometry.paths.len(), 1);
+        assert_eq!(
+            geometry.paths[0].rows[0],
+            GeometryRow::MoveTo { x: 3.0, y: 4.0 }
+        );
+    }
+
+    #[test]
+    fn a_chained_master_supplies_the_rows_of_a_section_without_any() {
+        // Master B carries the rows; master A is an instance of B with an
+        // empty Geometry section; the instance is an instance of A.
+        let mut doc = Document::new();
+        let b_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(b_shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(vec![row("LineTo", 1, &[("X", 5.0), ("Y", 6.0)])]));
+        doc.masters.push(crate::master::Master::new(
+            crate::id::MasterId { index: 0 },
+            2,
+        ));
+        doc.masters[0].shapes.push(b_shape);
+        let a_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let shape = doc.shape_mut(a_shape).expect("exists");
+            shape.master = Some(crate::id::MasterId { index: 0 });
+            shape.sheet.sections.push(geometry(Vec::new()));
+        }
+        doc.masters.push(crate::master::Master::new(
+            crate::id::MasterId { index: 1 },
+            1,
+        ));
+        doc.masters[1].shapes.push(a_shape);
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+        {
+            let shape = doc.shape_mut(instance).expect("exists");
+            shape.master = Some(crate::id::MasterId { index: 1 });
+            shape.sheet.sections.push(geometry(Vec::new()));
+        }
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert_eq!(geometry.paths.len(), 1);
+        assert_eq!(
+            geometry.paths[0].rows[0],
+            GeometryRow::LineTo { x: 5.0, y: 6.0 }
+        );
+    }
+
+    #[test]
+    fn a_master_chain_without_rows_takes_no_paths() {
+        let (mut doc, instance) = instance_of(&[]);
+        // The master's section exists but has no rows and no further rung.
+        let master_shape = doc.masters[0].shapes[0];
+        doc.shape_mut(master_shape).expect("exists").sheet.sections[0]
+            .rows
+            .clear();
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert!(geometry.paths.is_empty());
+    }
+
+    #[test]
+    fn a_dangling_master_reference_takes_no_paths() {
+        let mut doc = Document::new();
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(instance).expect("exists").master = Some(crate::id::MasterId { index: 5 });
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert!(geometry.paths.is_empty());
+    }
+
+    #[test]
+    fn a_cyclic_master_chain_takes_no_paths() {
+        let (mut doc, instance) = instance_of(&[]);
+        let master_shape = doc.masters[0].shapes[0];
+        // The master's shape is itself an instance of the same master.
+        doc.shape_mut(master_shape).expect("exists").master =
+            Some(crate::id::MasterId { index: 0 });
+        doc.shape_mut(master_shape).expect("exists").sheet.sections[0]
+            .rows
+            .clear();
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert!(geometry.paths.is_empty());
+    }
+
+    #[test]
+    fn optional_row_cells_degrade_by_kind() {
+        // The D cell of an `EllipticalArcTo` is optional (ADR 0022): a
+        // `Themed` marker, a wrong kind and a formula-only cell each
+        // substitute the row default, warning only for the bad ones.
+        let mut doc = Document::new();
+        let id = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(id).expect("exists");
+            let mut section = geometry(Vec::new());
+            let mut themed = row(
+                "EllipticalArcTo",
+                1,
+                &[("X", 1.0), ("Y", 1.0), ("A", 1.0), ("B", 1.0)],
+            );
+            let mut cell = Cell::new(CellName::from_static("D"));
+            cell.value = Some(CellValue::Str("Themed".to_owned()));
+            themed.cells.push(cell);
+            let mut wrong = row(
+                "EllipticalArcTo",
+                2,
+                &[("X", 1.0), ("Y", 1.0), ("A", 1.0), ("B", 1.0)],
+            );
+            let mut cell = Cell::new(CellName::from_static("D"));
+            cell.value = Some(CellValue::Str("x".to_owned()));
+            wrong.cells.push(cell);
+            let mut formula_only = row(
+                "EllipticalArcTo",
+                3,
+                &[("X", 1.0), ("Y", 1.0), ("A", 1.0), ("B", 1.0)],
+            );
+            formula_only.cells.push(formula_cell("D", "Width*2"));
+            section.rows.push(themed);
+            section.rows.push(wrong);
+            section.rows.push(formula_only);
+            shape.sheet.sections.push(section);
+        }
+        let geometry = doc.shape_geometry(id).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        // The themed marker is unresolvable: 0 with `UnresolvedTheme`.
+        assert_eq!(
+            rows[0],
+            GeometryRow::EllipticalArcTo {
+                x: 1.0,
+                y: 1.0,
+                ctrl: Point::new(1.0, 1.0),
+                angle: Angle::from_radians(0.0),
+                ratio: 0.0,
+            }
+        );
+        // The wrong kind and the formula-only cell give the row default.
+        for row in &rows[1..] {
+            assert_eq!(
+                *row,
+                GeometryRow::EllipticalArcTo {
+                    x: 1.0,
+                    y: 1.0,
+                    ctrl: Point::new(1.0, 1.0),
+                    angle: Angle::from_radians(0.0),
+                    ratio: 1.0,
+                }
+            );
+        }
+        assert_eq!(geometry.warnings.len(), 2);
+        assert_eq!(
+            geometry.warnings[0].kind,
+            crate::values::WarningKind::UnresolvedTheme
+        );
+        assert_eq!(
+            geometry.warnings[1].kind,
+            crate::values::WarningKind::KindMismatch
+        );
+    }
+
+    #[test]
+    fn section_flags_read_every_written_kind() {
+        let mut doc = Document::new();
+        let first = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(first).expect("exists");
+            let mut section = geometry(Vec::new());
+            let mut no_fill = Cell::new(CellName::from_static("NoFill"));
+            no_fill.value = Some(CellValue::Bool(true));
+            section.cells.push(no_fill);
+            let mut no_line = Cell::new(CellName::from_static("NoLine"));
+            no_line.value = Some(CellValue::Error("#VALUE!".to_owned()));
+            section.cells.push(no_line);
+            let mut no_show = Cell::new(CellName::from_static("NoShow"));
+            no_show.value = Some(CellValue::Str("x".to_owned()));
+            section.cells.push(no_show);
+            shape.sheet.sections.push(section);
+        }
+        let second = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let shape = doc.shape_mut(second).expect("exists");
+            let mut section = geometry(Vec::new());
+            let mut no_fill = Cell::new(CellName::from_static("NoFill"));
+            no_fill.value = Some(CellValue::Str("Themed".to_owned()));
+            section.cells.push(no_fill);
+            section.cells.push(formula_cell("NoLine", "TRUE"));
+            shape.sheet.sections.push(section);
+        }
+        let geometry = doc.shape_geometry(first).expect("reads");
+        let path = &geometry.paths[0];
+        assert!(path.no_fill);
+        assert!(!path.no_line);
+        assert!(!path.no_show);
+        assert_eq!(geometry.warnings.len(), 2);
+        assert_eq!(
+            geometry.warnings[0].kind,
+            crate::values::WarningKind::ErrorValue("#VALUE!".to_owned())
+        );
+        assert_eq!(
+            geometry.warnings[1].kind,
+            crate::values::WarningKind::KindMismatch
+        );
+        let geometry = doc.shape_geometry(second).expect("reads");
+        let path = &geometry.paths[0];
+        assert!(!path.no_fill);
+        assert!(!path.no_line);
+        assert_eq!(geometry.warnings.len(), 1);
+        assert_eq!(
+            geometry.warnings[0].kind,
+            crate::values::WarningKind::UnresolvedTheme
+        );
     }
 }

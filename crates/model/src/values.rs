@@ -1276,4 +1276,95 @@ mod tests {
         assert_eq!(theme_slot(106), None);
         assert_eq!(theme_slot(201), None);
     }
+
+    #[test]
+    fn text_substitutes_empty_on_errors_and_missing_values() {
+        let (doc, shape) =
+            document_with_cells(vec![cell("Bad", CellValue::Error("#VALUE!".to_owned()))]);
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        assert_eq!(
+            reader.text(sheet, &CellName::from_static("Bad")),
+            Ok(String::new())
+        );
+        assert_eq!(
+            reader.warnings()[0].kind,
+            WarningKind::ErrorValue("#VALUE!".to_owned())
+        );
+        assert_eq!(
+            reader.text(sheet, &CellName::from_static("Gone")),
+            Ok(String::new())
+        );
+        assert_eq!(reader.warnings()[1].kind, WarningKind::Missing);
+    }
+
+    #[test]
+    fn color_substitutes_black_on_a_missing_value() {
+        let (doc, shape) = document_with_shape();
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.color(SheetRef::Shape(shape), &CellName::from_static("LineColor")),
+            Ok(Color::new(0, 0, 0))
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::Missing);
+    }
+
+    #[test]
+    fn page_sheet_cells_read_through_the_page_lookup() {
+        let mut doc = Document::new();
+        let mut page = crate::page::Page::new(PageId { index: 0 }, 1);
+        page.sheet
+            .cells
+            .push(cell("PageWidth", CellValue::Number(11.0)));
+        doc.pages.push(page);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Page(PageId { index: 0 }),
+                &CellName::from_static("PageWidth")
+            ),
+            Ok(11.0)
+        );
+        assert_eq!(
+            reader.text(
+                SheetRef::Page(PageId { index: 0 }),
+                &CellName::from_static("PageWidth")
+            ),
+            Ok(String::new())
+        );
+        assert_eq!(
+            reader.list(
+                SheetRef::Page(PageId { index: 0 }),
+                &CellName::from_static("PageWidth")
+            ),
+            Ok(vec![11.0])
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::KindMismatch);
+    }
+
+    #[test]
+    fn a_themed_color_with_an_unusable_quick_style_value_does_not_resolve() {
+        // A QuickStyle slot that is not a whole number, or beyond u32.
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("LineColor", CellValue::Str("Themed".to_owned())),
+            cell("QuickStyleLineColor", CellValue::Number(2.5)),
+            cell("FillForegnd", CellValue::Str("Themed".to_owned())),
+            cell("QuickStyleFillColor", CellValue::Number(1.0e30)),
+        ]);
+        with_theme(&mut doc);
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        assert_eq!(
+            reader.color(sheet, &CellName::from_static("LineColor")),
+            Ok(Color::new(0, 0, 0))
+        );
+        assert_eq!(
+            reader.color(sheet, &CellName::from_static("FillForegnd")),
+            Ok(Color::new(0, 0, 0))
+        );
+        assert_eq!(reader.warnings().len(), 2);
+        for warning in reader.warnings() {
+            assert_eq!(warning.kind, WarningKind::UnresolvedTheme);
+        }
+    }
 }

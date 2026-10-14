@@ -2750,4 +2750,210 @@ mod phase3_tests {
         assert!(match_repeated_section(&sheet, "Geometry", None, Some(9)).is_none());
         assert!(match_repeated_section(&sheet, "Missing", None, Some(0)).is_none());
     }
+
+    #[test]
+    fn row_cells_fall_to_defaults_without_a_master() {
+        // A shape that is not an instance skips the master rung entirely.
+        let mut doc = Document::new();
+        let shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(Vec::new()));
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(shape),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+    }
+
+    #[test]
+    fn style_chains_continue_when_the_style_does_not_define() {
+        // Fill and text chains: the first style links onward without
+        // defining the cell, the second defines it.
+        let mut doc = Document::new();
+        let shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(shape).expect("exists");
+            shape.fill_style = Some(1);
+            shape.text_style = Some(2);
+        }
+        let mut first = crate::style::Style::new(StyleId { index: 0 });
+        first.visio_id = 1;
+        first.fill_style = Some(3);
+        doc.stylesheet.styles.push(first);
+        let mut second = crate::style::Style::new(StyleId { index: 1 });
+        second.visio_id = 2;
+        second.text_style = Some(4);
+        doc.stylesheet.styles.push(second);
+        let mut third = crate::style::Style::new(StyleId { index: 2 });
+        third.visio_id = 3;
+        third.sheet.cells.push(number_cell("FillForegnd", 0.5));
+        doc.stylesheet.styles.push(third);
+        let mut fourth = crate::style::Style::new(StyleId { index: 3 });
+        fourth.visio_id = 4;
+        let mut font = Cell::new(CellName::from_static("Font"));
+        font.value = Some(CellValue::Str("Calibri".to_owned()));
+        fourth.sheet.cells.push(font);
+        doc.stylesheet.styles.push(fourth);
+
+        let resolved = doc
+            .resolve(shape, &CellName::from_static("FillForegnd"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 2 }));
+        let resolved = doc
+            .resolve(shape, &CellName::from_static("Font"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 3 }));
+    }
+
+    #[test]
+    fn page_style_chains_continue_through_every_kind() {
+        // The page sheet's links cover Line, Fill and Text, and the chain
+        // continues through a style that does not define the cell.
+        let mut doc = Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        for (name, value) in [("LineStyle", "1"), ("FillStyle", "2"), ("TextStyle", "3")] {
+            page.preserved.attributes.push(XmlAttribute {
+                name: QName {
+                    prefix: None,
+                    uri: None,
+                    local: name.to_owned(),
+                },
+                value: value.to_owned(),
+            });
+        }
+        doc.pages.push(page);
+        let style = |index: u32, id: StyleId, link: (&str, u32)| {
+            let mut style = crate::style::Style::new(id);
+            style.visio_id = index;
+            match link.0 {
+                "line" => style.line_style = Some(link.1),
+                "fill" => style.fill_style = Some(link.1),
+                _ => style.text_style = Some(link.1),
+            }
+            style
+        };
+        let mut first = style(1, StyleId { index: 0 }, ("line", 4));
+        first.sheet.cells.push(number_cell("LinePattern", 1.0));
+        let mut inherited = Cell::new(CellName::from_static("LineWeight"));
+        inherited.formula = Some(INHERIT_FORMULA.to_owned());
+        first.sheet.cells.push(inherited);
+        let mut second = style(2, StyleId { index: 1 }, ("fill", 5));
+        second.sheet.cells.push(number_cell("FillPattern", 1.0));
+        let mut third = style(3, StyleId { index: 2 }, ("text", 6));
+        third.sheet.cells.push(number_cell("Size", 1.0));
+        let mut fourth = style(4, StyleId { index: 3 }, ("line", 4));
+        fourth.sheet.cells.push(number_cell("LineWeight", 0.02));
+        let mut fifth = style(5, StyleId { index: 4 }, ("fill", 5));
+        fifth.sheet.cells.push(number_cell("FillForegnd", 7.0));
+        let mut sixth = style(6, StyleId { index: 5 }, ("text", 6));
+        let mut font = Cell::new(CellName::from_static("Font"));
+        font.value = Some(CellValue::Str("Calibri".to_owned()));
+        sixth.sheet.cells.push(font);
+        for entry in [first, second, third, fourth, fifth, sixth] {
+            doc.stylesheet.styles.push(entry);
+        }
+
+        let resolved = doc
+            .resolve_page_cell(PageId { index: 0 }, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 3 }));
+        let resolved = doc
+            .resolve_page_cell(PageId { index: 0 }, &CellName::from_static("FillForegnd"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 4 }));
+        let resolved = doc
+            .resolve_page_cell(PageId { index: 0 }, &CellName::from_static("Font"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Style(StyleId { index: 5 }));
+    }
+
+    #[test]
+    fn match_repeated_section_without_a_position_takes_the_first() {
+        let mut sheet = Sheet::new();
+        sheet
+            .sections
+            .push(Section::new(crate::name::SectionName::from_static(
+                "Geometry",
+            )));
+        sheet
+            .sections
+            .push(Section::new(crate::name::SectionName::from_static(
+                "Geometry",
+            )));
+        assert!(std::ptr::eq(
+            match_repeated_section(&sheet, "Geometry", None, None).expect("found"),
+            &sheet.sections[0]
+        ));
+    }
+
+    #[test]
+    fn page_sheet_rows_resolve_without_a_master_rung() {
+        // A `SheetRef::Page` row lookup: the page sheet's own row, then the
+        // defaults (a page has no master rung).
+        let mut doc = Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.sheet.sections.push(geometry(Vec::new()));
+        doc.pages.push(page);
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Page(PageId { index: 0 }),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_dangling_master_reference_skips_the_master_rung() {
+        let mut doc = Document::new();
+        let shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let shape = doc.shape_mut(shape).expect("exists");
+            shape.master = Some(MasterId { index: 5 });
+            shape.sheet.sections.push(geometry(Vec::new()));
+        }
+        let resolved = doc
+            .resolve_row_cell(
+                SheetRef::Shape(shape),
+                "Geometry",
+                0,
+                &CellName::from_static("X"),
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+        assert_eq!(
+            resolved.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 5 }),
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+    }
 }
