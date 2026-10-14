@@ -203,6 +203,12 @@ pub struct GlyphPos {
     /// The index of the input run this glyph belongs to ([`BULLET_RUN`]
     /// for bullet glyphs).
     pub run: usize,
+    /// The font size of this glyph, in points (the bullet size for bullet
+    /// glyphs).
+    ///
+    /// The outline from `Font::outline` is in em units (size 1), so
+    /// backends scale it by `size / 72` inches per point (ADR 0024).
+    pub size: f64,
 }
 
 /// One laid-out line.
@@ -255,6 +261,11 @@ pub struct Layout {
     pub height: f64,
     /// Whether content overflowed the box.
     pub overflow: bool,
+    /// The block rotation that was baked into the glyph positions.
+    ///
+    /// The positions are already rotated; backends rotate each glyph
+    /// outline by this angle about its glyph origin (ADR 0024 amendment).
+    pub rotation: Angle,
     /// The warnings recorded while laying out (ADR 0021).
     pub warnings: Vec<Warning>,
 }
@@ -276,6 +287,8 @@ struct Sg {
     ascent: f64,
     descent: f64,
     gap: f64,
+    /// Font size of this glyph, in points.
+    size: f64,
     /// Placement: x from the block origin, in inches, before rotation.
     x: f64,
 }
@@ -495,6 +508,7 @@ impl<'a> Ctx<'a> {
                 ascent,
                 descent,
                 gap,
+                size: size_pt,
                 x: 0.0,
             });
         }
@@ -659,6 +673,7 @@ pub fn layout(block: &Block<'_>, fonts: &FontStack) -> Result<Layout, Error> {
                     x: block.margins.left + g.x,
                     y: baseline - g.y_off,
                     run: g.run,
+                    size: g.size,
                 })
                 .collect(),
             baseline,
@@ -686,6 +701,7 @@ pub fn layout(block: &Block<'_>, fonts: &FontStack) -> Result<Layout, Error> {
         width: width_max,
         height: content_height,
         overflow,
+        rotation: block.rotation,
         warnings: std::mem::take(&mut ctx.warnings),
     })
 }
@@ -1118,6 +1134,7 @@ mod tests {
                 x: 0.1,
                 y: 0.2,
                 run: 0,
+                size: 12.0,
             }],
             baseline: 0.25,
             width: 0.5,
@@ -1129,6 +1146,7 @@ mod tests {
             width: 0.5,
             height: 0.3,
             overflow: false,
+            rotation: Angle::from_degrees(0.0),
             warnings: vec![Warning::MissingFont {
                 family: "Calibri".to_owned(),
             }],
@@ -1220,6 +1238,33 @@ mod layout_tests {
             rotation: Angle::from_radians(0.0),
             wrap: true,
         }
+    }
+
+    #[test]
+    fn output_carries_the_glyph_sizes_and_block_rotation() {
+        let fonts = default_fonts();
+        let rotation = Angle::from_degrees(90.0);
+        let mut block = boxed(vec![para_runs(vec![
+            Run {
+                text: "a",
+                format: fmt("Carlito", 10.0),
+            },
+            Run {
+                text: "b",
+                format: fmt("Carlito", 20.0),
+            },
+        ])]);
+        block.rotation = rotation;
+        let out = layout(&block, &fonts).expect("lays out");
+        // The backends need both to draw the glyph outlines (ADR 0024).
+        assert_eq!(out.rotation, rotation);
+        let sizes: Vec<f64> = out
+            .lines
+            .iter()
+            .flat_map(|line| &line.glyphs)
+            .map(|glyph| glyph.size)
+            .collect();
+        assert_eq!(sizes, vec![10.0, 20.0]);
     }
 
     #[test]
