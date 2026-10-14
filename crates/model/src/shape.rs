@@ -20,12 +20,15 @@ pub struct Shape {
     pub name_u: String,
     /// The master this shape is an instance of, or `None`.
     pub master: Option<MasterId>,
-    /// The line style name (`LineStyle` cell), or `None`.
-    pub line_style: Option<String>,
-    /// The fill style name (`FillStyle` cell), or `None`.
-    pub fill_style: Option<String>,
-    /// The text style name (`TextStyle` cell), or `None`.
-    pub text_style: Option<String>,
+    /// The line style reference (`LineStyle` attribute): the Visio `ID` of
+    /// the stylesheet row it names, or `None`.
+    pub line_style: Option<u32>,
+    /// The fill style reference (`FillStyle` attribute): the Visio `ID` of
+    /// the stylesheet row it names, or `None`.
+    pub fill_style: Option<u32>,
+    /// The text style reference (`TextStyle` attribute): the Visio `ID` of
+    /// the stylesheet row it names, or `None`.
+    pub text_style: Option<u32>,
     /// The parent group shape, or `None` for a top-level shape.
     pub parent: Option<ShapeId>,
     /// The sub-shapes, in file order (empty for a non-group shape).

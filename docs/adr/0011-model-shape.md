@@ -79,7 +79,8 @@ cell is "0.00 inches". The reader therefore uses the cached value as
 written; neither read nor write converts. `ferrogram_geom::UnitKind::Angle`
 still counts degrees as the canonical unit of *conversions*; that mismatch
 touches only callers that convert (the ShapeSheet table's `default_value`
-parsing in `ferrogram-model`), not the model itself.
+parsing in `ferrogram-model`), not the model itself. P2-06b closes that
+mismatch too (see Amendments).
 
 `CellValue` is `Number(f64) | Str(String) | Bool(bool) | Color(Color) |
 List(String) | Error(String)`. List and error cached values stay raw strings:
@@ -100,6 +101,38 @@ previous value (`Cell::set_formula` -> `Option<String>`,
 inverse. The undo stack itself lives in `ferrogram-commands` (L4), not here.
 Command design (transaction grouping, redo) is Phase 4 work; nothing in this
 ADR blocks it.
+
+## Amendments
+
+### Amended 2026-10-14, P2-06b: radians everywhere, and the slots the files need
+
+- **The canonical angle unit is radians in `ferrogram-geom` too.**
+  `Angle` stores radians and `UnitKind::Angle` converts to radians
+  (`Unit::Radians` is the base unit, `Unit::Degrees` a factor of `pi/180`).
+  The amendment of P2-06 already made the *model* radians; the mismatch it
+  left in `geom` would have made `lookup::parse_default_value` produce
+  degrees for angle defaults. Everything now agrees with the file.
+- **`Section` has `cells`.** `.vsdx` writes `Geometry`'s `NoFill`, `NoLine`,
+  `NoShow`, `NoSnap` and `NoQuickDrag` as `Cell` children of the `Section`
+  element, outside its rows. They were kept verbatim (lossless but
+  invisible to the lookup); `Section::cells` holds them and the lookup
+  matches a section's own cells before its row cells.
+- **`Master` has `shapes: Vec<ShapeId>`, not `shape: Option<ShapeId>`.** A
+  master part may hold several top-level shapes ([MS-VSDX] allows it and the
+  corpus has masters with up to 33); the singular field kept the first and
+  lost the rest from reach. The list is in document order.
+- **Style references are Visio style IDs.** `Shape::line_style`,
+  `fill_style`, `text_style` and the same three fields on `Style` are
+  `Option<u32>`, the `ID` of a stylesheet row (`.vsdx` writes
+  `LineStyle="7"`); `Style` also keeps its own `visio_id`. The old fields
+  held the file text of the reference and `Style::base_style` held a `Style`
+  cell the reader consumed; neither matched what `.vsdx` writes (a style's
+  chain is its `LineStyle`/`FillStyle`/`TextStyle` attributes), so the
+  style rung of the lookup never matched a file-loaded shape. `base_style`
+  is gone; a `Style` cell is an ordinary cell again.
+- **`Connect` has `preserved`.** A `Connect` element's unmapped attributes
+  and children stay on the record instead of falling back to the page's
+  `Preserved`, so the page's bag no longer mixes in per-record content.
 
 ## Consequences
 
