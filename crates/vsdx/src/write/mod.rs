@@ -755,6 +755,59 @@ mod tests {
     }
 
     #[test]
+    fn a_reserved_part_name_is_an_error() {
+        // Coverage (audit major 3): the errors `write_document` can return
+        // are `MissingPart` (tested above) and `InvalidPackage` from the
+        // package writer (a preserved part name reserved for package
+        // metadata, and the zip writer failure that no input can provoke).
+        for name in ["/[Content_Types].xml", "/visio/_rels/document.xml.rels"] {
+            let mut package = Package::new();
+            package.parts.push(Part {
+                name: PartName::new(MAIN_PART),
+                content_type: ContentType::new(CT_DRAWING_MAIN),
+                data: PartData::Binary(Vec::new()),
+            });
+            package.parts.push(Part {
+                name: PartName::new(name),
+                content_type: ContentType::new("application/xml"),
+                data: PartData::Binary(Vec::new()),
+            });
+            let error = write_document(&sample(), &package);
+            assert!(matches!(error, Err(Error::InvalidPackage(_))), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_dangling_relationship_degrades_instead_of_failing() {
+        // Coverage (audit major 3): a relationship whose target part is
+        // missing never fails the write; the writer builds what the model
+        // needs and the dangling entry stays as it was.
+        let mut package = Package::new();
+        package.parts.push(Part {
+            name: PartName::new(MAIN_PART),
+            content_type: ContentType::new(CT_DRAWING_MAIN),
+            data: PartData::Xml(emit::visio_root(&NameStyle::generated(), "VisioDocument")),
+        });
+        package.relationships.push(Relationship {
+            source: PartName::new(MAIN_PART),
+            id: RelationshipId::new("rId7"),
+            rel_type: REL_PAGES.to_owned(),
+            target: "pages/pages.xml".to_owned(),
+            target_mode: TargetMode::Internal,
+            preserved: Preserved::new(),
+        });
+        let bytes = write_document(&sample(), &package).expect("a dangling relationship degrades");
+        let reread = crate::read_package(&bytes, &crate::Limits::DEFAULT).expect("reads");
+        assert!(reread.part(&PartName::new(PAGES_PART)).is_some());
+        assert!(
+            reread
+                .relationships
+                .iter()
+                .any(|relationship| relationship.id.as_str() == "rId7")
+        );
+    }
+
+    #[test]
     fn main_part_finds_the_relationship_or_the_content_type() {
         let mut package = Package::new();
         package.parts.push(Part {
