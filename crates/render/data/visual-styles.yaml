@@ -1,0 +1,447 @@
+# Visual style definitions (ADR 0023). Task P3-08, 2026-10-14.
+#
+# PROVENANCE
+# ----------
+# The *drawings* in this file (dash rhythms, arrowhead paths, fill tiles,
+# shadow values) are Ferrogram's own work. They are our own approximations
+# of the visual style collections Visio indexes from the LinePattern,
+# BeginArrow/EndArrow, FillPattern and ShdwPattern cells. Nothing is traced
+# from Visio output and nothing is extracted from any Microsoft binary
+# (AGENTS.md section 4).
+#
+# What is *not* ours (derived facts, recorded in docs/sources.md):
+# - Index semantics and ranges: the [MS-VSDX] per-cell value tables
+#   (source 3) and the ShapeSheet cell reference (source 4):
+#   LinePattern 0 = transparent, 1 = solid, 2..23 = assorted patterns,
+#   254 = custom master; BeginArrow/EndArrow 0 = none, 1..45 = assorted
+#   arrowheads, 254 = custom master (EndArrow uses BeginArrow's table);
+#   FillPattern 0 = none, 1 = solid, 2..40 = assorted, 254 = custom;
+#   ShdwPattern 0 = shadow hidden, 1 = shadow visible ([MS-VSDX]; the
+#   ShapeSheet reference describes 0..40 as the fill-pattern collection);
+#   BeginArrowSize/EndArrowSize 0..6 = size classes (very small .. colossal).
+# - Fill and shadow pattern names (visNoFill, visSolid, visWideUpDiagonal,
+#   ... visThinDiagonalCross, 0..24): the VisCellVals enumeration on
+#   Microsoft Learn (source 2). Names appear in each `note`.
+# - Dash rhythm proportions: measured by us from the small table figures of
+#   the [MS-VSDX] per-cell value tables (source 3) and re-expressed in our
+#   own numbers below. The figures are Microsoft's drawings; we commit only
+#   these ratios and our own paths.
+#
+# Corpus observation (black-box, 2026-10-14; the 15 corpus .vsdx files):
+# LinePattern 0/1/23, BeginArrow 0, EndArrow 0, FillPattern 0/1/24,
+# ShdwPattern 0 (plus `Themed` values, resolved elsewhere). The .vsd corpus
+# was not scanned (no parser yet). Every corpus index has an entry here.
+#
+# CONVENTIONS (the scene builder, P3-05, relies on these)
+# -------------------------------------------------------
+# - line_patterns.dashes: on/off lengths as multiples of the line width;
+#   empty = solid; `invisible` hides the line (index 0).
+# - line_ends.shape: our own path in unit coordinates: x = 0 is the tip at
+#   the shape's vertex, x = 1 is the tail along the line, y = 0.5 is the
+#   line centre. `width` scales y, `length` scales x, both as multiples of
+#   the arrow size class (BeginArrowSize/EndArrowSize 0..6). `filled: true`
+#   fills the path, `false` strokes it with the line stroke. `shape: none`
+#   draws nothing (index 0).
+# - fill_patterns: `kind: tile` repeats `tile` (our own path in the unit
+#   tile box (0,0)-(1,1)) with pitch `spacing`, a multiple of the line
+#   width. `filled: true` fills the tile shapes; `false` strokes them.
+#   `invert: true` marks tiles drawn in the background colour over a
+#   foreground-coloured box (the visBackDots family); the builder swaps the
+#   two colours for those.
+# - shadows: dx/dy/blur are multiples of the line width; alpha is 0..1.
+#   The builder scales them with the shadow cells (ShapeShdwOffsetX/Y,
+#   ShapeShdwBlur, ...).
+#
+# Every entry carries a `note` describing the intent. "Close enough" is
+# defined in ADR 0023; the later screenshot pass refines these numbers.
+
+meta:
+  version: 1
+  note: "Our own approximations of Visio's visual styles (ADR 0023)."
+
+line_patterns:
+  - index: 0
+    dashes: []
+    invisible: true
+    note: "visLinePattern 0: transparent line, no stroke drawn."
+  - index: 1
+    dashes: []
+    note: "visLinePattern 1: solid line."
+  - index: 2
+    dashes: [6, 4]
+    note: "Dashed; long dashes measured at about 6 line widths, gaps about 4."
+  - index: 3
+    dashes: [0.5, 4]
+    note: "Dotted; round-dot feel from a very short dash, gaps about 4."
+  - index: 4
+    dashes: [6, 4, 0.5, 4]
+    note: "Dash-dot; one dot between long dashes."
+  - index: 5
+    dashes: [5, 4, 0.5, 4, 0.5, 4]
+    note: "Dash-dot-dot; two dots between shorter dashes."
+  - index: 6
+    dashes: [0.5, 4, 6, 4, 6, 4]
+    note: "Dot then two long dashes, repeating."
+  - index: 7
+    dashes: [16, 4, 6, 4]
+    note: "Long dash then short dash, repeating."
+  - index: 8
+    dashes: [6, 4, 6, 4, 16, 4]
+    note: "Two short dashes then a long dash, repeating."
+  - index: 9
+    dashes: [3, 2]
+    note: "Dense dashes; dash about 3 line widths, gap about 2."
+  - index: 10
+    dashes: [0.5, 2]
+    note: "Dense dots; small gaps about 2 line widths."
+  - index: 11
+    dashes: [3, 2, 0.5, 2]
+    note: "Dense dash-dot."
+  - index: 12
+    dashes: [3, 2, 0.5, 2, 0.5, 2]
+    note: "Dense dash-dot-dot."
+  - index: 13
+    dashes: [0.5, 2, 3, 2, 3, 2]
+    note: "Dense dot then two dashes, repeating."
+  - index: 14
+    dashes: [3, 2, 8, 2]
+    note: "Dense short dash then long dash."
+  - index: 15
+    dashes: [8, 2, 3, 2, 3, 2]
+    note: "Dense long dash then two short dashes."
+  - index: 16
+    dashes: [13, 7]
+    note: "Sparse long dashes; dash about 13 line widths, gap about 7."
+  - index: 17
+    dashes: [0.5, 7]
+    note: "Sparse dots; gaps about 7 line widths."
+  - index: 18
+    dashes: [0.5, 7, 13, 7]
+    note: "Sparse dot then one long dash."
+  - index: 19
+    dashes: [0.5, 7, 0.5, 7, 13, 7]
+    note: "Sparse two dots then one long dash."
+  - index: 20
+    dashes: [0.5, 7, 13, 7, 13, 7]
+    note: "Sparse dot then two long dashes."
+  - index: 21
+    dashes: [33, 7, 13, 7]
+    note: "Very long dash then long dash."
+  - index: 22
+    dashes: [33, 7, 13, 7, 13, 7]
+    note: "Very long dash then two long dashes."
+  - index: 23
+    dashes: [1.5, 1]
+    note: "Square dots; short dashes with slightly shorter gaps. Corpus index (the Guide style in every corpus file)."
+
+line_ends:
+  - index: 0
+    shape: none
+    filled: false
+    width: 0.0
+    length: 0.0
+    note: "No arrowhead (BeginArrow/EndArrow 0). Draws nothing."
+  - index: 1
+    shape: "M 1 0.05 L 0 0.5 L 1 0.95"
+    filled: false
+    width: 1.0
+    length: 1.0
+    note: "Open chevron: two strokes meeting at the tip."
+  - index: 2
+    shape: "M 0 0.5 L 1 0.1 L 1 0.9 z"
+    filled: true
+    width: 1.0
+    length: 1.2
+    note: "Filled narrow triangle."
+  - index: 3
+    shape: "M 1 0.02 L 0 0.5 L 1 0.98"
+    filled: false
+    width: 1.2
+    length: 1.0
+    note: "Open wide V."
+  - index: 4
+    shape: "M 0 0.5 L 1 0.03 L 1 0.97 z"
+    filled: true
+    width: 1.1
+    length: 1.3
+    note: "Filled triangle, classic arrowhead."
+  - index: 5
+    shape: "M 0 0.5 L 1 0 L 0.8 0.5 L 1 1 z"
+    filled: true
+    width: 1.1
+    length: 1.4
+    note: "Filled arrow with a shallow back notch."
+  - index: 6
+    shape: "M 0 0.5 L 1 0 L 0.6 0.5 L 1 1 z"
+    filled: true
+    width: 1.1
+    length: 1.3
+    note: "Filled arrow with a deep back notch (barbed)."
+  - index: 7
+    shape: "M 1 0 Q 0.35 0.18 0 0.5 Q 0.35 0.82 1 1"
+    filled: false
+    width: 1.2
+    length: 1.2
+    note: "Open arrow with curved barbs."
+  - index: 8
+    shape: "M 0 0.5 L 1 0.2 L 1 0.8 z"
+    filled: true
+    width: 0.9
+    length: 1.5
+    note: "Filled slim triangle."
+  - index: 9
+    shape: "M 1 0.05 L 0 0.95"
+    filled: false
+    width: 1.0
+    length: 1.0
+    note: "Single diagonal stroke (slash) at the tip."
+  - index: 10
+    shape: "M 0.5 0 C 0.7762 0 1 0.2238 1 0.5 C 1 0.7762 0.7762 1 0.5 1 C 0.2238 1 0 0.7762 0 0.5 C 0 0.2238 0.2238 0 0.5 0 z"
+    filled: true
+    width: 1.0
+    length: 1.0
+    note: "Filled circle at the tip."
+  - index: 11
+    shape: "M 0 0 L 1 0 L 1 1 L 0 1 z"
+    filled: true
+    width: 1.0
+    length: 1.0
+    note: "Filled square at the tip."
+  - index: 12
+    shape: "M 1 0 Q 0.3 0.2 0 0.5 Q 0.3 0.8 1 1"
+    filled: false
+    width: 1.4
+    length: 1.2
+    note: "Open wide arrow with curved barbs."
+  - index: 13
+    shape: "M 0 0.5 L 1 0.16 L 0.75 0.5 L 1 0.84 z"
+    filled: true
+    width: 1.0
+    length: 1.5
+    note: "Filled slim dart (slim arrow with back notch)."
+  - index: 14
+    shape: "M 0 0.5 L 1 0.03 L 1 0.97 z"
+    filled: false
+    width: 1.1
+    length: 1.3
+    note: "Open triangle (outlined triangle)."
+  - index: 15
+    shape: "M 0 0.5 L 1 0.12 L 1 0.88 z"
+    filled: false
+    width: 0.9
+    length: 1.0
+    note: "Open small triangle."
+  - index: 16
+    shape: "M 0 0.5 L 1 0.14 L 1 0.86 z"
+    filled: true
+    width: 1.0
+    length: 1.4
+    note: "Filled slim triangle, medium proportions."
+  - index: 17
+    shape: "M 0 0.5 L 1 0.2 L 1 0.8 z"
+    filled: true
+    width: 0.9
+    length: 1.6
+    note: "Filled very slim triangle."
+  - index: 18
+    shape: "M 0 0.5 L 1 0.14 L 1 0.86 z"
+    filled: false
+    width: 1.0
+    length: 1.4
+    note: "Open slim triangle (outlined)."
+  - index: 19
+    shape: "M 0 0.5 L 1 0.1 L 0.72 0.5 L 1 0.9 z"
+    filled: true
+    width: 1.0
+    length: 1.5
+    note: "Filled slim dart, deeper back notch."
+  - index: 20
+    shape: "M 0.5 0.08 C 0.732 0.08 0.92 0.268 0.92 0.5 C 0.92 0.732 0.732 0.92 0.5 0.92 C 0.268 0.92 0.08 0.732 0.08 0.5 C 0.08 0.268 0.268 0.08 0.5 0.08 z"
+    filled: false
+    width: 1.0
+    length: 1.0
+    note: "Open circle (ring) at the tip."
+  - index: 21
+    shape: "M 0 0 L 1 0 L 1 1 L 0 1 z"
+    filled: false
+    width: 1.0
+    length: 1.0
+    note: "Open square (outlined square) at the tip."
+  - index: 22
+    shape: "M 0 0.5 L 0.5 0.06 L 1 0.5 L 0.5 0.94 z"
+    filled: false
+    width: 1.0
+    length: 2.0
+    note: "Open long diamond (outlined diamond)."
+  - index: 23
+    shape: "M 0.2 0.05 L 0.8 0.95"
+    filled: false
+    width: 1.0
+    length: 1.0
+    note: "Diagonal stroke crossing the line end."
+  - index: 24
+    shape: "M 0.15 0 L 0.15 1"
+    filled: false
+    width: 1.0
+    length: 0.5
+    note: "Single bar crossing the line end. Indices 25..45 add more bars and combined heads; define them when a file needs them."
+
+fill_patterns:
+  - index: 0
+    kind: none
+    note: "visNoFill: transparent fill."
+  - index: 1
+    kind: solid
+    note: "visSolid: solid foreground colour."
+  - index: 2
+    kind: tile
+    tile: "M 0 0 L 0.35 0 L 1 1 L 0.65 1 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideUpDiagonal: wide up-diagonal bands."
+  - index: 3
+    kind: tile
+    tile: "M 0 0 L 1 0 L 1 0.22 L 0 0.22 z M 0 0 L 0.22 0 L 0.22 1 L 0 1 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideCross: wide square grid."
+  - index: 4
+    kind: tile
+    tile: "M 0 0 L 0.22 0 L 1 1 L 0.78 1 z M 0 1 L 0.22 1 L 1 0 L 0.78 0 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideDiagonalCross: wide diagonal crosshatch."
+  - index: 5
+    kind: tile
+    tile: "M 0 1 L 0.35 1 L 1 0 L 0.65 0 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideDownDiagonal: wide down-diagonal bands."
+  - index: 6
+    kind: tile
+    tile: "M 0 0 L 1 0 L 1 0.35 L 0 0.35 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideHorz: wide horizontal bands."
+  - index: 7
+    kind: tile
+    tile: "M 0 0 L 0.35 0 L 0.35 1 L 0 1 z"
+    spacing: 8.0
+    filled: true
+    note: "visWideVert: wide vertical bands."
+  - index: 8
+    kind: tile
+    tile: "M 0.5 0.38 C 0.5663 0.38 0.62 0.4337 0.62 0.5 C 0.62 0.5663 0.5663 0.62 0.5 0.62 C 0.4337 0.62 0.38 0.5663 0.38 0.5 C 0.38 0.4337 0.4337 0.38 0.5 0.38 z"
+    spacing: 2.0
+    filled: true
+    invert: true
+    note: "visBackDotsMini: small background dots, dense pitch."
+  - index: 9
+    kind: tile
+    tile: "M 0 0 L 0.5 0 L 0.5 0.5 L 0 0.5 z M 0.5 0.5 L 1 0.5 L 1 1 L 0.5 1 z"
+    spacing: 3.0
+    filled: true
+    note: "visHalfAndHalf: checkerboard of foreground and background."
+  - index: 10
+    kind: tile
+    tile: "M 0.5 0.35 C 0.5828 0.35 0.65 0.4172 0.65 0.5 C 0.65 0.5828 0.5828 0.65 0.5 0.65 C 0.4172 0.65 0.35 0.5828 0.35 0.5 C 0.35 0.4172 0.4172 0.35 0.5 0.35 z"
+    spacing: 3.0
+    filled: true
+    note: "visForeDotsMini: small foreground dots, dense pitch."
+  - index: 11
+    kind: tile
+    tile: "M 0.5 0.35 C 0.5828 0.35 0.65 0.4172 0.65 0.5 C 0.65 0.5828 0.5828 0.65 0.5 0.65 C 0.4172 0.65 0.35 0.5828 0.35 0.5 C 0.35 0.4172 0.4172 0.35 0.5 0.35 z"
+    spacing: 5.0
+    filled: true
+    note: "visForeDotsNarrow: small foreground dots, medium pitch."
+  - index: 12
+    kind: tile
+    tile: "M 0.5 0.38 C 0.5663 0.38 0.62 0.4337 0.62 0.5 C 0.62 0.5663 0.5663 0.62 0.5 0.62 C 0.4337 0.62 0.38 0.5663 0.38 0.5 C 0.38 0.4337 0.4337 0.38 0.5 0.38 z"
+    spacing: 8.0
+    filled: true
+    note: "visForeDotsWide: small foreground dots, wide pitch."
+  - index: 13
+    kind: tile
+    tile: "M 0 0 L 1 0 L 1 0.5 L 0 0.5 z"
+    spacing: 5.0
+    filled: true
+    note: "visThickHorz: thick horizontal bands."
+  - index: 14
+    kind: tile
+    tile: "M 0 0 L 0.5 0 L 0.5 1 L 0 1 z"
+    spacing: 5.0
+    filled: true
+    note: "visThickVertical: thick vertical bands."
+  - index: 15
+    kind: tile
+    tile: "M 0 1 L 0.5 1 L 1 0 L 0.5 0 z"
+    spacing: 5.0
+    filled: true
+    note: "visThickDownDiagonal: thick down-diagonal bands."
+  - index: 16
+    kind: tile
+    tile: "M 0 0 L 0.5 0 L 1 1 L 0.5 1 z"
+    spacing: 5.0
+    filled: true
+    note: "visThickUpDiagonal: thick up-diagonal bands."
+  - index: 17
+    kind: tile
+    tile: "M 0 0 L 0.35 0 L 1 1 L 0.65 1 z M 0 1 L 0.35 1 L 1 0 L 0.65 0 z"
+    spacing: 5.0
+    filled: true
+    note: "visThickDiagonalCross: thick diagonal crosshatch."
+  - index: 18
+    kind: tile
+    tile: "M 0.5 0.25 C 0.6381 0.25 0.75 0.3619 0.75 0.5 C 0.75 0.6381 0.6381 0.75 0.5 0.75 C 0.3619 0.75 0.25 0.6381 0.25 0.5 C 0.25 0.3619 0.3619 0.25 0.5 0.25 z"
+    spacing: 4.0
+    filled: true
+    invert: true
+    note: "visBackDotsWide: larger background dots."
+  - index: 19
+    kind: tile
+    tile: "M 0 0 L 1 0 L 1 0.18 L 0 0.18 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinHorz: thin horizontal lines."
+  - index: 20
+    kind: tile
+    tile: "M 0 0 L 0.18 0 L 0.18 1 L 0 1 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinVert: thin vertical lines."
+  - index: 21
+    kind: tile
+    tile: "M 0 1 L 0.18 1 L 1 0 L 0.82 0 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinDownDiagonal: thin down-diagonal lines."
+  - index: 22
+    kind: tile
+    tile: "M 0 0 L 0.18 0 L 1 1 L 0.82 1 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinUpDiagonal: thin up-diagonal lines."
+  - index: 23
+    kind: tile
+    tile: "M 0 0 L 1 0 L 1 0.12 L 0 0.12 z M 0 0 L 0.12 0 L 0.12 1 L 0 1 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinCross: fine square grid."
+  - index: 24
+    kind: tile
+    tile: "M 0 0 L 0.12 0 L 1 1 L 0.88 1 z M 0 1 L 0.12 1 L 1 0 L 0.88 0 z"
+    spacing: 4.0
+    filled: true
+    note: "visThinDiagonalCross: fine diagonal crosshatch. Corpus index (GUARD(24) in tdf154379-QuickStyleFillMatrix). Indices 25..40 are gradient fills (theme paints, ADR 0020 Paint); they need no tile and are not defined here."
+
+shadows:
+  - index: 0
+    kind: none
+    note: "Shadow hidden (ShdwPattern 0)."
+  - index: 1
+    kind: drop
+    dx: 2.0
+    dy: -2.0
+    blur: 1.0
+    alpha: 0.5
+    note: "Simple drop shadow: offset down-right in page space, soft edge, half transparent. The builder scales dx/dy/blur with the shadow cells."

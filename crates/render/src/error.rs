@@ -14,6 +14,10 @@ pub enum Error {
     TooLarge,
     /// The operation is not implemented yet (a Phase 3 stub).
     NotImplemented,
+    /// The committed visual style data does not parse (ADR 0023). This
+    /// is a build bug in `crates/render/data/visual-styles.yaml`, not
+    /// file input.
+    InvalidStyleData,
 }
 
 impl fmt::Display for Error {
@@ -21,6 +25,7 @@ impl fmt::Display for Error {
         match self {
             Error::TooLarge => write!(f, "output is larger than the allowed caps"),
             Error::NotImplemented => write!(f, "not implemented yet"),
+            Error::InvalidStyleData => write!(f, "committed visual style data is not valid"),
         }
     }
 }
@@ -38,5 +43,9 @@ mod tests {
             "output is larger than the allowed caps"
         );
         assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
+        assert_eq!(
+            Error::InvalidStyleData.to_string(),
+            "committed visual style data is not valid"
+        );
     }
 }
