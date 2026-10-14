@@ -28,6 +28,7 @@ use ferrogram_model::{
 
 use super::emit::{self, NameStyle};
 use super::value;
+use crate::read::node::text_content;
 
 /// The patcher's shared inputs: the model and the part's name spelling.
 pub(crate) struct Ctx<'d> {
@@ -216,9 +217,11 @@ fn blank(text: &str) -> bool {
 
 /// Removes the children at these indices.
 ///
-/// When nothing but whitespace text is left, that pretty-printing whitespace
-/// goes too: [`diff`](ferrogram_model::diff) would otherwise read it as
-/// significant text (ADR 0012 whitespace rule).
+/// When elements were dropped and nothing but whitespace text is left, that
+/// pretty-printing whitespace goes too: [`diff`](ferrogram_model::diff) would
+/// otherwise read it as significant text (ADR 0012 whitespace rule). When
+/// nothing was dropped, blank text is the element's own significant content
+/// and stays.
 fn remove_children(children: &mut Vec<XmlChild>, drop: &[usize]) {
     let mut kept: Vec<XmlChild> = Vec::with_capacity(children.len());
     for (index, child) in children.iter().enumerate() {
@@ -229,7 +232,7 @@ fn remove_children(children: &mut Vec<XmlChild>, drop: &[usize]) {
     let only_whitespace = kept
         .iter()
         .all(|child| matches!(child, XmlChild::Text(text) if blank(text)));
-    if only_whitespace {
+    if only_whitespace && !drop.is_empty() {
         kept.clear();
     }
     *children = kept;
@@ -433,22 +436,6 @@ fn style_sheets_rank(local: &str) -> u8 {
 // Sheet content: cells and sections
 // ---------------------------------------------------------------------------
 
-/// The concatenated text of an element and its descendants.
-fn text_content(node: &XmlNode) -> String {
-    let mut text = String::new();
-    let mut stack = vec![node];
-    while let Some(node) = stack.pop() {
-        for child in node.children.iter().rev() {
-            match child {
-                XmlChild::Text(value) => text.push_str(value),
-                XmlChild::Element(element) => stack.push(element),
-                _ => {}
-            }
-        }
-    }
-    text
-}
-
 /// Patches one `Cell` element from a model cell.
 fn patch_cell(node: &mut XmlNode, cell: &Cell) {
     sync_string(node, "N", cell.name.as_str(), "");
@@ -476,13 +463,17 @@ fn patch_cell(node: &mut XmlNode, cell: &Cell) {
     }
 }
 
-/// Syncs the `U` attribute from the cell's unit. A unit code the file used
+/// Syncs the `U` attribute from the cached value and the cell's unit (see
+/// [`value::unit_spelling`]): the code the value's kind needs to read back
+/// (`BOOL`, `STR`) comes first, then the unit code. A unit code the file used
 /// but the model does not spell stays in `Preserved`, so the attribute is
-/// left alone unless the model takes it over.
+/// removed only when the model takes it over.
 fn sync_unit(node: &mut XmlNode, cell: &Cell) {
-    match value::unit_code(cell.unit) {
-        Some(code) => sync_string(node, "U", code, ""),
-        None => {
+    let current_code = current(node, "U").map(str::to_owned);
+    match value::unit_spelling(cell.value.as_ref(), cell.unit, current_code.as_deref()) {
+        value::UnitSpelling::Keep => {}
+        value::UnitSpelling::Code(code) => sync_string(node, "U", code, ""),
+        value::UnitSpelling::Absent => {
             if current(node, "U").is_some() && !preserved_has(&cell.preserved, "U") {
                 remove(node, "U");
             }
@@ -1503,6 +1494,16 @@ mod tests {
     }
 
     #[test]
+    fn remove_children_keeps_blank_text_when_nothing_was_dropped() {
+        // Blank text with no element sibling is the element's own content
+        // (ADR 0012 whitespace rule: only element-like content makes
+        // whitespace ignorable).
+        let mut children = vec![XmlChild::Text("   ".to_owned())];
+        remove_children(&mut children, &[]);
+        assert_eq!(children, vec![XmlChild::Text("   ".to_owned())]);
+    }
+
+    #[test]
     fn insert_child_follows_the_rank_order() {
         let mut children = vec![
             XmlChild::Element(element("Cell", &[], Vec::new())),
@@ -1704,18 +1705,5 @@ mod tests {
         let mut node = element("Properties", &[], vec![pairs]);
         patch_properties(&mut node, &mut pool, &preserved);
         assert_eq!(node.children.len(), 1);
-    }
-
-    #[test]
-    fn text_content_concatenates_descendants() {
-        let node = raw(
-            "X",
-            &[],
-            vec![
-                XmlChild::Text("a".to_owned()),
-                XmlChild::Element(text_element("Y", &[], "b")),
-            ],
-        );
-        assert_eq!(text_content(&node), "ab");
     }
 }

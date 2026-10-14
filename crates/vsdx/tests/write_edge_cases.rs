@@ -932,3 +932,587 @@ fn a_new_entity_without_contents_gets_no_rel_marker() {
     assert!(model.pages.iter().all(|page| page.shapes.is_empty()));
     assert!(model.masters.iter().all(|master| master.shapes.is_empty()));
 }
+
+/// Regression (review finding 2): blank text is significant content when an
+/// element has no element children (ADR 0012 whitespace rule), so a write
+/// keeps it even when it syncs the element's children.
+#[test]
+fn blank_text_only_content_survives_a_write() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element("PageContents", &[], &[text_element("Shapes", &[], "   ")]),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let document = to_model(&source).expect("reads");
+    let (written, _model) = round_trip(&document, &source);
+    let shapes = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    assert_eq!(shapes.len(), 1);
+    assert_eq!(shapes[0].children, vec![XmlChild::Text("   ".to_owned())]);
+}
+
+/// Regression (P2-10 open issue 1, task P2-14): a value the model built
+/// writes the `U` the reader classifies it with (`U="BOOL"`, `U="STR"`), and
+/// a `U` that already declares the right kind keeps its spelling.
+#[test]
+fn a_patched_value_writes_the_u_its_kind_needs() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                element("Cell", &[("N", "Flag")], &[]),
+                                element("Cell", &[("N", "Label"), ("V", "text")], &[]),
+                                element("Cell", &[("N", "Date"), ("U", "DATE"), ("V", "2")], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let mut document = to_model(&source).expect("reads");
+    let shape_id = document.pages[0].shapes[0];
+    let shape = document.shape_mut(shape_id).expect("shape");
+    for cell in &mut shape.sheet.cells {
+        match cell.name.as_str() {
+            "Flag" => cell.value = Some(CellValue::Bool(true)),
+            // A string that reads back as a number without `U`.
+            "Label" => cell.value = Some(CellValue::Str("2".to_owned())),
+            _ => {}
+        }
+    }
+
+    let (written, model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    assert_eq!(attr(cells[0], "V"), Some("1"));
+    assert_eq!(attr(cells[0], "U"), Some("BOOL"));
+    assert_eq!(attr(cells[1], "V"), Some("2"));
+    assert_eq!(attr(cells[1], "U"), Some("STR"));
+    // A spelling that already declares the kind is never rewritten.
+    assert_eq!(attr(cells[2], "V"), Some("2"));
+    assert_eq!(attr(cells[2], "U"), Some("DATE"));
+
+    let reread = model.shape(shape_id).expect("shape");
+    assert_eq!(reread.sheet.cells[0].value, Some(CellValue::Bool(true)));
+    assert_eq!(
+        reread.sheet.cells[1].value,
+        Some(CellValue::Str("2".to_owned()))
+    );
+    assert_eq!(
+        reread.sheet.cells[2].value,
+        Some(CellValue::Str("2".to_owned()))
+    );
+}
+
+/// Coverage (audit major 1): the reader's sheet-level preservation fallbacks
+/// (read/sheet.rs) keep an unmapped `Cell`, `Row` or `Section` child and an
+/// unknown cell attribute in `Preserved`, and a write puts every one of them
+/// back where the source had it.
+#[test]
+fn sheet_level_preservation_fallbacks_survive_the_round_trip() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                // No `N`: cannot be named, kept verbatim.
+                                element("Cell", &[("V", "9")], &[]),
+                                // Unknown cell attribute.
+                                element(
+                                    "Cell",
+                                    &[("N", "PinX"), ("V", "2"), ("Future", "yes")],
+                                    &[],
+                                ),
+                                element(
+                                    "Section",
+                                    &[("N", "Geometry")],
+                                    &[
+                                        element("Cell", &[("N", "NoFill"), ("V", "0")], &[]),
+                                        // Unmapped `Cell` child of the section.
+                                        element("Cell", &[("V", "3")], &[]),
+                                        // A `Row` with loose content is kept verbatim.
+                                        {
+                                            let mut row = element("Row", &[("IX", "1")], &[]);
+                                            row.children.push(XmlChild::Comment("note".to_owned()));
+                                            row
+                                        },
+                                        element(
+                                            "Row",
+                                            &[("IX", "2"), ("Del", "1")],
+                                            &[
+                                                // Unmapped `Cell` and unknown child of the row.
+                                                element("Cell", &[("V", "7")], &[]),
+                                                element("RefBy", &[("ID", "1")], &[]),
+                                            ],
+                                        ),
+                                    ],
+                                ),
+                                // No `N`: cannot be named, kept verbatim.
+                                element("Section", &[], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let document = to_model(&source).expect("reads");
+    let shape = document.shape(document.pages[0].shapes[0]).expect("shape");
+
+    // The reader keeps what it cannot map.
+    let kept: Vec<&str> = shape
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "Section"]);
+    let pinx = shape
+        .sheet
+        .cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "PinX")
+        .expect("PinX");
+    assert_eq!(pinx.preserved.attributes.len(), 1);
+    assert_eq!(pinx.preserved.attributes[0].name.local, "Future");
+    let section = &shape.sheet.sections[0];
+    let kept: Vec<&str> = section
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "Row"]);
+    let row = &section.rows[0];
+    assert_eq!(row.preserved.attributes[0].name.local, "Del");
+    let kept: Vec<&str> = row
+        .preserved
+        .children
+        .iter()
+        .map(|child| child.name.local.as_str())
+        .collect();
+    assert_eq!(kept, ["Cell", "RefBy"]);
+
+    // The writer puts every one of them back.
+    let (written, _model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    assert_eq!(cells.len(), 2);
+    assert!(attr(cells[0], "N").is_none());
+    assert_eq!(attr(cells[0], "V"), Some("9"));
+    assert_eq!(attr(cells[1], "Future"), Some("yes"));
+    let sections = children_named(shape[0], "Section");
+    assert_eq!(sections.len(), 2);
+    assert!(attr(sections[1], "N").is_none());
+    let section_cells = children_named(sections[0], "Cell");
+    assert_eq!(section_cells.len(), 2);
+    assert!(attr(section_cells[1], "N").is_none());
+    assert_eq!(attr(section_cells[1], "V"), Some("3"));
+    let rows = children_named(sections[0], "Row");
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows[0]
+            .children
+            .iter()
+            .any(|child| matches!(child, XmlChild::Comment(_)))
+    );
+    assert_eq!(attr(rows[1], "Del"), Some("1"));
+    let row_cells = children_named(rows[1], "Cell");
+    assert_eq!(attr(row_cells[0], "V"), Some("7"));
+    assert_eq!(children_named(rows[1], "RefBy").len(), 1);
+}
+
+/// Strips the writer's generated `Rel` markers from pages and masters: a new
+/// contents relationship brings a `Rel` element the reader keeps in the
+/// entity's preserved content. It is writer furniture, not document content
+/// (the property tests normalize the same way).
+fn without_rel_markers(document: &mut Document) {
+    for page in &mut document.pages {
+        page.preserved
+            .children
+            .retain(|child| child.name.local != "Rel");
+    }
+    for master in &mut document.masters {
+        master
+            .preserved
+            .children
+            .retain(|child| child.name.local != "Rel");
+    }
+}
+
+/// A document with content in every list, built in the arena order the
+/// reader builds (master shapes first, then page shapes).
+fn plumbing_document() -> Document {
+    let mut document = Document::new();
+    let master_shape = document.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+    let first = document.add_shape(Shape::new(ShapeId { index: 1 }, 1));
+    let second = document.add_shape(Shape::new(ShapeId { index: 2 }, 2));
+    let mut master = Master::new(MasterId { index: 0 }, 30);
+    master.name_u = "Box".to_owned();
+    master.shapes.push(master_shape);
+    document.masters.push(master);
+    let mut page = Page::new(PageId { index: 0 }, 10);
+    page.name = "P1".to_owned();
+    page.shapes.push(first);
+    document.pages.push(page);
+    let mut page = Page::new(PageId { index: 1 }, 20);
+    page.name = "P2".to_owned();
+    page.shapes.push(second);
+    document.pages.push(page);
+    document
+}
+
+/// Coverage (audit major 2): `write_document` into an empty package
+/// generates the parts from the model alone, and the result reads back to
+/// the same model.
+#[test]
+fn writing_into_an_empty_package_reads_back_the_same_model() {
+    let document = plumbing_document();
+    let bytes = write_document(&document, &Package::new()).expect("writes");
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("the written package reads");
+    let mut model = to_model(&package).expect("maps");
+    without_rel_markers(&mut model);
+    assert_eq!(model, document);
+}
+
+/// Coverage (audit major 2): a package without `[Content_Types].xml` (the
+/// reader infers its declarations) writes back to the same model.
+#[test]
+fn writing_into_a_package_without_content_types_reads_back_the_same_model() {
+    let bytes = common::build(common::Fixture::Malformed(
+        common::Malformed::NoContentTypes,
+    ));
+    let package = read_package(&bytes, &Limits::DEFAULT).expect("the fixture reads");
+    let document = to_model(&package).expect("maps");
+    let out = write_document(&document, &package).expect("writes");
+    let reread = read_package(&out, &Limits::DEFAULT).expect("the written package reads");
+    assert_eq!(to_model(&reread).expect("maps"), document);
+}
+
+/// Coverage (audit major 2): a package with only a main part and no
+/// `[Content_Types].xml` gets the missing pages and masters plumbing built,
+/// and reads back to the same model. A stale relationship id exercises the
+/// fresh-id collision loop.
+#[test]
+fn writing_builds_the_missing_index_parts_and_relationships() {
+    let document = plumbing_document();
+    let mut bare = Package::new();
+    bare.parts.push(Part {
+        name: PartName::new("/visio/document.xml"),
+        content_type: ContentType::new("application/xml"),
+        data: PartData::Xml(element("VisioDocument", &[], &[])),
+    });
+    bare.relationships.push(Relationship {
+        source: PartName::new("/"),
+        id: RelationshipId::new("rId1"),
+        rel_type: "http://schemas.microsoft.com/visio/2010/relationships/document".to_owned(),
+        target: "visio/document.xml".to_owned(),
+        target_mode: TargetMode::Internal,
+        preserved: Preserved::new(),
+    });
+    // A stale id on the (missing) pages index: the next fresh id must skip
+    // it.
+    bare.relationships.push(Relationship {
+        source: PartName::new("/visio/pages/pages.xml"),
+        id: RelationshipId::new("rId2"),
+        rel_type: "http://schemas.microsoft.com/visio/2010/relationships/page".to_owned(),
+        target: "page1.xml".to_owned(),
+        target_mode: TargetMode::Internal,
+        preserved: Preserved::new(),
+    });
+
+    let out = write_document(&document, &bare).expect("writes");
+    let reread = read_package(&out, &Limits::DEFAULT).expect("the written package reads");
+    for name in [
+        "/visio/pages/pages.xml",
+        "/visio/pages/page1.xml",
+        "/visio/pages/page2.xml",
+        "/visio/masters/masters.xml",
+        "/visio/masters/master1.xml",
+    ] {
+        assert!(reread.part(&PartName::new(name)).is_some(), "{name} exists");
+    }
+    let mut model = to_model(&reread).expect("maps");
+    without_rel_markers(&mut model);
+    assert_eq!(model, document);
+}
+
+/// The one-page source with two unit cells both tests below share.
+fn unit_source() -> Package {
+    package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                element("Cell", &[("N", "W1"), ("U", "IN"), ("V", "2")], &[]),
+                                element("Cell", &[("N", "W2"), ("U", "MM"), ("V", "3")], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    )
+}
+
+/// Coverage (audit minor 10): when the model takes a cell's unit over, the
+/// file's `U` follows — it goes when the new unit has no code, and it is
+/// rewritten when it has one.
+#[test]
+fn the_model_takes_a_unit_over_and_the_file_u_follows() {
+    let source = unit_source();
+    let mut document = to_model(&source).expect("reads");
+    let shape_id = document.pages[0].shapes[0];
+    {
+        let shape = document.shape_mut(shape_id).expect("shape");
+        for cell in &mut shape.sheet.cells {
+            match cell.name.as_str() {
+                "W1" => {
+                    assert_eq!(cell.unit, Unit::Inches);
+                    cell.unit = Unit::Unitsless;
+                }
+                "W2" => {
+                    assert_eq!(cell.unit, Unit::Millimeters);
+                    cell.unit = Unit::Points;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let (written, model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    // The unitless value loses `U`; the new unit rewrites it.
+    assert_eq!(attr(cells[0], "V"), Some("2"));
+    assert!(attr(cells[0], "U").is_none());
+    assert_eq!(attr(cells[1], "V"), Some("3"));
+    assert_eq!(attr(cells[1], "U"), Some("PT"));
+
+    let reread = model.shape(shape_id).expect("shape");
+    assert_eq!(reread.sheet.cells[0].unit, Unit::Unitsless);
+    assert_eq!(reread.sheet.cells[1].unit, Unit::Points);
+}
+
+/// Coverage (audit minor 10): model connects with no `Connects` wrapper in
+/// the source are wrapped in a new one; a loose preserved `Connect` element
+/// stays where the source put it.
+#[test]
+fn model_connects_get_a_new_connects_wrapper() {
+    let mut loose = element(
+        "Connect",
+        &[
+            ("FromSheet", "1"),
+            ("FromCell", "PinX"),
+            ("FromPart", "9"),
+            ("ToSheet", "1"),
+            ("ToCell", "PinX"),
+            ("ToPart", "3"),
+        ],
+        &[],
+    );
+    loose.self_closing = true;
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[
+                        element("Shapes", &[], &[element("Shape", &[("ID", "1")], &[])]),
+                        loose,
+                    ],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let mut document = to_model(&source).expect("reads");
+    // The loose element is preserved, not modeled.
+    assert!(document.pages[0].connects.is_empty());
+    let mut connect = Connect::new();
+    connect.from_sheet = 1;
+    connect.from_cell = "PinX".to_owned();
+    connect.from_part = 9;
+    connect.to_sheet = 2;
+    connect.to_cell = "PinY".to_owned();
+    connect.to_part = 3;
+    document.pages[0].connects.push(connect);
+
+    let (written, model) = round_trip(&document, &source);
+    let page_root = root(&written, "/visio/pages/page1.xml");
+    let wrappers = children_named(page_root, "Connects");
+    assert_eq!(wrappers.len(), 1);
+    let wrapped = children_named(wrappers[0], "Connect");
+    assert_eq!(wrapped.len(), 1);
+    assert_eq!(attr(wrapped[0], "ToSheet"), Some("2"));
+    // The loose `Connect` is still a direct child of the root.
+    assert_eq!(children_named(page_root, "Connect").len(), 1);
+    assert_eq!(model.pages[0].connects.len(), 1);
+    let preserved_connects = model.pages[0]
+        .preserved
+        .children
+        .iter()
+        .filter(|child| child.name.local == "Connect")
+        .count();
+    assert_eq!(preserved_connects, 1);
+}

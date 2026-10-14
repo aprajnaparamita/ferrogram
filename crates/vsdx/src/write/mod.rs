@@ -28,6 +28,10 @@ mod value;
 use ferrogram_model::{Document, DocumentKind, Master, Page, Preserved, XmlNode};
 
 use crate::Error;
+use crate::package::discovery::{
+    CT_DRAWING_MAIN, CT_STENCIL_MAIN, CT_TEMPLATE_MAIN, MAIN_PART, is_main_content_type, main_part,
+    rel_type_local, resolve_target,
+};
 use crate::package::{
     ContentType, ContentTypeDecl, ContentTypeKind, Package, Part, PartData, PartName, Relationship,
     RelationshipId, TargetMode, write_package,
@@ -35,12 +39,6 @@ use crate::package::{
 use crate::write::emit::NameStyle;
 use crate::write::patch::{Ctx, PropertyPool};
 
-/// The content type of the main drawing document part.
-const CT_DRAWING_MAIN: &str = "application/vnd.ms-visio.drawing.main+xml";
-/// The content type of the main stencil document part.
-const CT_STENCIL_MAIN: &str = "application/vnd.ms-visio.stencil.main+xml";
-/// The content type of the main template document part.
-const CT_TEMPLATE_MAIN: &str = "application/vnd.ms-visio.template.main+xml";
 /// The content type of the page list part.
 const CT_PAGES: &str = "application/vnd.ms-visio.pages+xml";
 /// The content type of a page contents part.
@@ -50,8 +48,6 @@ const CT_MASTERS: &str = "application/vnd.ms-visio.masters+xml";
 /// The content type of a master contents part.
 const CT_MASTER: &str = "application/vnd.ms-visio.master+xml";
 
-/// The part name of the main document part.
-const MAIN_PART: &str = "/visio/document.xml";
 /// The page list part.
 const PAGES_PART: &str = "/visio/pages/pages.xml";
 /// The master list part.
@@ -109,40 +105,8 @@ fn package_for(document: &Document, preserve: &Package) -> Result<Package, Error
 }
 
 // ---------------------------------------------------------------------------
-// Package discovery (the same rules as the reader)
+// Package discovery (the shared rules of `crate::package::discovery`)
 // ---------------------------------------------------------------------------
-
-/// The main document part of the package: the root relationship of a
-/// `document` type wins, a main content type is the fallback.
-fn main_part(package: &Package) -> Result<PartName, Error> {
-    let root = PartName::new("/");
-    for relationship in package.relationships_from(&root) {
-        if relationship.target_mode != TargetMode::Internal {
-            continue;
-        }
-        if rel_type_local(&relationship.rel_type) != "document" {
-            continue;
-        }
-        let name = resolve_target(root.as_str(), &relationship.target);
-        if package.part(&name).is_some() {
-            return Ok(name);
-        }
-    }
-    for part in &package.parts {
-        if is_main_content_type(part.content_type.as_str()) {
-            return Ok(part.name.clone());
-        }
-    }
-    Err(Error::MissingPart(MAIN_PART.to_owned()))
-}
-
-/// Whether a content type names a main document part (ADR 0016).
-fn is_main_content_type(content_type: &str) -> bool {
-    matches!(
-        content_type,
-        CT_DRAWING_MAIN | CT_STENCIL_MAIN | CT_TEMPLATE_MAIN
-    )
-}
 
 /// The content type of the main part for a document kind (ADR 0016).
 fn kind_content_type(kind: DocumentKind) -> &'static str {
@@ -151,33 +115,6 @@ fn kind_content_type(kind: DocumentKind) -> &'static str {
         DocumentKind::Template => CT_TEMPLATE_MAIN,
         _ => CT_DRAWING_MAIN,
     }
-}
-
-/// The last segment of a relationship type.
-fn rel_type_local(rel_type: &str) -> &str {
-    match rel_type.rsplit('/').next() {
-        Some(local) => local,
-        None => rel_type,
-    }
-}
-
-/// The absolute part name a relationship `target` points at.
-fn resolve_target(from: &str, target: &str) -> PartName {
-    if target.starts_with('/') {
-        return PartName::new(target.to_owned());
-    }
-    let directory = from.rsplit_once('/').map_or("", |(dir, _)| dir);
-    let mut path: Vec<&str> = Vec::new();
-    for segment in directory.split('/').chain(target.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                path.pop();
-            }
-            other => path.push(other),
-        }
-    }
-    PartName::new(format!("/{}", path.join("/")))
 }
 
 /// The target part of the relationship with this type from `source`.
@@ -818,6 +755,59 @@ mod tests {
     }
 
     #[test]
+    fn a_reserved_part_name_is_an_error() {
+        // Coverage (audit major 3): the errors `write_document` can return
+        // are `MissingPart` (tested above) and `InvalidPackage` from the
+        // package writer (a preserved part name reserved for package
+        // metadata, and the zip writer failure that no input can provoke).
+        for name in ["/[Content_Types].xml", "/visio/_rels/document.xml.rels"] {
+            let mut package = Package::new();
+            package.parts.push(Part {
+                name: PartName::new(MAIN_PART),
+                content_type: ContentType::new(CT_DRAWING_MAIN),
+                data: PartData::Binary(Vec::new()),
+            });
+            package.parts.push(Part {
+                name: PartName::new(name),
+                content_type: ContentType::new("application/xml"),
+                data: PartData::Binary(Vec::new()),
+            });
+            let error = write_document(&sample(), &package);
+            assert!(matches!(error, Err(Error::InvalidPackage(_))), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_dangling_relationship_degrades_instead_of_failing() {
+        // Coverage (audit major 3): a relationship whose target part is
+        // missing never fails the write; the writer builds what the model
+        // needs and the dangling entry stays as it was.
+        let mut package = Package::new();
+        package.parts.push(Part {
+            name: PartName::new(MAIN_PART),
+            content_type: ContentType::new(CT_DRAWING_MAIN),
+            data: PartData::Xml(emit::visio_root(&NameStyle::generated(), "VisioDocument")),
+        });
+        package.relationships.push(Relationship {
+            source: PartName::new(MAIN_PART),
+            id: RelationshipId::new("rId7"),
+            rel_type: REL_PAGES.to_owned(),
+            target: "pages/pages.xml".to_owned(),
+            target_mode: TargetMode::Internal,
+            preserved: Preserved::new(),
+        });
+        let bytes = write_document(&sample(), &package).expect("a dangling relationship degrades");
+        let reread = crate::read_package(&bytes, &crate::Limits::DEFAULT).expect("reads");
+        assert!(reread.part(&PartName::new(PAGES_PART)).is_some());
+        assert!(
+            reread
+                .relationships
+                .iter()
+                .any(|relationship| relationship.id.as_str() == "rId7")
+        );
+    }
+
+    #[test]
     fn main_part_finds_the_relationship_or_the_content_type() {
         let mut package = Package::new();
         package.parts.push(Part {
@@ -1001,5 +991,65 @@ mod tests {
             Some(ferrogram_model::CellValue::Number(2.0))
         );
         assert_eq!(shape.sheet.cells[0].unit, ferrogram_geom::Unit::Inches);
+    }
+
+    #[test]
+    fn a_generated_value_keeps_its_kind_on_re_read() {
+        // Regression (P2-10 open issue 1, task P2-14): a model-built `Bool`
+        // or number-like `Str` used to read back as `Number` because the
+        // writer emitted no `U` for it.
+        let mut document = sample();
+        let mut flag = ferrogram_model::Cell::new(CellName::from_static("Flag"));
+        flag.value = Some(ferrogram_model::CellValue::Bool(true));
+        let mut label = ferrogram_model::Cell::new(CellName::from_static("Label"));
+        label.value = Some(ferrogram_model::CellValue::Str("2".to_owned()));
+        let mut plain = ferrogram_model::Cell::new(CellName::from_static("Plain"));
+        plain.value = Some(ferrogram_model::CellValue::Str("Themed".to_owned()));
+        if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
+            shape.sheet.cells.push(flag);
+            shape.sheet.cells.push(label);
+            shape.sheet.cells.push(plain);
+        }
+        let package = from_model(&document).expect("package");
+        let bytes = write_package(&package).expect("bytes");
+        let reread = crate::read_document(&bytes, &crate::Limits::DEFAULT).expect("read");
+        let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
+        assert_eq!(
+            shape.sheet.cells[0].value,
+            Some(ferrogram_model::CellValue::Bool(true))
+        );
+        assert_eq!(
+            shape.sheet.cells[1].value,
+            Some(ferrogram_model::CellValue::Str("2".to_owned()))
+        );
+        assert_eq!(
+            shape.sheet.cells[2].value,
+            Some(ferrogram_model::CellValue::Str("Themed".to_owned()))
+        );
+    }
+
+    #[test]
+    fn newlines_in_text_and_attributes_round_trip() {
+        // Coverage (audit minor 4): a newline in text and a newline or a
+        // carriage return in an attribute value survive the write (the
+        // attribute escapes are `&#xA;` and `&#xD;`).
+        let mut document = sample();
+        document
+            .properties
+            .push(ferrogram_model::Property::new("title", "line1\nline2"));
+        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Note"));
+        cell.value = Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()));
+        if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
+            shape.sheet.cells.push(cell);
+        }
+        let package = from_model(&document).expect("package");
+        let bytes = write_package(&package).expect("bytes");
+        let reread = crate::read_document(&bytes, &crate::Limits::DEFAULT).expect("read");
+        assert_eq!(reread.properties[0].value, "line1\nline2");
+        let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
+        assert_eq!(
+            shape.sheet.cells[0].value,
+            Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()))
+        );
     }
 }

@@ -3,6 +3,7 @@
 //! Nothing here knows about Visio XML: the package layer is a zip container
 //! plus `[Content_Types].xml` and relationships (task P2-05).
 
+pub(crate) mod discovery;
 mod read;
 mod write;
 mod xml;

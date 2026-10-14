@@ -18,6 +18,7 @@
 mod error;
 mod package;
 mod read;
+mod value_parse;
 mod write;
 
 pub use error::Error;
