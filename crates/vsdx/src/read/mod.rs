@@ -81,6 +81,8 @@
 
 pub(crate) mod node;
 mod sheet;
+pub(crate) mod text;
+pub(crate) mod theme;
 pub(crate) mod value;
 
 use ferrogram_model::{
@@ -132,6 +134,7 @@ pub fn to_model(package: &Package) -> Result<Document, Error> {
     mapper.read_properties_part(&PartName::new(APP_PROPS_PART))?;
     let root = xml_part(package, &main)?;
     mapper.read_visio_document(root)?;
+    mapper.read_themes(&main)?;
     mapper.read_masters(&main)?;
     mapper.read_pages(&main)?;
     Ok(mapper.document)
@@ -295,7 +298,8 @@ impl Mapper<'_> {
     }
 
     /// Maps the main document part: the stylesheet, the `DocumentProperties`
-    /// subtree and the root's own preserved content.
+    /// subtree, the document colour table and the root's own preserved
+    /// content.
     fn read_visio_document(&mut self, root: &XmlNode) -> Result<(), Error> {
         Self::keep_attributes(&root.attributes, &mut self.document.preserved);
         for element in elements(root) {
@@ -306,8 +310,32 @@ impl Mapper<'_> {
                         self.map_property(property);
                     }
                 }
+                "Colors" => {
+                    // The colour table is typed read-side (ADR 0019); the
+                    // element itself stays preserved as before.
+                    theme::map_colors(element, &mut self.document.color_table, MAIN_PART)?;
+                    self.document.preserved.children.push(element.clone());
+                }
                 _ => self.document.preserved.children.push(element.clone()),
             }
+        }
+        Ok(())
+    }
+
+    /// Maps the theme parts the main part's relationships point at, in
+    /// relationship order (`Document::themes`, ADR 0019 decision 4).
+    fn read_themes(&mut self, main: &PartName) -> Result<(), Error> {
+        for relationship in self.package.relationships_from(main) {
+            if relationship.target_mode != TargetMode::Internal
+                || rel_type_local(&relationship.rel_type) != "theme"
+            {
+                continue;
+            }
+            let target = resolve_target(main.as_str(), &relationship.target);
+            let Ok(root) = xml_part(self.package, &target) else {
+                continue;
+            };
+            self.document.themes.push(theme::map_theme(root)?);
         }
         Ok(())
     }
@@ -597,6 +625,13 @@ impl Mapper<'_> {
             part,
             &["Shapes"],
         )?;
+        // The `Text` element also stays preserved (ADR 0012); the typed
+        // copy is read-side only (ADR 0019 decision 3).
+        for element in elements(node) {
+            if element.name.local == "Text" {
+                shape.text = Some(text::map_text(element, part)?);
+            }
+        }
         Ok(self.document.add_shape(shape))
     }
 
