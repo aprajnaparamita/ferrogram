@@ -97,3 +97,29 @@ panic (AGENTS.md section 6).
   inputs are the unusual Visio encodings anyway. Revisit if the alpha needs
   rational weights beyond unit.
 - **Emit SVG `A` for NURBS too.** Rejected: SVG arcs are elliptical only.
+
+## Amendments
+
+### Amended 2026-10-14, P3-05: the `NURBSTo` fallback and the knot lists
+
+The fallback sentence above ("otherwise the row's `X, Y, A, B, C, D`
+define a degree-3 B-spline with the current point as first control point")
+is replaced by a simpler rule, decided by the master when the corpus
+showed that no file exercises the encoded path: **when the `NURBS(...)`
+formula does not parse (or is absent), the builder draws a straight
+segment to the row's `X`/`Y` and records one
+`WarningKind::ErrorValue` warning on the `E` cell.** A curve fitted from
+`A`..`D` alone would invent shape the file never asked for; the straight
+chord is the honest degradation (the same rule libvisio's comment
+suggests for empty NURBS data).
+
+The knot lists are assembled in the form `ferrogram-geom` documents
+("Knot vectors" in `curve.rs`): one stored knot per control point plus a
+final knot. For `NurbsTo` that is the current point (knot `C`, weight
+`D`) followed by the formula's control points and the row's `(X, Y)`
+(knot `A`, weight `B`), with the formula's `knotLast` as the final knot;
+the formula's `xType`/`yType` scaling (fractions of `Width`/`Height`)
+applies to the formula's points only. For `SplineStart` + `SplineKnot`
+it is `B`, `A`, each `SplineKnot`'s `A`, and `C` as the final knot over
+the control points current point, `SplineStart`'s `(X, Y)` and each
+`SplineKnot`'s `(X, Y)`.
