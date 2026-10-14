@@ -8,6 +8,14 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# Argument parsing and JSON output (ADR 0026); the Ferrogram libraries the
+# CLI calls. Licences checked by cargo deny.
+lexopt = "0.3"
+serde_json = "1"
+ferrogram-geom = { path = "../../crates/geom" }
+ferrogram-model = { path = "../../crates/model" }
+ferrogram-render = { path = "../../crates/render" }
+ferrogram-vsdx = { path = "../../crates/vsdx" }
 
 [lints]
 workspace = true

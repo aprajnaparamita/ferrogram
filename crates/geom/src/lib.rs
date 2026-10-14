@@ -11,14 +11,18 @@
 #![forbid(unsafe_code)]
 
 mod angle;
+mod curve;
 mod error;
+mod path;
 mod point;
 mod rect;
 mod transform;
 mod units;
 
 pub use angle::Angle;
+pub use curve::{Arc, Cubic, Curve, EllipticalArc, Nurbs, NurbsPoint, Polyline, Spline};
 pub use error::Error;
+pub use path::{Path, Segment};
 pub use point::{Point, Size};
 pub use rect::Rect;
 pub use transform::Transform;

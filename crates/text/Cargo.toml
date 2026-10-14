@@ -8,6 +8,13 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# Fonts and shaping (ADR 0024). Pure Rust, permissive, wasm-compatible.
+# skrifa/harfrust replace ttf-parser/rustybuzz, which cargo deny flags as
+# unmaintained (RUSTSEC-2026-0192, RUSTSEC-2026-0206).
+ferrogram-geom = { path = "../geom" }
+skrifa = "0.48"
+harfrust = "0.14"
+unicode-linebreak = "0.1"
 
 [lints]
 workspace = true
