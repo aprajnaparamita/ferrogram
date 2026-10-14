@@ -14,7 +14,7 @@
 //! | `/visio/pages/pages.xml` | [`Document::pages`] |
 //! | `/visio/pages/page{N}.xml` | the page's shapes (the shape arena), its `Connect` records and its [`Preserved`] |
 //! | `/visio/masters/masters.xml` | [`Document::masters`] |
-//! | `/visio/masters/master{N}.xml` | the master's content shape (the shape arena) |
+//! | `/visio/masters/master{N}.xml` | the master's top-level shapes (the shape arena) |
 //! | everything else | untouched in the package |
 //!
 //! The main document part is found through the package root relationship
@@ -39,9 +39,9 @@
 //! kept verbatim instead.
 //!
 //! The cells a `Section` writes *outside* its rows (`Geometry` writes
-//! `NoFill`, `NoLine`, `NoShow`, `NoSnap`, `NoQuickDrag` there) have no slot
-//! on [`Section`](ferrogram_model::Section) and are kept verbatim in its
-//! [`Preserved`].
+//! `NoFill`, `NoLine`, `NoShow`, `NoSnap`, `NoQuickDrag` there) map to
+//! [`Section::cells`](ferrogram_model::Section) (P2-06b decision 1), where
+//! the lookup sees them before the row cells.
 //!
 //! # Preservation (ADR 0012)
 //!
@@ -70,11 +70,12 @@
 //! a panic:
 //!
 //! - a missing or dangling part, relationship or `Rel` reference leaves the
-//!   entity empty (`Master::shape` is `None`, a page has no shapes);
+//!   entity empty (`Master::shapes` is empty, a page has no shapes);
 //! - a `Master` or `BackPage` reference that names nothing stays in
 //!   `Preserved` instead of being resolved;
-//! - a `Connect` element carrying anything the model does not hold (there is
-//!   no preserved slot on `Connect`) is kept verbatim rather than modeled;
+//! - a `Connect` element with text, a comment or a processing instruction is
+//!   kept verbatim rather than modeled; its other unmapped attributes and
+//!   children go to [`Connect::preserved`](ferrogram_model::Connect);
 //! - a numeric or boolean value that does not parse is
 //!   [`Error::InvalidPackage`] naming the part and the cell.
 
@@ -83,13 +84,13 @@ mod sheet;
 mod value;
 
 use ferrogram_model::{
-    CellName, Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property,
-    Shape, ShapeId, Style, StyleId, XmlNode,
+    Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property, Shape,
+    ShapeId, Style, StyleId, XmlNode,
 };
 
 use crate::Error;
 use crate::package::{Limits, Package, PartData, PartName, TargetMode};
-use crate::read::node::{attribute, elements, is_namespace_declaration};
+use crate::read::node::{attribute, elements, has_loose_content, is_namespace_declaration};
 
 /// The content type of the main drawing document part.
 const CT_DRAWING_MAIN: &str = "application/vnd.ms-visio.drawing.main+xml";
@@ -248,6 +249,17 @@ fn parse_attr_int(value: &str, part: &str, attribute: &str) -> Result<i32, Error
     })
 }
 
+/// An unsigned integer attribute value (a style reference or a stylesheet
+/// `ID`), or [`Error::InvalidPackage`] naming the part and the attribute
+/// (P2-06b decision 3).
+fn parse_attr_uint(value: &str, part: &str, attribute: &str) -> Result<u32, Error> {
+    value.trim().parse::<u32>().map_err(|_| {
+        Error::InvalidPackage(format!(
+            "{part}: attribute `{attribute}`: not an unsigned integer"
+        ))
+    })
+}
+
 /// A boolean attribute value (`0`/`1`, `false`/`true` in either case), or
 /// [`Error::InvalidPackage`] naming the part and the attribute.
 fn parse_attr_bool(value: &str, part: &str, attribute: &str) -> Result<bool, Error> {
@@ -267,24 +279,6 @@ fn parse_bool(value: &str) -> Result<bool, ()> {
         "0" | "false" | "FALSE" => Ok(false),
         "1" | "true" | "TRUE" => Ok(true),
         _ => Err(()),
-    }
-}
-
-/// The base style of a style: its own `Style` cell (ADR 0011).
-///
-/// The cell is consumed: it moves from the sheet to [`Style::base_style`]. A
-/// `Style` cell without a string value is not a base style and stays a plain
-/// cell.
-fn take_base_style(style: &mut Style) {
-    let position = style.sheet.cells.iter().position(|cell| {
-        cell.name == CellName::from_static("Style")
-            && matches!(cell.value, Some(ferrogram_model::CellValue::Str(_)))
-    });
-    if let Some(position) = position {
-        let removed = style.sheet.cells.remove(position);
-        if let Some(ferrogram_model::CellValue::Str(name)) = removed.value {
-            style.base_style = Some(name);
-        }
     }
 }
 
@@ -422,8 +416,21 @@ impl Mapper<'_> {
                 .filter(|a| !is_namespace_declaration(a))
             {
                 match attribute.name.local.as_str() {
+                    "ID" => style.visio_id = parse_attr_uint(&attribute.value, MAIN_PART, "ID")?,
                     "Name" => style.name = attribute.value.clone(),
                     "NameU" => style.name_u = attribute.value.clone(),
+                    "LineStyle" => {
+                        style.line_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "LineStyle")?)
+                    }
+                    "FillStyle" => {
+                        style.fill_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "FillStyle")?)
+                    }
+                    "TextStyle" => {
+                        style.text_style =
+                            Some(parse_attr_uint(&attribute.value, MAIN_PART, "TextStyle")?)
+                    }
                     _ => style.preserved.attributes.push(attribute.clone()),
                 }
             }
@@ -434,7 +441,6 @@ impl Mapper<'_> {
                 MAIN_PART,
                 &[],
             )?;
-            take_base_style(&mut style);
             self.document.stylesheet.styles.push(style);
         }
         Ok(())
@@ -490,9 +496,9 @@ impl Mapper<'_> {
             if let Some(master) = self.document.masters.get_mut(position) {
                 master.preserved.attributes.extend(preserved.attributes);
                 master.preserved.children.extend(preserved.children);
-                // A master has one content shape field; a master with several
-                // top-level shapes keeps the first (the corpus has one each).
-                master.shape = shapes.first().copied();
+                // Every top-level shape of the master part is kept, in
+                // document order (P2-06b decision 2).
+                master.shapes = shapes;
             }
         }
         Ok(())
@@ -652,9 +658,15 @@ impl Mapper<'_> {
                 "ID" => shape.visio_id = parse_attr_int(&attribute.value, part, "ID")?,
                 "Name" => shape.name = attribute.value.clone(),
                 "NameU" => shape.name_u = attribute.value.clone(),
-                "LineStyle" => shape.line_style = Some(attribute.value.clone()),
-                "FillStyle" => shape.fill_style = Some(attribute.value.clone()),
-                "TextStyle" => shape.text_style = Some(attribute.value.clone()),
+                "LineStyle" => {
+                    shape.line_style = Some(parse_attr_uint(&attribute.value, part, "LineStyle")?)
+                }
+                "FillStyle" => {
+                    shape.fill_style = Some(parse_attr_uint(&attribute.value, part, "FillStyle")?)
+                }
+                "TextStyle" => {
+                    shape.text_style = Some(parse_attr_uint(&attribute.value, part, "TextStyle")?)
+                }
                 "Master" => {
                     if master.is_none() {
                         shape.preserved.attributes.push(attribute.clone());
@@ -791,21 +803,29 @@ fn map_page(node: &XmlNode, index: usize, ids: &[i32]) -> Result<(Page, Option<S
 
 /// Maps the `Connect` children of a `Connects` element.
 ///
-/// A `Connect` element carrying anything the model does not hold (there is
-/// no preserved slot on `Connect`) is kept verbatim instead of being modeled.
+/// Every `Connect` element is modeled (P2-06b decision 4); attributes and
+/// children the model does not hold go to the record's own [`Preserved`],
+/// never to the page's. A `Connect` with text, a comment or a processing
+/// instruction has nowhere to hold it and is kept verbatim by the caller's
+/// `preserved` instead. The wrapper's own attributes follow the wrapper's
+/// owner (the page).
 fn map_connects(
     node: &XmlNode,
     connects: &mut Vec<Connect>,
     preserved: &mut Preserved,
     part: &str,
 ) -> Result<(), Error> {
+    Mapper::keep_attributes(&node.attributes, preserved);
     for element in elements(node) {
         if element.name.local != "Connect" {
             preserved.children.push(element.clone());
             continue;
         }
+        if has_loose_content(element) {
+            preserved.children.push(element.clone());
+            continue;
+        }
         let mut connect = Connect::new();
-        let mut modeled = element.children.is_empty();
         for attribute in &element.attributes {
             if is_namespace_declaration(attribute) {
                 continue;
@@ -821,22 +841,20 @@ fn map_connects(
                 "ToSheet" => connect.to_sheet = parse_attr_int(&attribute.value, part, "ToSheet")?,
                 "ToCell" => connect.to_cell = attribute.value.clone(),
                 "ToPart" => connect.to_part = parse_attr_int(&attribute.value, part, "ToPart")?,
-                // No slot on `Connect`: the whole element is kept verbatim.
-                _ => modeled = false,
+                _ => connect.preserved.attributes.push(attribute.clone()),
             }
         }
-        if modeled {
-            connects.push(connect);
-        } else {
-            preserved.children.push(element.clone());
+        for child in elements(element) {
+            connect.preserved.children.push(child.clone());
         }
+        connects.push(connect);
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{CellLookup, QName, XmlAttribute, XmlChild};
+    use ferrogram_model::{CellLookup, CellName, QName, XmlAttribute, XmlChild};
 
     use super::*;
     use crate::package::{ContentType, Part, Relationship, RelationshipId};
@@ -1198,7 +1216,32 @@ mod tests {
         assert_eq!(master.visio_id, 2);
         assert_eq!(master.name, "Box");
         assert!(!master.hidden);
-        assert!(master.shape.is_some());
+        assert_eq!(master.shapes.len(), 1);
+    }
+
+    #[test]
+    fn a_master_keeps_every_top_level_shape() {
+        let mut package = drawing();
+        // Append a second top-level shape to the master's `Shapes` wrapper.
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/masters/master1.xml")
+            && let PartData::Xml(root) = &mut part.data
+            && let Some(XmlChild::Element(shapes)) = root.children.first_mut()
+        {
+            shapes
+                .children
+                .push(XmlChild::Element(element("Shape", &[("ID", "2")], &[])));
+        }
+        let document = to_model(&package).expect("document");
+        // Both shapes are kept, in document order (P2-06b decision 2).
+        let master = &document.masters[0];
+        assert_eq!(master.shapes.len(), 2);
+        let first = document.shape(master.shapes[0]).expect("shape");
+        let second = document.shape(master.shapes[1]).expect("shape");
+        assert_eq!(first.visio_id, 1);
+        assert_eq!(second.visio_id, 2);
     }
 
     #[test]
@@ -1253,7 +1296,7 @@ mod tests {
     }
 
     #[test]
-    fn to_model_keeps_section_level_cells_verbatim() {
+    fn to_model_maps_section_level_cells() {
         let document = to_model(&drawing()).expect("document");
         let style = document
             .style(ferrogram_model::StyleId { index: 0 })
@@ -1261,37 +1304,162 @@ mod tests {
         let section = style.sheet.sections.first().expect("section");
         assert_eq!(section.name.as_str(), "Geometry");
         assert_eq!(section.rows.len(), 1);
-        // `NoFill` has no slot on `Section` and is preserved verbatim.
-        assert_eq!(section.preserved.children.len(), 1);
-        assert_eq!(section.preserved.children[0].name.local, "Cell");
+        // `NoFill` is a section-level cell (P2-06b decision 1).
+        assert_eq!(section.cells.len(), 1);
+        assert_eq!(section.cells[0].name.as_str(), "NoFill");
+        assert!(section.preserved.children.is_empty());
     }
 
     #[test]
-    fn take_base_style_consumes_the_style_cell() {
-        let mut style = Style::new(StyleId { index: 0 });
-        style
-            .sheet
-            .cells
-            .push(ferrogram_model::Cell::new(CellName::from_static(
-                "LineWeight",
+    fn styles_carry_their_visio_ids_and_style_links() {
+        let mut package = drawing();
+        // Add a second stylesheet row: `ID="3"`, linking line cells to 0.
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/document.xml")
+            && let PartData::Xml(root) = &mut part.data
+            && let Some(XmlChild::Element(sheets)) = root.children.get_mut(1)
+        {
+            sheets.children.push(XmlChild::Element(element(
+                "StyleSheet",
+                &[
+                    ("ID", "3"),
+                    ("NameU", "Red"),
+                    ("Name", "Red"),
+                    ("LineStyle", "0"),
+                ],
+                &[element("Cell", &[("N", "Style"), ("V", "Normal")], &[])],
             )));
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Style"));
-        cell.value = Some(ferrogram_model::CellValue::Str("Normal".to_owned()));
-        style.sheet.cells.push(cell);
-        take_base_style(&mut style);
-        assert_eq!(style.base_style.as_deref(), Some("Normal"));
+        }
+        let document = to_model(&package).expect("document");
+        assert_eq!(document.stylesheet.styles.len(), 2);
+        let style = document.style_by_visio_id(3).expect("style");
+        assert_eq!(style.name, "Red");
+        assert_eq!(style.line_style, Some(0));
+        assert_eq!(style.fill_style, None);
+        assert_eq!(style.text_style, None);
+        // The first row keeps the `ID` the reference names.
+        assert_eq!(
+            document.style_by_visio_id(0).map(|s| s.name.as_str()),
+            Some("No Style")
+        );
+        // A `Style` cell is a plain cell now (P2-06b decision 3).
         assert_eq!(style.sheet.cells.len(), 1);
+        assert_eq!(style.sheet.cells[0].name.as_str(), "Style");
     }
 
     #[test]
-    fn take_base_style_keeps_a_non_string_style_cell() {
-        let mut style = Style::new(StyleId { index: 0 });
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Style"));
-        cell.value = Some(ferrogram_model::CellValue::Number(3.0));
-        style.sheet.cells.push(cell);
-        take_base_style(&mut style);
-        assert_eq!(style.base_style, None);
-        assert_eq!(style.sheet.cells.len(), 1);
+    fn a_bad_style_reference_is_an_error() {
+        let mut package = drawing();
+        if let Some(shape) = first_shape_mut(&mut package, "/visio/pages/page1.xml")
+            && let Some(attribute) = shape
+                .attributes
+                .iter_mut()
+                .find(|attribute| attribute.name.local == "LineStyle")
+        {
+            attribute.value = "No Style".to_owned();
+        }
+        assert!(matches!(to_model(&package), Err(Error::InvalidPackage(_))));
+    }
+
+    /// Pushes a `Connects` element onto the page contents root.
+    fn with_connects(package: &mut Package, wrapper_attrs: &[(&str, &str)], connect: XmlNode) {
+        if let Some(part) = package
+            .parts
+            .iter_mut()
+            .find(|part| part.name.as_str() == "/visio/pages/page1.xml")
+            && let PartData::Xml(root) = &mut part.data
+        {
+            root.children.push(XmlChild::Element(element(
+                "Connects",
+                wrapper_attrs,
+                &[connect],
+            )));
+        }
+    }
+
+    #[test]
+    fn a_connect_keeps_its_unmapped_content_in_its_own_preserved() {
+        let mut package = drawing();
+        let connect = element(
+            "Connect",
+            &[
+                ("FromSheet", "1"),
+                ("FromCell", "BeginX"),
+                ("FromPart", "9"),
+                ("ToSheet", "2"),
+                ("ToCell", "EndX"),
+                ("ToPart", "3"),
+                ("Trigger", "1"),
+            ],
+            &[element("RefBy", &[("ID", "7")], &[])],
+        );
+        with_connects(&mut package, &[("Note", "kept")], connect);
+        let document = to_model(&package).expect("document");
+        let page = &document.pages[0];
+        assert_eq!(page.connects.len(), 1);
+        let record = &page.connects[0];
+        assert_eq!(record.from_sheet, 1);
+        assert_eq!(record.from_cell, "BeginX");
+        assert_eq!(record.from_part, 9);
+        assert_eq!(record.to_sheet, 2);
+        assert_eq!(record.to_cell, "EndX");
+        assert_eq!(record.to_part, 3);
+        // The unmapped attribute and child stay on the record (P2-06b
+        // decision 4), never in the page's preserved content.
+        let attrs: Vec<&str> = record
+            .preserved
+            .attributes
+            .iter()
+            .map(|attribute| attribute.name.local.as_str())
+            .collect();
+        assert_eq!(attrs, ["Trigger"]);
+        assert_eq!(record.preserved.children.len(), 1);
+        assert_eq!(record.preserved.children[0].name.local, "RefBy");
+        // The wrapper's own attributes follow the wrapper's owner, and
+        // nothing of the record lands in the page's preserved children.
+        assert!(
+            page.preserved
+                .attributes
+                .iter()
+                .any(|attribute| attribute.name.local == "Note"),
+            "the wrapper attribute follows the page"
+        );
+        assert!(
+            page.preserved
+                .children
+                .iter()
+                .all(|child| child.name.local != "RefBy" && child.name.local != "Connect"),
+            "the record's content never falls back to the page"
+        );
+    }
+
+    #[test]
+    fn a_connect_with_loose_content_is_kept_verbatim() {
+        let mut package = drawing();
+        let mut connect = element("Connect", &[("FromSheet", "1")], &[]);
+        connect.children.push(XmlChild::Comment("note".to_owned()));
+        with_connects(&mut package, &[], connect);
+        let document = to_model(&package).expect("document");
+        let page = &document.pages[0];
+        assert!(page.connects.is_empty());
+        let verbatim: Vec<&str> = page
+            .preserved
+            .children
+            .iter()
+            .map(|child| child.name.local.as_str())
+            .filter(|name| *name == "Connect")
+            .collect();
+        assert_eq!(verbatim, ["Connect"]);
+    }
+
+    #[test]
+    fn a_bad_connect_value_is_an_error_naming_the_part() {
+        let mut package = drawing();
+        let connect = element("Connect", &[("FromSheet", "nope")], &[]);
+        with_connects(&mut package, &[], connect);
+        assert!(matches!(to_model(&package), Err(Error::InvalidPackage(_))));
     }
 
     /// The first `Shape` element of one part, for test surgery.
@@ -1360,7 +1528,7 @@ mod tests {
         assert_eq!(document.pages.len(), 1);
         assert!(document.pages[0].shapes.is_empty());
         assert_eq!(document.masters.len(), 1);
-        assert_eq!(document.masters[0].shape, None);
+        assert!(document.masters[0].shapes.is_empty());
     }
 
     /// Pushes a `Width` cell onto the master's content shape and turns the

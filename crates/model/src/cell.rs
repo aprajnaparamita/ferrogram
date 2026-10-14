@@ -25,7 +25,7 @@ impl Color {
 
 /// The cached value of a ShapeSheet cell.
 ///
-/// Numbers are in canonical units (ADR 0011): inches for lengths, degrees for
+/// Numbers are in canonical units (ADR 0011): inches for lengths, radians for
 /// angles, fraction for percentages. The unit the file wrote is kept on the
 /// cell.
 #[derive(Debug, Clone, PartialEq)]

@@ -5,7 +5,7 @@ use crate::master::Master;
 use crate::page::Page;
 use crate::raw::Preserved;
 use crate::shape::Shape;
-use crate::style::Stylesheet;
+use crate::style::{Style, Stylesheet};
 
 /// What kind of package a document was read from (`.vsdx`, `.vssx`, `.vstx`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -95,7 +95,7 @@ impl Document {
     }
 
     /// The stylesheet row with this id, or `None` when the id is stale.
-    pub fn style(&self, id: StyleId) -> Option<&crate::style::Style> {
+    pub fn style(&self, id: StyleId) -> Option<&Style> {
         self.stylesheet.styles.get(id.index as usize)
     }
 
@@ -167,6 +167,18 @@ impl Document {
             .map(|index| StyleId {
                 index: u32::try_from(index).unwrap_or(u32::MAX),
             })
+    }
+
+    /// Finds a style by its Visio `ID`, or `None`.
+    ///
+    /// A `.vsdx` style reference (`LineStyle`, `FillStyle`, `TextStyle`)
+    /// names a style by this id (P2-06b decision 3); the first stylesheet
+    /// row with this `visio_id` wins.
+    pub fn style_by_visio_id(&self, visio_id: u32) -> Option<&Style> {
+        self.stylesheet
+            .styles
+            .iter()
+            .find(|style| style.visio_id == visio_id)
     }
 }
 
@@ -293,5 +305,26 @@ mod tests {
         assert_eq!(d.style_by_name("Normal"), Some(StyleId { index: 0 }));
         assert_eq!(d.style_by_name("Normal.2"), None);
         assert_eq!(d.style_by_name("Nope"), None);
+    }
+
+    #[test]
+    fn style_by_visio_id_finds_the_stylesheet_row() {
+        let mut d = Document::new();
+        let mut first = crate::style::Style::new(StyleId { index: 0 });
+        first.visio_id = 7;
+        d.stylesheet.styles.push(first);
+        let mut second = crate::style::Style::new(StyleId { index: 1 });
+        second.visio_id = 3;
+        d.stylesheet.styles.push(second);
+
+        assert_eq!(
+            d.style_by_visio_id(7).map(|s| s.id),
+            Some(StyleId { index: 0 })
+        );
+        assert_eq!(
+            d.style_by_visio_id(3).map(|s| s.id),
+            Some(StyleId { index: 1 })
+        );
+        assert_eq!(d.style_by_visio_id(4), None);
     }
 }

@@ -110,9 +110,9 @@ pub(crate) fn map_cell(node: &XmlNode, part: &str) -> Result<Option<Cell>, Error
 /// Maps one `Section` element, or returns `None` when the element cannot be
 /// modeled and must be kept verbatim by the caller.
 ///
-/// The `Cell` children a section writes outside its rows have no slot on
-/// [`Section`] and are kept verbatim in its [`Preserved`], in document order
-/// with any other unmapped child.
+/// The `Cell` children a section writes outside its rows map to
+/// [`Section::cells`](ferrogram_model::Section) (P2-06b decision 1), in file
+/// order.
 pub(crate) fn map_section(node: &XmlNode, part: &str) -> Result<Option<Section>, Error> {
     let Some(name) = node::attribute(node, "N") else {
         return Ok(None);
@@ -130,6 +130,10 @@ pub(crate) fn map_section(node: &XmlNode, part: &str) -> Result<Option<Section>,
     }
     for element in elements(node) {
         match element.name.local.as_str() {
+            "Cell" => match map_cell(element, part)? {
+                Some(cell) => section.cells.push(cell),
+                None => section.preserved.children.push(element.clone()),
+            },
             "Row" => match map_row(element, part)? {
                 Some(row) => section.rows.push(row),
                 None => section.preserved.children.push(element.clone()),
@@ -301,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn a_section_maps_rows_and_keeps_section_level_cells() {
+    fn a_section_maps_its_level_cells_and_rows() {
         let node = element(
             "Section",
             &[("N", "Geometry"), ("IX", "0")],
@@ -316,15 +320,17 @@ mod tests {
         );
         let section = map_section(&node, "/p").expect("section").expect("modeled");
         assert_eq!(section.name.as_str(), "Geometry");
+        // The section-level `NoFill` cell maps to `Section::cells`.
+        assert_eq!(section.cells.len(), 1);
+        assert_eq!(section.cells[0].name.as_str(), "NoFill");
         assert_eq!(section.rows.len(), 1);
         assert_eq!(section.rows[0].row_type.as_deref(), Some("RelMoveTo"));
         assert_eq!(section.rows[0].ix, Some(1));
         assert_eq!(section.rows[0].cells.len(), 1);
-        // `IX` has no field on `Section`; the section-level `NoFill` cell has
-        // no slot either. Both stay preserved.
+        // `IX` has no field on `Section`; it stays preserved.
         assert_eq!(section.preserved.attributes.len(), 1);
         assert_eq!(section.preserved.attributes[0].name.local, "IX");
-        assert_eq!(section.preserved.children.len(), 1);
+        assert!(section.preserved.children.is_empty());
     }
 
     #[test]

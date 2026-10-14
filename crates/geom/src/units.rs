@@ -5,7 +5,7 @@ use crate::error::Error;
 /// The kind of quantity a unit measures.
 ///
 /// Canonical units (ADR 0011) are one per kind: inches for
-/// [`UnitKind::Length`], degrees for [`UnitKind::Angle`], a fraction for
+/// [`UnitKind::Length`], radians for [`UnitKind::Angle`], a fraction for
 /// [`UnitKind::Ratio`] (`0.5` = 50%), and the plain number itself for
 /// [`UnitKind::Dimensionless`].
 ///
@@ -15,7 +15,7 @@ use crate::error::Error;
 pub enum UnitKind {
     /// A length. The canonical unit is inches.
     Length,
-    /// An angle. The canonical unit is degrees.
+    /// An angle. The canonical unit is radians.
     Angle,
     /// A ratio. The canonical unit is a fraction (`0.5` = 50%).
     Ratio,
@@ -48,7 +48,7 @@ impl UnitKind {
 /// A Visio unit of measure.
 ///
 /// Cell values are stored in canonical units (ADR 0011): lengths in inches,
-/// angles in degrees, percentages as a fraction (`0.5` = 50%), and
+/// angles in radians, percentages as a fraction (`0.5` = 50%), and
 /// [`Unit::Unitsless`] values as plain numbers. This enum is the unit a raw
 /// file value was written in, kept so the value can be written back unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -84,9 +84,9 @@ pub enum Unit {
     Microns,
     /// Millipoints (1/72000 inch).
     Millipoints,
-    /// Degrees (the canonical angle unit).
+    /// Degrees.
     Degrees,
-    /// Radians.
+    /// Radians (the canonical angle unit).
     Radians,
     /// Percent of a whole (`0.5` = 50%).
     Percent,
@@ -129,14 +129,15 @@ impl Unit {
     /// - metric lengths follow the international inch (1 in = 25.4 mm,
     ///   exact), so the factor is exact in real arithmetic and rounded once
     ///   when written as an `f64`;
-    /// - degrees factor 1, percent factor 1/100, [`Unit::Unitsless`] factor 1.
+    /// - [`Unit::Radians`] factor 1, percent factor 1/100,
+    ///   [`Unit::Unitsless`] factor 1.
     ///
     /// Approximate:
     ///
+    /// - degrees: the factor `pi / 180` cannot be exact in `f64` (same
+    ///   rounding as [`f64::to_radians`]);
     /// - ciceros: 1 cicero = 12 didot points of 0.376 mm = 4.512 mm, so the
-    ///   factor is `4.512 / 25.4` inch;
-    /// - radians: the factor `180 / pi` cannot be exact in `f64` (same
-    ///   rounding as [`f64::to_degrees`]).
+    ///   factor is `4.512 / 25.4` inch.
     const fn canonical_per_unit(self) -> f64 {
         match self {
             Unit::Inches => 1.0,
@@ -154,15 +155,15 @@ impl Unit {
             Unit::Nanometers => 1.0e-9 / 0.0254,
             Unit::Microns => 1.0e-6 / 0.0254,
             Unit::Millipoints => 1.0 / 72_000.0,
-            Unit::Degrees => 1.0,
-            Unit::Radians => 180.0 / core::f64::consts::PI,
+            Unit::Degrees => core::f64::consts::PI / 180.0,
+            Unit::Radians => 1.0,
             Unit::Percent => 1.0 / 100.0,
             Unit::Unitsless => 1.0,
         }
     }
 
     /// Converts `value`, measured in this unit, to the canonical unit of this
-    /// unit's kind (inches for lengths, degrees for angles, fraction for
+    /// unit's kind (inches for lengths, radians for angles, fraction for
     /// percent, the plain number for [`Unit::Unitsless`]).
     ///
     /// This call cannot fail: the kind comes from the unit itself. Use
@@ -215,8 +216,8 @@ mod tests {
         (Unit::Nanometers, 1.0e-9 / 0.0254),
         (Unit::Microns, 1.0e-6 / 0.0254),
         (Unit::Millipoints, 1.0 / 72_000.0),
-        (Unit::Degrees, 1.0),
-        (Unit::Radians, 180.0 / core::f64::consts::PI),
+        (Unit::Degrees, core::f64::consts::PI / 180.0),
+        (Unit::Radians, 1.0),
         (Unit::Percent, 0.01),
         (Unit::Unitsless, 1.0),
     ];
@@ -253,7 +254,7 @@ mod tests {
         assert_eq!(Unit::Points.to_canonical(72.0), Ok(1.0));
         assert_eq!(Unit::Picas.to_canonical(6.0), Ok(1.0));
         assert_eq!(Unit::Millipoints.to_canonical(72_000.0), Ok(1.0));
-        assert_eq!(Unit::Degrees.to_canonical(270.0), Ok(270.0));
+        assert_eq!(Unit::Radians.to_canonical(2.5), Ok(2.5));
         assert_eq!(Unit::Unitsless.to_canonical(0.25), Ok(0.25));
     }
 
@@ -272,14 +273,14 @@ mod tests {
     }
 
     #[test]
-    fn radians_convert_to_degrees() {
+    fn degrees_convert_to_radians() {
         assert_approx(
-            Unit::Radians.to_canonical(core::f64::consts::PI).unwrap(),
-            180.0,
+            Unit::Degrees.to_canonical(180.0).unwrap(),
+            core::f64::consts::PI,
         );
         assert_approx(
-            Unit::Radians.from_canonical(180.0).unwrap(),
-            core::f64::consts::PI,
+            Unit::Degrees.from_canonical(core::f64::consts::PI).unwrap(),
+            180.0,
         );
     }
 
