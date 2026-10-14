@@ -185,11 +185,24 @@ pub(crate) fn cell_element(style: &NameStyle, cell: &Cell) -> XmlNode {
         }
         None => {}
     }
-    if writes_v(cell)
-        && let Some(code) = value::unit_code(cell.unit)
-    {
-        managed.push("U");
-        push(&mut node, "U", code.to_owned());
+    if writes_v(cell) {
+        // The `U` the reader needs to get the value's kind back (see
+        // [`value::unit_spelling`]); a `U` the file spelled is kept in
+        // `Preserved` and pushed below verbatim.
+        let current_code = cell
+            .preserved
+            .attributes
+            .iter()
+            .find(|attribute| attribute.name.local == "U")
+            .map(|attribute| attribute.value.clone());
+        match value::unit_spelling(cell.value.as_ref(), cell.unit, current_code.as_deref()) {
+            value::UnitSpelling::Keep => {}
+            value::UnitSpelling::Code(code) => {
+                managed.push("U");
+                push(&mut node, "U", code.to_owned());
+            }
+            value::UnitSpelling::Absent => {}
+        }
     }
     push_preserved(&mut node, &cell.preserved, &managed);
     push_preserved_children(&mut node, &cell.preserved);

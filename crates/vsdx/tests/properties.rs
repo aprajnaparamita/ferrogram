@@ -349,7 +349,7 @@ const SECTION_NAMES: &[&str] = &["Geometry", "Connection Points", "Character"];
 const ROW_NAMES: &[&str] = &["Row_1", "Row_2"];
 const ROW_TYPES: &[&str] = &["RelCubBezTo", "InX"];
 const FORMULAS: &[&str] = &["2", "0.5 in", "Inh", ""];
-const STRINGS: &[&str] = &["Themed", "a b", "not-a-number", ""];
+const STRINGS: &[&str] = &["Themed", "a b", "not-a-number", "", "2", "0.5", "#4d4d4d"];
 const ERRORS: &[&str] = &["#VALUE!", "#REF!"];
 const PROPERTY_NAMES: &[&str] = &["title", "subject", "creator"];
 const UNITS: &[Unit] = &[
@@ -366,7 +366,8 @@ const UNITS: &[Unit] = &[
 /// A cell value with a unit the value can round-trip with: a number carries
 /// any unit, every other kind carries [`Unit::Unitsless`] (a `U` code
 /// declares the kind, and a written `V` that contradicts it does not read
-/// back). `Bool` and `List` are excluded: see the task's Result.
+/// back). `List` is excluded: no `U` code maps back to a list (the formula
+/// engine owns it).
 fn arb_cell_value() -> impl Strategy<Value = (CellValue, Unit)> {
     proptest::prop_oneof![
         (
@@ -376,6 +377,7 @@ fn arb_cell_value() -> impl Strategy<Value = (CellValue, Unit)> {
             .prop_map(|(value, unit)| (CellValue::Number(value), unit)),
         proptest::sample::select(STRINGS.to_vec())
             .prop_map(|text| { (CellValue::Str(text.to_owned()), Unit::Unitsless) }),
+        any::<bool>().prop_map(|flag| (CellValue::Bool(flag), Unit::Unitsless)),
         proptest::sample::select(ERRORS.to_vec())
             .prop_map(|text| { (CellValue::Error(text.to_owned()), Unit::Unitsless) }),
         (any::<u8>(), any::<u8>(), any::<u8>())
@@ -393,6 +395,20 @@ fn arb_cell() -> impl Strategy<Value = Cell> {
             let mut cell = Cell::new(CellName::new(name.to_owned()));
             cell.formula = formula;
             if let Some((value, unit)) = value {
+                // A `U` with no `Unit` spelling lives in the reader's
+                // preserved attributes, so a model that a read produced
+                // looks exactly like this (`U="BOOL"`, `U="STR"`).
+                let code = match &value {
+                    CellValue::Bool(_) => Some("BOOL"),
+                    CellValue::Str(_) => Some("STR"),
+                    _ => None,
+                };
+                if let Some(code) = code {
+                    cell.preserved.attributes.push(XmlAttribute {
+                        name: QName::local("U"),
+                        value: code.to_owned(),
+                    });
+                }
                 cell.value = Some(value);
                 cell.unit = unit;
             }

@@ -81,7 +81,7 @@
 
 pub(crate) mod node;
 mod sheet;
-mod value;
+pub(crate) mod value;
 
 use ferrogram_model::{
     Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property, Shape,

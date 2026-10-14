@@ -463,13 +463,17 @@ fn patch_cell(node: &mut XmlNode, cell: &Cell) {
     }
 }
 
-/// Syncs the `U` attribute from the cell's unit. A unit code the file used
+/// Syncs the `U` attribute from the cached value and the cell's unit (see
+/// [`value::unit_spelling`]): the code the value's kind needs to read back
+/// (`BOOL`, `STR`) comes first, then the unit code. A unit code the file used
 /// but the model does not spell stays in `Preserved`, so the attribute is
-/// left alone unless the model takes it over.
+/// removed only when the model takes it over.
 fn sync_unit(node: &mut XmlNode, cell: &Cell) {
-    match value::unit_code(cell.unit) {
-        Some(code) => sync_string(node, "U", code, ""),
-        None => {
+    let current_code = current(node, "U").map(str::to_owned);
+    match value::unit_spelling(cell.value.as_ref(), cell.unit, current_code.as_deref()) {
+        value::UnitSpelling::Keep => {}
+        value::UnitSpelling::Code(code) => sync_string(node, "U", code, ""),
+        value::UnitSpelling::Absent => {
             if current(node, "U").is_some() && !preserved_has(&cell.preserved, "U") {
                 remove(node, "U");
             }

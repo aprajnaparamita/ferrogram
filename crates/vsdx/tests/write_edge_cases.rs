@@ -977,3 +977,93 @@ fn blank_text_only_content_survives_a_write() {
     assert_eq!(shapes.len(), 1);
     assert_eq!(shapes[0].children, vec![XmlChild::Text("   ".to_owned())]);
 }
+
+/// Regression (P2-10 open issue 1, task P2-14): a value the model built
+/// writes the `U` the reader classifies it with (`U="BOOL"`, `U="STR"`), and
+/// a `U` that already declares the right kind keeps its spelling.
+#[test]
+fn a_patched_value_writes_the_u_its_kind_needs() {
+    let source = package(
+        &[
+            (
+                "/visio/document.xml",
+                element(
+                    "VisioDocument",
+                    &[],
+                    &[element("DocumentSettings", &[], &[])],
+                ),
+            ),
+            (
+                "/visio/pages/pages.xml",
+                element(
+                    "Pages",
+                    &[],
+                    &[element(
+                        "Page",
+                        &[("ID", "0")],
+                        &[element("Rel", &[("r:id", "rId1")], &[])],
+                    )],
+                ),
+            ),
+            (
+                "/visio/pages/page1.xml",
+                element(
+                    "PageContents",
+                    &[],
+                    &[element(
+                        "Shapes",
+                        &[],
+                        &[element(
+                            "Shape",
+                            &[("ID", "1")],
+                            &[
+                                element("Cell", &[("N", "Flag")], &[]),
+                                element("Cell", &[("N", "Label"), ("V", "text")], &[]),
+                                element("Cell", &[("N", "Date"), ("U", "DATE"), ("V", "2")], &[]),
+                            ],
+                        )],
+                    )],
+                ),
+            ),
+        ],
+        &[
+            ("/", "rId1", "visio/document.xml"),
+            ("/visio/document.xml", "rId1", "pages/pages.xml"),
+            ("/visio/pages/pages.xml", "rId1", "page1.xml"),
+        ],
+    );
+    let mut document = to_model(&source).expect("reads");
+    let shape_id = document.pages[0].shapes[0];
+    let shape = document.shape_mut(shape_id).expect("shape");
+    for cell in &mut shape.sheet.cells {
+        match cell.name.as_str() {
+            "Flag" => cell.value = Some(CellValue::Bool(true)),
+            // A string that reads back as a number without `U`.
+            "Label" => cell.value = Some(CellValue::Str("2".to_owned())),
+            _ => {}
+        }
+    }
+
+    let (written, model) = round_trip(&document, &source);
+    let wrapper = children_named(root(&written, "/visio/pages/page1.xml"), "Shapes");
+    let shape = children_named(wrapper[0], "Shape");
+    let cells = children_named(shape[0], "Cell");
+    assert_eq!(attr(cells[0], "V"), Some("1"));
+    assert_eq!(attr(cells[0], "U"), Some("BOOL"));
+    assert_eq!(attr(cells[1], "V"), Some("2"));
+    assert_eq!(attr(cells[1], "U"), Some("STR"));
+    // A spelling that already declares the kind is never rewritten.
+    assert_eq!(attr(cells[2], "V"), Some("2"));
+    assert_eq!(attr(cells[2], "U"), Some("DATE"));
+
+    let reread = model.shape(shape_id).expect("shape");
+    assert_eq!(reread.sheet.cells[0].value, Some(CellValue::Bool(true)));
+    assert_eq!(
+        reread.sheet.cells[1].value,
+        Some(CellValue::Str("2".to_owned()))
+    );
+    assert_eq!(
+        reread.sheet.cells[2].value,
+        Some(CellValue::Str("2".to_owned()))
+    );
+}
