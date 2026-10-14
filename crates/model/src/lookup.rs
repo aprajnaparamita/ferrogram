@@ -90,6 +90,44 @@ impl CellLookup for Document {
 }
 
 impl Document {
+    /// Resolves one cell of one row of a repeated section (ADR 0019).
+    ///
+    /// `row` is the row's position in the section. The rungs are the local
+    /// row's cell, the master's row at the same position in the same
+    /// section (matched by `IX` when both sides have one), no style rung
+    /// (a `Geometry` cell never comes from a style), the section default
+    /// and the hard default. `Inh` does not define (ADR 0013 amendment);
+    /// cycles are cut as in [`CellLookup::resolve`].
+    ///
+    /// Returns [`crate::Error::NotImplemented`] until the model work lands
+    /// (P3-02).
+    pub fn resolve_row_cell(
+        &self,
+        sheet: crate::values::SheetRef,
+        section: &str,
+        row: usize,
+        cell: &CellName,
+    ) -> Result<Resolved<'_>, crate::Error> {
+        let _ = (sheet, section, row, cell);
+        Err(crate::Error::NotImplemented)
+    }
+
+    /// Resolves a page-sheet cell (ADR 0019): the page's own cell, the
+    /// style chain, the section default, the hard default.
+    ///
+    /// Returns [`crate::Error::NotImplemented`] until the model work lands
+    /// (P3-02).
+    pub fn resolve_page_cell(
+        &self,
+        page: crate::id::PageId,
+        cell: &CellName,
+    ) -> Result<Resolved<'_>, crate::Error> {
+        let _ = (page, cell);
+        Err(crate::Error::NotImplemented)
+    }
+}
+
+impl Document {
     /// Resolves `cell` on `shape` against `table`, the ShapeSheet cell
     /// catalogue (the generated table in production).
     ///
@@ -1783,5 +1821,32 @@ mod tests {
             Some("1")
         );
         assert_eq!(find_def(TWO, "Other", None), None);
+    }
+}
+
+#[cfg(test)]
+mod phase3_stub_tests {
+    use super::*;
+    use crate::id::PageId;
+    use crate::values::SheetRef;
+
+    #[test]
+    fn resolve_row_cell_is_not_implemented_yet() {
+        let doc = Document::new();
+        let cell = CellName::from_static("X");
+        assert_eq!(
+            doc.resolve_row_cell(SheetRef::Shape(ShapeId { index: 0 }), "Geometry", 0, &cell),
+            Err(crate::Error::NotImplemented)
+        );
+    }
+
+    #[test]
+    fn resolve_page_cell_is_not_implemented_yet() {
+        let doc = Document::new();
+        let cell = CellName::from_static("PageWidth");
+        assert_eq!(
+            doc.resolve_page_cell(PageId { index: 0 }, &cell),
+            Err(crate::Error::NotImplemented)
+        );
     }
 }

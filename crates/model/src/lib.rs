@@ -17,7 +17,9 @@ mod cell;
 mod document;
 mod error;
 pub mod generated;
+mod geometry;
 mod id;
+mod layer;
 mod lookup;
 mod master;
 mod name;
@@ -27,11 +29,18 @@ mod section;
 mod shape;
 mod sheet;
 mod style;
+mod text;
+mod theme;
+mod values;
 
 pub use cell::{Cell, CellValue, Color};
 pub use document::{Document, DocumentKind, Property};
 pub use error::Error;
+pub use geometry::{
+    GeometryPath, GeometryRow, NurbsData, NurbsDataPoint, PolylineData, ShapeGeometry,
+};
 pub use id::{MasterId, PageId, ShapeId, StyleId};
+pub use layer::Layer;
 pub use lookup::{CellLookup, Resolved, ValueSource};
 pub use master::Master;
 pub use name::{CellName, SectionName};
@@ -43,3 +52,6 @@ pub use section::{Row, Section};
 pub use shape::Shape;
 pub use sheet::Sheet;
 pub use style::{Style, Stylesheet};
+pub use text::{TextContent, TextPart};
+pub use theme::{ColorTableEntry, Theme, ThemeColors, ThemeFonts};
+pub use values::{CellReader, CellWarning, SheetRef, WarningKind, palette};
