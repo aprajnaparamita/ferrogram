@@ -715,6 +715,25 @@ mod tests {
         (doc, id)
     }
 
+    #[test]
+    fn a_master_parent_cycle_ends_the_walk_instead_of_looping() {
+        // Regression (coverage audit minor 5): the master-path walk guards
+        // against a cycle in the parent chain of a malformed file.
+        let (mut doc, a) = document_with_shape();
+        let b = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 1 }, 2));
+        // `a`'s parent is `b` and `b`'s parent is `a`: a cycle no well-formed
+        // file produces.
+        doc.shape_mut(a).expect("a").parent = Some(b);
+        doc.shape_mut(a).expect("a").children.push(b);
+        doc.shape_mut(b).expect("b").parent = Some(a);
+        doc.shape_mut(b).expect("b").children.push(a);
+        let r = doc
+            .resolve_with_table(a, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .expect("resolves without hanging");
+        // No master rung applies; the walk ends at the section default.
+        assert_eq!(r.source, ValueSource::SectionDefault);
+    }
+
     // --- the five sources, in order ------------------------------------
 
     #[test]
