@@ -14,7 +14,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-02](tasks/P3-02.md) | implementer | P3-01 | A | ready (master note: `Themed` values, palette) | — |
 | [P3-03](tasks/P3-03.md) | implementer | P3-01 | A | ready | — |
 | [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | ready (master note: Selawik italics) | — |
-| [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | ready | — |
+| [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | merged (added `Error::InvalidStyleData` in `error.rs`) | agent/P3-08 |
 | [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | waits for A | — |
 | [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | waits for A | — |
 | [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | waits for A | — |
@@ -108,3 +108,5 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-10 (open, for the audits and fix tasks): a model built in memory loses `Bool`, `List` and number-like `Str` kinds on write then read, because the writer emits no `U` for them; the arena holds nested sub-shapes in wrapper order, not document order; the schema test skips without `xmllint` and `reference/` (CI should install libxml2 and set `FERROGRAM_REQUIRE_SCHEMA=1`).
 - P2-14 (open): a hand-built `Color`/`List` value with a unit, or a `Bool`/`Str` with a real unit, does not read back the same (formula-engine task); the relationships writer always uses the default namespace for the relationships vocabulary.
 - P3-01 (open): the fixed palette 0..23 is not transcribed yet (P3-02). Per-shape `ThemeIndex` is deferred; the renderer uses `themes[0]`. The `Ellipse` row reading (conjugate semi-diameters) needs a black-box check for the oblique case. Linux golden drift may need the metric loosened in `tests/golden.rs`. Corpus colour cells cache `Themed` and palette indices; ADR 0021 did not cover them (master note in P3-02).
+- P3-08 (open): dashes scale with line width (ADR 0023), which may not match Visio; line ends 25..45, fill patterns 25..40 (gradients) and patterned shadow bodies are undefined and return `None` with a warning; the `.vsd` corpus was not scanned for style indices. The scene builder (P3-05) must follow the unit-box and tile-box conventions documented in `styles.rs` and `visual-styles.yaml`.
+- Master (2026-10-14): new advisories RUSTSEC-2026-0346..0349 against `rustls` 0.23.45 (xtask via `ureq`) failed the deny step; fixed with `cargo update -p rustls` (0.23.46).
