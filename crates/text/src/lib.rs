@@ -16,8 +16,8 @@ mod font;
 mod layout;
 
 pub use error::Error;
-pub use font::{Font, FontStack, GlyphId};
+pub use font::{CARLITO, Font, FontSource, FontStack, GlyphId, SELAWIK, default_fonts};
 pub use layout::{
-    Align, Block, Bullet, Format, GlyphPos, Insets, Layout, Line, Paragraph, Run, VAlign, Warning,
-    layout,
+    Align, BULLET_RUN, Block, Bullet, Format, GlyphPos, Insets, Layout, Line, Paragraph, Run,
+    VAlign, Warning, layout,
 };
