@@ -40,6 +40,22 @@ pub(crate) fn is_namespace_declaration(attribute: &XmlAttribute) -> bool {
     }
 }
 
+/// The concatenated text of an element and its descendants.
+pub(crate) fn text_content(node: &XmlNode) -> String {
+    let mut text = String::new();
+    let mut stack = vec![node];
+    while let Some(node) = stack.pop() {
+        for child in node.children.iter().rev() {
+            match child {
+                XmlChild::Text(value) => text.push_str(value),
+                XmlChild::Element(element) => stack.push(element),
+                _ => {}
+            }
+        }
+    }
+    text
+}
+
 /// Whether an element carries content that is not an element and not
 /// ignorable whitespace: significant text, a comment or a processing
 /// instruction.
@@ -122,6 +138,19 @@ mod tests {
         assert!(is_namespace_declaration(&default.attributes[0]));
         assert!(is_namespace_declaration(&prefixed.attributes[0]));
         assert!(!is_namespace_declaration(&plain.attributes[0]));
+    }
+
+    #[test]
+    fn text_content_concatenates_descendants() {
+        let node = element(
+            "X",
+            &[],
+            vec![
+                XmlChild::Text("a".to_owned()),
+                XmlChild::Element(element("Y", &[], vec![XmlChild::Text("b".to_owned())])),
+            ],
+        );
+        assert_eq!(text_content(&node), "ab");
     }
 
     #[test]

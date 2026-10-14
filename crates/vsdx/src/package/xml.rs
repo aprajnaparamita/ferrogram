@@ -3,7 +3,9 @@
 //! The parser keeps namespace prefixes, attribute order and whitespace text
 //! nodes so the serializer reproduces the source tree (ADR 0012). Namespace
 //! URIs are resolved from `xmlns` declarations, which are themselves kept as
-//! attributes. The XML declaration is not representable in [`XmlNode`] and is
+//! attributes: an unprefixed element name takes the default namespace, an
+//! unprefixed attribute name stays in no namespace. The XML declaration is
+//! not representable in [`XmlNode`] and is
 //! dropped on write; comments outside the root element and character data
 //! outside the root element (whitespace only in well-formed documents) are
 //! dropped for the same reason.
@@ -244,7 +246,7 @@ fn parse_element(
     let (local, prefix) = element.name().decompose();
     let prefix = prefix.map(|p| String::from_utf8_lossy(p.as_ref()).into_owned());
     let local = String::from_utf8_lossy(local.as_ref()).into_owned();
-    let uri = resolve_prefix(prefix.as_deref(), &inner);
+    let uri = resolve_element_name(prefix.as_deref(), &inner);
 
     let attributes = raw
         .into_iter()
@@ -252,7 +254,7 @@ fn parse_element(
             let uri = if a.declaration.is_some() {
                 None
             } else {
-                resolve_prefix(a.prefix.as_deref(), &inner)
+                resolve_attribute_name(a.prefix.as_deref(), &inner)
             };
             XmlAttribute {
                 name: QName {
@@ -268,11 +270,40 @@ fn parse_element(
     Ok((QName { prefix, uri, local }, attributes, scope))
 }
 
+/// Resolves an element name against the visible scopes.
+///
+/// Unprefixed names take the default namespace; a prefixed name takes its
+/// binding (see [`resolve_prefix`]). An unbound prefix or no default
+/// namespace resolves to no namespace, and an `xmlns=""` unbinding resets
+/// the default namespace to none ([XML Namespaces] empty binding).
+fn resolve_element_name(prefix: Option<&str>, scopes: &[&Scope]) -> Option<String> {
+    if prefix.is_some() {
+        return resolve_prefix(prefix, scopes);
+    }
+    for scope in scopes.iter().rev() {
+        if let Some((_, uri)) = scope.iter().find(|(name, _)| name.is_none()) {
+            return if uri.is_empty() {
+                None
+            } else {
+                Some(uri.clone())
+            };
+        }
+    }
+    None
+}
+
+/// Resolves an attribute name against the visible scopes.
+///
+/// Unprefixed attribute names are in no namespace, whatever the default
+/// namespace says ([XML Namespaces]); only prefixed names resolve.
+fn resolve_attribute_name(prefix: Option<&str>, scopes: &[&Scope]) -> Option<String> {
+    let prefix = prefix?;
+    resolve_prefix(Some(prefix), scopes)
+}
+
 /// Resolves a namespace prefix against the visible scopes.
 ///
-/// Unprefixed names take the default namespace (attributes call this only with
-/// a prefix, so they never pick up the default namespace). An unbound prefix
-/// resolves to no namespace.
+/// An unbound prefix resolves to no namespace.
 fn resolve_prefix(prefix: Option<&str>, scopes: &[&Scope]) -> Option<String> {
     let prefix = prefix?;
     if prefix == "xml" {
@@ -357,7 +388,16 @@ fn write_node(node: &XmlNode, out: &mut String) {
         return;
     }
     out.push('>');
-    for child in &node.children {
+    write_children(&node.children, out);
+    out.push_str("</");
+    write_qualified_name(&node.name, out);
+    out.push('>');
+}
+
+/// Serializes children (elements, text, comments and processing
+/// instructions) into `out`, in document order.
+fn write_children(children: &[XmlChild], out: &mut String) {
+    for child in children {
         match child {
             XmlChild::Element(element) => write_node(element, out),
             XmlChild::Text(text) => escape_text(text, out),
@@ -380,9 +420,6 @@ fn write_node(node: &XmlNode, out: &mut String) {
             _ => {}
         }
     }
-    out.push_str("</");
-    write_qualified_name(&node.name, out);
-    out.push('>');
 }
 
 /// Writes a qualified name with its prefix spelling.
@@ -575,6 +612,46 @@ mod tests {
         let attribute = &node.attributes[0];
         assert_eq!(attribute.name.prefix.as_deref(), Some("xml"));
         assert_eq!(attribute.name.uri.as_deref(), Some(XML_NAMESPACE_URI));
+    }
+
+    #[test]
+    fn unprefixed_names_take_the_default_namespace() {
+        let default = parse_xml("<Cell xmlns=\"urn:x\"/>", &Limits::DEFAULT).expect("parses");
+        assert_eq!(default.name.uri.as_deref(), Some("urn:x"));
+        let prefixed = parse_xml("<p:Cell xmlns:p=\"urn:x\"/>", &Limits::DEFAULT).expect("parses");
+        assert_eq!(prefixed.name.uri.as_deref(), Some("urn:x"));
+        // The prefix spelling is ignored; the URI decides (ADR 0012).
+        assert_eq!(diff(&default, &prefixed).expect("diff"), Vec::new());
+        let bare = parse_xml("<Cell/>", &Limits::DEFAULT).expect("parses");
+        assert_eq!(bare.name.uri, None);
+        assert!(!diff(&default, &bare).expect("diff").is_empty());
+    }
+
+    #[test]
+    fn unprefixed_attributes_stay_in_no_namespace() {
+        let node = parse_xml("<Cell xmlns=\"urn:x\" N=\"v\"/>", &Limits::DEFAULT).expect("parses");
+        let attribute = &node.attributes[1];
+        assert_eq!(attribute.name.local, "N");
+        assert_eq!(attribute.name.uri, None);
+    }
+
+    #[test]
+    fn an_empty_default_binding_resets_the_namespace() {
+        let node = parse_xml(
+            "<a xmlns=\"urn:x\"><b xmlns=\"\"/><c/></a>",
+            &Limits::DEFAULT,
+        )
+        .expect("parses");
+        let children: Vec<&XmlNode> = node
+            .children
+            .iter()
+            .filter_map(|child| match child {
+                ferrogram_model::XmlChild::Element(element) => Some(element),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(children[0].name.uri, None);
+        assert_eq!(children[1].name.uri.as_deref(), Some("urn:x"));
     }
 
     #[test]

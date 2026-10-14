@@ -38,9 +38,10 @@
 //! and unit it was written with verbatim (task P2-06).
 
 use ferrogram_geom::Unit;
-use ferrogram_model::{CellValue, Color};
+use ferrogram_model::CellValue;
 
 use crate::Error;
+use crate::value_parse::{Shaped, parse_color, shape};
 
 /// The kind of value a `U` attribute code declares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,7 +129,7 @@ pub(crate) fn value(
             "1" | "true" | "TRUE" => Ok(CellValue::Bool(true)),
             _ => Err(bad_value(part, cell, "boolean value is neither 0 nor 1")),
         },
-        Kind::Color => Ok(match color(v) {
+        Kind::Color => Ok(match parse_color(v) {
             Some(color) => CellValue::Color(color),
             None => CellValue::Str(v.to_owned()),
         }),
@@ -141,53 +142,8 @@ pub(crate) fn value(
     }
 }
 
-/// What a value of unknown declared kind looks like.
-enum Shaped {
-    /// A number literal.
-    Number(f64),
-    /// A `#RGB` or `#RRGGBB` literal.
-    Color(Color),
-    /// Anything else, kept as written.
-    Str(String),
-}
-
-/// Classifies a value with no declared kind by its own shape.
-fn shape(v: &str) -> Shaped {
-    if let Ok(number) = v.trim().parse::<f64>() {
-        return Shaped::Number(number);
-    }
-    if let Some(color) = color(v) {
-        return Shaped::Color(color);
-    }
-    Shaped::Str(v.to_owned())
-}
-
-/// The color of a `#RGB` or `#RRGGBB` literal (any case), or `None`.
-pub(crate) fn color(v: &str) -> Option<Color> {
-    let digits = v.strip_prefix('#')?.as_bytes();
-    match digits {
-        [r1, r2, g1, g2, b1, b2] => {
-            Some(Color::new(hex(*r1, *r2)?, hex(*g1, *g2)?, hex(*b1, *b2)?))
-        }
-        [r, g, b] => Some(Color::new(hex(*r, *r)?, hex(*g, *g)?, hex(*b, *b)?)),
-        _ => None,
-    }
-}
-
-/// The value of one hexadecimal digit pair.
-fn hex(high: u8, low: u8) -> Option<u8> {
-    Some(digit(high)? * 16 + digit(low)?)
-}
-
-/// The value of one hexadecimal digit.
-fn digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
+// What a value of unknown declared kind looks like, and the shape rules
+// that classify one, live in `crate::value_parse` (shared with the writer).
 
 /// An [`Error::InvalidPackage`] naming the part and the cell of a bad cached
 /// value. The message carries the part name and the cell name only, never the
@@ -198,6 +154,8 @@ pub(crate) fn bad_value(part: &str, cell: &str, why: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
+    use ferrogram_model::Color;
+
     use super::*;
 
     #[test]
@@ -354,15 +312,5 @@ mod tests {
             value(";Not Started;Done", Some("XYZ"), "p", "c"),
             Ok(CellValue::Str(";Not Started;Done".to_owned()))
         );
-    }
-
-    #[test]
-    fn color_literals_have_exactly_three_or_six_digits() {
-        assert_eq!(color("#12345"), None);
-        assert_eq!(color("#1234567"), None);
-        assert_eq!(color("123456"), None);
-        assert_eq!(color("#"), None);
-        assert_eq!(color("#zzzzzz"), None);
-        assert_eq!(color("#000000"), Some(Color::new(0, 0, 0)));
     }
 }

@@ -79,9 +79,9 @@
 //! - a numeric or boolean value that does not parse is
 //!   [`Error::InvalidPackage`] naming the part and the cell.
 
-mod node;
+pub(crate) mod node;
 mod sheet;
-mod value;
+pub(crate) mod value;
 
 use ferrogram_model::{
     Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property, Shape,
@@ -89,20 +89,18 @@ use ferrogram_model::{
 };
 
 use crate::Error;
+use crate::package::discovery::{
+    CT_DRAWING_MAIN, CT_STENCIL_MAIN, CT_TEMPLATE_MAIN, MAIN_PART, main_part, rel_type_local,
+    resolve_target,
+};
 use crate::package::{Limits, Package, PartData, PartName, TargetMode};
-use crate::read::node::{attribute, elements, has_loose_content, is_namespace_declaration};
+use crate::read::node::{
+    attribute, elements, has_loose_content, is_namespace_declaration, text_content,
+};
 
-/// The content type of the main drawing document part.
-const CT_DRAWING_MAIN: &str = "application/vnd.ms-visio.drawing.main+xml";
-/// The content type of the main stencil document part.
-const CT_STENCIL_MAIN: &str = "application/vnd.ms-visio.stencil.main+xml";
-/// The content type of the main template document part.
-const CT_TEMPLATE_MAIN: &str = "application/vnd.ms-visio.template.main+xml";
 /// The content type the package reader infers for an XML part when the
 /// package has no `[Content_Types].xml` (task P2-05).
 const CT_XML: &str = "application/xml";
-/// The part name every package must name through its root relationships.
-const MAIN_PART: &str = "/visio/document.xml";
 /// The core document properties part.
 const CORE_PROPS_PART: &str = "/docProps/core.xml";
 /// The extended document properties part.
@@ -139,42 +137,6 @@ pub fn to_model(package: &Package) -> Result<Document, Error> {
     Ok(mapper.document)
 }
 
-/// The main document part of the package.
-///
-/// The package root relationship whose type ends in `/document` wins (the
-/// content type alone cannot find the part of a package with no
-/// `[Content_Types].xml`); a part whose content type names a main document
-/// part is the fallback. A root relationship to a missing part is skipped.
-fn main_part(package: &Package) -> Result<PartName, Error> {
-    let root = PartName::new("/");
-    for relationship in package.relationships_from(&root) {
-        if relationship.target_mode != TargetMode::Internal {
-            continue;
-        }
-        if rel_type_local(&relationship.rel_type) != "document" {
-            continue;
-        }
-        let name = resolve_target(root.as_str(), &relationship.target);
-        if package.part(&name).is_some() {
-            return Ok(name);
-        }
-    }
-    for part in &package.parts {
-        if is_main_content_type(part.content_type.as_str()) {
-            return Ok(part.name.clone());
-        }
-    }
-    Err(Error::MissingPart(MAIN_PART.to_owned()))
-}
-
-/// Whether a content type names a main document part (ADR 0016).
-fn is_main_content_type(content_type: &str) -> bool {
-    matches!(
-        content_type,
-        CT_DRAWING_MAIN | CT_STENCIL_MAIN | CT_TEMPLATE_MAIN
-    )
-}
-
 /// The document kind named by the main part's content type (ADR 0016).
 ///
 /// An inferred `application/xml` content type (a package without
@@ -207,38 +169,6 @@ fn xml_part<'p>(package: &'p Package, name: &PartName) -> Result<&'p XmlNode, Er
             name.as_str()
         ))),
     }
-}
-
-/// The last segment of a relationship type, e.g. `document` for the Visio
-/// document relationship.
-fn rel_type_local(rel_type: &str) -> &str {
-    match rel_type.rsplit('/').next() {
-        Some(local) => local,
-        None => rel_type,
-    }
-}
-
-/// The absolute part name a relationship `target` points at, resolved
-/// against the directory of the part holding the relationship.
-///
-/// A target that is already absolute is used as written; `.` and `..`
-/// segments are resolved. The result is not checked against the package.
-fn resolve_target(from: &str, target: &str) -> PartName {
-    if target.starts_with('/') {
-        return PartName::new(target.to_owned());
-    }
-    let directory = from.rsplit_once('/').map_or("", |(dir, _)| dir);
-    let mut path: Vec<&str> = Vec::new();
-    for segment in directory.split('/').chain(target.split('/')) {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                path.pop();
-            }
-            other => path.push(other),
-        }
-    }
-    PartName::new(format!("/{}", path.join("/")))
 }
 
 /// An integer attribute value, or [`Error::InvalidPackage`] naming the part
@@ -280,22 +210,6 @@ fn parse_bool(value: &str) -> Result<bool, ()> {
         "1" | "true" | "TRUE" => Ok(true),
         _ => Err(()),
     }
-}
-
-/// The concatenated text of an element and its descendants.
-fn text_content(node: &XmlNode) -> String {
-    let mut text = String::new();
-    let mut stack = vec![node];
-    while let Some(node) = stack.pop() {
-        for child in node.children.iter().rev() {
-            match child {
-                ferrogram_model::XmlChild::Text(value) => text.push_str(value),
-                ferrogram_model::XmlChild::Element(element) => stack.push(element),
-                _ => {}
-            }
-        }
-    }
-    text
 }
 
 /// The state of one read: the package being mapped and the document built.

@@ -15,10 +15,12 @@
 //! - **Attribute set**: compared by (namespace URI, local name); order is
 //!   ignored. An omitted attribute is a presence difference, never equal to
 //!   an empty one.
-//! - **Attribute value**: strings compare exactly, except that a value made
-//!   of a number literal with an optional unit suffix compares numerically
-//!   against another such value with the same suffix (`0.5` equals `.50`).
-//!   Units are never converted: `1 in` and `25.4 mm` differ.
+//! - **Attribute value**: strings compare exactly, except that two values
+//!   that each start with a number literal (with an optional unit suffix)
+//!   compare numerically when their suffixes match exactly (`0.5` equals
+//!   `.50`, `0.5 in` equals `.50 in`). Units are never converted: `1 in` and
+//!   `25.4 mm` differ. Text compares exactly in [`compare_child`] and is
+//!   never numeric-normalized.
 //! - **Child elements**: compared in document order; reordering is a
 //!   difference.
 //! - **Text**: character data compares exactly. A whitespace-only text node
@@ -161,8 +163,10 @@ impl fmt::Display for XmlDifference {
 /// Empty output means the trees are semantically equivalent: same element
 /// names and namespace URIs, same attributes ignoring order and prefix, same
 /// children in order, same text. Self-closing and empty elements are
-/// equivalent, and attribute values compare as strings except that numeric
-/// spellings compare numerically (`0.5` equals `.50`).
+/// equivalent, and attribute values compare as strings except that two
+/// values that each start with a number literal (with an optional unit
+/// suffix) compare numerically when their suffixes match (`0.5` equals
+/// `.50`). Text compares exactly.
 ///
 /// The call always succeeds; the `Result` keeps the signature stable for
 /// callers that compare whole packages (ADR 0012).
@@ -423,12 +427,14 @@ fn compare_child(a: &XmlChild, b: &XmlChild, path: &str, out: &mut Vec<XmlDiffer
     }
 }
 
-/// Compares two attribute or text values.
+/// Compares two attribute values.
 ///
-/// Values compare exactly, except that two values that each consist of a
+/// Values compare exactly, except that two values that each start with a
 /// number literal with an optional unit suffix compare numerically when
-/// their suffixes are equal: `0.5` equals `.50`, and `0.5 in` equals `.50
-/// in`, but `1 in` differs from `1 mm` (units are never converted).
+/// their suffixes match exactly: `0.5` equals `.50`, and `0.5 in` equals
+/// `.50 in`, but `1 in` differs from `1 mm` (units are never converted).
+/// Text compares exactly elsewhere: [`compare_child`] never routes text
+/// through this rule.
 fn values_equal(a: &str, b: &str) -> bool {
     if a == b {
         return true;
@@ -444,8 +450,9 @@ fn values_equal(a: &str, b: &str) -> bool {
 /// number literal.
 ///
 /// The grammar is `[-+]? ( digits [ '.' [ digits ] ] | '.' digits )
-/// ( [eE] [-+]? digits )?`; anything after it is the suffix. `inf` and
-/// `NaN` are not number literals here.
+/// ( [eE] [-+]? digits )?`; anything after it is the suffix, which must
+/// match exactly for two values to compare equal (units never convert).
+/// `inf` and `NaN` are not number literals here.
 pub(crate) fn parse_number_value(text: &str) -> Option<(f64, &str)> {
     let bytes = text.as_bytes();
     let mut end = 0;

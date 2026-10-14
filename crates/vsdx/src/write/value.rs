@@ -7,6 +7,13 @@
 //! map back to the same spelling are translated (the reader keeps every other
 //! code in `Preserved`), so a write restores the file's own spelling.
 //!
+//! A value the model built (not one read from a file with its `U`) needs the
+//! `U` the reader classifies it with (task P2-14): `U="BOOL"` for `Bool` and
+//! `U="STR"` for a `Str` whose text would otherwise read as a number or a
+//! colour. A [`CellValue::List`] is out of scope here: no `U` code maps back
+//! to a list, so one is written as its raw text and reads back by shape; the
+//! formula engine owns that kind.
+//!
 //! A cached value compares equal to its written attribute when the attribute
 //! still spells it, under the same rules the reader parses with: a number may
 //! have any spelling (`2.0` stays `2.0` when the value did not change), a
@@ -15,6 +22,9 @@
 
 use ferrogram_geom::Unit;
 use ferrogram_model::{CellValue, Color};
+
+use crate::read::value::{Kind, kind};
+use crate::value_parse::{Shaped, parse_color, shape};
 
 /// The `U` code that `unit` spells, or `None` when the unit has no code
 /// ([`Unit::Unitsless`] and codes the reader keeps preserved).
@@ -37,8 +47,89 @@ pub(crate) fn unit_code(unit: Unit) -> Option<&'static str> {
         Unit::Degrees => Some("DEG"),
         Unit::Radians => Some("RAD"),
         Unit::Percent => Some("PER"),
+        // A unit with no code writes no `U` (decision, coverage audit minor
+        // 8): the value reads back by its shape and a preserved spelling
+        // stays in `Preserved`. Keep, not an error — an error would reject a
+        // model the reader accepted. `every_unit_has_a_spelling_or_a_place`
+        // lists the units this arm covers.
         _ => None,
     }
+}
+
+/// What the writer does with the `U` attribute of a cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnitSpelling {
+    /// The `U` already there declares the value's kind: keep it as written.
+    Keep,
+    /// Write this code.
+    Code(&'static str),
+    /// Write no `U`. A spelling the file used and the model kept is not
+    /// removed by this; the caller checks [`Preserved`](ferrogram_model::Preserved).
+    Absent,
+}
+
+/// What the writer does with the `U` attribute of a cell whose cached value
+/// is `value` in `unit`, given the `U` spelling `current` (the file's
+/// attribute or the preserved fragment's).
+///
+/// A value the reader would classify differently without a `U` gets the code
+/// it needs ([`kind_code`]); a spelling that already declares the value's
+/// kind is kept (`DATE` for a date string), so an unedited write changes
+/// nothing. Otherwise the unit code wins, and a unit with no code writes no
+/// `U`.
+pub(crate) fn unit_spelling(
+    value: Option<&CellValue>,
+    unit: Unit,
+    current: Option<&str>,
+) -> UnitSpelling {
+    if let Some(value) = value
+        && let Some(code) = kind_code(value, unit)
+    {
+        return if declares_kind(current, value) {
+            UnitSpelling::Keep
+        } else {
+            UnitSpelling::Code(code)
+        };
+    }
+    match unit_code(unit) {
+        Some(code) => UnitSpelling::Code(code),
+        None => UnitSpelling::Absent,
+    }
+}
+
+/// The `U` code a value's kind needs for the reader to classify it the same
+/// way: `BOOL` for `Bool`, `STR` for a `Str` whose text would read as a
+/// number or a colour, or whose unit would otherwise write a numeric code.
+/// `None` when the value's own shape already reads back the same kind.
+///
+/// Kind fidelity wins over the unit for `Bool` and `Str`: the reader gives
+/// neither kind a unit back. A [`CellValue::List`] has no code the reader
+/// maps back to a list: out of scope (the formula engine owns it).
+pub(crate) fn kind_code(value: &CellValue, unit: Unit) -> Option<&'static str> {
+    match value {
+        CellValue::Bool(_) => Some("BOOL"),
+        CellValue::Str(text)
+            if !matches!(shape(text), Shaped::Str(_)) || unit_code(unit).is_some() =>
+        {
+            Some("STR")
+        }
+        _ => None,
+    }
+}
+
+/// Whether the `U` spelling `code` makes the reader classify the written `V`
+/// of `value` as the value's kind (the rules of [`crate::read::value`]).
+///
+/// Only called for values whose [`kind_code`] fires (`Bool`, misreading
+/// `Str`); without a `U` such a value never reads back the same kind, so
+/// `None` never declares it.
+fn declares_kind(code: Option<&str>, value: &CellValue) -> bool {
+    let want = match value {
+        CellValue::Bool(_) => Kind::Bool,
+        CellValue::Str(_) => Kind::Str,
+        _ => return false,
+    };
+    code.is_some_and(|code| kind(Some(code)) == want)
 }
 
 /// The `V` attribute value of a cached value.
@@ -89,36 +180,6 @@ fn color_text(color: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
 }
 
-/// The color of a `#RGB` or `#RRGGBB` literal (any case), or `None`.
-///
-/// Mirrors the reader's color parser so a written color matches its source
-/// spelling.
-fn parse_color(text: &str) -> Option<Color> {
-    let digits = text.strip_prefix('#')?.as_bytes();
-    match digits {
-        [r1, r2, g1, g2, b1, b2] => {
-            Some(Color::new(hex(*r1, *r2)?, hex(*g1, *g2)?, hex(*b1, *b2)?))
-        }
-        [r, g, b] => Some(Color::new(hex(*r, *r)?, hex(*g, *g)?, hex(*b, *b)?)),
-        _ => None,
-    }
-}
-
-/// The value of one hexadecimal digit pair.
-fn hex(high: u8, low: u8) -> Option<u8> {
-    Some(digit(high)? * 16 + digit(low)?)
-}
-
-/// The value of one hexadecimal digit.
-fn digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +206,47 @@ mod tests {
         }
         assert_eq!(unit_code(Unit::Unitsless), None);
         assert_eq!(unit_code(Unit::Nanometers), None);
+    }
+
+    #[test]
+    fn every_unit_has_a_spelling_or_a_place() {
+        // Coverage (audit minor 8): the complete list of what the writer
+        // does with every `Unit` variant. A variant with no code writes no
+        // `U` (the `_ => None` fallback, where the keep-not-error decision
+        // is recorded); this test lists them, so a new variant cannot ship
+        // with a silent fallback.
+        let spelled = [
+            (Unit::Inches, "IN"),
+            (Unit::Feet, "FT"),
+            (Unit::Yards, "YD"),
+            (Unit::Miles, "MI"),
+            (Unit::Millimeters, "MM"),
+            (Unit::Centimeters, "CM"),
+            (Unit::Meters, "M"),
+            (Unit::Kilometers, "KM"),
+            (Unit::Points, "PT"),
+            (Unit::Picas, "P"),
+            (Unit::Ciceros, "C"),
+            (Unit::Degrees, "DEG"),
+            (Unit::Radians, "RAD"),
+            (Unit::Percent, "PER"),
+        ];
+        for (unit, code) in spelled {
+            assert_eq!(unit_code(unit), Some(code), "{unit:?} spells {code}");
+        }
+        let unspelled = [
+            Unit::Angstroms,
+            Unit::Nanometers,
+            Unit::Microns,
+            Unit::Millipoints,
+            Unit::Unitsless,
+        ];
+        for unit in unspelled {
+            assert_eq!(unit_code(unit), None, "{unit:?} writes no U");
+        }
+        // The two lists name every variant of the 19-variant `Unit` enum
+        // (`#[non_exhaustive]`, so the match cannot check that itself).
+        assert_eq!(spelled.len() + unspelled.len(), 19);
     }
 
     #[test]
@@ -207,12 +309,102 @@ mod tests {
     }
 
     #[test]
-    fn colors_parse_like_the_reader() {
-        assert_eq!(parse_color("#4d4d4d"), Some(Color::new(77, 77, 77)));
-        assert_eq!(parse_color("#abc"), Some(Color::new(170, 187, 204)));
-        assert_eq!(parse_color("#gggggg"), None);
-        assert_eq!(parse_color("#12345"), None);
-        assert_eq!(parse_color("4d4d4d"), None);
+    fn kind_codes_cover_bool_and_misreading_strings() {
+        assert_eq!(
+            kind_code(&CellValue::Bool(true), Unit::Unitsless),
+            Some("BOOL")
+        );
+        // A string that reads back as a number or a colour without `U`.
+        assert_eq!(
+            kind_code(&CellValue::Str("2".to_owned()), Unit::Unitsless),
+            Some("STR")
+        );
+        assert_eq!(
+            kind_code(&CellValue::Str("#4d4d4d".to_owned()), Unit::Unitsless),
+            Some("STR")
+        );
+        // A unit would write a numeric code over the string.
+        assert_eq!(
+            kind_code(&CellValue::Str("Themed".to_owned()), Unit::Inches),
+            Some("STR")
+        );
+        assert_eq!(
+            kind_code(&CellValue::Str("Themed".to_owned()), Unit::Unitsless),
+            None
+        );
+        assert_eq!(kind_code(&CellValue::Number(2.0), Unit::Inches), None);
+        assert_eq!(
+            kind_code(&CellValue::Color(Color::new(0, 0, 0)), Unit::Unitsless),
+            None
+        );
+        // `List` is out of scope: no code maps back to a list.
+        assert_eq!(
+            kind_code(&CellValue::List("a;b".to_owned()), Unit::Unitsless),
+            None
+        );
+    }
+
+    #[test]
+    fn unit_spelling_prefers_the_kind_code() {
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Bool(true)), Unit::Unitsless, None),
+            UnitSpelling::Code("BOOL")
+        );
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Str("2".to_owned())), Unit::Unitsless, None),
+            UnitSpelling::Code("STR")
+        );
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Number(2.0)), Unit::Inches, None),
+            UnitSpelling::Code("IN")
+        );
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Number(2.0)), Unit::Unitsless, Some("IN")),
+            UnitSpelling::Absent
+        );
+        assert_eq!(
+            unit_spelling(None, Unit::Unitsless, None),
+            UnitSpelling::Absent
+        );
+    }
+
+    #[test]
+    fn unit_spelling_keeps_a_spelling_that_declares_the_kind() {
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Bool(true)), Unit::Unitsless, Some("BOOL")),
+            UnitSpelling::Keep
+        );
+        // The file's `DATE` spelling stays; the kind reads back the same.
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::Str("2".to_owned())),
+                Unit::Unitsless,
+                Some("DATE")
+            ),
+            UnitSpelling::Keep
+        );
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::Str("2".to_owned())),
+                Unit::Unitsless,
+                Some("STR")
+            ),
+            UnitSpelling::Keep
+        );
+        // A spelling that declares another kind does not survive a model
+        // that took the value over.
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::Str("2".to_owned())),
+                Unit::Unitsless,
+                Some("FOO")
+            ),
+            UnitSpelling::Code("STR")
+        );
+        assert_eq!(
+            unit_spelling(Some(&CellValue::Bool(true)), Unit::Unitsless, Some("DATE")),
+            UnitSpelling::Code("BOOL")
+        );
     }
 
     #[test]
