@@ -393,3 +393,193 @@ pub(crate) fn write_qualified_name(name: &QName, out: &mut String) {
     }
     out.push_str(&name.local);
 }
+
+#[cfg(test)]
+mod tests {
+    use ferrogram_model::diff;
+    use proptest::prelude::*;
+
+    use super::*;
+
+    /// Element names the generator produces: valid XML names.
+    const ELEMENT_NAMES: &[&str] = &["a", "b", "Cell", "X9", "_k"];
+    /// Attribute names the generator produces (never `xmlns`).
+    const ATTRIBUTE_NAMES: &[&str] = &["id", "N", "V", "n2"];
+    /// Character data the generator produces (no carriage return: the XML
+    /// parser normalizes line endings, so a raw `\r` cannot round-trip
+    /// through text).
+    const TEXTS: &[&str] = &["x", "a & b < c>", "0.5", " ", "", "0.5 in", "'q'", "\"z\""];
+    /// Comment bodies (no `--`, which XML forbids inside a comment).
+    const COMMENTS: &[&str] = &["note", "c-1", "x & y"];
+    /// Processing-instruction targets (never `xml`) and data (no `?>`).
+    const PI_TARGETS: &[&str] = &["p1", "t"];
+    const PI_DATA: &[&str] = &["d", "data x"];
+
+    fn arb_qname() -> impl Strategy<Value = QName> {
+        proptest::prop_oneof![
+            proptest::sample::select(ELEMENT_NAMES.to_vec())
+                .prop_map(|local| QName::local(local.to_owned())),
+            proptest::sample::select(ELEMENT_NAMES.to_vec()).prop_map(|local| QName {
+                prefix: Some("p".to_owned()),
+                uri: Some("urn:x".to_owned()),
+                local: local.to_owned(),
+            }),
+        ]
+    }
+
+    fn arb_attribute_value() -> impl Strategy<Value = String> {
+        proptest::sample::select(TEXTS.to_vec()).prop_map(str::to_owned)
+    }
+
+    /// Attributes with distinct names (a duplicate name is not well-formed
+    /// XML and cannot round-trip).
+    fn arb_attributes() -> impl Strategy<Value = Vec<XmlAttribute>> {
+        proptest::collection::vec(
+            (
+                proptest::sample::select(ATTRIBUTE_NAMES.to_vec()),
+                arb_attribute_value(),
+            ),
+            0..4,
+        )
+        .prop_map(|pairs| {
+            let mut out: Vec<XmlAttribute> = Vec::new();
+            for (name, value) in pairs {
+                if out.iter().any(|attribute| attribute.name.local == name) {
+                    continue;
+                }
+                out.push(XmlAttribute {
+                    name: QName::local(name.to_owned()),
+                    value,
+                });
+            }
+            out
+        })
+    }
+
+    fn arb_leaf_child() -> impl Strategy<Value = XmlChild> {
+        proptest::prop_oneof![
+            proptest::sample::select(TEXTS.to_vec())
+                .prop_map(|text| XmlChild::Text(text.to_owned())),
+            proptest::sample::select(COMMENTS.to_vec())
+                .prop_map(|comment| XmlChild::Comment(comment.to_owned())),
+            (
+                proptest::sample::select(PI_TARGETS.to_vec()),
+                proptest::sample::select(PI_DATA.to_vec()),
+            )
+                .prop_map(|(target, data)| XmlChild::ProcessingInstruction {
+                    target: target.to_owned(),
+                    data: data.to_owned(),
+                }),
+        ]
+    }
+
+    /// The children a writer can produce: no two adjacent text nodes (the
+    /// parser merges them into one).
+    fn children_from(items: Vec<XmlChild>) -> Vec<XmlChild> {
+        let mut out: Vec<XmlChild> = Vec::new();
+        for item in items {
+            if matches!(item, XmlChild::Text(_)) && matches!(out.last(), Some(XmlChild::Text(_))) {
+                continue;
+            }
+            out.push(item);
+        }
+        out
+    }
+
+    fn arb_tree() -> impl Strategy<Value = XmlNode> {
+        let leaf = (
+            arb_qname(),
+            arb_attributes(),
+            proptest::collection::vec(arb_leaf_child(), 0..4),
+        )
+            .prop_map(|(name, attributes, items)| XmlNode {
+                name,
+                attributes,
+                children: children_from(items),
+                self_closing: false,
+            });
+        leaf.prop_recursive(3, 24, 3, |inner| {
+            (
+                arb_qname(),
+                arb_attributes(),
+                proptest::collection::vec(
+                    proptest::prop_oneof![inner.prop_map(XmlChild::Element), arb_leaf_child(),],
+                    0..5,
+                ),
+            )
+                .prop_map(|(name, attributes, items)| XmlNode {
+                    name,
+                    attributes,
+                    children: children_from(items),
+                    self_closing: false,
+                })
+        })
+    }
+
+    /// A tree whose root declares the `p` prefix the generator's prefixed
+    /// names use.
+    fn arb_root() -> impl Strategy<Value = XmlNode> {
+        arb_tree().prop_map(|mut node| {
+            node.attributes.insert(
+                0,
+                XmlAttribute {
+                    name: QName {
+                        prefix: Some("xmlns".to_owned()),
+                        uri: None,
+                        local: "p".to_owned(),
+                    },
+                    value: "urn:x".to_owned(),
+                },
+            );
+            node
+        })
+    }
+
+    proptest::proptest! {
+        /// ADR 0017: random `XmlNode` trees survive parse -> serialize ->
+        /// parse with `diff` empty (the preservation tree is faithful).
+        #[test]
+        fn trees_survive_parse_serialize_parse(node in arb_root()) {
+            let text = write_xml(&node);
+            let parsed = parse_xml(&text, &Limits::DEFAULT).expect("the written text parses");
+            proptest::prop_assert_eq!(diff(&node, &parsed).expect("diff never fails"), Vec::new());
+        }
+    }
+
+    #[test]
+    fn entities_and_character_references_decode() {
+        let node = parse_xml(
+            "<a x=\"&amp;&lt;&quot;\">&gt;&#65;&#x42;&apos;</a>",
+            &Limits::DEFAULT,
+        )
+        .expect("parses");
+        assert_eq!(node.attributes[0].value, "&<\"");
+        assert_eq!(node.children[0], XmlChild::Text(">AB'".to_owned()));
+    }
+
+    #[test]
+    fn an_unresolved_or_malformed_reference_is_an_error() {
+        assert!(parse_xml("<a>&nope;</a>", &Limits::DEFAULT).is_err());
+        assert!(parse_xml("<a>&#xzz;</a>", &Limits::DEFAULT).is_err());
+        assert!(parse_xml("<a>&#1114112;</a>", &Limits::DEFAULT).is_err());
+    }
+
+    #[test]
+    fn two_root_elements_are_an_error() {
+        assert!(parse_xml("<a/><b/>", &Limits::DEFAULT).is_err());
+    }
+
+    #[test]
+    fn the_xml_prefix_resolves_to_the_xml_namespace() {
+        let node = parse_xml("<a xml:lang=\"en\"/>", &Limits::DEFAULT).expect("parses");
+        let attribute = &node.attributes[0];
+        assert_eq!(attribute.name.prefix.as_deref(), Some("xml"));
+        assert_eq!(attribute.name.uri.as_deref(), Some(XML_NAMESPACE_URI));
+    }
+
+    #[test]
+    fn the_empty_document_is_an_error() {
+        assert!(parse_xml("", &Limits::DEFAULT).is_err());
+        assert!(parse_xml("   ", &Limits::DEFAULT).is_err());
+    }
+}
