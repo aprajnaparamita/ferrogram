@@ -2,8 +2,17 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **2 complete** (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md)); waiting for the user's "continue" before Phase 3
-- Phase 2 goal: document model and .vsdx I/O (KICKOFF.md). Exit: every corpus .vsdx file round-trips without loss and without panics.
+- Current phase: **3 in progress** (planning)
+- Phase 3 goal: rendering from cached values, plus the CLI (KICKOFF.md). Exit: every corpus file renders without panics, and every geometry row type has tests.
+- Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
+
+## Phase 3 task board
+
+| Task | Role | Depends on | State | Branch |
+|---|---|---|---|---|
+| [P3-01](tasks/P3-01.md) | architect | phase-2 | ready | — |
+
+The architect writes P3-02 onwards; the master adds them here after review.
 
 ## Phase 2 task board
 
