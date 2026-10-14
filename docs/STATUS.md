@@ -18,8 +18,8 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | merged (angles are radians; 25 name aliases) | agent/P2-06 |
 | [P2-06b](tasks/P2-06b.md) | implementer | P2-06 | merged (`Inh` fix on main) | agent/P2-06b |
 | [P2-07](tasks/P2-07.md) | implementer | P2-06b | merged (exit criterion met: 15/15 corpus files round-trip) | agent/P2-07 |
-| [P2-09](tasks/P2-09.md) | implementer | P2-06, P2-08 | ready (parallel with P2-06b, P2-07) | — |
-| [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | waiting | — |
+| [P2-09](tasks/P2-09.md) | implementer | P2-06, P2-08 | merged (docs XSD is 1.1 and out of date; see P2-10 rule) | agent/P2-09 |
+| [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | ready | — |
 | [P2-11](tasks/P2-11.md) | reviewer | P2-10 | waiting (group D) | — |
 | [P2-12](tasks/P2-12.md) | coverage-auditor | P2-10 | waiting (group D) | — |
 | [P2-13](tasks/P2-13.md) | cleanroom-auditor | P2-10 | waiting (group D) | — |
@@ -81,3 +81,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-06 (decided): the writer patches the source part trees (P2-07, ADR 0018), because unmapped children interleave with mapped ones in the corpus. Model gaps (section-level cells, several master shapes, style references by ID, `Connect` preservation, radians in geom) go to P2-06b. `tests/roundtrip.rs` moved from P2-09 to P2-07; P2-10 adds schema validation of written parts.
 - P2-06b (decided on main): a cell whose formula is `Inh` does not define the cell for the lookup (ADR 0013 amendment); its cached snapshot is not used as a fallback yet. Duplicate style IDs resolve first-wins. A chained master rung reuses the instance's sibling position; revisit if a file needs more.
 - P2-07 (deferred to Phase 4): deleting a page or master leaves its part behind; a new `Property` is written into `DocumentProperties`, not `docProps/*`; edits to `Preserved` are not written back; only the first `Shapes` wrapper of a shape is patched; changed booleans are written as `0`/`1`. The generator silently stops at 128 sub-shape levels; make that an error when Phase 4 can build deep models.
+- P2-09 (decided): the only public XSD (Office developer docs) is XSD 1.1, uses an older namespace and is out of sync with files Visio writes; 3 of 106 corpus source parts validate against the derived schema. The schema test checks that the writer adds no new validation errors, not that parts are valid. The libvisio oracle compares only page counts and page sizes for `.vsdx`; full comparison waits for Phase 7.
