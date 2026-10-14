@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **2 in progress** (planning)
+- Current phase: **2 complete** (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md)); waiting for the user's "continue" before Phase 3
 - Phase 2 goal: document model and .vsdx I/O (KICKOFF.md). Exit: every corpus .vsdx file round-trips without loss and without panics.
 
 ## Phase 2 task board
@@ -22,7 +22,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | merged (1 writer bug fixed; vsdx 97.1%) | agent/P2-10 |
 | [P2-11](tasks/P2-11.md) | reviewer | P2-10 | merged (approve with fixes: 0 blocker, 1 major, 6 minor; finding 7 fixed on main) | agent/P2-11 |
 | [P2-12](tasks/P2-12.md) | coverage-auditor | P2-10 | merged (pass: 0 blocker, 3 major, 11 minor) | agent/P2-12 |
-| [P2-14](tasks/P2-14.md) | implementer | P2-11, P2-12 | ready (review and coverage fixes) | — |
+| [P2-14](tasks/P2-14.md) | implementer | P2-11, P2-12 | merged | agent/P2-14 |
 | [P2-13](tasks/P2-13.md) | cleanroom-auditor | P2-10 | merged (pass: 0 blocker, 0 major, 2 minor; F1 fixed on main) | agent/P2-13 |
 
 Tasks in the same group run in parallel on disjoint files. Fix tasks (P2-14 onward) follow the audits, as in Phase 1.
@@ -84,3 +84,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-07 (deferred to Phase 4): deleting a page or master leaves its part behind; a new `Property` is written into `DocumentProperties`, not `docProps/*`; edits to `Preserved` are not written back; only the first `Shapes` wrapper of a shape is patched; changed booleans are written as `0`/`1`. The generator silently stops at 128 sub-shape levels; make that an error when Phase 4 can build deep models.
 - P2-09 (decided): the only public XSD (Office developer docs) is XSD 1.1, uses an older namespace and is out of sync with files Visio writes; 3 of 106 corpus source parts validate against the derived schema. The schema test checks that the writer adds no new validation errors, not that parts are valid. The libvisio oracle compares only page counts and page sizes for `.vsdx`; full comparison waits for Phase 7.
 - P2-10 (open, for the audits and fix tasks): a model built in memory loses `Bool`, `List` and number-like `Str` kinds on write then read, because the writer emits no `U` for them; the arena holds nested sub-shapes in wrapper order, not document order; the schema test skips without `xmllint` and `reference/` (CI should install libxml2 and set `FERROGRAM_REQUIRE_SCHEMA=1`).
+- P2-14 (open): a hand-built `Color`/`List` value with a unit, or a `Bool`/`Str` with a real unit, does not read back the same (formula-engine task); the relationships writer always uses the default namespace for the relationships vocabulary.

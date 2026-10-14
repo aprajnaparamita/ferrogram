@@ -2,7 +2,7 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 2 of 8 in progress.** Nothing is usable as an app yet. The project can read `.vsdx` files into its document model, but cannot save, render or edit them. Do not use Ferrogram for real work.
+> **Status: pre-alpha, Phase 2 of 8 complete.** Nothing is usable as an app yet. The libraries read `.vsdx` files into a document model and write them back without loss, but nothing renders or edits them. Do not use Ferrogram for real work.
 
 ## What works today
 
@@ -14,26 +14,25 @@ Library code and developer tools only. There is no app, CLI feature or UI yet.
   - loaded and checked at runtime by `crates/ui-spec`.
 - **Geometry** (`crates/geom`): units and conversions, points, rectangles, angles and affine transforms.
 - **Document model** (`crates/model`): pages, masters, shapes, styles and ShapeSheet cells, each cell keeping its formula, cached value and unit. Master and style inheritance is resolved by a lookup, and XML can be compared semantically. The ShapeSheet table is generated from `ui-spec/shapesheet.toml` by `cargo xtask codegen`.
-- **`.vsdx` reading** (`crates/vsdx`):
+- **`.vsdx` reading and writing** (`crates/vsdx`):
   - The zip package layer reads and writes packages, with caps against zip bombs and oversized input.
   - Pages, masters, shapes, styles and document properties are read into the model, and content the model does not cover is kept.
-  - All 15 test files in the corpus read without errors.
+  - The writer updates each part from the model and keeps everything else in place. All 15 corpus files round-trip without loss.
+  - Tested with malformed input, a fuzz target, property tests, the libvisio oracle and schema checks.
 - **Test tooling:**
   - `cargo xtask corpus` fetches third-party test files (they are not committed);
   - `cargo xtask oracle` builds libvisio's tools as a test oracle;
   - hand-written test files are in `corpus/fixtures/`.
 
-## In progress (Phase 2)
+## Next (Phase 3)
 
-- Fixing gaps the reader found in the model (style references by ID, masters with several shapes, section-level cells).
-- Writing `.vsdx` back from the model, with a lossless round-trip of every corpus file. This is the exit criterion for Phase 2.
-- The test harness: malformed input, fuzzing, comparison with the libvisio oracle, and schema validation.
+Rendering to PNG and SVG, and the first CLI commands.
 
 The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/).
 
 ## What does not work yet
 
-Saving, rendering, editing, the ribbon UI, the ShapeSheet formula engine, `.vsd` import, the CLI and the MCP/control channel.
+Rendering, editing, the ribbon UI, the ShapeSheet formula engine, `.vsd` import, the CLI and the MCP/control channel.
 
 ## Plan (alpha MVP)
 
@@ -41,7 +40,7 @@ Saving, rendering, editing, the ribbon UI, the ShapeSheet formula engine, `.vsd`
 |---|---|---|
 | 0 | Bootstrap: workspace, gate, CI, agent process | done |
 | 1 | Sources and UI/ShapeSheet definitions | done |
-| 2 | Document model and .vsdx I/O (lossless round-trip) | in progress |
+| 2 | Document model and .vsdx I/O (lossless round-trip) | done |
 | 3 | Rendering (PNG/SVG) and CLI | planned |
 | 4 | App shell, switchable 2016/365 ribbon | planned |
 | 5 | Editing core | planned |
