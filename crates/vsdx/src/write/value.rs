@@ -47,6 +47,11 @@ pub(crate) fn unit_code(unit: Unit) -> Option<&'static str> {
         Unit::Degrees => Some("DEG"),
         Unit::Radians => Some("RAD"),
         Unit::Percent => Some("PER"),
+        // A unit with no code writes no `U` (decision, coverage audit minor
+        // 8): the value reads back by its shape and a preserved spelling
+        // stays in `Preserved`. Keep, not an error — an error would reject a
+        // model the reader accepted. `every_unit_has_a_spelling_or_a_place`
+        // lists the units this arm covers.
         _ => None,
     }
 }
@@ -201,6 +206,47 @@ mod tests {
         }
         assert_eq!(unit_code(Unit::Unitsless), None);
         assert_eq!(unit_code(Unit::Nanometers), None);
+    }
+
+    #[test]
+    fn every_unit_has_a_spelling_or_a_place() {
+        // Coverage (audit minor 8): the complete list of what the writer
+        // does with every `Unit` variant. A variant with no code writes no
+        // `U` (the `_ => None` fallback, where the keep-not-error decision
+        // is recorded); this test lists them, so a new variant cannot ship
+        // with a silent fallback.
+        let spelled = [
+            (Unit::Inches, "IN"),
+            (Unit::Feet, "FT"),
+            (Unit::Yards, "YD"),
+            (Unit::Miles, "MI"),
+            (Unit::Millimeters, "MM"),
+            (Unit::Centimeters, "CM"),
+            (Unit::Meters, "M"),
+            (Unit::Kilometers, "KM"),
+            (Unit::Points, "PT"),
+            (Unit::Picas, "P"),
+            (Unit::Ciceros, "C"),
+            (Unit::Degrees, "DEG"),
+            (Unit::Radians, "RAD"),
+            (Unit::Percent, "PER"),
+        ];
+        for (unit, code) in spelled {
+            assert_eq!(unit_code(unit), Some(code), "{unit:?} spells {code}");
+        }
+        let unspelled = [
+            Unit::Angstroms,
+            Unit::Nanometers,
+            Unit::Microns,
+            Unit::Millipoints,
+            Unit::Unitsless,
+        ];
+        for unit in unspelled {
+            assert_eq!(unit_code(unit), None, "{unit:?} writes no U");
+        }
+        // The two lists name every variant of the 19-variant `Unit` enum
+        // (`#[non_exhaustive]`, so the match cannot check that itself).
+        assert_eq!(spelled.len() + unspelled.len(), 19);
     }
 
     #[test]
