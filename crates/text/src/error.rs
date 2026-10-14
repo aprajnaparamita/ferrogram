@@ -11,6 +11,8 @@ use std::fmt;
 pub enum Error {
     /// The font bytes are not a font this crate can parse.
     InvalidFont,
+    /// The layout block has a non-finite or negative dimension or size.
+    InvalidBlock,
     /// The operation is not implemented yet (a Phase 3 stub).
     NotImplemented,
 }
@@ -19,6 +21,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InvalidFont => write!(f, "bytes are not a parsable font"),
+            Error::InvalidBlock => write!(f, "block has a non-finite or negative dimension"),
             Error::NotImplemented => write!(f, "not implemented yet"),
         }
     }
@@ -35,6 +38,10 @@ mod tests {
         assert_eq!(
             Error::InvalidFont.to_string(),
             "bytes are not a parsable font"
+        );
+        assert_eq!(
+            Error::InvalidBlock.to_string(),
+            "block has a non-finite or negative dimension"
         );
         assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
     }
