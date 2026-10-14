@@ -286,3 +286,64 @@ fn regenerate_committed_fixtures() {
         eprintln!("wrote {}", path.display());
     }
 }
+
+// The builder itself is exercised by the tests above (task P2-08); this
+// module holds the unit tests of the zip byte-surgery helpers in
+// `common`, moved here so they run once per `cargo test` and not once per
+// test binary that includes `mod common;` (task P2-09).
+mod byte_surgery_tests {
+    use super::common::*;
+
+    #[test]
+    fn rfind_subslice_finds_the_last_occurrence() {
+        assert_eq!(rfind_subslice(b"abXabX", b"X"), Some(5));
+        assert_eq!(rfind_subslice(b"abc", b"abcd"), None);
+        assert_eq!(rfind_subslice(b"abc", b""), None);
+    }
+
+    #[test]
+    fn find_header_matches_the_file_name_field() {
+        let bytes = build(Fixture::Drawing);
+        let local = find_header(&bytes, LOCAL_SIG, "[Content_Types].xml", 30);
+        let central = find_header(&bytes, CENTRAL_SIG, "[Content_Types].xml", 46);
+        assert!(local.is_some());
+        assert!(central.is_some());
+        assert_ne!(local, central);
+        assert!(find_header(&bytes, LOCAL_SIG, "nope.xml", 30).is_none());
+    }
+
+    #[test]
+    fn read_and_patch_u32_round_trip() {
+        let mut bytes = vec![0, 1, 2, 3, 4, 5];
+        patch_u32(&mut bytes, 1, 0x0640_0000);
+        assert_eq!(read_u32(&bytes, 1), Some(0x0640_0000));
+        assert_eq!(read_u32(&bytes, 4), None); // out of range, no panic
+        patch_u32(&mut bytes, 99, 7); // out of range, no panic
+    }
+
+    #[test]
+    fn corrupt_central_directory_breaks_the_signature() {
+        let bytes = corrupt_central_directory(build(Fixture::Drawing));
+        let eocd = rfind_subslice(&bytes, EOCD_SIG).unwrap();
+        let cd_offset = read_u32(&bytes, eocd + 16).unwrap() as usize;
+        assert_eq!(read_u32(&bytes, cd_offset), Some(0xFFFF_FFFF));
+    }
+
+    #[test]
+    fn declare_huge_size_patches_both_headers() {
+        let bytes = declare_huge_size(build(Fixture::Drawing), "visio/pages/page1.xml", 77);
+        let local = find_header(&bytes, LOCAL_SIG, "visio/pages/page1.xml", 30).unwrap();
+        let central = find_header(&bytes, CENTRAL_SIG, "visio/pages/page1.xml", 46).unwrap();
+        assert_eq!(read_u32(&bytes, local + 22), Some(77));
+        assert_eq!(read_u32(&bytes, central + 24), Some(77));
+    }
+
+    #[test]
+    fn add_dangling_relationship_keeps_the_rest() {
+        let rels = pages_rels().into_bytes();
+        let out = add_dangling_relationship(&rels);
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("Target=\"pages/missing.xml\""));
+        assert!(text.contains("Target=\"page1.xml\""));
+    }
+}
