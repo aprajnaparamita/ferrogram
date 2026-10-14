@@ -939,4 +939,39 @@ mod tests {
         );
         assert_eq!(shape.sheet.cells[0].unit, ferrogram_geom::Unit::Inches);
     }
+
+    #[test]
+    fn a_generated_value_keeps_its_kind_on_re_read() {
+        // Regression (P2-10 open issue 1, task P2-14): a model-built `Bool`
+        // or number-like `Str` used to read back as `Number` because the
+        // writer emitted no `U` for it.
+        let mut document = sample();
+        let mut flag = ferrogram_model::Cell::new(CellName::from_static("Flag"));
+        flag.value = Some(ferrogram_model::CellValue::Bool(true));
+        let mut label = ferrogram_model::Cell::new(CellName::from_static("Label"));
+        label.value = Some(ferrogram_model::CellValue::Str("2".to_owned()));
+        let mut plain = ferrogram_model::Cell::new(CellName::from_static("Plain"));
+        plain.value = Some(ferrogram_model::CellValue::Str("Themed".to_owned()));
+        if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
+            shape.sheet.cells.push(flag);
+            shape.sheet.cells.push(label);
+            shape.sheet.cells.push(plain);
+        }
+        let package = from_model(&document).expect("package");
+        let bytes = write_package(&package).expect("bytes");
+        let reread = crate::read_document(&bytes, &crate::Limits::DEFAULT).expect("read");
+        let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
+        assert_eq!(
+            shape.sheet.cells[0].value,
+            Some(ferrogram_model::CellValue::Bool(true))
+        );
+        assert_eq!(
+            shape.sheet.cells[1].value,
+            Some(ferrogram_model::CellValue::Str("2".to_owned()))
+        );
+        assert_eq!(
+            shape.sheet.cells[2].value,
+            Some(ferrogram_model::CellValue::Str("Themed".to_owned()))
+        );
+    }
 }
