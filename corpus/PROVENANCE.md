@@ -54,6 +54,12 @@ Two more malformed fixtures are generated at test time and never committed:
 stable across `flate2` versions) and `malformed-many-entries.vsdx` (8193
 boring zip entries). Same author and license as above.
 
+The files under `crates/vsdx/fuzz/corpus/` (task P2-09) are byte-identical
+copies of every committed fixture above, used as the seed corpus of the
+`read_package` fuzz target (ADR 0017 section 4). Same author and license
+(MIT); `fixtures/` stays the single source of truth and a copy that drifts is
+a bug.
+
 All rows above are our own work: hand-written XML and a plain zip container
 produced by `crates/vsdx/tests/common/mod.rs` (task P2-08). Element names,
 content types and relationship type URIs are structural facts recorded in

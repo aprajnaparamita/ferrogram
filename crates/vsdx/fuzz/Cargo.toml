@@ -1,0 +1,25 @@
+[package]
+name = "ferrogram-vsdx-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.ferrogram-vsdx]
+path = ".."
+
+# Prevent this from interfering with workspaces (the cargo-fuzz way).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "read_package"
+path = "fuzz_targets/read_package.rs"
+test = false
+doc = false
+bench = false
