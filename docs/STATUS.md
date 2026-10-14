@@ -16,8 +16,8 @@ Task board. Only the master agent edits this file, on `main`.
 | [P2-08](tasks/P2-08.md) | implementer | P2-01 | merged (ATTRIBUTION row added on main) | agent/P2-08 |
 | [P2-04](tasks/P2-04.md) | implementer | P2-02, P2-03 | merged | agent/P2-04 |
 | [P2-06](tasks/P2-06.md) | implementer | P2-04, P2-05 | merged (angles are radians; 25 name aliases) | agent/P2-06 |
-| [P2-06b](tasks/P2-06b.md) | implementer | P2-06 | ready (parallel with P2-09) | — |
-| [P2-07](tasks/P2-07.md) | implementer | P2-06b | waiting (patch-based writer; owns `roundtrip.rs`) | — |
+| [P2-06b](tasks/P2-06b.md) | implementer | P2-06 | merged (`Inh` fix on main) | agent/P2-06b |
+| [P2-07](tasks/P2-07.md) | implementer | P2-06b | ready (patch-based writer; owns `roundtrip.rs`) | — |
 | [P2-09](tasks/P2-09.md) | implementer | P2-06, P2-08 | ready (parallel with P2-06b, P2-07) | — |
 | [P2-10](tasks/P2-10.md) | test-engineer | P2-07, P2-09 | waiting | — |
 | [P2-11](tasks/P2-11.md) | reviewer | P2-10 | waiting (group D) | — |
@@ -79,3 +79,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P2-05 (decided): the package reader accepts a package without `[Content_Types].xml` and infers declarations, because two libvisio corpus files have none. A dangling internal relationship is recorded, not an error. The XML helpers live in `crates/vsdx/src/package/xml.rs`; there is no `src/xml/` module.
 - P2-04 (decided): the model keeps cell and section names as spelled in the `.vsdx` file; P2-06 adds a name-alias table in `crates/model/src/aliases.rs` for the ShapeSheet-table lookups. `ferrogram_model::Error::NotImplemented` and the `vsdx` one are removed after P2-07. Table defaults are parsed lazily and interned with `Box::leak` (bounded by the static table); move the parsing into codegen once `shapesheet.toml` records default values.
 - P2-06 (decided): the writer patches the source part trees (P2-07, ADR 0018), because unmapped children interleave with mapped ones in the corpus. Model gaps (section-level cells, several master shapes, style references by ID, `Connect` preservation, radians in geom) go to P2-06b. `tests/roundtrip.rs` moved from P2-09 to P2-07; P2-10 adds schema validation of written parts.
+- P2-06b (decided on main): a cell whose formula is `Inh` does not define the cell for the lookup (ADR 0013 amendment); its cached snapshot is not used as a fallback yet. Duplicate style IDs resolve first-wins. A chained master rung reuses the instance's sibling position; revisit if a file needs more.

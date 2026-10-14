@@ -37,6 +37,7 @@ The main drive is small. Put everything large on `/Volumes/Dara/ferrogram/`:
 - Worktrees: `/Volumes/Dara/ferrogram/worktrees/`
 - Cargo target dirs: `/Volumes/Dara/ferrogram/target/<task-id>` (always set `CARGO_TARGET_DIR`)
 - Raw downloads: `/Volumes/Dara/ferrogram/reference/`. The repo's `reference/` directory is a symlink to it (gitignored). In a worktree, create the same symlink: `ln -s /Volumes/Dara/ferrogram/reference reference`.
+- Corpus files: `corpus/vsdx/` and `corpus/vsd/` are gitignored and exist only in the main checkout. In a worktree, link them: `ln -s /Users/dara/ferrogram/corpus/vsdx corpus/vsdx` and the same for `vsd`. If git shows the links as untracked, add them to `.git/info/exclude`, not to `.gitignore`.
 - Large builds (libvisio, corpora): `/Volumes/Dara/ferrogram/`.
 
 ## 4. Clean-room rules (non-negotiable)

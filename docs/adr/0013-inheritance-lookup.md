@@ -104,6 +104,17 @@ the document changes when a lookup runs.
   treating `Inh` as "continue the chain" is a Phase 3 question, recorded as
   an open issue of P2-06b.
 
+### Amended 2026-10-14, master (after P2-06b): `Inh` does not define
+
+`.vsdx` writes `F="Inh"` on a cell whose value comes from the master, a
+style or a default. Its `V` is a snapshot of the inherited value at save
+time. A cell whose formula is exactly `Inh` therefore does **not** define
+the cell for the lookup: resolution continues with the next source. The
+cell stays in the model unchanged, so the writer emits it as it was read.
+The cached snapshot is not used as a fallback. If Phase 3 finds cells
+that resolve worse than their snapshot, it may add that fallback as a
+further amendment.
+
 ## Consequences
 
 - Rendering and property panels call `resolve` per cell; caching is a later

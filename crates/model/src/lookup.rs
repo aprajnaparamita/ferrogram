@@ -321,9 +321,18 @@ fn walk_down<'a>(
     Some(current)
 }
 
+/// The formula `.vsdx` writes on a cell whose value is inherited. Its cached
+/// value is only a snapshot of the inherited one.
+const INHERIT_FORMULA: &str = "Inh";
+
 /// Whether a cell defines the value of its source: it carries a formula or
-/// a cached value (ADR 0013, "the first that defines the cell").
+/// a cached value (ADR 0013, "the first that defines the cell"). A cell
+/// whose formula is `Inh` does not define it; the lookup continues to the
+/// master, style and default sources.
 fn defines(cell: &Cell) -> bool {
+    if cell.formula.as_deref() == Some(INHERIT_FORMULA) {
+        return false;
+    }
     cell.value.is_some() || cell.formula.is_some()
 }
 
@@ -732,6 +741,52 @@ mod tests {
         assert_eq!(r.value, Some(&CellValue::Number(2.0)));
         assert_eq!(r.source, ValueSource::SectionDefault);
         assert_eq!(r.via, vec![ValueSource::Local, ValueSource::SectionDefault]);
+    }
+
+    #[test]
+    fn inherited_local_cell_does_not_define() {
+        let (mut doc, id) = document_with_shape();
+        let mut cell = number_cell("PinX", 9.0);
+        cell.set_formula(Some("Inh".to_owned()));
+        doc.shape_mut(id)
+            .expect("shape exists")
+            .sheet
+            .cells
+            .push(cell);
+        let r = doc
+            .resolve_with_table(id, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(2.0)));
+        assert_eq!(r.source, ValueSource::SectionDefault);
+    }
+
+    #[test]
+    fn inherited_local_cell_resolves_from_the_master() {
+        let (mut doc, id) = document_with_shape();
+        let mid = doc.masters.len();
+        let mut master = crate::master::Master::new(MasterId { index: mid as u32 }, 1);
+        let content = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(content)
+            .expect("content exists")
+            .sheet
+            .cells
+            .push(number_cell("PinX", 7.0));
+        master.shapes = vec![content];
+        doc.masters.push(master);
+        let shape = doc.shape_mut(id).expect("shape exists");
+        shape.master = Some(MasterId { index: mid as u32 });
+        let mut cell = number_cell("PinX", 9.0);
+        cell.set_formula(Some("Inh".to_owned()));
+        shape.sheet.cells.push(cell);
+
+        let r = doc
+            .resolve_with_table(id, &CellName::from_static("PinX"), DEFAULT_TABLE)
+            .unwrap();
+        assert_eq!(r.value, Some(&CellValue::Number(7.0)));
+        assert_eq!(
+            r.source,
+            ValueSource::Master(MasterId { index: mid as u32 })
+        );
     }
 
     #[test]
