@@ -11,6 +11,7 @@ Committed provenance for every external source Ferrogram uses. The local-only co
 | 5 | Keyboard shortcuts for Visio (Microsoft Support) | https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-visio-ee952f31-7e3e-4564-8116-f3ecbb733cc1 (live page now redirects; archived snapshot at https://web.archive.org/web/20251205120214id_/https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-visio-ee952f31-7e3e-4564-8116-f3ecbb733cc1) | 2026-10-12 | Web snapshot 2025-12-05; live page retired 2026 | Microsoft Support terms (informal) | Shortcut key combinations mapped to Visio commands (cross-referenced to source 2) |
 | 6 | libvisio (binary .vsd reference) | https://git.libreoffice.org/libvisio | 2026-10-12 | `c7c970775b750a4bf7fd1b4364d69bac9815bfcb` (2026-10-09) | Mozilla Public License Version 2.0 (verified from `COPYING.MPL`; recorded in `NOTICE`) | Commit hash, CLI command list (`vsd2raw`, `vss2raw`, `vsd2xhtml`, `vss2xhtml`, `vsd2text`, `vss2text`), file inventory of test data; **never libvisio source itself** — only `crates/vsd-binary` (MPL-2.0) will hold ported code, in a later task |
 | 7 | Visio test corpus (libvisio test data) | https://git.libreoffice.org/libvisio (src/test/data/) | 2026-10-12 | libvisio `c7c970775b750a4bf7fd1b4364d69bac9815bfcb` | MPL-2.0 | Nothing: files are fetched and sha256-verified from the pinned commit (`corpus/manifest.toml`, ADR 0005). LibreOffice core test files were dropped (license unclear, commit not pinned). |
+| 8 | Visio XML schema map (the XSD embedded in `docs/visio/schema-mapvisio-xml.md`) | https://github.com/MicrosoftDocs/office-developer-client-docs/blob/f8c5dfed613fafd2fb8c8f9b1e43454f29517831/docs/visio/schema-mapvisio-xml.md | 2026-10-14 | `f8c5dfed613fafd2fb8c8f9b1e43454f29517831` (2024-04-12); the file is byte-identical at the local clone's `eedbd61ca40689e7cfed5e1cfd9440a9dc3ab7a5` | Page: Creative Commons Attribution 4.0 (repository `LICENSE`); code samples: MIT (repository `LICENSE-CODE`); the XSD block carries its own Microsoft notice permitting copy, display and distribution with attribution (Copyright (c) Microsoft Corporation) | The licence finding in the note below and the test-time extractor (`crates/vsdx/tests/schema.rs`); **the XSD itself is never committed** |
 
 ## Open Specifications Promise (note)
 
@@ -22,6 +23,26 @@ Open Specifications Promise
 they may be used to implement the specifications, and short verbatim
 quotes are permitted, but we commit only derived structural data (element
 names, type tables, schemas of relationships), never the spec text itself.
+
+## XSD licence finding (source 8, P2-09)
+
+Checked 2026-10-14 at the pinned commit `f8c5dfed613fafd2fb8c8f9b1e43454f29517831`
+of `MicrosoftDocs/office-developer-client-docs`:
+
+- The repository `LICENSE` is **Creative Commons Attribution 4.0
+  International** and covers the documentation pages, including
+  `docs/visio/schema-mapvisio-xml.md`.
+- The repository `LICENSE-CODE` is **MIT** and covers code samples in the
+  documentation.
+- The embedded XSD block additionally carries its own Microsoft copyright
+  notice with a permission to copy, display and distribute the document,
+  provided the notice is reproduced.
+
+**May the XSD ever be committed? No.** Redistribution appears permitted with
+attribution, but AGENTS.md section 4 forbids committing Microsoft-owned spec
+content, and nothing needs it in git: `crates/vsdx/tests/schema.rs` extracts
+the fenced block into a temp file at test time and never writes it anywhere
+else. `[MS-VSDX].pdf` is likewise never committed.
 
 ## Skipped
 
