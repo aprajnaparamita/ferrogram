@@ -466,21 +466,41 @@ fn interned_default(
     default_unit: &'static str,
     kind: &'static str,
 ) -> Option<&'static CellValue> {
-    type Key = (&'static str, &'static str, &'static str);
-    static CACHE: OnceLock<Mutex<HashMap<Key, &'static CellValue>>> = OnceLock::new();
+    static CACHE: OnceLock<DefaultCache> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let key = (text, default_unit, kind);
-    if let Ok(guard) = cache.lock()
-        && let Some(value) = guard.get(&key)
-    {
+    interned_in(cache, text, default_unit, kind)
+}
+
+/// The key of the default-value cache: the catalogue strings parsed.
+type DefaultKey = (&'static str, &'static str, &'static str);
+
+/// The default-value cache of [`interned_default`].
+type DefaultCache = Mutex<HashMap<DefaultKey, &'static CellValue>>;
+
+/// The insert-or-reuse half of [`interned_default`], over a caller-supplied
+/// cache so the lock handling is testable.
+///
+/// One critical section: a poisoned lock is recovered with `into_inner`, and
+/// the value is parsed, inserted or reused under the lock, so no parse is
+/// leaked per call and concurrent first calls share one value.
+fn interned_in(
+    cache: &DefaultCache,
+    text: &'static str,
+    default_unit: &'static str,
+    kind: &'static str,
+) -> Option<&'static CellValue> {
+    let key: DefaultKey = (text, default_unit, kind);
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(value) = guard.get(&key) {
         return Some(*value);
     }
     let parsed = parse_default_value(text, default_unit, kind)?;
-    let interned: &'static CellValue = Box::leak(Box::new(parsed));
-    match cache.lock() {
-        Ok(mut guard) => Some(*guard.entry(key).or_insert(interned)),
-        Err(_) => Some(interned),
-    }
+    let value = guard
+        .entry(key)
+        .or_insert_with(|| Box::leak(Box::new(parsed)));
+    Some(*value)
 }
 
 /// Parses a `default_value` string of the ShapeSheet table into a cached
@@ -1588,6 +1608,32 @@ mod tests {
         let second = interned_default("2 in", "Inches", "Number").expect("parses");
         assert!(std::ptr::eq(first, second));
         assert_eq!(interned_default("word", "Inches", "Number"), None);
+    }
+
+    #[test]
+    fn interned_defaults_reuse_one_value_per_key_on_a_poisoned_lock() {
+        // Regression (review finding 4): the old cache handed out a freshly
+        // leaked value per call after a poisoned lock. The panic below is the
+        // only way to poison one; its message is silenced.
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let cache: DefaultCache = Mutex::new(HashMap::new());
+        let first = interned_in(&cache, "2 in", "Inches", "Number").expect("parses");
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            panic!("poison the cache");
+        }));
+        std::panic::set_hook(previous_hook);
+        assert!(panicked.is_err());
+        let second = interned_in(&cache, "2 in", "Inches", "Number").expect("parses");
+        let third = interned_in(&cache, "2 in", "Inches", "Number").expect("parses");
+        assert!(std::ptr::eq(first, second));
+        assert!(std::ptr::eq(second, third));
+        // A key that does not parse leaks nothing and returns none.
+        assert_eq!(interned_in(&cache, "word", "Inches", "Number"), None);
+        assert_eq!(interned_in(&cache, "word", "Inches", "Number"), None);
     }
 
     // --- sheet and style helpers ---------------------------------------
