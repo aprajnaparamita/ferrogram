@@ -548,6 +548,42 @@ mod tests {
     }
 
     #[test]
+    fn a_huge_scale_is_exit_three_not_a_panic() {
+        let (dir, file) = sample_file();
+        let out = dir.join("page.png");
+        let mut command = render_command(&file, &out);
+        command.scale = 1.0e300;
+        let (result, _, stderr) = run_buffered(&Command::Render(command));
+        assert_eq!(result, Ok(exit::RENDER));
+        assert!(stderr.contains("larger than the allowed caps"), "{stderr}");
+        assert!(!out.exists(), "no output for a capped raster");
+    }
+
+    #[test]
+    fn a_huge_page_is_exit_three_not_a_panic() {
+        let dir = temp_dir();
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+        shape.sheet.cells.push(cell("PinX", CellValue::Number(1.0)));
+        let id = doc.add_shape(shape);
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.sheet
+            .cells
+            .push(cell("PageWidth", CellValue::Number(1.0e6)));
+        page.sheet
+            .cells
+            .push(cell("PageHeight", CellValue::Number(1.0e6)));
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let file = dir.join("huge.vsdx");
+        std::fs::write(&file, package_bytes(&doc)).expect("huge file");
+        let out = dir.join("page.png");
+        let (result, _, stderr) = run_buffered(&Command::Render(render_command(&file, &out)));
+        assert_eq!(result, Ok(exit::RENDER));
+        assert!(stderr.contains("larger than the allowed caps"), "{stderr}");
+    }
+
+    #[test]
     fn warnings_exit_zero_and_strict_exits_four() {
         let (dir, file) = sample_file();
         let out = dir.join("page.png");
