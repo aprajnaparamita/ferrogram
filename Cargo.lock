@@ -484,6 +484,7 @@ dependencies = [
  "ferrogram-model",
  "ferrogram-text",
  "ferrogram-vsdx",
+ "quick-xml",
  "serde",
  "serde-saphyr",
  "tiny-skia",
