@@ -14,8 +14,12 @@
 //!   [`BuildOptions::scale`] pixels per inch, 96 by default; ADR 0022).
 //! - **Transforms** compose exactly as ADR 0020: `translate(PinX, PinY) ·
 //!   rotate(Angle) · scale(FlipX, FlipY) · translate(-LocPinX, -LocPinY)`,
-//!   and a child multiplies its parent's composed transform
-//!   (`own.then(parent)`).
+//!   A node's transform is relative to its enclosing `Group` node (the
+//!   page for a top-level node), so the backends compose the chain: a
+//!   group carries its own transform, a group's own shape node is the
+//!   identity inside it, and a child carries its own transform. The
+//!   absolute `own.then(parent)` is used only where page coordinates are
+//!   needed (the `InfiniteLine` page clip).
 //! - **Geometry rows** map through [`Curve::to_cubics`](ferrogram_geom::Curve::to_cubics):
 //!   `MoveTo` starts a subpath (also mid-section: a stroking gap), the
 //!   `Rel*` rows scale by the shape's `Width`/`Height`, `NurbsTo` assembles
@@ -483,11 +487,19 @@ fn shape_node(
         let entity = ctx.doc.shape(id)?;
         (entity.children.clone(), !entity.children.is_empty())
     };
-    let transform = ctx.shape_transform(SheetRef::Shape(id)).then(parent);
-    let (path, fill, stroke, shadow, text) = shape_content(ctx, page, id, transform);
+    let local = ctx.shape_transform(SheetRef::Shape(id));
+    let absolute = local.then(parent);
+    let (path, fill, stroke, shadow, text) = shape_content(ctx, page, id, absolute);
 
     let mut node = None;
     if !path.is_empty() || text.is_some() {
+        // Relative to the enclosing group node (ADR 0020): the group's
+        // own shape sits inside the group, which already carries `local`.
+        let transform = if has_children {
+            Transform::identity()
+        } else {
+            local
+        };
         node = Some(Node::Shape(Box::new(Shape {
             transform,
             path,
@@ -506,7 +518,7 @@ fn shape_node(
         kids.push(node);
     }
     for child in children {
-        if let Some(node) = shape_node(ctx, page, child, transform, depth - 1, visited) {
+        if let Some(node) = shape_node(ctx, page, child, absolute, depth - 1, visited) {
             kids.push(node);
         }
     }
@@ -514,7 +526,7 @@ fn shape_node(
         return None;
     }
     Some(Node::Group(Group {
-        transform,
+        transform: local,
         clip: None,
         children: kids,
     }))
@@ -2789,8 +2801,20 @@ mod tests {
                 );
                 match group.children.first() {
                     Some(Node::Shape(shape)) => {
+                        // Relative to the group: (1, 2) inside it, and
+                        // (6, 2) on the page once a backend composes the
+                        // chain. Regression: the child used to carry the
+                        // page transform too, so backends applied the
+                        // group offset twice.
                         assert_eq!(
                             shape.transform.apply(Point::new(0.0, 0.0)),
+                            Point::new(1.0, 2.0)
+                        );
+                        assert_eq!(
+                            shape
+                                .transform
+                                .then(group.transform)
+                                .apply(Point::new(0.0, 0.0)),
                             Point::new(6.0, 2.0)
                         );
                     }

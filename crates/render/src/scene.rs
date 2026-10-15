@@ -229,7 +229,8 @@ pub struct TextNode {
 /// One shape node: a filled and stroked path with optional text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shape {
-    /// The shape-local to page transform (ADR 0020).
+    /// The shape-local to parent transform (ADR 0020): relative to the
+    /// enclosing [`Group`] node, or to the page for a top-level node.
     pub transform: Transform,
     /// The shape's path in shape-local coordinates.
     pub path: Path,
@@ -248,7 +249,9 @@ pub struct Shape {
 /// A group node: transformed children.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Group {
-    /// The group-local to page transform (ADR 0020).
+    /// The group-local to parent transform (ADR 0020): relative to the
+    /// enclosing [`Group`] node, or to the page for a top-level node.
+    /// Backends compose it with every child's transform.
     pub transform: Transform,
     /// The clip applied to the children.
     pub clip: Option<Clip>,
