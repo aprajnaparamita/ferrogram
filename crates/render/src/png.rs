@@ -16,8 +16,9 @@
 //! `render::styles`: `x = 0` is the tip at the path's vertex, `x = 1` is
 //! the tail `length` inches along the line into the shape, and `y = 0.5`
 //! is the line centre scaled by `width`. Patterns fill the tile box
-//! (background, then the tile path in the foreground) and repeat with the
-//! `tile_size` pitch. Shadows are an offset copy of the shape filled (and
+//! (background, then the tile mark: filled when `PatternPaint::filled`,
+//! stroked with `PatternPaint::tile_stroke_width` otherwise) and repeat
+//! with the `tile_size` pitch. Shadows are an offset copy of the shape filled (and
 //! stroked) in the shadow colour with its alpha; `Shadow::blur` is not
 //! applied (`tiny-skia` has no blur). A [`Clip`] on a group clips its
 //! children; a clip on a shape clips its fill, stroke, line ends and text,
@@ -35,13 +36,16 @@
 //!
 //! # Caps (AGENTS.md section 6)
 //!
-//! Input-derived sizes are capped: either raster dimension above 16 384
-//! pixels or a raster above 256 MiB returns [`Error::TooLarge`], as does a
-//! degenerate request (a zero, negative or non-finite pixel size). Scene
-//! nesting is followed to a depth of 128 (the builder's cap); deeper nodes
-//! are not drawn. Non-finite coordinates in paths, strokes, gradients,
-//! patterns, shadows, line ends and glyphs are skipped. Nothing here
-//! panics or allocates without bound.
+//! Input-derived sizes are capped: either raster dimension above
+//! [`crate::MAX_DEVICE_EXTENT`] pixels or a raster above 256 MiB returns
+//! [`Error::TooLarge`], as does a degenerate request (a zero, negative or
+//! non-finite pixel size). A `scale` that is not finite, not positive or
+//! above [`crate::MAX_DEVICE_EXTENT`] pixels per inch returns
+//! [`Error::InvalidOptions`] (the scale cap both backends share, ADR 0025
+//! amendment). Scene nesting is followed to a depth of 128 (the builder's
+//! cap); deeper nodes are not drawn. Non-finite coordinates in paths,
+//! strokes, gradients, patterns, shadows, line ends and glyphs are
+//! skipped. Nothing here panics or allocates without bound.
 //!
 //! # Determinism (ADR 0025)
 //!
@@ -63,9 +67,6 @@ use crate::scene::{
     Rgba, Scene, Shadow, Shape, Stroke, TextNode,
 };
 
-/// The largest raster dimension, in pixels.
-const MAX_DIMENSION: u32 = 16_384;
-
 /// The largest raster size in bytes (256 MiB at four bytes per pixel).
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -80,7 +81,9 @@ const EPS: f64 = 1.0e-12;
 /// Options for PNG output (ADR 0025).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PngOptions {
-    /// Pixels per inch (default 96).
+    /// Pixels per inch (default 96). Must be finite, positive and at
+    /// most [`crate::MAX_DEVICE_EXTENT`], or the render fails with
+    /// [`Error::InvalidOptions`].
     pub scale: f64,
     /// Whether to anti-alias (default true).
     pub antialias: bool,
@@ -105,29 +108,32 @@ impl Default for PngOptions {
 /// Rasterizes a scene to PNG bytes at `scale` pixels per inch (ADR 0025).
 ///
 /// The raster is `ceil(width * scale)` by `ceil(height * scale)` pixels.
-/// Returns [`Error::TooLarge`] when the raster exceeds the caps of
-/// AGENTS.md section 6 (or cannot form a raster at all) and
+/// Returns [`Error::InvalidOptions`] for a scale that is not finite, not
+/// positive or over the shared scale cap ([`crate::MAX_DEVICE_EXTENT`]
+/// pixels per inch), [`Error::TooLarge`] when the raster exceeds the caps
+/// of AGENTS.md section 6 (or cannot form a raster at all) and
 /// [`Error::Encode`] when the PNG encoder fails.
 pub fn render_png(scene: &Scene, options: &PngOptions) -> Result<Vec<u8>, Error> {
-    let (width, height) = raster_size(scene, options)?;
+    let scale = crate::checked_scale(options.scale)?;
+    let (width, height) = raster_size(scene, scale)?;
     let mut pixmap = Pixmap::new(width, height).ok_or(Error::TooLarge)?;
     if let Some(background) = scene.background {
         pixmap.fill(color(background));
     }
     let ctx = Ctx {
-        scale: options.scale,
+        scale,
         antialias: options.antialias,
         width,
         height,
     };
     // Page inches (y up) to image pixels (y down).
     let device = Transform {
-        m11: options.scale,
+        m11: scale,
         m12: 0.0,
         m21: 0.0,
-        m22: -options.scale,
+        m22: -scale,
         dx: 0.0,
-        dy: scene.height * options.scale,
+        dy: scene.height * scale,
     };
     let mut clips = Vec::new();
     draw_nodes(&mut pixmap, &ctx, &scene.nodes, device, &mut clips, 0);
@@ -150,9 +156,9 @@ struct Ctx {
 type ClipFrame = (SkPath, FillRule);
 
 /// The raster size in pixels, under the caps of AGENTS.md section 6.
-fn raster_size(scene: &Scene, options: &PngOptions) -> Result<(u32, u32), Error> {
-    let width = pixels(scene.width, options.scale)?;
-    let height = pixels(scene.height, options.scale)?;
+fn raster_size(scene: &Scene, scale: f64) -> Result<(u32, u32), Error> {
+    let width = pixels(scene.width, scale)?;
+    let height = pixels(scene.height, scale)?;
     let bytes = u64::from(width)
         .checked_mul(u64::from(height))
         .and_then(|px| px.checked_mul(4))
@@ -164,10 +170,11 @@ fn raster_size(scene: &Scene, options: &PngOptions) -> Result<(u32, u32), Error>
 }
 
 /// `ceil(inches * scale)` pixels, or [`Error::TooLarge`] when the size is
-/// degenerate (zero, negative or non-finite) or over the dimension cap.
+/// degenerate (zero, negative or non-finite) or over the device extent
+/// cap ([`crate::MAX_DEVICE_EXTENT`]).
 fn pixels(inches: f64, scale: f64) -> Result<u32, Error> {
     let px = inches * scale;
-    if !px.is_finite() || px <= 0.0 || px > f64::from(MAX_DIMENSION) {
+    if !px.is_finite() || px <= 0.0 || px > f64::from(crate::MAX_DEVICE_EXTENT) {
         return Err(Error::TooLarge);
     }
     Ok(px.ceil() as u32)
@@ -532,20 +539,38 @@ fn sk_stops(stops: &[GradientStop]) -> Vec<SkGradientStop> {
         .collect()
 }
 
-/// The tile of a pattern paint at device resolution.
+/// The tile of a pattern paint at device resolution: the background box,
+/// then the tile mark filled or stroked as [`PatternPaint::filled`]
+/// decides.
 fn tile_pixmap(pattern: &PatternPaint, ctx: &Ctx) -> Option<Pixmap> {
     let (tile_w, tile_h) = tile_pixels(pattern.tile_size, ctx)?;
     let mut pixmap = Pixmap::new(tile_w, tile_h)?;
     pixmap.fill(color(pattern.background));
     if let Some(path) = sk_path(&pattern.tile) {
-        // The tile lives in the unit box `(0, 0)` to `(1, 1)`.
         let mut paint = Paint {
             anti_alias: ctx.antialias,
             ..Paint::default()
         };
         paint.set_color(color(pattern.foreground));
-        let unit = SkTransform::from_scale(tile_w as f32, tile_h as f32);
-        pixmap.fill_path(&path, &paint, FillRule::Winding, unit, None);
+        // The tile path is in inches inside the `(0, 0)` to `tile_size`
+        // box; the pixmap is that box at device resolution, so the mark
+        // fills the tile exactly as it does in `svg.rs`.
+        let unit = SkTransform::from_scale(
+            (f64::from(tile_w) / pattern.tile_size.width) as f32,
+            (f64::from(tile_h) / pattern.tile_size.height) as f32,
+        );
+        if pattern.filled {
+            pixmap.fill_path(&path, &paint, FillRule::Winding, unit, None);
+        } else if pattern.tile_stroke_width.is_finite() && pattern.tile_stroke_width > 0.0 {
+            let stroke = SkStroke {
+                width: pattern.tile_stroke_width as f32,
+                miter_limit: 4.0,
+                line_cap: SkLineCap::Round,
+                line_join: SkLineJoin::Round,
+                dash: None,
+            };
+            pixmap.stroke_path(&path, &paint, &stroke, unit, None);
+        }
     }
     Some(pixmap)
 }
@@ -562,8 +587,8 @@ fn tile_pixels(size: ferrogram_geom::Size, ctx: &Ctx) -> Option<(u32, u32)> {
     if !w_px.is_finite() || !h_px.is_finite() || w_px < 1.0 || h_px < 1.0 {
         return None;
     }
-    let w_px = w_px.min(f64::from(MAX_DIMENSION)) as u32;
-    let h_px = h_px.min(f64::from(MAX_DIMENSION)) as u32;
+    let w_px = w_px.min(f64::from(crate::MAX_DEVICE_EXTENT)) as u32;
+    let h_px = h_px.min(f64::from(crate::MAX_DEVICE_EXTENT)) as u32;
     let bytes = u64::from(w_px) * u64::from(h_px) * 4;
     if bytes > MAX_BYTES {
         return None;
@@ -1155,6 +1180,8 @@ mod tests {
             background: Rgba::opaque(0, 0, 255),
             tile,
             tile_size: Size::new(1.0, 1.0),
+            filled: true,
+            tile_stroke_width: 0.05,
         });
         let node = shape(path_rect(0.0, 0.0, 2.0, 2.0), Some(paint));
         let scene = scene_of(2.0, 2.0, vec![node]);
@@ -1251,7 +1278,6 @@ mod tests {
             layout,
             color: Rgba::opaque(0, 0, 0),
             origin: Point::new(1.0, 1.5),
-            rotation,
         };
         scene_of(
             2.0,
@@ -1308,7 +1334,6 @@ mod tests {
             && let Some(text) = &mut shape.text
         {
             text.runs.push(crate::scene::TextRun {
-                size: 40.0,
                 underline: false,
                 strikethrough: false,
                 color: Rgba::opaque(255, 0, 0),
@@ -1398,20 +1423,27 @@ mod tests {
 
     #[test]
     fn degenerate_sizes_are_too_large() {
-        let mut options = PngOptions::new();
-        for (width, height, scale) in [
-            (0.0, 1.0, 96.0),
-            (-1.0, 1.0, 96.0),
-            (1.0, f64::NAN, 96.0),
-            (1.0, 1.0, 0.0),
-            (1.0, 1.0, -96.0),
-            (1.0, 1.0, f64::INFINITY),
-            (f64::INFINITY, 1.0, 96.0),
-            (1.0, 1.0, f64::NAN),
+        let options = PngOptions::new();
+        for (width, height) in [
+            (0.0, 1.0),
+            (-1.0, 1.0),
+            (1.0, f64::NAN),
+            (f64::INFINITY, 1.0),
         ] {
-            options.scale = scale;
             let scene = scene_of(width, height, Vec::new());
             assert_eq!(render_png(&scene, &options), Err(Error::TooLarge));
+        }
+    }
+
+    #[test]
+    fn a_bad_scale_is_invalid_options() {
+        // The scale cap both backends share (ADR 0025 amendment, P3-16):
+        // a bad option is `InvalidOptions`, not `TooLarge`.
+        let mut options = PngOptions::new();
+        for scale in [0.0, -96.0, f64::INFINITY, f64::NAN, 1.0e300, 20_000.0] {
+            options.scale = scale;
+            let scene = scene_of(1.0, 1.0, Vec::new());
+            assert_eq!(render_png(&scene, &options), Err(Error::InvalidOptions));
         }
     }
 
@@ -1463,6 +1495,8 @@ mod tests {
             background: Rgba::opaque(255, 255, 255),
             tile: Path::new(),
             tile_size: Size::new(nan, 0.0),
+            filled: false,
+            tile_stroke_width: nan,
         });
         let mut node = shape(path, Some(gradient));
         if let Node::Shape(shape) = &mut node {
@@ -1569,18 +1603,18 @@ mod tests {
     fn raster_size_is_checked_with_integer_math() {
         let mut options = PngOptions::new();
         assert_eq!(
-            raster_size(&scene_of(1.0, 1.0, Vec::new()), &options),
+            raster_size(&scene_of(1.0, 1.0, Vec::new()), options.scale),
             Ok((96, 96))
         );
         // The largest raster the byte cap allows at 16384 pixels wide is
         // 4096 pixels tall.
         options.scale = 16_384.0;
         assert_eq!(
-            raster_size(&scene_of(1.0, 0.25, Vec::new()), &options),
+            raster_size(&scene_of(1.0, 0.25, Vec::new()), options.scale),
             Ok((16_384, 4096))
         );
         assert_eq!(
-            raster_size(&scene_of(1.0, 0.26, Vec::new()), &options),
+            raster_size(&scene_of(1.0, 0.26, Vec::new()), options.scale),
             Err(Error::TooLarge)
         );
     }

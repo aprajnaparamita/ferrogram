@@ -24,6 +24,10 @@
 //! number, so [`CellReader::boolean`] accepts numbers and
 //! [`CellReader::list`] accepts one number as a one-element list. Those are
 //! coercions, not kind mismatches, and record no warning.
+//!
+//! A cached number that is not finite (`inf`, `nan`, `1e999`) is a kind
+//! mismatch (ADR 0021 amendment, P3-16): one [`WarningKind::KindMismatch`]
+//! warning and the hard default, never a silent `0`.
 
 use crate::cell::{CellValue, Color};
 use crate::defaults::{DocumentedDefault, documented_default};
@@ -42,6 +46,53 @@ pub enum SheetRef {
     Shape(ShapeId),
     /// A page sheet.
     Page(PageId),
+}
+
+/// One row of a repeated section, named for the `CellReader::row_*`
+/// readers (ADR 0019 decision 5).
+///
+/// A row is matched by `IX` when both sides have one and by position
+/// otherwise, in the sheet's own rows as in the master chain's. The text
+/// run markers (`cp`/`pp`) name rows by `IX` alone
+/// ([`RowTarget::by_ix`]); the row-count driven reads (gradient stops, tab
+/// stops) name rows by position ([`RowTarget::at`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RowTarget {
+    /// The row's position in the section, when the caller knows one.
+    pub position: Option<usize>,
+    /// The row's `IX`, when both sides have one.
+    pub ix: Option<i32>,
+}
+
+impl RowTarget {
+    /// The row at `position`; a row `IX` is taken from the sheet's own row
+    /// when it has one.
+    pub const fn at(position: usize) -> Self {
+        Self {
+            position: Some(position),
+            ix: None,
+        }
+    }
+
+    /// The row with `IX` `ix`, wherever it sits (a text run marker).
+    pub const fn by_ix(ix: i32) -> Self {
+        Self {
+            position: None,
+            ix: Some(ix),
+        }
+    }
+}
+
+/// The repeated-section identity of one [`RowTarget`]: the first section
+/// with that name (ADR 0019 decision 5), the row as named.
+fn repeated<'a>(section: &'a str, row: RowTarget) -> crate::lookup::RepeatedCell<'a> {
+    crate::lookup::RepeatedCell {
+        section,
+        section_ix: None,
+        section_pos: Some(0),
+        row: row.position,
+        row_ix: row.ix,
+    }
 }
 
 /// Why [`CellReader`] substituted a default (ADR 0021).
@@ -144,39 +195,31 @@ impl<'d> CellReader<'d> {
 
     /// Reads a number from one row of a repeated section (ADR 0019).
     ///
-    /// `row` is the row's position in the section; `section` names the
-    /// section (the first section with that name when a sheet has several).
-    /// The value policy is the one of [`CellReader::number`].
+    /// `row` names the row by position, by `IX` or by both
+    /// ([`RowTarget`]); `section` names the section (the first section with
+    /// that name when a sheet has several). The value policy is the one of
+    /// [`CellReader::number`].
     pub fn row_number(
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         cell: &CellName,
     ) -> Result<f64, Error> {
-        self.row_number_in(
-            sheet,
-            &crate::lookup::RepeatedCell {
-                section,
-                section_ix: None,
-                section_pos: Some(0),
-                row: Some(row),
-                row_ix: None,
-            },
-            cell,
-        )
+        self.row_number_in(sheet, &repeated(section, row), cell)
     }
 
     /// Reads a string from one row of a repeated section (ADR 0019).
     ///
-    /// `row` is the row's position in the section; `section` names the
-    /// section (the first section with that name when a sheet has several).
-    /// The value policy is the one of [`CellReader::text`].
+    /// `row` names the row by position, by `IX` or by both
+    /// ([`RowTarget`]); `section` names the section (the first section with
+    /// that name when a sheet has several). The value policy is the one of
+    /// [`CellReader::text`].
     pub fn row_text(
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         cell: &CellName,
     ) -> Result<String, Error> {
         let resolved = self.row_resolved(sheet, section, row, cell)?;
@@ -185,14 +228,15 @@ impl<'d> CellReader<'d> {
 
     /// Reads a boolean from one row of a repeated section (ADR 0019).
     ///
-    /// `row` is the row's position in the section; `section` names the
-    /// section (the first section with that name when a sheet has several).
-    /// The value policy is the one of [`CellReader::boolean`].
+    /// `row` names the row by position, by `IX` or by both
+    /// ([`RowTarget`]); `section` names the section (the first section with
+    /// that name when a sheet has several). The value policy is the one of
+    /// [`CellReader::boolean`].
     pub fn row_boolean(
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         cell: &CellName,
     ) -> Result<bool, Error> {
         let resolved = self.row_resolved(sheet, section, row, cell)?;
@@ -201,15 +245,16 @@ impl<'d> CellReader<'d> {
 
     /// Reads a color from one row of a repeated section (ADR 0019).
     ///
-    /// `row` is the row's position in the section; `section` names the
-    /// section (the first section with that name when a sheet has several).
-    /// The value policy is the one of [`CellReader::color`]: palette and
-    /// document-table indices resolve and `Themed` goes through the theme.
+    /// `row` names the row by position, by `IX` or by both
+    /// ([`RowTarget`]); `section` names the section (the first section with
+    /// that name when a sheet has several). The value policy is the one of
+    /// [`CellReader::color`]: palette and document-table indices resolve
+    /// and `Themed` goes through the theme.
     pub fn row_color(
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         cell: &CellName,
     ) -> Result<Color, Error> {
         let resolved = self.row_resolved(sheet, section, row, cell)?;
@@ -217,23 +262,17 @@ impl<'d> CellReader<'d> {
     }
 
     /// The resolved cached value of one row cell (ADR 0019 decision 5): the
-    /// section named by `section`, the row at position `row`.
+    /// section named by `section`, the row named by `row` ([`RowTarget`]).
     fn row_resolved(
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         cell: &CellName,
     ) -> Result<crate::lookup::Resolved<'d>, Error> {
         self.doc.resolve_repeated_with_table(
             sheet,
-            &crate::lookup::RepeatedCell {
-                section,
-                section_ix: None,
-                section_pos: Some(0),
-                row: Some(row),
-                row_ix: None,
-            },
+            &repeated(section, row),
             cell,
             crate::generated::CELLS,
         )
@@ -258,7 +297,11 @@ impl<'d> CellReader<'d> {
     /// The number policy (ADR 0021) for an already-resolved cell.
     ///
     /// The geometry reader resolves row cells itself (it knows the section
-    /// identity) and applies the policy through this method.
+    /// identity) and applies the policy through this method. A cached
+    /// number that is not finite (`inf`, `nan`, `1e999`) is a kind
+    /// mismatch: it substitutes the hard default with one
+    /// [`WarningKind::KindMismatch`] warning (ADR 0021 amendment), never
+    /// silently.
     pub(crate) fn number_from(
         &mut self,
         sheet: SheetRef,
@@ -269,7 +312,14 @@ impl<'d> CellReader<'d> {
         let value = resolved.value.cloned();
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_number(sheet, cell),
-            Some(CellValue::Number(number)) if source != ValueSource::HardDefault => number,
+            Some(CellValue::Number(number))
+                if source != ValueSource::HardDefault && number.is_finite() =>
+            {
+                number
+            }
+            Some(CellValue::Number(_)) if source != ValueSource::HardDefault => {
+                self.warn_number(sheet, cell, WarningKind::KindMismatch)
+            }
             Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
                 self.warn_number(sheet, cell, WarningKind::ErrorValue(error))
             }
@@ -309,13 +359,17 @@ impl<'d> CellReader<'d> {
     }
 
     /// The number another cell resolves to for a documented formula
-    /// default: its cached value when it has one, `0` otherwise (the
-    /// related cell's own read reports its own warnings).
+    /// default: its finite cached value when it has one, `0` otherwise
+    /// (the related cell's own read reports its own warnings). A
+    /// non-finite cached value is not passed on: the substitution policy
+    /// of [`CellReader::number_from`] rejects it with one warning.
     fn related_number(&self, sheet: SheetRef, name: &str) -> f64 {
         let resolved = self.resolved(sheet, &CellName::new(name)).ok();
         resolved
             .and_then(|resolved| match resolved.value {
-                Some(CellValue::Number(value)) if resolved.source != ValueSource::HardDefault => {
+                Some(CellValue::Number(value))
+                    if resolved.source != ValueSource::HardDefault && value.is_finite() =>
+                {
                     Some(*value)
                 }
                 _ => None,
@@ -341,7 +395,15 @@ impl<'d> CellReader<'d> {
         let value = resolved.value.cloned();
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_number(sheet, cell),
-            Some(CellValue::Number(number)) if source != ValueSource::HardDefault => number,
+            Some(CellValue::Number(number))
+                if source != ValueSource::HardDefault && number.is_finite() =>
+            {
+                number
+            }
+            Some(CellValue::Number(_)) if source != ValueSource::HardDefault => {
+                self.warn_number(sheet, cell, WarningKind::KindMismatch);
+                default
+            }
             Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
                 self.warn_number(sheet, cell, WarningKind::ErrorValue(error));
                 default
@@ -1120,6 +1182,38 @@ mod tests {
     }
 
     #[test]
+    fn a_non_finite_cached_number_is_one_kind_mismatch() {
+        // `V='inf'` parses to a non-finite number (`f64::from_str`);
+        // ADR 0021 forbids substituting it silently.
+        for bad in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            let (doc, shape) = document_with_cells(vec![cell("PinX", CellValue::Number(bad))]);
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(SheetRef::Shape(shape), &CellName::from_static("PinX")),
+                Ok(0.0)
+            );
+            assert_eq!(reader.warnings().len(), 1);
+            let warning = &reader.warnings()[0];
+            assert_eq!(warning.kind, WarningKind::KindMismatch);
+            assert_eq!(warning.substituted, CellValue::Number(0.0));
+        }
+    }
+
+    #[test]
+    fn a_non_finite_optional_row_cell_keeps_the_row_default() {
+        let (doc, shape) = document_with_cells(vec![cell("C", CellValue::Number(f64::INFINITY))]);
+        let name = CellName::from_static("C");
+        let resolved = doc.resolve(shape, &name).expect("resolves");
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number_from_or(SheetRef::Shape(shape), &name, resolved, 1.0),
+            1.0
+        );
+        assert_eq!(reader.warnings().len(), 1);
+        assert_eq!(reader.warnings()[0].kind, WarningKind::KindMismatch);
+    }
+
+    #[test]
     fn a_kind_mismatch_is_reported_per_requested_kind() {
         let (doc, shape) = document_with_cells(vec![cell("PinX", CellValue::Str("hello".into()))]);
         let mut reader = CellReader::new(&doc);
@@ -1161,7 +1255,7 @@ mod tests {
             reader.row_number(
                 SheetRef::Shape(ShapeId { index: 3 }),
                 "Geometry",
-                0,
+                RowTarget::at(0),
                 &CellName::from_static("X")
             ),
             Err(Error::UnknownShape(ShapeId { index: 3 }))
@@ -1520,18 +1614,33 @@ mod tests {
         let mut reader = CellReader::new(&doc);
         let sheet = SheetRef::Shape(shape);
         assert_eq!(
-            reader.row_number(sheet, "Geometry", 0, &CellName::from_static("X")),
+            reader.row_number(
+                sheet,
+                "Geometry",
+                RowTarget::at(0),
+                &CellName::from_static("X")
+            ),
             Ok(1.25)
         );
         assert!(reader.warnings().is_empty());
         assert_eq!(
-            reader.row_number(sheet, "Geometry", 1, &CellName::from_static("X")),
+            reader.row_number(
+                sheet,
+                "Geometry",
+                RowTarget::at(1),
+                &CellName::from_static("X")
+            ),
             Ok(0.0)
         );
         assert_eq!(reader.warnings()[0].kind, WarningKind::Missing);
         // A row past the end substitutes too.
         assert_eq!(
-            reader.row_number(sheet, "Geometry", 9, &CellName::from_static("X")),
+            reader.row_number(
+                sheet,
+                "Geometry",
+                RowTarget::at(9),
+                &CellName::from_static("X")
+            ),
             Ok(0.0)
         );
     }
@@ -1562,27 +1671,84 @@ mod tests {
         let strike = CellName::from_static("Strikethru");
         let color = CellName::from_static("Color");
         assert_eq!(
-            reader.row_text(sheet, "Character", 0, &font),
+            reader.row_text(sheet, "Character", RowTarget::at(0), &font),
             Ok("Calibri".to_owned())
         );
-        assert_eq!(reader.row_boolean(sheet, "Character", 0, &strike), Ok(true));
         assert_eq!(
-            reader.row_color(sheet, "Character", 0, &color),
+            reader.row_boolean(sheet, "Character", RowTarget::at(0), &strike),
+            Ok(true)
+        );
+        assert_eq!(
+            reader.row_color(sheet, "Character", RowTarget::at(0), &color),
             Ok(Color::new(255, 0, 0))
         );
         assert!(reader.warnings().is_empty());
         // A bad kind substitutes with one warning, like the sheet readers.
         assert_eq!(
-            reader.row_text(sheet, "Character", 1, &font),
+            reader.row_text(sheet, "Character", RowTarget::at(1), &font),
             Ok(String::new())
         );
         assert_eq!(reader.warnings()[0].kind, WarningKind::KindMismatch);
         // A row past the end substitutes too.
         assert_eq!(
-            reader.row_boolean(sheet, "Character", 9, &strike),
+            reader.row_boolean(sheet, "Character", RowTarget::at(9), &strike),
             Ok(false)
         );
         assert_eq!(reader.warnings()[1].kind, WarningKind::Missing);
+    }
+
+    #[test]
+    fn a_row_read_by_ix_matches_the_master_row_by_ix() {
+        // A master whose `Character` rows are `IX` 0 and 5, and an
+        // instance without a `Character` section: a run marked `IX` 5
+        // reads the master's row 5 (matched by `IX`, never by position).
+        let (mut doc, shape) = document_with_shape();
+        let mid = doc.masters.len();
+        let mut master = crate::master::Master::new(crate::id::MasterId { index: mid as u32 }, 1);
+        let content = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        {
+            let content = doc.shape_mut(content).expect("content exists");
+            let mut section =
+                crate::section::Section::new(crate::name::SectionName::from_static("Character"));
+            let mut row_zero = crate::section::Row::new();
+            row_zero.ix = Some(0);
+            row_zero
+                .cells
+                .push(cell("Font", CellValue::Str("Zero".into())));
+            let mut row_five = crate::section::Row::new();
+            row_five.ix = Some(5);
+            row_five
+                .cells
+                .push(cell("Font", CellValue::Str("Five".into())));
+            section.rows.push(row_zero);
+            section.rows.push(row_five);
+            content.sheet.sections.push(section);
+        }
+        master.shapes = vec![content];
+        doc.masters.push(master);
+        doc.shape_mut(shape).expect("shape exists").master =
+            Some(crate::id::MasterId { index: mid as u32 });
+
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        let font = CellName::from_static("Font");
+        assert_eq!(
+            reader.row_text(sheet, "Character", RowTarget::by_ix(5), &font),
+            Ok("Five".to_owned())
+        );
+        assert_eq!(
+            reader.row_text(sheet, "Character", RowTarget::by_ix(0), &font),
+            Ok("Zero".to_owned())
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+        // A marker `IX` no row has substitutes the defaults with one
+        // warning.
+        assert_eq!(
+            reader.row_text(sheet, "Character", RowTarget::by_ix(9), &font),
+            Ok(String::new())
+        );
+        assert_eq!(reader.warnings().len(), 1);
+        assert_eq!(reader.warnings()[0].kind, WarningKind::Missing);
     }
 
     #[test]
@@ -1592,15 +1758,15 @@ mod tests {
         let sheet = SheetRef::Shape(ShapeId { index: 3 });
         let cell = CellName::from_static("Font");
         assert_eq!(
-            reader.row_text(sheet, "Character", 0, &cell),
+            reader.row_text(sheet, "Character", RowTarget::at(0), &cell),
             Err(Error::UnknownShape(ShapeId { index: 3 }))
         );
         assert_eq!(
-            reader.row_boolean(sheet, "Character", 0, &cell),
+            reader.row_boolean(sheet, "Character", RowTarget::at(0), &cell),
             Err(Error::UnknownShape(ShapeId { index: 3 }))
         );
         assert_eq!(
-            reader.row_color(sheet, "Character", 0, &cell),
+            reader.row_color(sheet, "Character", RowTarget::at(0), &cell),
             Err(Error::UnknownShape(ShapeId { index: 3 }))
         );
     }
@@ -1982,6 +2148,19 @@ mod tests {
             Ok(0.0)
         );
         assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn a_non_finite_related_value_does_not_leak_into_a_documented_default() {
+        // `LocPinX = Width*0.5`: a non-finite cached `Width` is not
+        // passed on (the number policy rejects it), the default is 0.
+        let (doc, shape) =
+            document_with_cells(vec![cell("Width", CellValue::Number(f64::INFINITY))]);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LocPinX")),
+            Ok(0.0)
+        );
     }
 
     #[test]

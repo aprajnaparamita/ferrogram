@@ -44,7 +44,8 @@
 #   draws nothing (index 0).
 # - fill_patterns: `kind: tile` repeats `tile` (our own path in the unit
 #   tile box (0,0)-(1,1)) with pitch `spacing`, a multiple of the line
-#   width. `filled: true` fills the tile shapes; `false` strokes them.
+#   width. `filled: true` fills the tile shapes; `false` strokes them with
+#   `tile_stroke_width`, a fraction of the tile box side (default 0.05).
 #   `invert: true` marks tiles drawn in the background colour over a
 #   foreground-coloured box (the visBackDots family); the builder swaps the
 #   two colours for those.

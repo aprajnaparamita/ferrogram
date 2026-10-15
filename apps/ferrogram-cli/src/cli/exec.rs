@@ -549,13 +549,19 @@ mod tests {
 
     #[test]
     fn a_huge_scale_is_exit_three_not_a_panic() {
+        // A bad `--scale` is `InvalidOptions` (ADR 0025 amendment): still
+        // exit 3 (ADR 0026), but reported as a bad option, not as a
+        // document that is too big.
         let (dir, file) = sample_file();
         let out = dir.join("page.png");
         let mut command = render_command(&file, &out);
         command.scale = 1.0e300;
         let (result, _, stderr) = run_buffered(&Command::Render(command));
         assert_eq!(result, Ok(exit::RENDER));
-        assert!(stderr.contains("larger than the allowed caps"), "{stderr}");
+        assert!(
+            stderr.contains("the render options are not valid"),
+            "{stderr}"
+        );
         assert!(!out.exists(), "no output for a capped raster");
     }
 
