@@ -172,3 +172,58 @@ source contradicts it, one constant changes.
 - **Put the palette in `ui-spec/visual-styles.yaml` (ADR 0023).** Rejected:
   color resolution is model semantics (color cells resolve before the
   renderer sees them), and `model` must not depend on a UI data file.
+
+## Amendments
+
+### Amended 2026-10-15, P3-15: the geometry row union
+
+`Document::shape_geometry` returns **the row union** of a shape and its
+master chain, not "the shape's own rows whenever it has any". The corpus
+shows why: instances often carry only some rows of a `Geometry` section
+(`bgcolor.vsdx`'s `Rectangle` shapes carry two `LineTo` rows at `IX` 2..3
+with every cell `F='Inh'` and only the `X` cell at that; `testfile1.vsdx`
+shapes 8, 11 and 14 carry `IX` 2..4 and 1, 3, 4), while the master holds
+the `MoveTo` and the closing rows. The old rule rendered those as open
+polylines in the master's row positions, not as the master's closed paths.
+
+The rule, per `Geometry` section (matched by its `IX`, else by its position
+among the same-named sections):
+
+1. The rows of the **furthest** rung of the master chain form the base, in
+   file order. Each nearer rung — the shape's own section last — applies
+   its rows on top.
+2. A row **overrides** the merged row it matches: by `IX` when both sides
+   have one, else by position. A row whose `IX` differs from the matched
+   row's never matches by position (both sides have an `IX` and they
+   disagree); the positional fallback applies only to a row without `IX`.
+3. A row **overrides per cell**: the merged row's cells resolve through
+   `Document::resolve_row_cell` as before — the nearer rung's cell wins
+   when it defines (a formula that is not `Inh`), otherwise the further
+   rung's cell, otherwise the defaults. A cell the nearer row omits is
+   inherited like an `Inh` cell.
+4. A row with `Del` (`Row/@Del`, spelled `1` or `true`) **removes** the
+   merged row it matches; an unmatched `Del` row removes nothing, and a
+   `Del` row never enters the union on its own.
+5. An **unmatched** row is inserted in `IX` order (before the first merged
+   row with a greater `IX`), or at its own position when it has no `IX`.
+   The corpus never exercises this (every instance row matches a master
+   row); it is our deterministic rule for added rows.
+6. The row's `T` comes from the nearest rung that declares one.
+
+The section-level cells (`NoFill`, `NoLine`, `NoShow`, `NoSnap`,
+`NoQuickDrag`) merge the same way, per cell, through the lookup's
+section-level rung (already row-free).
+
+Divergences and limits:
+
+- A deleted row removes the merged row, but a *re-added* row of a nearer
+  rung may still take cells from a further rung's row of the same `IX`
+  (the lookup skips nothing; only the union drops rows). Unobserved in the
+  corpus; revisit if a file needs it.
+- A merged row without `IX` carries no identity for the cell lookup: the
+  lookup falls back to the positional row of each rung. Every corpus
+  `Geometry` row has an `IX`.
+- Inherited row cells are the master's **cached** values, in the master's
+  coordinate space: a resized instance whose own cells are all `Inh` draws
+  the master's geometry at master coordinates (the instance's snapshots are
+  not used, ADR 0013). Formula evaluation (Phase 6) fixes this.

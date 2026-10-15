@@ -145,6 +145,34 @@ impl Document {
         None
     }
 
+    /// The page a shape is on, or `None` when the shape is unreachable
+    /// from any page (a malformed file).
+    ///
+    /// The lookup walks up the parent chain to the shape's root and finds
+    /// the page that lists that root among its top-level shapes; a cyclic
+    /// parent chain returns `None`, never loops.
+    pub fn page_of(&self, shape: ShapeId) -> Option<PageId> {
+        let mut root = shape;
+        let mut seen = Vec::new();
+        loop {
+            if seen.contains(&root) {
+                return None;
+            }
+            seen.push(root);
+            match self.shape(root)?.parent {
+                Some(parent) => root = parent,
+                None => break,
+            }
+        }
+        self.pages.iter().enumerate().find_map(|(index, page)| {
+            if page.shapes.contains(&root) {
+                u32::try_from(index).ok().map(|index| PageId { index })
+            } else {
+                None
+            }
+        })
+    }
+
     /// Finds a master by `NameU`, or `None`.
     ///
     /// The first master with this `NameU` wins; `Name` is not searched. The
@@ -331,5 +359,39 @@ mod tests {
             Some(StyleId { index: 1 })
         );
         assert_eq!(d.style_by_visio_id(4), None);
+    }
+
+    #[test]
+    fn page_of_walks_up_to_the_page_of_the_root_shape() {
+        let mut d = Document::new();
+        let root = d.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        let child = d.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        if let Some(shape) = d.shape_mut(root) {
+            shape.children.push(child);
+        }
+        if let Some(shape) = d.shape_mut(child) {
+            shape.parent = Some(root);
+        }
+        let mut page = crate::page::Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(root);
+        d.pages.push(page);
+        assert_eq!(d.page_of(root), Some(PageId { index: 0 }));
+        assert_eq!(d.page_of(child), Some(PageId { index: 0 }));
+    }
+
+    #[test]
+    fn page_of_reports_nothing_for_unreachable_and_cyclic_shapes() {
+        let mut d = Document::new();
+        let lonely = d.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        assert_eq!(d.page_of(lonely), None);
+        let first = d.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        let second = d.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+        if let Some(shape) = d.shape_mut(first) {
+            shape.parent = Some(second);
+        }
+        if let Some(shape) = d.shape_mut(second) {
+            shape.parent = Some(first);
+        }
+        assert_eq!(d.page_of(first), None);
     }
 }
