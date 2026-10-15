@@ -25,9 +25,9 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | merged (approve with fixes: 0 blocker, 4 major, 8 minor) | agent/P3-12 |
 | [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | merged (pass: 0 blocker, 5 major, 10 minor; ratchet proposal in report) | agent/P3-13 |
 | [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | merged (pass: 3 minor; F4 crash fixed by the master) | agent/P3-14 |
-| [P3-16](tasks/P3-16.md) | implementer | P3-12..P3-14 | E | ready | — |
+| [P3-16](tasks/P3-16.md) | implementer | P3-12..P3-14 | E | merged (also fixed PNG tile marks drawn pitch times too small) | agent/P3-16 |
 | [P3-18](tasks/P3-18.md) | implementer | P3-12, P3-14 | E | merged (docs only; knot rule re-sourced) | agent/P3-18 |
-| [P3-17](tasks/P3-17.md) | test-engineer | P3-16 | — | waits for P3-16 | — |
+| [P3-17](tasks/P3-17.md) | test-engineer | P3-16 | — | ready | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -128,3 +128,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-11 (open): `text::layout` can emit non-finite glyph positions for extreme finite input (`line_spacing: f64::MAX`); the backends sanitize, so it is hardening for Phase 6. `render_svg` has no upper bound on `scale` (PNG caps the raster); P3-12 decides whether both backends share one cap. Report: `docs/reviews/phase-3-tests.md`.
 - P3-14 (fixed on main): `render_png` panicked in tiny-skia on huge finite coordinates under a rotation (F4). Fills, strokes and clips whose device-space bounds, widened by the stroke, pass +/-2^22 px are now skipped (`fits_device` in `png.rs`), with a regression test. Clean-room minors F1-F3 go to P3-18; the knot rule rests on [MS-VSDX] and the `DrawNURBS` remarks, not libvisio.
 - P3-18 (open): the black-box check of the knot rule stays open (no corpus file has `NURBSTo` or spline rows); a periodic spline (first knot repeated fewer than `degree + 1` times) is read as clamped, a documented divergence.
+- P3-16 (open): `text::Layout` `MissingFont`/`MissingGlyph` warnings do not reach `Scene::warnings` or the CLI; boolean and list coercions still accept non-finite values (Phase 6); `Character`/`Paragraph`/`Tabs` rows without an `IX` no longer match run markers by position (every corpus row has an `IX`); un-drawable glyphs are skipped by documented rule, not warned.
