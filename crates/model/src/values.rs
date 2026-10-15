@@ -920,11 +920,9 @@ fn theme_slot(index: u32) -> Option<ThemeSlot> {
 /// The fixed Visio palette (indices 0..23), our own transcription of the
 /// default colour table (ADR 0019 decision 6).
 ///
-/// Indices and colour names come from the `VisDefaultColors` enumeration on
-/// Microsoft Learn (source 9 of `docs/sources.md`); the RGB values are the
-/// conventional values of those names and are not yet verified against
-/// Visio's own colour dialog (recorded in `docs/sources.md` and the P3-02
-/// Result).
+/// Colour names come from the `VisDefaultColors` enumeration on Microsoft
+/// Learn (source 13 of `docs/sources.md`); the RGB values are the
+/// [MS-VSDX] section 2.2.7.6 "Color Table" (source 3).
 ///
 /// Returns `None` for an index the table does not hold (24 and up resolve
 /// through `Document::color_table`).
@@ -945,11 +943,11 @@ pub fn palette(index: u32) -> Option<Color> {
         (11, "Dark yellow", Color::new(128, 128, 0)),
         (12, "Purple", Color::new(128, 0, 128)),
         (13, "Dark cyan", Color::new(0, 128, 128)),
-        (14, "Gray", Color::new(128, 128, 128)),
+        (14, "Gray", Color::new(192, 192, 192)),
         (15, "10% gray", Color::new(230, 230, 230)),
-        (16, "20% gray", Color::new(204, 204, 204)),
+        (16, "20% gray", Color::new(205, 205, 205)),
         (17, "30% gray", Color::new(179, 179, 179)),
-        (18, "40% gray", Color::new(153, 153, 153)),
+        (18, "40% gray", Color::new(154, 154, 154)),
         (19, "50% gray", Color::new(128, 128, 128)),
         (20, "60% gray", Color::new(102, 102, 102)),
         (21, "70% gray", Color::new(77, 77, 77)),
@@ -1614,7 +1612,11 @@ mod tests {
         assert_eq!(palette(0), Some(Color::new(0, 0, 0)));
         assert_eq!(palette(1), Some(Color::new(255, 255, 255)));
         assert_eq!(palette(2), Some(Color::new(255, 0, 0)));
-        assert_eq!(palette(14), Some(Color::new(128, 128, 128)));
+        // [MS-VSDX] 2.2.7.6: 14 is #C0C0C0, 16 is #CDCDCD, 18 is #9A9A9A
+        // (not the conventional 128 / 204 / 153).
+        assert_eq!(palette(14), Some(Color::new(192, 192, 192)));
+        assert_eq!(palette(16), Some(Color::new(205, 205, 205)));
+        assert_eq!(palette(18), Some(Color::new(154, 154, 154)));
         assert_eq!(palette(19), Some(Color::new(128, 128, 128)));
         assert_eq!(palette(23), Some(Color::new(26, 26, 26)));
         for index in 0..=23 {
