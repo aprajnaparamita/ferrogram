@@ -256,10 +256,8 @@ fn match_attributes(text: &str, name: &str) -> Vec<String> {
         let after = start + needle.len();
         let tail = rest.get(after..).unwrap_or("");
         let end = tail.find('"').unwrap_or(tail.len());
-        if boundary {
-            if let Some(value) = tail.get(..end) {
-                found.push(value.to_owned());
-            }
+        if boundary && let Some(value) = tail.get(..end) {
+            found.push(value.to_owned());
         }
         rest = rest.get(after + end + 1..).unwrap_or("");
     }
@@ -471,7 +469,9 @@ fn walk_nodes(nodes: &[Node], parent: Transform, height: f64, summary: &mut Scen
     for node in nodes {
         match node {
             Node::Group(Group {
-                transform, children, ..
+                transform,
+                children,
+                ..
             }) => {
                 summary.groups = true;
                 walk_nodes(children, parent.then(*transform), height, summary);
@@ -492,7 +492,12 @@ fn walk_nodes(nodes: &[Node], parent: Transform, height: f64, summary: &mut Scen
                 if shape.text.is_some() {
                     summary.text = true;
                 }
-                add_shape_bounds(shape, parent.then(shape.transform), height, &mut summary.bounds);
+                add_shape_bounds(
+                    shape,
+                    parent.then(shape.transform),
+                    height,
+                    &mut summary.bounds,
+                );
             }
             _ => {}
         }
@@ -534,9 +539,13 @@ fn sample_segment(current: Point, segment: &Segment) -> Vec<Point> {
                 let t = f64::from(step) / 16.0;
                 let u = 1.0 - t;
                 Point::new(
-                    u * u * u * current.x + 3.0 * u * u * t * ctrl1.x + 3.0 * u * t * t * ctrl2.x
+                    u * u * u * current.x
+                        + 3.0 * u * u * t * ctrl1.x
+                        + 3.0 * u * t * t * ctrl2.x
                         + t * t * t * to.x,
-                    u * u * u * current.y + 3.0 * u * u * t * ctrl1.y + 3.0 * u * t * t * ctrl2.y
+                    u * u * u * current.y
+                        + 3.0 * u * u * t * ctrl1.y
+                        + 3.0 * u * t * t * ctrl2.y
                         + t * t * t * to.y,
                 )
             })
@@ -648,7 +657,9 @@ fn skip_reason(opage: &OraclePage, summary: &SceneSummary) -> Option<String> {
         return Some("the oracle reports an empty page".to_owned());
     }
     if summary.text {
-        return Some("our scene has text; the oracle draws text as extra paths and groups".to_owned());
+        return Some(
+            "our scene has text; the oracle draws text as extra paths and groups".to_owned(),
+        );
     }
     if summary.groups {
         return Some("our scene has group nodes; group shapes flatten differently".to_owned());
@@ -685,7 +696,8 @@ mod tests {
 
     #[test]
     fn svg_blocks_split_on_the_svg_elements() {
-        let text = "<body><svg:svg width=\"1in\">a</svg:svg><svg:svg width=\"2in\">b</svg:svg></body>";
+        let text =
+            "<body><svg:svg width=\"1in\">a</svg:svg><svg:svg width=\"2in\">b</svg:svg></body>";
         let blocks = svg_blocks(text);
         assert_eq!(blocks.len(), 2);
         assert!(blocks[0].contains("1in"));
@@ -694,7 +706,8 @@ mod tests {
 
     #[test]
     fn page_size_and_scale_come_from_the_svg_element() {
-        let block = "<svg:svg width=\"11.6929in\" height=\"8.2677in\" viewBox=\"0 0 841.8898 595.2756\">";
+        let block =
+            "<svg:svg width=\"11.6929in\" height=\"8.2677in\" viewBox=\"0 0 841.8898 595.2756\">";
         assert_eq!(page_size(block), (11.6929, 8.2677));
         assert!((units_per_inch(block) - 72.0).abs() < 1e-3);
     }
@@ -703,10 +716,7 @@ mod tests {
     fn path_points_read_moves_lines_and_closes() {
         let d = "M 72.0,144.0\nL 216.0,144.0\nZ";
         let points = path_points(d, 72.0).expect("parses");
-        assert_eq!(
-            points,
-            vec![Point::new(1.0, 2.0), Point::new(3.0, 2.0)]
-        );
+        assert_eq!(points, vec![Point::new(1.0, 2.0), Point::new(3.0, 2.0)]);
     }
 
     #[test]
@@ -787,10 +797,7 @@ mod tests {
             true,
         );
         assert_eq!(points.len(), 33);
-        let extreme = points
-            .iter()
-            .map(|p| p.y.abs())
-            .fold(0.0f64, f64::max);
+        let extreme = points.iter().map(|p| p.y.abs()).fold(0.0f64, f64::max);
         assert!(extreme > 0.99, "arc never reaches the apex: {extreme}");
     }
 
