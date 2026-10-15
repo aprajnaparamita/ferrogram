@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{CellValue, Color, Document, PageId, ShapeId, TextPart};
+use ferrogram_model::{CellLookup, CellValue, Color, Document, PageId, ShapeId, TextPart};
 use ferrogram_vsdx::{Limits, read_document};
 
 /// The corpus directory with the real `.vsdx` packages.
@@ -212,4 +212,101 @@ fn themed_cached_values_stay_strings() {
         shape_with_cell(&document, "LineColor", &themed).is_some(),
         "no shape caches the Themed marker"
     );
+}
+
+#[test]
+fn sparse_geometry_rows_merge_with_the_master_rows() {
+    // Acceptance (P3-15, fix 1): bgcolor.vsdx's page shape `Rectangle`
+    // (Visio `ID` 1) carries only two `LineTo` rows (`IX` 2..3, every cell
+    // `F='Inh'`, and only the `X` cell at that) while its master holds
+    // `MoveTo` + the closing rows at `IX` 1..5. The union is the master's
+    // closed rectangle, not the instance's open polyline (ADR 0019
+    // amendment).
+    let doc = corpus_document!("bgcolor.vsdx");
+    let shape = doc
+        .shape_by_visio_id(PageId { index: 0 }, 1)
+        .expect("shape `Rectangle`");
+    let geometry = doc.shape_geometry(shape).expect("reads");
+    assert_eq!(geometry.paths.len(), 1);
+    let rows = &geometry.paths[0].rows;
+    assert_eq!(rows.len(), 5, "{:?}", rows);
+    assert_eq!(
+        rows[0],
+        ferrogram_model::GeometryRow::MoveTo { x: 0.0, y: 0.0 }
+    );
+    for (index, (x, y)) in [
+        (1, (1.574803149606299, 0.0)),
+        (2, (1.574803149606299, 1.181102362204724)),
+        (3, (0.0, 1.181102362204724)),
+        (4, (0.0, 0.0)),
+    ] {
+        assert_eq!(
+            rows[index],
+            ferrogram_model::GeometryRow::LineTo { x, y },
+            "row {index}"
+        );
+    }
+}
+
+#[test]
+fn a_themed_fill_resolves_to_the_theme_variant_colour() {
+    // Acceptance (P3-15, fix 2): color-boxes.vsdx's page shapes
+    // `Rectangle.5`..`Rectangle` (Visio `ID` 68..74) fill with a pure
+    // `Themed` value (`FillForegnd` resolves to the marker through their
+    // styles) and carry `QuickStyleFillColor` 200..206. Each resolves to a
+    // colour of the theme's first variation colour scheme
+    // (`vt:variationClrSchemeLst`).
+    //
+    // Reasoning: [MS-VSDX] `QuickStyleFillColor` maps 0..8 to the colour
+    // scheme (`dk1`, `lt1`, `accent1`..`accent6`, background) and 100..106
+    // to "the color property ... of a `CT_VariationClrScheme` element
+    // specified by the `VariationColorIndex` cell"; `VisQuickStyleColors`
+    // names 100..106 "Color variant 1..7". The 200..206 family has no
+    // published meaning, but the shapes' own cached line colours (the same
+    // slots through `QuickStyleLineColor`, `LineColor V='...' F='Inh'`)
+    // match the same variation colours modulated by the line style matrix
+    // (`QuickStyleLineMatrix` 6): 68 `#547495` = 0.73 x `varColor2`
+    // `#759FCC`, 74 `#41719c` = 0.73 x `varColor1` `#5B9BD5`, and
+    // tdf154379-QuickStyleFillMatrix.vsdx's shape 317 (variant 200, matrix
+    // 2) caches `LineColor` `#5b9bd5` = `varColor1` unshaded. So 200+k
+    // names `varColor{k+1}` like 100+k (ADR 0021 amendment).
+    //
+    // `VariationColorIndex` is absent on these shapes and on the page
+    // sheet, so variation scheme 0 applies ([MS-VSDX]: 65534 defers to the
+    // page sheet).
+    let doc = corpus_document!("color-boxes.vsdx");
+    for (visio_id, slot, rgb) in [
+        (68, 201, (0x75, 0x9F, 0xCC)),
+        (69, 205, (0x70, 0xAD, 0x47)),
+        (70, 206, (0xFE, 0xC0, 0x00)),
+        (71, 202, (0x41, 0x71, 0x9C)),
+        (72, 204, (0xED, 0x7D, 0x31)),
+        (73, 203, (0xBD, 0xD0, 0xE9)),
+        (74, 200, (0x5B, 0x9B, 0xD5)),
+    ] {
+        let shape = doc
+            .shape_by_visio_id(PageId { index: 0 }, visio_id)
+            .expect("corpus shape");
+        // The premise: the fill is the pure `Themed` marker.
+        let resolved = doc
+            .resolve(shape, &ferrogram_model::CellName::new("FillForegnd"))
+            .expect("resolves");
+        assert_eq!(
+            resolved.value,
+            Some(&CellValue::Str("Themed".to_owned())),
+            "shape {visio_id} ({slot})"
+        );
+        let mut reader = ferrogram_model::CellReader::new(&doc);
+        let fill = reader
+            .color(
+                ferrogram_model::SheetRef::Shape(shape),
+                &ferrogram_model::CellName::new("FillForegnd"),
+            )
+            .expect("reads");
+        assert_eq!(
+            fill,
+            Color::new(rgb.0, rgb.1, rgb.2),
+            "shape {visio_id} (QuickStyleFillColor {slot})"
+        );
+    }
 }

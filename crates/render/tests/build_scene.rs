@@ -6,6 +6,9 @@
 //! transform composition, master inheritance (a corpus file), themed fills
 //! (a corpus file), fills, strokes, line ends, shadows, text runs, layer
 //! visibility, background pages, page size and warnings for bad values.
+//! Task P3-15 adds one corpus test per acceptance item: the geometry row
+//! union (closed paths from master rows), theme variant fills, and no
+//! `Missing` warning for a cell with a documented default.
 //! Corpus files are fetched, never committed (ADR 0005); the tests skip
 //! with a message when `corpus/vsdx/` is absent, and fail instead when
 //! `FERROGRAM_REQUIRE_CORPUS=1` is set.
@@ -1068,4 +1071,135 @@ fn master_instances_keep_their_transform_chain() {
             let _ = Angle::from_radians(0.0);
         }
     }
+}
+
+#[test]
+fn sparse_instance_rows_draw_a_closed_path_with_the_master_rows() {
+    if require_corpus_or(&corpus_files()) {
+        return;
+    }
+    // Acceptance (P3-15, fix 1): bgcolor.vsdx's `Rectangle` instances
+    // carry two `LineTo` rows (`IX` 2..3, all cells `F='Inh'`) and their
+    // master holds `MoveTo` + the closing rows (`IX` 1..5). With the row
+    // union (ADR 0019 amendment) each draws the master's closed
+    // rectangle: `MoveTo` + four `LineTo` segments, back at the start.
+    let doc = corpus_document("bgcolor.vsdx").expect("corpus file");
+    let scene = build(&doc);
+    let mut closed = 0;
+    for node in &scene.nodes {
+        let Node::Shape(shape) = node else {
+            continue;
+        };
+        let segments = shape.path.segments();
+        let (Some(Segment::MoveTo(start)), Some(Segment::LineTo(_))) =
+            (segments.first(), segments.get(1))
+        else {
+            continue;
+        };
+        let ends = end_points(segments);
+        if segments.len() == 5 && ends.last() == Some(start) {
+            closed += 1;
+        }
+    }
+    assert_eq!(closed, 3, "the three `Rectangle` instances");
+}
+
+#[test]
+fn a_themed_variant_fill_lands_in_the_scene() {
+    if require_corpus_or(&corpus_files()) {
+        return;
+    }
+    // Acceptance (P3-15, fix 2): color-boxes.vsdx's shapes 68..74 fill
+    // with the theme's variation colours (`QuickStyleFillColor` 200..206,
+    // see `read_mapping.rs` for the derivation). The scene carries the
+    // colours, not the hard default black.
+    let doc = corpus_document("color-boxes.vsdx").expect("corpus file");
+    let scene = build(&doc);
+    let mut fills: Vec<Rgba> = Vec::new();
+    for node in &scene.nodes {
+        if let Node::Shape(shape) = node {
+            match shape.fill.as_ref() {
+                Some(Paint::Solid(color)) => fills.push(*color),
+                Some(Paint::LinearGradient { stops, .. })
+                | Some(Paint::RadialGradient { stops, .. }) => {
+                    fills.extend(stops.iter().map(|stop| stop.color));
+                }
+                _ => {}
+            }
+        }
+    }
+    for rgb in [(0x5B, 0x9B, 0xD5), (0x75, 0x9F, 0xCC), (0xFE, 0xC0, 0x00)] {
+        assert!(
+            fills.contains(&Rgba::opaque(rgb.0, rgb.1, rgb.2)),
+            "no fill of {rgb:?} in {fills:?}"
+        );
+    }
+}
+
+#[test]
+fn no_missing_warning_for_a_cell_with_a_documented_default() {
+    let files = corpus_files();
+    if require_corpus_or(&files) {
+        return;
+    }
+    // Acceptance (P3-15, fix 3): a cell that is absent at every rung and
+    // has a default documented on its ShapeSheet reference page resolves
+    // to that default without a `Missing` warning (ADR 0021 amendment).
+    // This test counts the warnings that remain for documented cells and
+    // demands zero; a `Missing` warning for a cell with no documented
+    // default is expected and fine.
+    let mut documented = Vec::new();
+    let mut undocumented = 0;
+    for file in &files {
+        let bytes = std::fs::read(file).expect("reads");
+        let doc = read_document(&bytes, &Limits::DEFAULT).expect("reads as a document");
+        for (index, _) in doc.pages.iter().enumerate() {
+            let page = PageId {
+                index: u32::try_from(index).expect("page index"),
+            };
+            let scene = build_scene(&doc, page, &BuildOptions::new()).expect("builds");
+            for warning in &scene.warnings {
+                if !matches!(warning.kind, WarningKind::Missing) {
+                    continue;
+                }
+                if ferrogram_model::documented_default(warning.cell.as_str()).is_some() {
+                    documented.push((file.clone(), warning.cell.as_str().to_owned()));
+                } else {
+                    undocumented += 1;
+                }
+            }
+        }
+    }
+    assert!(
+        documented.is_empty(),
+        "Missing warnings for cells with documented defaults: {documented:?}"
+    );
+    eprintln!("Missing warnings without a documented default: {undocumented}");
+}
+#[test]
+fn color_boxes_renders_filled_and_stroked_shapes() {
+    if require_corpus_or(&corpus_files()) {
+        return;
+    }
+    // Acceptance (P3-15, the master note): the themed patterns resolve
+    // through the theme's style lists and fall back to the *visible*
+    // values (`FillPattern` 1, `LinePattern` 1, `LineWeight` the hairline
+    // default), so page 1 of color-boxes.vsdx draws filled and stroked
+    // shapes instead of a blank page.
+    let doc = corpus_document("color-boxes.vsdx").expect("corpus file");
+    let scene = build(&doc);
+    let mut filled = 0;
+    let mut stroked = 0;
+    for node in &scene.nodes {
+        if let Node::Shape(shape) = node {
+            if shape.fill.is_some() {
+                filled += 1;
+            }
+            if shape.stroke.is_some() {
+                stroked += 1;
+            }
+        }
+    }
+    assert!(filled > 0, "no filled shape in the scene");
+    assert!(stroked > 0, "no stroked shape in the scene");
 }

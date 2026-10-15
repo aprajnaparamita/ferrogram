@@ -13,7 +13,10 @@
 //! maps to `Document::color_table`; the `Colors` element itself stays in
 //! the document's preserved content as before (ADR 0012).
 
-use ferrogram_model::{Color, ColorTableEntry, Theme, ThemeColors, ThemeFonts, XmlNode};
+use ferrogram_model::{
+    Color, ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts,
+    ThemeLineKind, ThemeLineStyle, ThemeVariation, ThemeVariationStyles, XmlNode,
+};
 
 use crate::Error;
 use crate::read::node::{attribute, elements, is_namespace_declaration};
@@ -40,16 +43,202 @@ pub(crate) fn map_theme(root: &XmlNode) -> Result<Theme, Error> {
 }
 
 /// Maps the `a:themeElements` children: the colour and font schemes, with
-/// everything else kept verbatim.
+/// everything else kept verbatim. The `a:clrScheme` extensions carry the
+/// Visio variation colour schemes (`vt:variationClrSchemeLst`) and the
+/// background colour (`bkgnd`), mapped into [`Theme::variations`] and
+/// [`Theme::background`] (ADR 0021 amendment).
 fn map_theme_elements(node: &XmlNode, theme: &mut Theme) -> Result<(), Error> {
     for element in elements(node) {
         match element.name.local.as_str() {
-            "clrScheme" => theme.colors = map_color_scheme(element),
+            "clrScheme" => {
+                theme.colors = map_color_scheme(element);
+                map_color_scheme_extensions(element, theme);
+            }
             "fontScheme" => theme.fonts = Some(map_font_scheme(element)),
+            "fmtScheme" => {
+                map_effect_scheme(element, theme);
+                theme.preserved.children.push(element.clone());
+            }
             _ => theme.preserved.children.push(element.clone()),
         }
     }
     Ok(())
+}
+
+/// Maps what themed pattern, weight and transparency cells need from an
+/// `a:fmtScheme` element (ADR 0021 amendment): the `fillStyleLst` fills,
+/// the `lnStyleLst` lines and the `fillIdx`/`lineIdx` values of the
+/// `vt:variationStyleSchemeLst` style schemes. The element itself stays
+/// preserved: the writer never rewrites theme parts (ADR 0019).
+fn map_effect_scheme(node: &XmlNode, theme: &mut Theme) {
+    for element in elements(node) {
+        match element.name.local.as_str() {
+            "fillStyleLst" => {
+                theme.fill_styles = elements(element)
+                    .map(map_fill_style)
+                    .collect::<Option<Vec<_>>>()
+                    .unwrap_or_default();
+            }
+            "lnStyleLst" => {
+                theme.line_styles = elements(element)
+                    .map(map_line_style)
+                    .collect::<Option<Vec<_>>>()
+                    .unwrap_or_default();
+            }
+            "extLst" => {
+                for extension in elements(element).filter(|e| e.name.local == "ext") {
+                    for list in
+                        elements(extension).filter(|e| e.name.local == "variationStyleSchemeLst")
+                    {
+                        for scheme in
+                            elements(list).filter(|e| e.name.local == "variationStyleScheme")
+                        {
+                            let indices = |name: &str| -> Vec<u32> {
+                                elements(scheme)
+                                    .filter(|e| e.name.local == "varStyle")
+                                    .filter_map(|e| attribute(e, name))
+                                    .filter_map(|value| value.trim().parse::<u32>().ok())
+                                    .collect()
+                            };
+                            theme.variation_styles.push(ThemeVariationStyles {
+                                fill_indices: indices("fillIdx"),
+                                line_indices: indices("lineIdx"),
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Fully opaque (the DrawingML `a:alpha` default of 100000).
+const OPAQUE: u32 = 100_000;
+
+/// Maps one `a:fmtScheme` fill (`noFill`, `solidFill`, `gradFill`), or
+/// `None` for a fill kind we do not map (a partial list cannot be typed).
+fn map_fill_style(fill: &XmlNode) -> Option<ThemeFillStyle> {
+    let kind = match fill.name.local.as_str() {
+        "noFill" => ThemeFillKind::None,
+        "solidFill" => ThemeFillKind::Solid,
+        "gradFill" => ThemeFillKind::Gradient,
+        _ => return None,
+    };
+    // A single colour without `a:alpha` is opaque (the DrawingML default
+    // 100000); a gradient's alphas are per stop and stay unmapped.
+    let alpha = match kind {
+        ThemeFillKind::Gradient => None,
+        _ => Some(color_alpha(fill).unwrap_or(OPAQUE)),
+    };
+    Some(ThemeFillStyle { kind, alpha })
+}
+
+/// Maps one `a:fmtScheme` line (`a:ln`), or `None` for anything else.
+fn map_line_style(line: &XmlNode) -> Option<ThemeLineStyle> {
+    if line.name.local != "ln" {
+        return None;
+    }
+    let mut kind = ThemeLineKind::Solid;
+    if elements(line).any(|element| element.name.local == "noFill") {
+        kind = ThemeLineKind::None;
+    } else if let Some(value) = elements(line)
+        .find(|element| element.name.local == "prstDash")
+        .and_then(|element| attribute(element, "val"))
+        .map(|value| value.trim().to_owned())
+        && value != "solid"
+    {
+        kind = ThemeLineKind::Dashed;
+    }
+    let alpha = match kind {
+        ThemeLineKind::None => None,
+        _ => Some(color_alpha(line).unwrap_or(OPAQUE)),
+    };
+    let width_emu = attribute(line, "w").and_then(|value| value.trim().parse::<i64>().ok());
+    Some(ThemeLineStyle {
+        kind,
+        alpha,
+        width_emu,
+    })
+}
+
+/// The `a:alpha` (opacity, 0..100000) of the first colour element inside
+/// `node` (directly or inside its fill wrapper), or `None` when it has
+/// none.
+fn color_alpha(node: &XmlNode) -> Option<u32> {
+    elements(node).find_map(color_alpha_in)
+}
+
+/// The `a:alpha` of one colour element, or of the fill wrapper around one.
+fn color_alpha_in(node: &XmlNode) -> Option<u32> {
+    if matches!(node.name.local.as_str(), "srgbClr" | "schemeClr" | "sysClr") {
+        return alpha_of(node);
+    }
+    if matches!(
+        node.name.local.as_str(),
+        "solidFill" | "gradFill" | "pattFill" | "noFill"
+    ) {
+        return elements(node).find_map(alpha_of);
+    }
+    None
+}
+
+/// The `a:alpha` value of one colour element.
+fn alpha_of(color: &XmlNode) -> Option<u32> {
+    elements(color)
+        .find(|element| element.name.local == "alpha")
+        .and_then(|element| attribute(element, "val"))
+        .and_then(|value| value.trim().parse::<u32>().ok())
+}
+
+/// Maps the extensions of an `a:clrScheme` element: the `bkgnd` background
+/// colour and the `vt:variationClrSchemeLst` variation colour schemes (ADR
+/// 0021 amendment). An extension that maps nothing stays ignored: the
+/// theme part is preserved-only for the writer (ADR 0019).
+fn map_color_scheme_extensions(node: &XmlNode, theme: &mut Theme) {
+    for extension_list in elements(node).filter(|element| element.name.local == "extLst") {
+        for extension in elements(extension_list).filter(|element| element.name.local == "ext") {
+            for element in elements(extension) {
+                match element.name.local.as_str() {
+                    "bkgnd" => {
+                        theme.background = elements(element)
+                            .find(|child| child.name.local == "srgbClr")
+                            .and_then(|child| attribute(child, "val"))
+                            .and_then(hex_color);
+                    }
+                    "variationClrSchemeLst" => {
+                        for scheme in elements(element) {
+                            if scheme.name.local == "variationClrScheme"
+                                && let Some(variation) = map_variation_scheme(scheme)
+                            {
+                                theme.variations.push(variation);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+/// Maps one `vt:variationClrScheme` element into its seven `varColor`
+/// colours, or `None` when a slot is missing or unparsable (a partial
+/// scheme cannot be typed).
+fn map_variation_scheme(node: &XmlNode) -> Option<ThemeVariation> {
+    let mut colors = [Color::new(0, 0, 0); 7];
+    for (position, color) in colors.iter_mut().enumerate() {
+        let name = format!("varColor{}", position + 1);
+        *color = elements(node)
+            .find(|child| child.name.local == name)
+            .and_then(|slot| {
+                elements(slot)
+                    .find(|child| child.name.local == "srgbClr")
+                    .and_then(|child| attribute(child, "val"))
+                    .and_then(hex_color)
+            })?;
+    }
+    Some(ThemeVariation { colors })
 }
 
 /// Maps one `a:clrScheme` element, or `None` when a slot is missing or its
@@ -407,5 +596,344 @@ mod tests {
         assert_eq!(hex_color("#abc"), Some(Color::new(170, 187, 204)));
         assert_eq!(hex_color("nope"), None);
         assert_eq!(hex_color(""), None);
+    }
+
+    /// One `vt:variationClrScheme` with `varColor1`..`varColor7`.
+    fn variation(colors: &[&str]) -> XmlNode {
+        let slots = colors
+            .iter()
+            .enumerate()
+            .map(|(position, value)| {
+                child(element(
+                    &format!("varColor{}", position + 1),
+                    &[],
+                    vec![child(element("srgbClr", &[("val", value)], Vec::new()))],
+                ))
+            })
+            .collect();
+        element("variationClrScheme", &[], slots)
+    }
+
+    #[test]
+    fn the_clr_scheme_extensions_map_the_variations_and_the_background() {
+        let mut scheme = color_scheme();
+        scheme.children.push(child(element(
+            "extLst",
+            &[],
+            vec![
+                child(element(
+                    "ext",
+                    &[("uri", "{bkgnd}")],
+                    vec![child(element(
+                        "bkgnd",
+                        &[],
+                        vec![child(element("srgbClr", &[("val", "FFFFFF")], Vec::new()))],
+                    ))],
+                )),
+                child(element(
+                    "ext",
+                    &[("uri", "{variations}")],
+                    vec![child(element(
+                        "variationClrSchemeLst",
+                        &[],
+                        vec![
+                            child(variation(&[
+                                "5B9BD5", "759FCC", "41719C", "BDD0E9", "ED7D31", "70AD47",
+                                "FEC000",
+                            ])),
+                            child(variation(&[
+                                "A5A5A5", "B43500", "AF5200", "AC770D", "ED7D31", "FFC000",
+                                "5B9BD5",
+                            ])),
+                        ],
+                    ))],
+                )),
+            ],
+        )));
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![child(scheme), child(font_scheme())],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        assert_eq!(theme.background, Some(Color::new(255, 255, 255)));
+        assert_eq!(theme.variations.len(), 2);
+        assert_eq!(theme.variations[0].colors[0], Color::new(0x5B, 0x9B, 0xD5));
+        assert_eq!(theme.variations[0].colors[6], Color::new(0xFE, 0xC0, 0x00));
+        assert_eq!(theme.variations[1].colors[1], Color::new(0xB4, 0x35, 0x00));
+    }
+
+    #[test]
+    fn a_partial_variation_scheme_or_background_is_skipped() {
+        // `varColor4` is missing: the scheme cannot be typed and is
+        // dropped. The `bkgnd` element without a colour maps to `None`.
+        let mut scheme = color_scheme();
+        scheme.children.push(child(element(
+            "extLst",
+            &[],
+            vec![
+                child(element(
+                    "ext",
+                    &[],
+                    vec![child(element("bkgnd", &[], Vec::new()))],
+                )),
+                child(element(
+                    "ext",
+                    &[],
+                    vec![child(element(
+                        "variationClrSchemeLst",
+                        &[],
+                        vec![
+                            child(variation(&["5B9BD5", "759FCC", "41719C", "BDD0E9"])),
+                            child(variation(&[
+                                "5B9BD5", "759FCC", "41719C", "BDD0E9", "ED7D31", "70AD47",
+                                "FEC000",
+                            ])),
+                        ],
+                    ))],
+                )),
+            ],
+        )));
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![child(scheme), child(font_scheme())],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        assert_eq!(theme.background, None);
+        assert_eq!(theme.variations.len(), 1);
+        assert_eq!(theme.variations[0].colors[0], Color::new(0x5B, 0x9B, 0xD5));
+    }
+
+    #[test]
+    fn the_fill_style_list_and_the_variation_styles_map() {
+        let fills = |kinds: &[&str]| {
+            child(element(
+                "fillStyleLst",
+                &[],
+                kinds
+                    .iter()
+                    .map(|kind| child(element(kind, &[], Vec::new())))
+                    .collect(),
+            ))
+        };
+        let var_style = |fill: &str| {
+            child(element(
+                "varStyle",
+                &[("fillIdx", fill), ("lineIdx", fill)],
+                Vec::new(),
+            ))
+        };
+        let fmt = element(
+            "fmtScheme",
+            &[("name", "Office")],
+            vec![
+                fills(&["solidFill", "gradFill", "noFill"]),
+                child(element("lnStyleLst", &[], Vec::new())),
+                child(element(
+                    "extLst",
+                    &[],
+                    vec![child(element(
+                        "ext",
+                        &[],
+                        vec![child(element(
+                            "variationStyleSchemeLst",
+                            &[],
+                            vec![
+                                child(element(
+                                    "variationStyleScheme",
+                                    &[("embellishment", "2")],
+                                    vec![var_style("3"), var_style("2")],
+                                )),
+                                child(element("variationStyleScheme", &[], vec![var_style("1")])),
+                            ],
+                        ))],
+                    ))],
+                )),
+            ],
+        );
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![child(color_scheme()), child(fmt)],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        assert_eq!(
+            theme.fill_styles,
+            vec![
+                ThemeFillStyle {
+                    kind: ThemeFillKind::Solid,
+                    alpha: Some(100_000)
+                },
+                ThemeFillStyle {
+                    kind: ThemeFillKind::Gradient,
+                    alpha: None
+                },
+                ThemeFillStyle {
+                    kind: ThemeFillKind::None,
+                    alpha: Some(100_000)
+                },
+            ]
+        );
+        assert_eq!(theme.variation_styles.len(), 2);
+        assert_eq!(theme.variation_styles[0].fill_indices, vec![3, 2]);
+        assert_eq!(theme.variation_styles[0].line_indices, vec![3, 2]);
+        assert_eq!(theme.variation_styles[1].fill_indices, vec![1]);
+    }
+
+    #[test]
+    fn the_line_style_list_maps_dash_alpha_and_width() {
+        let ln =
+            |children: Vec<XmlChild>, attrs: &[(&str, &str)]| child(element("ln", attrs, children));
+        let color = |alpha: Option<&str>| {
+            let mut kids = Vec::new();
+            if let Some(alpha) = alpha {
+                kids.push(child(element("alpha", &[("val", alpha)], Vec::new())));
+            }
+            child(element(
+                "solidFill",
+                &[],
+                vec![child(element("srgbClr", &[("val", "FFFFFF")], kids))],
+            ))
+        };
+        let fmt = element(
+            "fmtScheme",
+            &[],
+            vec![child(element(
+                "lnStyleLst",
+                &[],
+                vec![
+                    ln(
+                        vec![
+                            color(Some("50000")),
+                            child(element("prstDash", &[("val", "solid")], Vec::new())),
+                        ],
+                        &[("w", "12700")],
+                    ),
+                    ln(
+                        vec![
+                            color(None),
+                            child(element("prstDash", &[("val", "sysDash")], Vec::new())),
+                        ],
+                        &[],
+                    ),
+                    ln(vec![child(element("noFill", &[], Vec::new()))], &[]),
+                    child(element("notALine", &[], Vec::new())),
+                ],
+            ))],
+        );
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![child(color_scheme()), child(fmt)],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        // The non-`ln` entry cannot be typed: the whole list drops.
+        assert!(theme.line_styles.is_empty());
+
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![
+                    child(color_scheme()),
+                    child(element(
+                        "fmtScheme",
+                        &[],
+                        vec![child(element(
+                            "lnStyleLst",
+                            &[],
+                            vec![
+                                ln(
+                                    vec![
+                                        color(Some("50000")),
+                                        child(element("prstDash", &[("val", "solid")], Vec::new())),
+                                    ],
+                                    &[("w", "12700")],
+                                ),
+                                ln(
+                                    vec![
+                                        color(None),
+                                        child(element(
+                                            "prstDash",
+                                            &[("val", "sysDash")],
+                                            Vec::new(),
+                                        )),
+                                    ],
+                                    &[],
+                                ),
+                                ln(vec![child(element("noFill", &[], Vec::new()))], &[]),
+                            ],
+                        ))],
+                    )),
+                ],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        assert_eq!(
+            theme.line_styles,
+            vec![
+                ThemeLineStyle {
+                    kind: ThemeLineKind::Solid,
+                    alpha: Some(50_000),
+                    width_emu: Some(12_700),
+                },
+                ThemeLineStyle {
+                    kind: ThemeLineKind::Dashed,
+                    alpha: Some(100_000),
+                    width_emu: None,
+                },
+                ThemeLineStyle {
+                    kind: ThemeLineKind::None,
+                    alpha: None,
+                    width_emu: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unknown_fill_style_kind_empties_the_list() {
+        let fmt = element(
+            "fmtScheme",
+            &[],
+            vec![child(element(
+                "fillStyleLst",
+                &[],
+                vec![
+                    child(element("solidFill", &[], Vec::new())),
+                    child(element("pattFill", &[], Vec::new())),
+                ],
+            ))],
+        );
+        let root = element(
+            "a:theme",
+            &[("name", "Office")],
+            vec![child(element(
+                "a:themeElements",
+                &[],
+                vec![child(color_scheme()), child(fmt)],
+            ))],
+        );
+        let theme = map_theme(&root).expect("maps");
+        assert!(theme.fill_styles.is_empty());
     }
 }

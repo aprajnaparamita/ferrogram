@@ -26,6 +26,7 @@
 //! coercions, not kind mismatches, and record no warning.
 
 use crate::cell::{CellValue, Color};
+use crate::defaults::{DocumentedDefault, documented_default};
 use crate::document::Document;
 use crate::error::Error;
 use crate::id::{PageId, ShapeId};
@@ -275,8 +276,51 @@ impl<'d> CellReader<'d> {
             Some(_) if source != ValueSource::HardDefault => {
                 self.warn_number(sheet, cell, WarningKind::KindMismatch)
             }
-            _ => self.warn_number(sheet, cell, WarningKind::Missing),
+            _ => self.missing_number(sheet, cell, source),
         }
+    }
+
+    /// The substitution for a number nothing defines (ADR 0021 amendment):
+    /// the documented default when the ShapeSheet reference documents one
+    /// (no warning: a missing cell with a documented default is not an
+    /// error), the hard default with a [`WarningKind::Missing`] warning
+    /// otherwise. A cell that something defines but that caches no value
+    /// always warns.
+    fn missing_number(&mut self, sheet: SheetRef, cell: &CellName, source: ValueSource) -> f64 {
+        if source == ValueSource::HardDefault
+            && let Some(value) = self.documented_number(sheet, cell)
+        {
+            return value;
+        }
+        self.warn_number(sheet, cell, WarningKind::Missing)
+    }
+
+    /// The documented default of a number cell (ADR 0021 amendment), or
+    /// `None` when the ShapeSheet reference documents none. A formula
+    /// default (`LocPinX = Width*0.5`) reads the named cell's cached value
+    /// and falls back to 0: one multiplication, no formula engine (Phase 6
+    /// replaces this).
+    fn documented_number(&self, sheet: SheetRef, cell: &CellName) -> Option<f64> {
+        match documented_default(cell.as_str())? {
+            DocumentedDefault::Number(value) => Some(value),
+            DocumentedDefault::HalfOf(other) => Some(self.related_number(sheet, other) * 0.5),
+            DocumentedDefault::WholeOf(other) => Some(self.related_number(sheet, other)),
+        }
+    }
+
+    /// The number another cell resolves to for a documented formula
+    /// default: its cached value when it has one, `0` otherwise (the
+    /// related cell's own read reports its own warnings).
+    fn related_number(&self, sheet: SheetRef, name: &str) -> f64 {
+        let resolved = self.resolved(sheet, &CellName::new(name)).ok();
+        resolved
+            .and_then(|resolved| match resolved.value {
+                Some(CellValue::Number(value)) if resolved.source != ValueSource::HardDefault => {
+                    Some(*value)
+                }
+                _ => None,
+            })
+            .unwrap_or(0.0)
     }
 
     /// The number policy for an *optional* row cell (the C and D cells of
@@ -461,8 +505,20 @@ impl<'d> CellReader<'d> {
 
     /// Records one warning and returns the substituted number.
     fn warn_number(&mut self, sheet: SheetRef, cell: &CellName, kind: WarningKind) -> f64 {
-        self.warn(sheet, cell, kind, CellValue::Number(0.0));
-        0.0
+        self.warn_number_as(sheet, cell, kind, 0.0)
+    }
+
+    /// Records one warning and returns `value` in the substituted value's
+    /// place (the visible fallbacks of ADR 0021).
+    fn warn_number_as(
+        &mut self,
+        sheet: SheetRef,
+        cell: &CellName,
+        kind: WarningKind,
+        value: f64,
+    ) -> f64 {
+        self.warn(sheet, cell, kind, CellValue::Number(value));
+        value
     }
 
     /// Records one warning and returns the substituted boolean.
@@ -553,11 +609,86 @@ impl<'d> CellReader<'d> {
             return None;
         }
         let index = index as u32;
-        let colors = self.doc.themes.first()?.colors.as_ref()?;
+        let theme = self.doc.themes.first()?;
         match theme_slot(index)? {
-            ThemeSlot::Dk1 => Some(colors.dk1),
-            ThemeSlot::Lt1 => Some(colors.lt1),
-            ThemeSlot::Accent(position) => colors.accents.get(position).copied(),
+            ThemeSlot::Dk1 => theme.colors.as_ref().map(|colors| colors.dk1),
+            ThemeSlot::Lt1 => theme.colors.as_ref().map(|colors| colors.lt1),
+            ThemeSlot::Accent(position) => theme
+                .colors
+                .as_ref()
+                .and_then(|colors| colors.accents.get(position).copied()),
+            ThemeSlot::Background => theme.background,
+            ThemeSlot::Variation(position) => self
+                .variation_scheme(sheet, theme)?
+                .colors
+                .get(position)
+                .copied(),
+        }
+    }
+
+    /// The theme variation colour scheme a sheet's `QuickStyle*` variant
+    /// values name ([MS-VSDX] `VariationColorIndex`): the scheme its
+    /// `VariationColorIndex` cell selects (0..3 of `Theme::variations`).
+    /// A missing cell and the value 65534 defer to the page sheet's cell
+    /// ([MS-VSDX]); anything else is variation 0.
+    fn variation_scheme<'t>(
+        &self,
+        sheet: SheetRef,
+        theme: &'t crate::theme::Theme,
+    ) -> Option<&'t crate::theme::ThemeVariation> {
+        theme
+            .variations
+            .get(self.variation_position(sheet, "VariationColorIndex"))
+    }
+
+    /// The theme variation style scheme a sheet's `QuickStyle*Matrix`
+    /// variant values name ([MS-VSDX] `VariationStyleIndex`): the scheme
+    /// its `VariationStyleIndex` cell selects (0..3 of
+    /// [`crate::theme::Theme::variation_styles`]), with the same 65534
+    /// fallback.
+    fn variation_style_scheme<'t>(
+        &self,
+        sheet: SheetRef,
+        theme: &'t crate::theme::Theme,
+    ) -> Option<&'t crate::theme::ThemeVariationStyles> {
+        theme
+            .variation_styles
+            .get(self.variation_position(sheet, "VariationStyleIndex"))
+    }
+
+    /// The variation scheme index a sheet selects: its `name` cell, or the
+    /// page sheet's when the cell is missing or 65534 ([MS-VSDX]), else 0.
+    fn variation_position(&self, sheet: SheetRef, name: &str) -> usize {
+        let mut index = self.index_cell(sheet, name).unwrap_or(65534);
+        if index == 65534 {
+            let page = match sheet {
+                SheetRef::Page(page) => Some(page),
+                SheetRef::Shape(shape) => self.doc.page_of(shape),
+            };
+            index = page
+                .and_then(|page| self.index_cell(SheetRef::Page(page), name))
+                .unwrap_or(0);
+        }
+        if index == 65534 {
+            index = 0;
+        }
+        usize::try_from(index).unwrap_or(0)
+    }
+
+    /// The variation index one sheet's `name` cell names ([MS-VSDX]: 0 to
+    /// 65534).
+    fn index_cell(&self, sheet: SheetRef, name: &str) -> Option<i32> {
+        let resolved = self.resolved(sheet, &CellName::new(name)).ok()?;
+        match resolved.value {
+            Some(CellValue::Number(index))
+                if index.is_finite()
+                    && index.fract() == 0.0
+                    && *index >= 0.0
+                    && *index <= 65534.0 =>
+            {
+                Some(*index as i32)
+            }
+            _ => None,
         }
     }
 
@@ -582,12 +713,109 @@ impl<'d> CellReader<'d> {
         }
     }
 
-    /// The substitution for a `Themed` number cell. A themed transparency
-    /// (`*Trans`) resolves through the theme's colour scheme, which carries
-    /// no alpha (the `a:fmtScheme` matrices are deferred), so it cannot be
-    /// resolved and substitutes 0 with [`WarningKind::UnresolvedTheme`].
+    /// The substitution for a `Themed` number cell (ADR 0021 amendment).
+    ///
+    /// Patterns, weights and transparencies resolve through the theme's
+    /// fill and line style lists where a published meaning exists. Where
+    /// it does not, a `Themed` pattern falls back to the **visible** value
+    /// (`FillPattern`/`LinePattern` 1, `ShdwPattern` 0) and a `Themed`
+    /// `LineWeight` to the documented hairline default, each warning
+    /// [`WarningKind::UnresolvedTheme`]; never 0 for a fill or a line.
     fn themed_number(&mut self, sheet: SheetRef, cell: &CellName) -> f64 {
-        self.warn_number(sheet, cell, WarningKind::UnresolvedTheme)
+        if let Some(value) = self.themed_value(sheet, cell) {
+            return value;
+        }
+        let fallback = match cell.as_str() {
+            "FillPattern" | "LinePattern" => 1.0,
+            // The `THEMEVAL` reference documents '0.7 pt.' as the value a
+            // theme-less document returns for `LineWeight` (a hairline
+            // default per the P3-15 note).
+            "LineWeight" => 0.7 / 72.0,
+            _ => 0.0,
+        };
+        self.warn_number_as(sheet, cell, WarningKind::UnresolvedTheme, fallback)
+    }
+
+    /// The theme answers a `Themed` number cell: the pattern, weight or
+    /// transparency its style matrix names (ADR 0021 amendment), or `None`
+    /// when the theme cannot answer it.
+    fn themed_value(&self, sheet: SheetRef, cell: &CellName) -> Option<f64> {
+        match cell.as_str() {
+            "FillPattern" => Some(match self.themed_fill_style(sheet)?.kind {
+                crate::theme::ThemeFillKind::None => 0.0,
+                crate::theme::ThemeFillKind::Solid => 1.0,
+                // The scene builder reads 25..40 as a gradient (ADR 0022).
+                crate::theme::ThemeFillKind::Gradient => 25.0,
+            }),
+            "LinePattern" => match self.themed_line_style(sheet)?.kind {
+                crate::theme::ThemeLineKind::None => Some(0.0),
+                crate::theme::ThemeLineKind::Solid => Some(1.0),
+                // A dash preset names no Visio `LinePattern` index (no
+                // published meaning): fall back with a warning.
+                crate::theme::ThemeLineKind::Dashed => None,
+            },
+            // `a:ln/@w` is EMU (1/914400 inch, [ISO/IEC29500-1]).
+            "LineWeight" => {
+                let emu = self.themed_line_style(sheet)?.width_emu?;
+                let emu = i32::try_from(emu).ok()?;
+                Some(f64::from(emu) / 914400.0)
+            }
+            "FillForegndTrans" | "FillBkgndTrans" => {
+                Some(self.transparency_of(self.themed_fill_style(sheet)?.alpha))
+            }
+            "LineColorTrans" => Some(self.transparency_of(self.themed_line_style(sheet)?.alpha)),
+            _ => None,
+        }
+    }
+
+    /// The transparency (0..1) of a themed style's `a:alpha` opacity
+    /// (0..100000); no alpha is the DrawingML default, opaque.
+    fn transparency_of(&self, alpha: Option<u32>) -> f64 {
+        1.0 - f64::from(alpha.unwrap_or(100_000).min(100_000)) / 100_000.0
+    }
+
+    /// The theme fill style a sheet's `QuickStyleFillMatrix` names (ADR
+    /// 0021 amendment), or `None` when the theme cannot answer it.
+    fn themed_fill_style(&self, sheet: SheetRef) -> Option<crate::theme::ThemeFillStyle> {
+        let theme = self.doc.themes.first()?;
+        let slot = self.style_matrix_slot(sheet, "QuickStyleFillMatrix", |styles| {
+            styles.fill_indices.as_slice()
+        })?;
+        theme.fill_styles.get(slot).copied()
+    }
+
+    /// The theme line style a sheet's `QuickStyleLineMatrix` names (ADR
+    /// 0021 amendment), or `None` when the theme cannot answer it.
+    fn themed_line_style(&self, sheet: SheetRef) -> Option<crate::theme::ThemeLineStyle> {
+        let theme = self.doc.themes.first()?;
+        let slot = self.style_matrix_slot(sheet, "QuickStyleLineMatrix", |styles| {
+            styles.line_indices.as_slice()
+        })?;
+        theme.line_styles.get(slot).copied()
+    }
+
+    /// The style slot a `QuickStyle*Matrix` value names ([MS-VSDX]
+    /// `QuickStyleFillMatrix`): 1..6 the `a:fmtScheme` styles in order,
+    /// 100..103 the `fillIdx`/`lineIdx` of the first..fourth `vt:varStyle`
+    /// of the variation style scheme (1-based). 0 names the root style
+    /// sheet, not the theme.
+    fn style_matrix_slot(
+        &self,
+        sheet: SheetRef,
+        name: &str,
+        indices: fn(&crate::theme::ThemeVariationStyles) -> &[u32],
+    ) -> Option<usize> {
+        let theme = self.doc.themes.first()?;
+        let index = self.index_cell(sheet, name)?;
+        match index {
+            1..=6 => Some(index as usize - 1),
+            100..=103 => {
+                let scheme = self.variation_style_scheme(sheet, theme)?;
+                let entry = *indices(scheme).get(index as usize - 100)?;
+                usize::try_from(entry.checked_sub(1)?).ok()
+            }
+            _ => None,
+        }
     }
 
     /// The substitution for a `Themed` boolean cell.
@@ -650,8 +878,8 @@ impl ThemeRole {
     }
 }
 
-/// The theme colour a `QuickStyle*` slot names (the ShapeSheet reference:
-/// 0 is the Dark theme colour, 1 the Light theme colour, 2..7 Accent 1..6).
+/// The theme colour a `QuickStyle*` slot names (ADR 0021 amendment,
+/// [MS-VSDX] `QuickStyleFillColor`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ThemeSlot {
     /// Slot 0: the dark 1 theme colour.
@@ -660,16 +888,31 @@ enum ThemeSlot {
     Lt1,
     /// Slots 2..7: accent 1..6, by position in `ThemeColors::accents`.
     Accent(usize),
+    /// Slot 8: the theme's background colour (`Theme::background`).
+    Background,
+    /// Slots 100..106 and 200..206: variation colour 1..7 of the active
+    /// theme variation (`ThemeVariation::colors`).
+    Variation(usize),
 }
 
 /// The theme slot a `QuickStyle*` colour value names, or `None` for a value
-/// the theme colour scheme cannot answer (8 is the background colour and
-/// the 100+ variant encodings).
+/// no published meaning covers.
+///
+/// The mapping ([MS-VSDX] `QuickStyleFillColor`, `VisQuickStyleColors`):
+/// 0 Dark (`dk1`), 1 Light (`lt1`), 2..7 Accent 1..6, 8 the background
+/// colour, 100..106 the variation colours 1..7 (`varColor1`..`varColor7`
+/// of the variation scheme the `VariationColorIndex` cell selects). The
+/// 200..206 family has **no published meaning**; the corpus shows the same
+/// variation colours (100+k and 200+k both name `varColor{k+1}`, ADR 0021
+/// amendment), so we resolve it that way and record it as corpus-derived.
 fn theme_slot(index: u32) -> Option<ThemeSlot> {
     match index {
         0 => Some(ThemeSlot::Dk1),
         1 => Some(ThemeSlot::Lt1),
         2..=7 => Some(ThemeSlot::Accent(index as usize - 2)),
+        8 => Some(ThemeSlot::Background),
+        100..=106 => Some(ThemeSlot::Variation(index as usize - 100)),
+        200..=206 => Some(ThemeSlot::Variation(index as usize - 200)),
         _ => None,
     }
 }
@@ -726,7 +969,10 @@ mod tests {
     use crate::id::ShapeId;
     use crate::name::CellName;
     use crate::shape::Shape;
-    use crate::theme::{ColorTableEntry, Theme, ThemeColors, ThemeFonts};
+    use crate::theme::{
+        ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts,
+        ThemeLineKind, ThemeLineStyle, ThemeVariation, ThemeVariationStyles,
+    };
 
     use super::*;
 
@@ -1233,9 +1479,11 @@ mod tests {
             reader.number(sheet, &CellName::from_static("LineColorTrans")),
             Ok(0.0)
         );
+        // The `LineWeight` fallback is the documented hairline default
+        // (0.7 point), never 0 (ADR 0021 amendment).
         assert_eq!(
             reader.number(sheet, &CellName::from_static("LineWeight")),
-            Ok(0.0)
+            Ok(0.7 / 72.0)
         );
         assert_eq!(
             reader.boolean(sheet, &CellName::from_static("FillGradientEnabled")),
@@ -1435,11 +1683,22 @@ mod tests {
         assert_eq!(theme_slot(1), Some(ThemeSlot::Lt1));
         assert_eq!(theme_slot(2), Some(ThemeSlot::Accent(0)));
         assert_eq!(theme_slot(7), Some(ThemeSlot::Accent(5)));
-        // 8 is the background colour and 100+ are variant encodings: the
-        // colour scheme cannot answer them.
-        assert_eq!(theme_slot(8), None);
-        assert_eq!(theme_slot(106), None);
-        assert_eq!(theme_slot(201), None);
+        // 8 is the theme's background colour ([MS-VSDX] `QuickStyleFillColor`).
+        assert_eq!(theme_slot(8), Some(ThemeSlot::Background));
+        // 100..106 are the variation colours 1..7 ([MS-VSDX],
+        // `VisQuickStyleColors` "Color variant 1..7").
+        assert_eq!(theme_slot(100), Some(ThemeSlot::Variation(0)));
+        assert_eq!(theme_slot(106), Some(ThemeSlot::Variation(6)));
+        // 200..206 have no published meaning; the corpus shows the same
+        // variation colours (ADR 0021 amendment).
+        assert_eq!(theme_slot(200), Some(ThemeSlot::Variation(0)));
+        assert_eq!(theme_slot(206), Some(ThemeSlot::Variation(6)));
+        // Everything else has no published meaning.
+        assert_eq!(theme_slot(9), None);
+        assert_eq!(theme_slot(99), None);
+        assert_eq!(theme_slot(107), None);
+        assert_eq!(theme_slot(199), None);
+        assert_eq!(theme_slot(207), None);
     }
 
     #[test]
@@ -1531,5 +1790,474 @@ mod tests {
         for warning in reader.warnings() {
             assert_eq!(warning.kind, WarningKind::UnresolvedTheme);
         }
+    }
+
+    /// A theme with two variation schemes (`varColor1`..`varColor7` at
+    /// `scheme * 100 + position + 1`) and a background colour.
+    fn theme_with_variations() -> Theme {
+        let mut theme = Theme::new("Test");
+        theme.colors = Some(colors());
+        theme.variations = vec![
+            ThemeVariation {
+                colors: [
+                    Color::new(1, 0, 0),
+                    Color::new(2, 0, 0),
+                    Color::new(3, 0, 0),
+                    Color::new(4, 0, 0),
+                    Color::new(5, 0, 0),
+                    Color::new(6, 0, 0),
+                    Color::new(7, 0, 0),
+                ],
+            },
+            ThemeVariation {
+                colors: [
+                    Color::new(101, 0, 0),
+                    Color::new(102, 0, 0),
+                    Color::new(103, 0, 0),
+                    Color::new(104, 0, 0),
+                    Color::new(105, 0, 0),
+                    Color::new(106, 0, 0),
+                    Color::new(107, 0, 0),
+                ],
+            },
+        ];
+        theme.background = Some(Color::new(9, 9, 9));
+        theme
+    }
+
+    #[test]
+    fn a_themed_colour_resolves_the_variation_slot() {
+        // `QuickStyleFillColor` 102 names `varColor3` of the active theme
+        // variation ([MS-VSDX]); 202 names the same slot (corpus-derived).
+        for slot in [102.0, 202.0] {
+            let (mut doc, shape) = document_with_cells(vec![
+                cell("QuickStyleFillColor", CellValue::Number(slot)),
+                cell("FillForegnd", CellValue::Str("Themed".to_owned())),
+            ]);
+            doc.themes.push(theme_with_variations());
+            let mut reader = CellReader::new(&doc);
+            let color = reader
+                .color(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("FillForegnd"),
+                )
+                .expect("resolves");
+            assert_eq!(color, Color::new(3, 0, 0), "{slot}");
+            assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+        }
+    }
+
+    #[test]
+    fn the_background_slot_reads_the_theme_background_colour() {
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineColor", CellValue::Number(8.0)),
+            cell("LineColor", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_variations());
+        let mut reader = CellReader::new(&doc);
+        let color = reader
+            .color(SheetRef::Shape(shape), &CellName::from_static("LineColor"))
+            .expect("resolves");
+        assert_eq!(color, Color::new(9, 9, 9));
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn the_variation_scheme_follows_the_variation_color_index() {
+        // The shape's own `VariationColorIndex` selects the scheme.
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("VariationColorIndex", CellValue::Number(1.0)),
+            cell("QuickStyleFillColor", CellValue::Number(100.0)),
+            cell("FillForegnd", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_variations());
+        let mut reader = CellReader::new(&doc);
+        let color = reader
+            .color(
+                SheetRef::Shape(shape),
+                &CellName::from_static("FillForegnd"),
+            )
+            .expect("resolves");
+        assert_eq!(color, Color::new(101, 0, 0));
+
+        // A missing cell and the value 65534 defer to the page sheet's
+        // cell ([MS-VSDX]); a page cell of 65534 and anything unusable
+        // fall back to variation 0.
+        for (own, on_page, want) in [
+            (None, Some(1.0), Color::new(101, 0, 0)),
+            (None, Some(0.0), Color::new(1, 0, 0)),
+            (Some(65534.0), Some(1.0), Color::new(101, 0, 0)),
+            (Some(65534.0), Some(65534.0), Color::new(1, 0, 0)),
+            (Some(65534.0), Some(2.5), Color::new(1, 0, 0)),
+            (Some(2.5), None, Color::new(1, 0, 0)),
+        ] {
+            let mut cells = vec![
+                cell("QuickStyleFillColor", CellValue::Number(100.0)),
+                cell("FillForegnd", CellValue::Str("Themed".to_owned())),
+            ];
+            if let Some(own) = own {
+                cells.push(cell("VariationColorIndex", CellValue::Number(own)));
+            }
+            let (mut doc, shape) = document_with_cells(cells);
+            let mut page_entity = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+            if let Some(on_page) = on_page {
+                page_entity
+                    .sheet
+                    .cells
+                    .push(cell("VariationColorIndex", CellValue::Number(on_page)));
+            }
+            page_entity.shapes.push(shape);
+            doc.pages.push(page_entity);
+            doc.themes.push(theme_with_variations());
+            let mut reader = CellReader::new(&doc);
+            let color = reader
+                .color(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("FillForegnd"),
+                )
+                .expect("resolves");
+            assert_eq!(color, want, "{own:?} {on_page:?}");
+        }
+    }
+
+    #[test]
+    fn a_page_sheet_resolves_the_theme_colours_too() {
+        let mut doc = Document::new();
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.sheet.cells = vec![
+            cell("QuickStyleFillColor", CellValue::Number(201.0)),
+            cell("FillForegnd", CellValue::Str("Themed".to_owned())),
+        ];
+        doc.pages.push(page);
+        doc.themes.push(theme_with_variations());
+        let mut reader = CellReader::new(&doc);
+        let color = reader
+            .color(
+                SheetRef::Page(crate::id::PageId { index: 0 }),
+                &CellName::from_static("FillForegnd"),
+            )
+            .expect("resolves");
+        assert_eq!(color, Color::new(2, 0, 0));
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn documented_defaults_replace_the_missing_warning() {
+        // Literal defaults: no warning, the documented value.
+        let (doc, shape) = document_with_shape();
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        assert_eq!(
+            reader.number(sheet, &CellName::from_static("LeftMargin")),
+            Ok(0.1)
+        );
+        assert_eq!(
+            reader.number(sheet, &CellName::from_static("TopMargin")),
+            Ok(4.0 / 72.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        // A formula default: `LocPinX = Width*0.5` with `Width` defined.
+        let (doc, shape) = document_with_cells(vec![cell("Width", CellValue::Number(2.0))]);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LocPinX")),
+            Ok(1.0)
+        );
+        // `TxtWidth = Width*1`.
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("TxtWidth")),
+            Ok(2.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        // `Width` absent (or of another kind): the formula default is 0,
+        // quietly; `Width` itself warns only when it is read.
+        let (doc, shape) = document_with_cells(vec![cell("Width", CellValue::Str("x".to_owned()))]);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LocPinX")),
+            Ok(0.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn a_documented_default_does_not_hide_a_malformed_cell() {
+        // The cell is defined but caches no value: it is not "absent at
+        // every rung", so it still warns (ADR 0021 amendment).
+        let (mut doc, shape) = document_with_shape();
+        let mut only_formula = Cell::new(CellName::from_static("LocPinX"));
+        only_formula.formula = Some("Width*0.5".to_owned());
+        if let Some(shape) = doc.shape_mut(shape) {
+            shape.sheet.cells.push(only_formula);
+        }
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LocPinX")),
+            Ok(0.0)
+        );
+        assert_eq!(reader.warnings().len(), 1);
+        assert_eq!(reader.warnings()[0].kind, WarningKind::Missing);
+    }
+
+    /// A theme with three fill styles, three line styles and one
+    /// variation style scheme.
+    fn theme_with_fills() -> Theme {
+        let mut theme = theme_with_variations();
+        theme.fill_styles = vec![
+            ThemeFillStyle {
+                kind: ThemeFillKind::Solid,
+                alpha: Some(50_000),
+            },
+            ThemeFillStyle {
+                kind: ThemeFillKind::Gradient,
+                alpha: None,
+            },
+            ThemeFillStyle {
+                kind: ThemeFillKind::None,
+                alpha: Some(100_000),
+            },
+        ];
+        theme.line_styles = vec![
+            ThemeLineStyle {
+                kind: ThemeLineKind::Solid,
+                alpha: Some(100_000),
+                width_emu: Some(12_700),
+            },
+            ThemeLineStyle {
+                kind: ThemeLineKind::Dashed,
+                alpha: None,
+                width_emu: None,
+            },
+            ThemeLineStyle {
+                kind: ThemeLineKind::None,
+                alpha: None,
+                width_emu: Some(25_400),
+            },
+        ];
+        theme.variation_styles = vec![ThemeVariationStyles {
+            fill_indices: vec![3, 2, 1],
+            line_indices: vec![2, 1, 3],
+        }];
+        theme
+    }
+
+    #[test]
+    fn a_themed_fill_pattern_resolves_through_the_fill_style_matrix() {
+        // `QuickStyleFillMatrix` 1..6 names the `a:fmtScheme` fill styles
+        // in order ([MS-VSDX]): 1 solid -> FillPattern 1, 2 gradient ->
+        // 25 (the renderer's gradient range), 3 no fill -> 0.
+        for (matrix, want) in [(1.0, 1.0), (2.0, 25.0), (3.0, 0.0)] {
+            let (mut doc, shape) = document_with_cells(vec![
+                cell("QuickStyleFillMatrix", CellValue::Number(matrix)),
+                cell("FillPattern", CellValue::Str("Themed".to_owned())),
+            ]);
+            doc.themes.push(theme_with_fills());
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("FillPattern")
+                ),
+                Ok(want),
+                "{matrix}"
+            );
+            assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+        }
+    }
+
+    #[test]
+    fn a_themed_fill_pattern_resolves_through_the_variation_style_matrix() {
+        // `QuickStyleFillMatrix` 100..103 names the `fillIdx` of the
+        // first..fourth `vt:varStyle` of the variation style scheme
+        // ([MS-VSDX]); the `fillIdx` values are 1-based.
+        for (matrix, want) in [(100.0, 0.0), (101.0, 25.0), (102.0, 1.0)] {
+            let (mut doc, shape) = document_with_cells(vec![
+                cell("QuickStyleFillMatrix", CellValue::Number(matrix)),
+                cell("FillPattern", CellValue::Str("Themed".to_owned())),
+            ]);
+            doc.themes.push(theme_with_fills());
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("FillPattern")
+                ),
+                Ok(want),
+                "{matrix}"
+            );
+            assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+        }
+    }
+
+    /// The `QuickStyle*Matrix` cell of a themed pattern cell.
+    fn matrix_cell(pattern: &str) -> &'static str {
+        match pattern {
+            "FillPattern" => "QuickStyleFillMatrix",
+            _ => "QuickStyleLineMatrix",
+        }
+    }
+
+    #[test]
+    fn a_themed_pattern_falls_back_to_the_visible_value_with_a_warning() {
+        // Matrix 0 names the root style sheet (not the theme), 7 has no
+        // published meaning, `fillIdx` 0 is out of range and a dashed line
+        // names no Visio pattern index: the fallback is the *visible*
+        // value (1) with `UnresolvedTheme`, never 0 (ADR 0021 amendment).
+        for (matrix, name) in [
+            (0.0, "FillPattern"),
+            (7.0, "FillPattern"),
+            (103.0, "FillPattern"),
+            (100.0, "FillPattern"),
+            (0.0, "LinePattern"),
+            (2.0, "LinePattern"),
+            (7.0, "LinePattern"),
+        ] {
+            let (mut doc, shape) = document_with_cells(vec![
+                Cell::new(CellName::new(matrix_cell(name))),
+                cell(name, CellValue::Str("Themed".to_owned())),
+            ]);
+            let mut theme = theme_with_fills();
+            if matrix == 100.0 {
+                theme.variation_styles[0].fill_indices = vec![0];
+            }
+            if matrix == 103.0 {
+                theme.variation_styles[0].fill_indices = vec![1, 1, 1];
+            }
+            doc.themes.push(theme);
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(SheetRef::Shape(shape), &CellName::new(name)),
+                Ok(1.0),
+                "{name} {matrix}"
+            );
+            assert_eq!(
+                reader.warnings()[0].kind,
+                WarningKind::UnresolvedTheme,
+                "{name} {matrix}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_themed_shadow_pattern_falls_back_to_no_shadow_with_a_warning() {
+        let (mut doc, shape) = document_with_cells(vec![cell(
+            "ShdwPattern",
+            CellValue::Str("Themed".to_owned()),
+        )]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("ShdwPattern")
+            ),
+            Ok(0.0)
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::UnresolvedTheme);
+    }
+
+    #[test]
+    fn a_themed_line_pattern_resolves_through_the_line_style_matrix() {
+        // `QuickStyleLineMatrix` 1..3 name `lnStyleLst` entries 1..3:
+        // solid (1), dashed (no published index: the fallback 1 with a
+        // warning) and no line (0).
+        for (matrix, want, warns) in [(1.0, 1.0, false), (2.0, 1.0, true), (3.0, 0.0, false)] {
+            let (mut doc, shape) = document_with_cells(vec![
+                cell("QuickStyleLineMatrix", CellValue::Number(matrix)),
+                cell("LinePattern", CellValue::Str("Themed".to_owned())),
+            ]);
+            doc.themes.push(theme_with_fills());
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("LinePattern")
+                ),
+                Ok(want),
+                "{matrix}"
+            );
+            assert_eq!(!reader.warnings().is_empty(), warns, "{matrix}");
+        }
+    }
+
+    #[test]
+    fn a_themed_line_weight_resolves_from_the_line_width() {
+        // `a:ln/@w` is EMU (1/914400 inch): 12700 EMU is 1 point. Without
+        // a width the fallback is 0.7 point with `UnresolvedTheme`.
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineMatrix", CellValue::Number(1.0)),
+            cell("LineWeight", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LineWeight")),
+            Ok(12_700.0 / 914_400.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineMatrix", CellValue::Number(2.0)),
+            cell("LineWeight", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LineWeight")),
+            Ok(0.7 / 72.0)
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::UnresolvedTheme);
+    }
+
+    #[test]
+    fn themed_transparencies_resolve_from_the_style_alpha() {
+        // `a:alpha` is opacity: 50000 is 50% transparent. No alpha is the
+        // DrawingML default, opaque.
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleFillMatrix", CellValue::Number(1.0)),
+            cell("FillForegndTrans", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("FillForegndTrans")
+            ),
+            Ok(0.5)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleFillMatrix", CellValue::Number(3.0)),
+            cell("FillBkgndTrans", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("FillBkgndTrans")
+            ),
+            Ok(0.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineMatrix", CellValue::Number(1.0)),
+            cell("LineColorTrans", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("LineColorTrans")
+            ),
+            Ok(0.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
     }
 }

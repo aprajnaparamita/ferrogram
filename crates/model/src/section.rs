@@ -60,6 +60,18 @@ impl Row {
             preserved: Preserved::new(),
         }
     }
+
+    /// Whether the row is deleted (`Row/@Del`), kept verbatim in
+    /// [`Row::preserved`] because the read side maps only `N`, `T` and
+    /// `IX`.
+    ///
+    /// A deleted row removes the inherited row of the same `IX` from the
+    /// row union of a shape and its master chain (ADR 0019 amendment).
+    pub fn is_deleted(&self) -> bool {
+        self.preserved.attributes.iter().any(|attribute| {
+            attribute.name.local == "Del" && matches!(attribute.value.trim(), "1" | "true" | "TRUE")
+        })
+    }
 }
 
 impl Default for Row {
