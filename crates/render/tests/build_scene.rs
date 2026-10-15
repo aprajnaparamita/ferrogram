@@ -1176,3 +1176,30 @@ fn no_missing_warning_for_a_cell_with_a_documented_default() {
     );
     eprintln!("Missing warnings without a documented default: {undocumented}");
 }
+#[test]
+fn color_boxes_renders_filled_and_stroked_shapes() {
+    if require_corpus_or(&corpus_files()) {
+        return;
+    }
+    // Acceptance (P3-15, the master note): the themed patterns resolve
+    // through the theme's style lists and fall back to the *visible*
+    // values (`FillPattern` 1, `LinePattern` 1, `LineWeight` the hairline
+    // default), so page 1 of color-boxes.vsdx draws filled and stroked
+    // shapes instead of a blank page.
+    let doc = corpus_document("color-boxes.vsdx").expect("corpus file");
+    let scene = build(&doc);
+    let mut filled = 0;
+    let mut stroked = 0;
+    for node in &scene.nodes {
+        if let Node::Shape(shape) = node {
+            if shape.fill.is_some() {
+                filled += 1;
+            }
+            if shape.stroke.is_some() {
+                stroked += 1;
+            }
+        }
+    }
+    assert!(filled > 0, "no filled shape in the scene");
+    assert!(stroked > 0, "no stroked shape in the scene");
+}
