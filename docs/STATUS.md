@@ -23,7 +23,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | merged (render fuzz seed corpus re-included by the master) | agent/P3-10 |
 | [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | merged (fixed a negative zero-advance line width in text) | agent/P3-11 |
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | merged (approve with fixes: 0 blocker, 4 major, 8 minor) | agent/P3-12 |
-| [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | ready | — |
+| [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | merged (pass: 0 blocker, 5 major, 10 minor; ratchet proposal in report) | agent/P3-13 |
 | [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | ready | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
