@@ -538,6 +538,130 @@ mod tests {
     }
 
     #[test]
+    fn page_numbers_stay_in_their_bounds() {
+        // The largest page number parses; one past it does not.
+        let max = command(&["inspect", "a.vsdx", "--page", "4294967295"]);
+        match max {
+            Command::Inspect(i) => assert_eq!(i.page, Some(u32::MAX)),
+            other => panic!("expected inspect, got {other:?}"),
+        }
+        assert_eq!(
+            error(&["inspect", "a.vsdx", "--page", "4294967296"]),
+            "invalid page number: 4294967296"
+        );
+        assert_eq!(
+            error(&["inspect", "a.vsdx", "--page", "-1"]),
+            "invalid page number: -1"
+        );
+        assert_eq!(
+            error(&["inspect", "a.vsdx", "--page", ""]),
+            "invalid page number: "
+        );
+        assert_eq!(
+            error(&["inspect", "a.vsdx", "--page", " 2"]),
+            "invalid page number:  2"
+        );
+        // A leading plus is accepted by the integer parser; pinned.
+        match command(&["inspect", "a.vsdx", "--page", "+2"]) {
+            Command::Inspect(i) => assert_eq!(i.page, Some(2)),
+            other => panic!("expected inspect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scale_values_stay_in_their_bounds() {
+        // Finite and positive only: zero, negatives and infinities out.
+        for bad in ["0", "-1", "inf", "-inf", "1e400", "nan", "NaN"] {
+            assert_eq!(
+                error(&["render", "a.vsdx", "--out", "a.png", "--scale", bad]),
+                format!("scale must be a positive number: {bad}"),
+                "{bad}"
+            );
+        }
+        for bad in ["", " 1", "x"] {
+            assert_eq!(
+                error(&["render", "a.vsdx", "--out", "a.png", "--scale", bad]),
+                format!("invalid scale: {bad}"),
+                "{bad:?}"
+            );
+        }
+        for good in ["1", "0.5", "1e-300", "300.5"] {
+            match command(&["render", "a.vsdx", "--out", "a.png", "--scale", good]) {
+                Command::Render(r) => assert!(r.scale.is_finite() && r.scale > 0.0, "{good}"),
+                other => panic!("expected render, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn format_and_background_values_are_exact() {
+        // The format and the `none` keyword are case-sensitive.
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "a.png", "--format", "PNG"]),
+            "unknown format: PNG; expected png or svg"
+        );
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "a.png", "--background", "NONE"]),
+            "invalid background: NONE; use #RRGGBB or none"
+        );
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "a.png", "--background", ""]),
+            "invalid background: ; use #RRGGBB or none"
+        );
+        assert_eq!(
+            error(&[
+                "render",
+                "a.vsdx",
+                "--out",
+                "a.png",
+                "--background",
+                "##123456"
+            ]),
+            "invalid background: ##123456; use #RRGGBB or none"
+        );
+        // Uppercase hex is fine, with or without the hash.
+        for good in ["#ABCDEF", "abcdef"] {
+            match command(&["render", "a.vsdx", "--out", "a.png", "--background", good]) {
+                Command::Render(r) => {
+                    assert_eq!(
+                        r.background,
+                        Some(Background::Color(Rgba::opaque(0xAB, 0xCD, 0xEF))),
+                        "{good}"
+                    );
+                }
+                other => panic!("expected render, got {other:?}"),
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_arguments_are_usage_errors() {
+        use std::os::unix::ffi::OsStringExt;
+        let mut out = Vec::new();
+        let bogus = OsString::from_vec(vec![0xff]);
+        let result = parse_to([bogus.clone()].into_iter(), &mut out);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "the command name is not valid text"
+        );
+        let result = parse_to(
+            [
+                OsString::from("render"),
+                OsString::from("a.vsdx"),
+                OsString::from("--out"),
+                bogus,
+            ]
+            .into_iter(),
+            &mut out,
+        );
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "the value of --out is not valid text"
+        );
+    }
+
+    #[test]
     fn render_without_a_known_extension_needs_a_format() {
         assert_eq!(
             error(&["render", "a.vsdx", "--out", "a"]),
