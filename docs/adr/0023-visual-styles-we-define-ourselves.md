@@ -117,3 +117,21 @@ Nothing here is copied from Visio output; a screenshot may be *observed*
   the engine and the CLI with no UI involved.
 - **Skip patterns in Phase 3 (solid lines only).** Rejected: KICKOFF lists
   line patterns and fill patterns in the Phase 3 rendering list.
+
+## Amendments
+
+### Amended 2026-10-15, P3-16: how a tile is drawn
+
+The fill tiles needed one more drawing parameter (the Phase 3 review,
+P3-12 major 3). `PatternTemplate` gains `tile_stroke_width`: the stroke
+width of a tile drawn with `filled: false`, as a **fraction of the tile
+box side** (the unit-box convention), default **0.05**. The data file
+may set it per entry (`tile_stroke_width: 0.05`); `filled: true` tiles
+ignore it. The builder scales it with the tile (`x pitch` inches), so a
+stroked mark keeps its weight relative to the tile at every zoom, and
+`PatternPaint` carries the result (`filled`, `tile_stroke_width` in
+inches) to the backends (ADR 0020 amendment).
+
+The shipped tiles are all closed and filled today, so no committed entry
+changes; the field is what keeps the next open tile (the `M 0 0 L 1 1`
+example above) drawing identically in every backend.

@@ -152,3 +152,43 @@ never panics: bad values become warnings and defaults (ADR 0021).
 - **Indices in the scene, patterns resolved in the backends.** Rejected:
   every backend would need the style tables, and golden tests would compare
   resolved shapes instead of intent.
+
+## Amendments
+
+### Amended 2026-10-15, P3-16: pattern tiles and text fields
+
+Two type changes from the Phase 3 review (P3-12) and one rule the type
+design already implied.
+
+**`PatternPaint` carries how to draw the tile.** The review found the
+backends disagreeing: PNG filled every tile path and SVG stroked an open
+one as a hairline, so a tile like the ADR 0023 example (`M 0 0 L 1 1`)
+drew in one backend and vanished in the other. `PatternPaint` gains
+`filled: bool` and `tile_stroke_width: f64` (inches), both set from the
+`PatternTemplate` in `build_fill`, and both backends honor them. The
+scene stays the single source of drawing intent, and the Phase 4 egui
+backend draws the same mark without picking a side (ADR 0023 amendment
+for the template field).
+
+**One copy of the text rotation and the run size.** `TextNode::rotation`
+and `TextRun::size` duplicated `text::Layout::rotation` and
+`GlyphPos::size`, and the backends already consumed the layout fields.
+The duplicates are gone: the layout is self-contained (ADR 0024's
+output contract), `TextNode` keeps `fonts`, `runs`, `layout`, `color`
+and `origin`, and `TextRun` keeps `underline`, `strikethrough` and
+`color`. The placement recipe in `render::scene` references the layout
+fields only; it also says what the earlier draft implied: a node's
+transform maps into its parent group's space and the ancestor chain maps
+to the page.
+
+**A group's own shape is drawn first.** A group shape with geometry and
+sub-shapes (the P3-05 decision) emits its own shape as the **first
+child** of its `Group` node with an **identity transform** (the group
+already carries the shape transform), and the sub-shapes follow in file
+order on top of it. `Group` has no shape slot, so this is the only
+structure the types allow; the draw order (own shape at the back) is now
+part of the contract. A black-box check of Visio's group z-order is on
+the screenshot-pass list.
+
+**`BuildOptions::default()` agrees with `BuildOptions::new()`** (both
+include the background page).
