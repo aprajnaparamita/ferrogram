@@ -144,3 +144,11 @@ periodic input draws as an open curve that need not start at its first
 control point. No corpus file exercises the case and the black-box check
 is open; revisit when a file or the screenshot pass needs it.
 
+**Degenerate curves degrade silently (P3-12 minor 8).** The sentence in
+"Degenerate inputs" above ("degrade to the straight chord or line and
+warn") is replaced by: **degrade to the straight chord or line without a
+warning**, or to nothing when the chord is not finite. `ferrogram-geom`
+has no warning channel and the builder records nothing for these cases;
+the degradations reinterpret geometry the file did ask for, while cell
+substitutions warn (ADR 0021). Unknown row types and unparsable formulas
+still warn.
