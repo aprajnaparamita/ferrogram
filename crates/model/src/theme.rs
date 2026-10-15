@@ -3,7 +3,10 @@
 //! A theme part ([MS-VSDX] `/visio/theme/theme{N}.xml`) is a DrawingML
 //! theme: a colour scheme (`a:clrScheme`), a font scheme (`a:fontScheme`)
 //! and an effects scheme (`a:fmtScheme`). Phase 3 maps the colours and
-//! fonts as far as rendering needs; effects stay preserved. The document
+//! fonts as far as rendering needs; effects stay preserved. The
+//! variation colour schemes (`vt:variationClrSchemeLst`) and the background
+//! colour (`bkgnd`) resolve the `QuickStyle*Color` variant encodings (ADR
+//! 0021 amendment); effects stay preserved. The document
 //! colour table (`Colors`/`ColorEntry`) names colours by index (24 and
 //! up; 0..23 are the fixed palette, `crate::values::palette`).
 
@@ -59,6 +62,46 @@ pub struct ThemeFonts {
     pub minor_cs: String,
 }
 
+/// One theme variation colour scheme (`vt:variationClrScheme`, ADR 0021
+/// amendment).
+///
+/// The seven `varColor1`..`varColor7` colours are what a `QuickStyle*Color`
+/// value of 100..106 names ([MS-VSDX] `QuickStyleFillColor`: "the color
+/// property ... of a `CT_VariationClrScheme` element specified by the
+/// `VariationColorIndex` cell"). A theme part holds four of them
+/// (`vt:variationClrSchemeLst`); the shape's `VariationColorIndex` cell
+/// selects one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeVariation {
+    /// `varColor1`..`varColor7`, in file order.
+    pub colors: [Color; 7],
+}
+
+/// What one `a:fmtScheme` fill style does (ADR 0021 amendment): the kind
+/// of the fill a themed `FillPattern` cell names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeFillKind {
+    /// No fill (`noFill`).
+    None,
+    /// A solid fill (`solidFill`).
+    Solid,
+    /// A gradient fill (`gradFill`); the stops come from the shape's own
+    /// `FillGradient` rows until the `a:fmtScheme` gradient stops are read
+    /// (open issue of P3-15).
+    Gradient,
+}
+
+/// The fill style indices of one theme variation style scheme
+/// (`vt:variationStyleScheme`, ADR 0021 amendment): the `fillIdx`
+/// attributes of its `vt:varStyle` children, in file order. Each is a
+/// 1-based index into [`Theme::fill_kinds`]; a `QuickStyleFillMatrix`
+/// value of 100..103 names the first..fourth entry ([MS-VSDX]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeVariationStyles {
+    /// The `fillIdx` values, in `vt:varStyle` order.
+    pub fill_indices: Vec<u32>,
+}
+
 /// One theme part (ADR 0019).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
@@ -68,6 +111,19 @@ pub struct Theme {
     pub colors: Option<ThemeColors>,
     /// The font scheme, when the part has one.
     pub fonts: Option<ThemeFonts>,
+    /// The variation colour schemes (`vt:variationClrSchemeLst` inside
+    /// `a:clrScheme`), in file order (ADR 0021 amendment).
+    pub variations: Vec<ThemeVariation>,
+    /// The theme's background colour (the `bkgnd` extension of
+    /// `a:clrScheme`), which `QuickStyle*Color` 8 names (ADR 0021
+    /// amendment).
+    pub background: Option<Color>,
+    /// The fill styles of `a:fmtScheme`'s `fillStyleLst`, in file order
+    /// (ADR 0021 amendment): what a themed `FillPattern` resolves to.
+    pub fill_kinds: Vec<ThemeFillKind>,
+    /// The variation style schemes (`vt:variationStyleSchemeLst` inside
+    /// `a:fmtScheme`), in file order (ADR 0021 amendment).
+    pub variation_styles: Vec<ThemeVariationStyles>,
     /// The rest of the part kept verbatim (ADR 0012).
     pub preserved: Preserved,
 }
@@ -79,6 +135,10 @@ impl Theme {
             name: name.into(),
             colors: None,
             fonts: None,
+            variations: Vec::new(),
+            background: None,
+            fill_kinds: Vec::new(),
+            variation_styles: Vec::new(),
             preserved: Preserved::new(),
         }
     }

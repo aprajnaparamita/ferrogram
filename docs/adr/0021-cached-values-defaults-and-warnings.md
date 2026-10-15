@@ -180,3 +180,86 @@ Open issues:
   ("custom colors have values of 24 and above" in numeric operations,
   ShapeSheet reference) instead of a table index. It substitutes black
   with a `Missing` warning for now.
+
+### Amended 2026-10-15, P3-15: theme variant colours
+
+The variant encodings of the open issue above are now resolved. The mapping
+([MS-VSDX] `QuickStyleFillColor` and the `QuickStyleLineColor`,
+`QuickStyleShadowColor`, `QuickStyleFontColor` pages that reuse its table;
+`VisQuickStyleColors`):
+
+| `QuickStyle*Color` | Resolves to |
+|---|---|
+| 0 | `dk1` (the Dark theme colour) |
+| 1 | `lt1` (the Light theme colour) |
+| 2..7 | `accent1`..`accent6` |
+| 8 | the theme's background colour (`bkgnd`, the `a:clrScheme` extension; `UnresolvedTheme` when the part has none) |
+| 100..106 | `varColor1`..`varColor7` of the theme variation colour scheme the sheet's `VariationColorIndex` cell selects ("Color variant 1..7", `VisQuickStyleColors`) |
+| 200..206 | the same `varColor1`..`varColor7` (no published meaning; corpus-derived, below) |
+| anything else | `UnresolvedTheme` + the hard default |
+
+- The variation colour schemes are the `vt:variationClrSchemeLst`
+  extension of `a:clrScheme`, read into `Theme::variations` (one
+  `varColor1`..`varColor7` set per `vt:variationClrScheme`).
+- `VariationColorIndex` ([MS-VSDX]) selects the scheme: 0..3 the
+  scheme's position, 65534 or a missing cell defers to the page sheet's
+  cell, anything else is variation 0. `VariationStyleIndex` works the same
+  way for the style schemes below.
+- **200..206 have no published meaning.** The corpus shows the same
+  variation colours: `color-boxes.vsdx`'s shapes 68..74 carry
+  `QuickStyleLineColor`/`QuickStyleFillColor` 200..206 and cache the
+  variation colours modulated by the line style matrix
+  (`QuickStyleLineMatrix` 6, e.g. `#547495` = 0.73 x `varColor2`
+  `#759FCC`), and `tdf154379-QuickStyleFillMatrix.vsdx`'s shape 317
+  (variant 200, matrix 2) caches `LineColor V='#5b9bd5'` = `varColor1`
+  unshaded. We resolve 200+k exactly like 100+k and flag it
+  corpus-derived.
+- The **style-matrix modulation of the colour** (`QuickStyle*Matrix` →
+  the `a:fmtScheme` `fillStyleLst`/`lnStyleLst` entries, whose `tint` /
+  `shade` modifiers work in the HSL colour space per [MS-VSDX] `ThemeCBV`)
+  is **not** applied: `CellReader::color` resolves the theme's own colour.
+  The corpus snapshots show Visio's value after the modulation; the exact
+  transform stays open.
+
+### Amended 2026-10-15, P3-15: themed `FillPattern` from the fill style matrix
+
+A themed `FillPattern` resolves through the fill style its
+`QuickStyleFillMatrix` names ([MS-VSDX] `QuickStyleFillMatrix`): 1..6 the
+`a:fmtScheme` `fillStyleLst` fills in order, 100..103 the `fillIdx` of the
+first..fourth `vt:varStyle` of the variation style scheme the
+`VariationStyleIndex` cell selects (`vt:variationStyleSchemeLst`; the
+`fillIdx` values are 1-based). The fill kind maps to the pattern value:
+`noFill` 0, `solidFill` 1, `gradFill` 25 (the renderer's gradient range;
+the stops still come from the shape's own `FillGradient` rows). Matrix 0
+names the root style sheet, not the theme, and keeps the `UnresolvedTheme`
+warning. Themed `LinePattern`, `ShdwPattern`, transparencies and gradient
+stop colours keep the warning: mapping them needs the line/effect style
+lists and their dash and shadow tables.
+
+### Amended 2026-10-15, P3-15: quiet documented defaults
+
+A cell that is **absent at every rung** and has a default documented on its
+ShapeSheet reference page resolves to that default with **no** warning
+(`ferrogram_model::defaults`). The table transcribes the documented
+defaults of the cells the scene builder reads: `LocPinX`/`LocPinY`
+(`= Width*0.5`, `= Height*0.5`), `TxtPinX`/`TxtPinY`, `TxtWidth`/
+`TxtHeight` (`= Width*1`, `= Height*1`), `TxtLocPinX`/`TxtLocPinY`
+(flattened to `Width`/`Height` halves), `TxtAngle` (0), the four text
+block margins (0.1 inch; `TopMargin` 4 point) and the transparency cells
+(`FillForegndTrans`, `FillBkgndTrans`, `LineColorTrans`,
+`ShdwForegndTrans`, `ColorTrans`: 0). A formula default evaluates one
+multiplication from the named cell's cached value (0 when it has none):
+no formula engine until Phase 6.
+
+- A cell that something **defines** but that caches no value still warns
+  `Missing`: it is not "absent at every rung".
+- A cell with **no documented default** keeps the `Missing` warning and
+  the hard default. The ShapeSheet reference documents no default for
+  `FlipX`, `FlipY`, `Angle`, `Width`, `PinX`, `FillPattern`, `Size`,
+  `ShapeShdwShow` and most other cells, so the warnings for those remain;
+  extending the table needs another source (a black-box observation pass)
+  or a CLI filter.
+- `Font`'s documented default is the font *number* 0 ("the default font");
+  the model cannot resolve a number to a family without `FaceNames`, and
+  substituting the string `"0"` would break the renderer's theme-font
+  fallback, so `Font` has no table entry yet.

@@ -14,6 +14,7 @@
 
 pub mod aliases;
 mod cell;
+mod defaults;
 mod document;
 mod error;
 pub mod generated;
@@ -34,6 +35,7 @@ mod theme;
 mod values;
 
 pub use cell::{Cell, CellValue, Color};
+pub use defaults::{DocumentedDefault, documented_default};
 pub use document::{Document, DocumentKind, Property};
 pub use error::Error;
 pub use geometry::{
@@ -53,5 +55,8 @@ pub use shape::Shape;
 pub use sheet::Sheet;
 pub use style::{Style, Stylesheet};
 pub use text::{TextContent, TextPart};
-pub use theme::{ColorTableEntry, Theme, ThemeColors, ThemeFonts};
+pub use theme::{
+    ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFonts, ThemeVariation,
+    ThemeVariationStyles,
+};
 pub use values::{CellReader, CellWarning, SheetRef, WarningKind, palette};
