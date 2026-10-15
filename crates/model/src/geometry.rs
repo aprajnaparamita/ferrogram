@@ -1457,6 +1457,47 @@ mod tests {
         assert_eq!(parse_polyline_data("NURBS(1, 3, 0, 0, 0, 0, 0, 1)"), None);
     }
 
+    #[test]
+    fn parse_nurbs_data_edge_spellings() {
+        // A space before the parenthesis and a leading `=` are accepted.
+        let spaced = parse_nurbs_data("NURBS (1, 3, 0, 0, 0, 0, 0, 1)").expect("parses");
+        assert_eq!(spaced.degree, 3);
+        // A trailing comma, a stray closing parenthesis and a quoted
+        // non-number make the argument list unparsable.
+        assert_eq!(parse_nurbs_data("NURBS(1, 3, 0, 0, 0, 0, 0, 1,)"), None);
+        assert_eq!(parse_nurbs_data("NURBS(1, 3, 0, 0, 0, 0, 0, 1))"), None);
+        assert_eq!(parse_nurbs_data("NURBS(\"x\", 3, 0, 0, 0, 0, 0, 1)"), None);
+        // An infinite degree is not an index; an infinite knot is kept
+        // as written (numbers are not validated here).
+        assert_eq!(parse_nurbs_data("NURBS(1, inf, 0, 0, 0, 0, 0, 1)"), None);
+        let infinite = parse_nurbs_data("NURBS(1e999, 3, 0, 0, 0, 0, 0, 1)").expect("parses");
+        assert!(infinite.knot_last.is_infinite());
+    }
+
+    #[test]
+    fn parse_polyline_data_edge_spellings() {
+        // A `POLYLINE` call never falls back to the bare-list form.
+        assert_eq!(parse_polyline_data("POLYLINE(1, 1)"), None);
+        assert_eq!(parse_polyline_data("POLYLINE(1, 1, 0, 0, 1 x)"), None);
+        // Every separator of the bare list form splits.
+        let bare = parse_polyline_data("\t0\t1\n2,3\r4;5").expect("parses");
+        assert_eq!(
+            bare.points,
+            vec![
+                Point::new(0.0, 1.0),
+                Point::new(2.0, 3.0),
+                Point::new(4.0, 5.0)
+            ]
+        );
+        // Odd and empty token lists do not parse.
+        assert_eq!(parse_polyline_data("5"), None);
+        assert_eq!(parse_polyline_data("0 0 0"), None);
+        assert_eq!(parse_polyline_data("   "), None);
+        // An overflowing coordinate is kept as written.
+        let infinite = parse_polyline_data("1e999 0").expect("parses");
+        assert_eq!(infinite.points, vec![Point::new(f64::INFINITY, 0.0)]);
+    }
+
     // --- row sources and degrading values -----------------------------
 
     #[test]

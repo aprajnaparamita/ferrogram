@@ -987,9 +987,13 @@ fn finalize(slice: &[LineItem], spec: &LineSpec<'_>) -> Draft {
         Align::Right => (text_width - x_start - width).max(0.0),
     };
 
-    // Second pass: x placement with alignment and justification.
+    // Second pass: x placement with alignment and justification. The
+    // width is the sum of the advances, not `pen - start`: subtracting
+    // two nearly equal positions cancels and can go negative for a
+    // zero-advance glyph (task P3-11 regression).
     let mut glyphs: Vec<Sg> = Vec::new();
     let mut pen = x_start + shift;
+    let mut width = 0.0_f64;
     for (idx, item) in slice.iter().enumerate() {
         match &item.item {
             Item::Piece(p) => {
@@ -1001,13 +1005,17 @@ fn finalize(slice: &[LineItem], spec: &LineSpec<'_>) -> Draft {
                         advance += stretch;
                     }
                     pen += advance;
+                    width += advance;
                     glyphs.push(g);
                 }
             }
-            Item::Tab => pen += tab_advance(pen, tabs),
+            Item::Tab => {
+                let advance = tab_advance(pen, tabs);
+                pen += advance;
+                width += advance;
+            }
         }
     }
-    let width = pen - x_start - shift;
 
     let (mut ascent, mut descent, mut gap) = default_metrics;
     if !glyphs.is_empty() {
@@ -1753,6 +1761,56 @@ mod layout_tests {
         let without = layout(&boxed(vec![para("a")]), &fonts).unwrap();
         assert_eq!(with_spaces.lines[0].glyphs.len(), 1);
         approx(with_spaces.lines[0].width, without.lines[0].width);
+    }
+
+    #[test]
+    fn a_zero_advance_line_has_a_non_negative_width() {
+        // A zero-point run advances nothing; the line width is the sum
+        // of the advances, so it is exactly zero. The old
+        // `pen - x_start - shift` cancelled when the alignment shifted
+        // the line at an indent and came out a tiny negative number
+        // (task P3-11 regression, found by the layout property test;
+        // this is its minimal input).
+        let fonts = default_fonts();
+        let paragraph = Paragraph {
+            runs: vec![
+                Run {
+                    text: "",
+                    format: fmt("Carlito", 0.0),
+                },
+                Run {
+                    text: "\n\u{200b}a•a",
+                    format: fmt("Carlito", 0.0),
+                },
+            ],
+            align: Align::Center,
+            line_spacing: 0.0,
+            space_before: 0.0,
+            space_after: 0.0,
+            indent_first: 0.0,
+            indent_left: 0.417_093_181_740_270_27,
+            bullet: None,
+            tabs: Vec::new(),
+        };
+        let block = Block {
+            paragraphs: vec![paragraph],
+            width: 2.018_373_444_809_812_5,
+            height: 0.0,
+            valign: VAlign::Top,
+            margins: Insets {
+                left: 0.0,
+                right: 0.358_982_212_006_411_9,
+                top: 0.0,
+                bottom: 0.0,
+            },
+            rotation: Angle::from_radians(0.0),
+            wrap: false,
+        };
+        let result = layout(&block, &fonts).unwrap();
+        for line in &result.lines {
+            assert!(line.width >= 0.0, "{line:?}");
+            assert_eq!(line.width, 0.0, "{line:?}");
+        }
     }
 
     #[test]

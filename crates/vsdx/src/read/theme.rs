@@ -936,4 +936,106 @@ mod tests {
         let theme = map_theme(&root).expect("maps");
         assert!(theme.fill_styles.is_empty());
     }
+
+    #[test]
+    fn a_slot_falls_through_an_unparsable_colour_to_the_next_child() {
+        let scheme = element(
+            "clrScheme",
+            &[],
+            vec![child(element(
+                "dk1",
+                &[],
+                vec![
+                    child(element("srgbClr", &[("val", "#zz")], Vec::new())),
+                    child(element(
+                        "sysClr",
+                        &[("val", "windowText"), ("lastClr", "112233")],
+                        Vec::new(),
+                    )),
+                ],
+            ))],
+        );
+        assert_eq!(slot(&scheme, "dk1"), Some(Color::new(0x11, 0x22, 0x33)));
+        // A slot whose only colour does not parse has no colour.
+        let scheme = element(
+            "clrScheme",
+            &[],
+            vec![child(element(
+                "dk1",
+                &[],
+                vec![child(element("srgbClr", &[("val", "#zz")], Vec::new()))],
+            ))],
+        );
+        assert_eq!(slot(&scheme, "dk1"), None);
+    }
+
+    #[test]
+    fn an_unparsable_alpha_falls_back_to_opaque() {
+        // `a:alpha` is 0..100000; a value that does not parse as a `u32`
+        // (negative, over the range, junk) is the DrawingML default.
+        for bad in ["-1", "5000000000", "x", ""] {
+            let fill = element(
+                "solidFill",
+                &[],
+                vec![child(element(
+                    "srgbClr",
+                    &[("val", "#000000")],
+                    vec![child(element("alpha", &[("val", bad)], Vec::new()))],
+                ))],
+            );
+            let style = map_fill_style(&fill).expect("maps");
+            assert_eq!(style.alpha, Some(OPAQUE), "{bad}");
+        }
+    }
+
+    #[test]
+    fn color_entry_indices_and_colours_say_what_they_accept() {
+        // The index is trimmed and must fit `i32`; the colour literal is
+        // not trimmed.
+        let node = element(
+            "Colors",
+            &[],
+            vec![child(element(
+                "ColorEntry",
+                &[("IX", " 24 "), ("RGB", "#fff")],
+                Vec::new(),
+            ))],
+        );
+        let mut table = Vec::new();
+        map_colors(&node, &mut table, "part").expect("maps");
+        assert_eq!(
+            table,
+            vec![ColorTableEntry {
+                index: 24,
+                color: Color::new(255, 255, 255)
+            }]
+        );
+        for ix in ["2147483648", "-2147483649", "x"] {
+            let node = element(
+                "Colors",
+                &[],
+                vec![child(element(
+                    "ColorEntry",
+                    &[("IX", ix), ("RGB", "#000000")],
+                    Vec::new(),
+                ))],
+            );
+            assert!(map_colors(&node, &mut Vec::new(), "part").is_err(), "{ix}");
+        }
+        for rgb in [" #fff", "#fff ", ""] {
+            let node = element(
+                "Colors",
+                &[],
+                vec![child(element(
+                    "ColorEntry",
+                    &[("IX", "24"), ("RGB", rgb)],
+                    Vec::new(),
+                ))],
+            );
+            assert!(
+                map_colors(&node, &mut Vec::new(), "part").is_err(),
+                "{rgb:?}"
+            );
+        }
+    }
 }
