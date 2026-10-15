@@ -358,6 +358,23 @@ fn build_default_stack() -> FontStack {
     stack
 }
 
+/// A font whose bytes do not parse, for the fallback paths' tests
+/// (`advance_em` and the shaper fallback in `crate::layout`).
+#[cfg(test)]
+pub(crate) fn unparsable_for_test() -> Font {
+    Font {
+        bytes: std::sync::Arc::new(b"not a font".to_vec()),
+        family: String::new(),
+        aliases: Vec::new(),
+        weight: 400,
+        italic: false,
+        upem: 1000,
+        ascent: 800,
+        descent: 200,
+        line_gap: 0,
+    }
+}
+
 fn font_ref(bytes: &[u8]) -> Result<FontRef<'_>, Error> {
     FontRef::new(bytes).map_err(|_| Error::InvalidFont)
 }
@@ -702,5 +719,43 @@ mod tests {
     fn pick_name_skips_empty_strings() {
         let f = Font::from_bytes(CARLITO[0].bytes.to_vec()).unwrap();
         assert!(!f.family().is_empty());
+    }
+
+    // --- edge cases (P3-17, coverage finding minor 2) -----------------
+
+    #[test]
+    fn advance_em_of_an_unparsable_font_is_zero() {
+        let f = unparsable_for_test();
+        assert_eq!(f.advance_em(GlyphId(1)), 0.0);
+    }
+
+    #[test]
+    fn path_pen_records_cubic_curves() {
+        // The bundled faces are TrueType (quadratic); a CFF glyph would
+        // come out through `curve_to`, so the pen is exercised directly.
+        let mut pen = PathPen(Path::new());
+        pen.move_to(0.0, 0.0);
+        pen.curve_to(1.0, 0.0, 1.0, 1.0, 0.0, 1.0);
+        pen.close();
+        assert_eq!(
+            pen.0.segments(),
+            &[
+                Segment::MoveTo(Point::new(0.0, 0.0)),
+                Segment::CubicTo {
+                    ctrl1: Point::new(1.0, 0.0),
+                    ctrl2: Point::new(1.0, 1.0),
+                    to: Point::new(0.0, 1.0),
+                },
+                Segment::Close,
+            ]
+        );
+    }
+
+    #[test]
+    fn family_names_come_from_the_name_table() {
+        let carlito = Font::from_bytes(CARLITO[0].bytes.to_vec()).unwrap();
+        assert_eq!(carlito.family(), "Carlito");
+        let selawk = Font::from_bytes(SELAWIK[0].bytes.to_vec()).unwrap();
+        assert_eq!(selawk.family(), "Selawik");
     }
 }
