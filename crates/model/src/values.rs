@@ -48,7 +48,7 @@ pub enum SheetRef {
     Page(PageId),
 }
 
-/// One row of a repeated section, named for the [`CellReader::row_*`]
+/// One row of a repeated section, named for the `CellReader::row_*`
 /// readers (ADR 0019 decision 5).
 ///
 /// A row is matched by `IX` when both sides have one and by position
