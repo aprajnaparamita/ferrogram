@@ -19,11 +19,24 @@
 //! # Knot vectors
 //!
 //! Visio stores one knot per control point plus a final knot (`knot_last`):
-//! `n + 1` knots for `n` control points (`SplineStart`'s `B`, `A`, each
-//! `SplineKnot`'s `A`, then `SplineStart`'s `C`). The full knot vector of
-//! a degree-`d` B-spline is that list followed by `d` more copies of the
-//! last knot, so the curve runs over `knots[d] ..= knot_last` and ends on
-//! its last control point.
+//! `n + 1` knots for `n` control points ([MS-VSDX] 2.4.2.7 `NURBSTo`,
+//! 2.4.2.14 `SplineKnot`, 2.4.2.15 `SplineStart`: `SplineStart`'s `B`,
+//! `A`, each `SplineKnot`'s `A`, then `SplineStart`'s `C`). The full knot
+//! vector of a degree-`d` B-spline is that list followed by `d` more
+//! copies of the last knot: the `DrawNURBS` remarks of the Visio
+//! VBA/automation reference say the application supplies the missing
+//! repeated knots at the tail of the conventional `n + degree + 1`
+//! sequence (their example: the degree-2 list `0, 0, 0, 2, 5, 8` is read
+//! as `0, 0, 0, 2, 5, 8, 8, 8`). The curve therefore runs over
+//! `knots[d] ..= knot_last` and ends on its last control point. libvisio
+//! pads the same way; that is corroboration only, not the source.
+//!
+//! The `DrawNURBS` remarks call a spline *periodic* when its first knot
+//! repeats fewer than `degree + 1` times. We always read the stored list
+//! as clamped (the padding above), so a periodic input draws as an open
+//! curve that need not start at its first control point. No corpus file
+//! exercises the case; it stays open until a file or the screenshot pass
+//! needs it.
 
 use core::f64::consts::{FRAC_PI_2, TAU};
 

@@ -110,8 +110,8 @@ formula does not parse (or is absent), the builder draws a straight
 segment to the row's `X`/`Y` and records one
 `WarningKind::ErrorValue` warning on the `E` cell.** A curve fitted from
 `A`..`D` alone would invent shape the file never asked for; the straight
-chord is the honest degradation (the same rule libvisio's comment
-suggests for empty NURBS data).
+chord is the honest degradation (libvisio draws the same chord for empty
+NURBS data; that is corroboration only).
 
 The knot lists are assembled in the form `ferrogram-geom` documents
 ("Knot vectors" in `curve.rs`): one stored knot per control point plus a
@@ -123,3 +123,24 @@ applies to the formula's points only. For `SplineStart` + `SplineKnot`
 it is `B`, `A`, each `SplineKnot`'s `A`, and `C` as the final knot over
 the control points current point, `SplineStart`'s `(X, Y)` and each
 `SplineKnot`'s `(X, Y)`.
+
+### Amended 2026-10-15, P3-18: knot-vector provenance, the periodic case, silent degradation
+
+**The knot-vector rule is re-sourced (P3-14 F2).** The stored `n + 1`
+knots (one per control point plus a final knot; which row cell holds
+which knot) come from [MS-VSDX] 2.4.2.7 (`NURBSTo`), 2.4.2.14
+(`SplineKnot`) and 2.4.2.15 (`SplineStart`). The end padding (`degree`
+copies of the last knot, completing the conventional `n + degree + 1`
+sequence) comes from the `DrawNURBS` parameter remarks of the Visio
+VBA/automation reference, worked example included; see "Knot vectors" in
+`curve.rs`. libvisio pads its knot vector the same way, but only as
+corroboration. The P3-03 Result stays as written; it is a historical
+record.
+
+**A periodic spline is read as clamped (P3-14 F3).** Those remarks call
+a spline *periodic* when its first knot repeats fewer than `degree + 1`
+times. `curve.rs` always applies the clamped padding above, so a
+periodic input draws as an open curve that need not start at its first
+control point. No corpus file exercises the case and the black-box check
+is open; revisit when a file or the screenshot pass needs it.
+
