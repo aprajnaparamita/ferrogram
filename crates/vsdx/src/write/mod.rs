@@ -1052,4 +1052,41 @@ mod tests {
             Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()))
         );
     }
+
+    #[test]
+    fn refresh_content_types_adds_a_missing_override() {
+        // A preserved package whose main part is declared as a stencil
+        // main part and carries no `Override` for it: the refresh follows
+        // `Document::kind`, rewrites the part and adds the declaration.
+        let document = sample();
+        let main = PartName::new(MAIN_PART);
+        let mut package = from_model(&document).expect("package");
+        if let Some(part) = package.parts.iter_mut().find(|part| part.name == main) {
+            part.content_type = ContentType::new(CT_STENCIL_MAIN);
+        }
+        package.content_types.retain(|decl| {
+            !(decl.kind == ContentTypeKind::Override && normalize(&decl.name) == main.as_str())
+        });
+        assert!(
+            !package
+                .content_types
+                .iter()
+                .any(|decl| normalize(&decl.name) == main.as_str()),
+            "the setup must leave the main part undeclared"
+        );
+
+        refresh_content_types(&mut package, &document, &main);
+
+        let declared: Vec<_> = package
+            .content_types
+            .iter()
+            .filter(|decl| {
+                decl.kind == ContentTypeKind::Override && normalize(&decl.name) == main.as_str()
+            })
+            .collect();
+        assert_eq!(declared.len(), 1, "{:?}", package.content_types);
+        assert_eq!(declared[0].content_type, CT_DRAWING_MAIN);
+        let part = package.part(&main).expect("main part");
+        assert_eq!(part.content_type.as_str(), CT_DRAWING_MAIN);
+    }
 }

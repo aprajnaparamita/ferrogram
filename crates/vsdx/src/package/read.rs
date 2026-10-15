@@ -414,7 +414,7 @@ fn find_attribute<'n>(node: &'n XmlNode, name: &str) -> Option<&'n str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::{ContentTypeDecl, ContentTypeKind};
+    use crate::package::{ContentTypeDecl, ContentTypeKind, Limits, PartName};
 
     #[test]
     fn normalize_name_is_absolute_with_forward_slashes() {
@@ -544,5 +544,25 @@ mod tests {
             parse_content_types(&root),
             Err(Error::InvalidPackage(_))
         ));
+    }
+
+    #[test]
+    fn parse_relationships_skips_non_element_children() {
+        // Mixed content in a relationships entry: the text between the
+        // `Relationship` elements is preserved as a non-element child and
+        // skipped, never an error.
+        let text = concat!(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">",
+            "<Relationship Id=\"rId1\" Type=\"t\" Target=\"a.xml\"/>",
+            "junk",
+            "<Relationship Id=\"rId2\" Type=\"t\" Target=\"b.xml\"/>",
+            "</Relationships>"
+        );
+        let root = parse_xml(text, &Limits::default()).expect("parses");
+        let source = PartName::new("/a.xml");
+        let relationships = parse_relationships(&root, &source).expect("relationships");
+        assert_eq!(relationships.len(), 2);
+        assert_eq!(relationships[0].id.as_str(), "rId1");
+        assert_eq!(relationships[1].id.as_str(), "rId2");
     }
 }
