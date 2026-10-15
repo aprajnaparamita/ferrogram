@@ -1,0 +1,13 @@
+---
+source: crates/render/tests/svg_snapshot.rs
+expression: svg
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="816.000000" height="1056.000000" viewBox="0 0 816.000000 1056.000000">
+  <g transform="matrix(1.000000 0.000000 0.000000 -1.000000 0.000000 1056.000000)">
+    <path d="M 96.000000 768.000000 L 288.000000 864.000000 L 480.000000 768.000000" fill="none" stroke="#c0392b" stroke-width="4.800000" stroke-linecap="round" />
+    <path d="M 96.000000 624.000000 L 288.000000 720.000000 L 480.000000 624.000000" fill="none" stroke="#2980b9" stroke-width="1.920000" stroke-dasharray="11.520000 7.680000" stroke-linecap="round" />
+    <path d="M 96.000000 480.000000 L 480.000000 480.000000" fill="none" />
+    <path d="M 96.000000 288.000000 L 288.000000 432.000000 L 480.000000 288.000000" fill="none" />
+  </g>
+</svg>
