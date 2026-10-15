@@ -170,9 +170,8 @@ pub fn build_scene(doc: &Document, page: PageId, options: &BuildOptions) -> Resu
     let entity = doc
         .page(page)
         .ok_or(Error::Model(ferrogram_model::Error::UnknownPage(page)))?;
-    let width = ctx.number(SheetRef::Page(page), "PageWidth");
-    let height = ctx.number(SheetRef::Page(page), "PageHeight");
-    let mut scene = Scene::new(width.max(0.0), height.max(0.0));
+    let (width, height) = page_size(&mut ctx, page);
+    let mut scene = Scene::new(width, height);
 
     let mut seen = Vec::new();
     if options.background
@@ -628,12 +627,32 @@ fn shape_content(
     (path, fill, stroke, shadow, text)
 }
 
+/// The page size used when a page has no positive `PageWidth` or
+/// `PageHeight` (US Letter, portrait, in inches). Files without a page
+/// sheet exist in the corpus; a zero-size scene cannot be rasterized.
+const FALLBACK_PAGE_SIZE: (f64, f64) = (8.5, 11.0);
+
+/// The page size in inches. A missing, zero, negative or non-finite
+/// `PageWidth` or `PageHeight` takes the [`FALLBACK_PAGE_SIZE`] value (the
+/// reader already records a warning for a missing or bad cell).
+fn page_size(ctx: &mut Ctx<'_>, page: PageId) -> (f64, f64) {
+    let sheet = SheetRef::Page(page);
+    let positive = |value: f64, fallback: f64| {
+        if value.is_finite() && value > 0.0 {
+            value
+        } else {
+            fallback
+        }
+    };
+    let width = positive(ctx.number(sheet, "PageWidth"), FALLBACK_PAGE_SIZE.0);
+    let height = positive(ctx.number(sheet, "PageHeight"), FALLBACK_PAGE_SIZE.1);
+    (width, height)
+}
+
 /// The page rectangle in the shape's local coordinates (the `InfiniteLine`
 /// clip), or `None` when the shape transform cannot be inverted.
 fn page_rect_in_local(ctx: &mut Ctx<'_>, page: PageId, transform: Transform) -> Option<[Point; 4]> {
-    let sheet = SheetRef::Page(page);
-    let width = ctx.number(sheet, "PageWidth").max(0.0);
-    let height = ctx.number(sheet, "PageHeight").max(0.0);
+    let (width, height) = page_size(ctx, page);
     let inverse = transform.invert().ok()?;
     Some([
         inverse.apply(Point::new(0.0, 0.0)),
@@ -1965,6 +1984,26 @@ mod tests {
     }
 
     // --- options and transforms --------------------------------------
+
+    #[test]
+    fn a_page_without_a_size_falls_back_to_letter() {
+        // Regression: corpus files without a page sheet built a 0 x 0
+        // scene, which the PNG backend rejects.
+        let (doc, _, _) = document_with_shape();
+        let scene = build(&doc);
+        assert_eq!((scene.width, scene.height), (8.5, 11.0));
+    }
+
+    #[test]
+    fn a_zero_page_size_falls_back_per_axis() {
+        let (mut doc, _, _) = document_with_shape();
+        if let Some(entity) = doc.pages.first_mut() {
+            entity.sheet.cells.push(number_cell("PageWidth", 0.0));
+            entity.sheet.cells.push(number_cell("PageHeight", 4.0));
+        }
+        let scene = build(&doc);
+        assert_eq!((scene.width, scene.height), (8.5, 4.0));
+    }
 
     #[test]
     fn new_options_include_the_background() {
