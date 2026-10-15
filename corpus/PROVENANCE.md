@@ -48,6 +48,17 @@ Not listed (kept in `reference/corpus-candidates/` only): the larger libvisio fi
 | `fixtures/malformed-huge-declared-size.vsdx` | P2-08 | MIT | Malformed: `page1.xml` declares 100 MiB uncompressed. Builder output. |
 | `fixtures/malformed-deep-nesting.vsdx` | P2-08 | MIT | Malformed: 200 nested elements in `document.xml`. Builder output. |
 | `fixtures/malformed-bad-content-types.vsdx` | P2-08 | MIT | Malformed: `[Content_Types].xml` is not well-formed XML. Builder output. |
+| `fixtures/render-geometry-absolute.vsdx` | P3-10 | MIT | Rendering fixture: every absolute geometry row type, one subpath each. Builder output. |
+| `fixtures/render-geometry-relative.vsdx` | P3-10 | MIT | Rendering fixture: every relative (`Rel*`) geometry row type, one subpath each. Builder output. |
+| `fixtures/render-fills.vsdx` | P3-10 | MIT | Rendering fixture: solid, gradient and pattern fills. Builder output. |
+| `fixtures/render-lines.vsdx` | P3-10 | MIT | Rendering fixture: line weight, pattern, line ends and rounding. Builder output. |
+| `fixtures/render-shadows.vsdx` | P3-10 | MIT | Rendering fixture: drop shadows. Builder output. |
+| `fixtures/render-text.vsdx` | P3-10 | MIT | Rendering fixture: text with runs, paragraphs, bullets and tabs. Builder output. |
+| `fixtures/render-master-inheritance.vsdx` | P3-10 | MIT | Rendering fixture: a master instance that inherits its geometry. Builder output. |
+| `fixtures/render-theme.vsdx` | P3-10 | MIT | Rendering fixture: theme colours and theme fonts (`Themed` cells plus our own DrawingML theme part). Builder output. |
+| `fixtures/render-layers.vsdx` | P3-10 | MIT | Rendering fixture: layer membership and layer visibility. Builder output. |
+| `fixtures/render-page-size.vsdx` | P3-10 | MIT | Rendering fixture: a non-default (landscape) page size. Builder output. |
+| `fixtures/render-background-pages.vsdx` | P3-10 | MIT | Rendering fixture: a background page behind the drawing page. Builder output. |
 
 Two more malformed fixtures are generated at test time and never committed:
 `malformed-zip-bomb.vsdx` (8 MiB of zeros deflated; the deflate stream is not
@@ -59,6 +70,14 @@ copies of every committed fixture above, used as the seed corpus of the
 `read_package` fuzz target (ADR 0017 section 4). Same author and license
 (MIT); `fixtures/` stays the single source of truth and a copy that drifts is
 a bug.
+
+The seed corpus of the `render_document` fuzz target
+(`crates/render/fuzz/corpus/`, task P3-10, ADR 0027 section 6) holds
+byte-identical copies of four committed fixtures above
+(`render-geometry-absolute.vsdx`, `render-fills.vsdx`, `render-text.vsdx`,
+`render-theme.vsdx`) plus three tiny hand-written junk files
+(`junk-text.bin`, `junk-zip-header.bin`, `junk-zeros.bin`). Same author and
+license (P3-10, MIT).
 
 All rows above are our own work: hand-written XML and a plain zip container
 produced by `crates/vsdx/tests/common/mod.rs` (task P2-08). Element names,

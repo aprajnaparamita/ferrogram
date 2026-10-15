@@ -502,6 +502,8 @@ dependencies = [
  "ferrogram-model",
  "ferrogram-text",
  "ferrogram-vsdx",
+ "insta",
+ "proptest",
  "quick-xml",
  "serde",
  "serde-saphyr",
