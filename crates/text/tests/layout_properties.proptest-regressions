@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8f78cd3c7ecde8c10e226f8c2da1e186e83e0ed19fcf3c8ade04a425ae853ef3 # shrinks to spec = BlockSpec { paragraphs: [ParaSpec { texts: ["", "\n\u{200b}a•a"], families: [], sizes: [0.0, 0.0], align: Center, line_spacing: 0.0, space_before: 0.0, space_after: 0.0, indent_first: 0.0, indent_left: 0.41709318174027027, bullet: None, tabs: [] }], width: 2.0183734448098125, height: 0.0, valign: Top, margins: [0.0, 0.3589822120064119, 0.0, 0.0], rotation: 0.0, wrap: false }
+cc aa64f3d2358b95347a98e88f217ef7607e4910cf1f9d46eb89f50cb671cfadce # shrinks to spec = BlockSpec { paragraphs: [ParaSpec { texts: [""], families: [], sizes: [], align: Left, line_spacing: 0.0, space_before: 0.0, space_after: 0.0, indent_first: 0.0, indent_left: 0.0, bullet: None, tabs: [] }], width: 0.0, height: 0.0, valign: Top, margins: [0.0, 0.0, 0.0, 0.0], rotation: 0.0, wrap: false }, which = 8, bad = NaN

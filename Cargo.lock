@@ -520,6 +520,7 @@ version = "0.0.1"
 dependencies = [
  "ferrogram-geom",
  "harfrust",
+ "proptest",
  "skrifa",
  "unicode-linebreak",
 ]
