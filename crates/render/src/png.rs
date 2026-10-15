@@ -358,6 +358,9 @@ fn draw_fill(
     total: SkTransform,
     mask: Option<&Mask>,
 ) {
+    if !fits_device(path, total, 0.0) {
+        return;
+    }
     with_paint(paint, ctx, |paint| {
         pixmap.fill_path(path, paint, FillRule::Winding, total, mask);
     });
@@ -372,7 +375,7 @@ fn draw_stroke(
     total: SkTransform,
     mask: Option<&Mask>,
 ) {
-    if !stroke.width.is_finite() || stroke.width < 0.0 {
+    if !stroke.width.is_finite() || stroke.width < 0.0 || !fits_device(path, total, stroke.width) {
         return;
     }
     let sk_stroke = SkStroke {
@@ -598,8 +601,58 @@ fn push_clip(clips: &mut Vec<ClipFrame>, clip: Option<&Clip>, total: Transform) 
     let Some(path) = sk_path_with(&clip.path, total) else {
         return 0;
     };
+    if !fits_device(&path, SkTransform::identity(), 0.0) {
+        // A clip too big to rasterize clips nothing on the page.
+        return 0;
+    }
     clips.push((path, FillRule::Winding));
     1
+}
+
+/// The largest device-space coordinate, in pixels, a path may reach.
+///
+/// The raster is at most [`MAX_DIMENSION`] pixels per side, so a path
+/// beyond this bound is absurd input. `tiny-skia` computes in `f32` and
+/// fixed point and asserts finite points (P3-14 F4), so such a path is
+/// skipped rather than handed to it.
+const MAX_DEVICE_COORD: f64 = 4_194_304.0;
+
+/// Whether a path under `total`, widened by a stroke of `width` local
+/// units, stays inside [`MAX_DEVICE_COORD`].
+///
+/// The affine image of the path lies inside the image of its bounding
+/// box, so the four corners bound it. The math is in `f64`.
+fn fits_device(path: &SkPath, total: SkTransform, width: f64) -> bool {
+    let b = path.bounds();
+    let (sx, ky, kx, sy, tx, ty) = (
+        f64::from(total.sx),
+        f64::from(total.ky),
+        f64::from(total.kx),
+        f64::from(total.sy),
+        f64::from(total.tx),
+        f64::from(total.ty),
+    );
+    // The stroke reaches at most `width` times the largest axis scale
+    // beyond the path.
+    let reach = width * (sx.abs() + kx.abs()).max(ky.abs() + sy.abs());
+    if !reach.is_finite() || reach > MAX_DEVICE_COORD {
+        return false;
+    }
+    let corners = [
+        (b.left(), b.top()),
+        (b.right(), b.top()),
+        (b.left(), b.bottom()),
+        (b.right(), b.bottom()),
+    ];
+    corners.iter().all(|&(x, y)| {
+        let (x, y) = (f64::from(x), f64::from(y));
+        let dx = sx * x + kx * y + tx;
+        let dy = ky * x + sy * y + ty;
+        dx.is_finite()
+            && dy.is_finite()
+            && dx.abs() + reach <= MAX_DEVICE_COORD
+            && dy.abs() + reach <= MAX_DEVICE_COORD
+    })
 }
 
 /// The dash of a stroke, or `None` for a solid line.
@@ -1438,6 +1491,45 @@ mod tests {
         scene.width = 1.0;
         let bytes = render_png(&scene, &PngOptions::new());
         assert!(bytes.is_ok() || bytes == Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn huge_finite_coordinates_never_panic() {
+        // P3-14 F4: a 1e30 in shape width under a rotation is finite in
+        // f64 but overflows the f32 device space of tiny-skia, whose
+        // hairline stroker asserts finite points in debug builds.
+        let mut wide = Path::new();
+        wide.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        wide.push(Segment::LineTo(Point::new(1.0e30, 0.0)));
+        wide.push(Segment::CubicTo {
+            ctrl1: Point::new(1.0e30, 1.0e30),
+            ctrl2: Point::new(-1.0e30, 1.0e30),
+            to: Point::new(0.0, 0.0),
+        });
+        let mut nodes = Vec::new();
+        for (width, scale) in [(0.0, 1.0), (1.0, 1.0), (0.0, 1.0e10), (1.0e-30, 1.0e30)] {
+            let mut node = shape(wide.clone(), Some(solid_red()));
+            if let Node::Shape(shape) = &mut node {
+                shape.stroke = Some(stroke(solid_blue(), width));
+                shape.transform = Transform::scale(scale, scale)
+                    .then(Transform::rotate(Angle::from_radians(-1.0)))
+                    .then(Transform::translate(Point::new(5.0e29, -5.0e29)));
+                shape.shadow = Some(Shadow {
+                    color: Rgba::new(0, 0, 0, 255),
+                    offset: Point::new(1.0e30, 0.0),
+                    blur: 0.0,
+                });
+            }
+            nodes.push(Node::Group(Group {
+                transform: Transform::rotate(Angle::from_radians(-1.0)),
+                clip: Some(Clip {
+                    path: path_rect(-1.0e30, -1.0e30, 1.0e30, 1.0e30),
+                }),
+                children: vec![node],
+            }));
+        }
+        let scene = scene_of(1.0, 1.0, nodes);
+        assert!(render_png(&scene, &PngOptions::new()).is_ok());
     }
 
     #[test]
