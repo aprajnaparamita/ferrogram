@@ -190,10 +190,12 @@ impl Document {
             (row_ix, _) => row_ix,
         };
 
-        // 1. Local: the row's own cell (or the section's own cell).
+        // 1. Local: the row's own cell (or the section's own cell). A row
+        //    is matched here as in the master rung below: by `IX` when both
+        //    sides have one, else by position (ADR 0019 decision 5).
         via.push(ValueSource::Local);
         if let Some(found) =
-            local_section.and_then(|local| repeated_cell(local, repeated.row, cell))
+            local_section.and_then(|local| matched_row_cell(local, repeated.row, row_ix, cell))
             && defines(found)
         {
             return Ok(Resolved {
@@ -658,9 +660,12 @@ fn repeated_cell<'a>(
     }
 }
 
-/// The cell of the master's row that matches a local row at `row` with `IX`
-/// `row_ix`: by `IX` when both sides have one, else by position (ADR 0019
-/// decision 5).
+/// The cell of the row that matches a row at `row` with `IX` `row_ix`: by
+/// `IX` when both sides have one, else by position (ADR 0019 decision 5).
+///
+/// A row whose `IX` differs from `row_ix` never matches by position: both
+/// sides have an `IX` and they disagree. A positional match applies only
+/// when the row at `row` has no `IX` of its own.
 fn matched_row_cell<'a>(
     section: &'a Section,
     row: Option<usize>,
@@ -671,11 +676,17 @@ fn matched_row_cell<'a>(
         return repeated_cell(section, None, cell);
     };
     let matched = match row_ix {
-        Some(row_ix) => section
+        Some(row_ix) => match section
             .rows
             .iter()
             .find(|candidate| candidate.ix == Some(row_ix))
-            .or_else(|| section.rows.get(row)),
+        {
+            Some(found) => Some(found),
+            None => section
+                .rows
+                .get(row)
+                .filter(|candidate| candidate.ix.is_none()),
+        },
         None => section.rows.get(row),
     };
     matched?.cells.iter().find(|c| c.name == *cell)
@@ -2955,5 +2966,58 @@ mod phase3_tests {
                 ValueSource::HardDefault,
             ]
         );
+    }
+
+    #[test]
+    fn a_row_matches_by_position_only_when_the_other_side_has_no_ix() {
+        // The caller names `IX` 5. A master row without `IX` at the same
+        // position matches by position ("by `IX` when both sides have one,
+        // else by position", ADR 0019 decision 5); a master row with
+        // another `IX` at that position does not match at all.
+        let (mut doc, instance) = instance_of_master(Vec::new());
+        let master_shape = doc.masters[0].shapes[0];
+        {
+            let shape = doc.shape_mut(master_shape).expect("exists");
+            let sec = &mut shape.sheet.sections[0];
+            sec.rows.clear();
+            let mut no_ix = Row::new();
+            no_ix.row_type = Some("LineTo".to_owned());
+            no_ix.cells.push(number_cell("X", 1.0));
+            sec.rows.push(no_ix);
+        }
+        doc.shape_mut(instance)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(Vec::new()));
+        let target = RepeatedCell {
+            section: "Geometry",
+            section_ix: None,
+            section_pos: Some(0),
+            row: Some(0),
+            row_ix: Some(5),
+        };
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &target,
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(1.0)));
+
+        // Now the master's row at position 0 has `IX` 2: no match.
+        let master_shape = doc.masters[0].shapes[0];
+        doc.shape_mut(master_shape).expect("exists").sheet.sections[0].rows[0].ix = Some(2);
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &target,
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
     }
 }
