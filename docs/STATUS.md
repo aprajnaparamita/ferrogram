@@ -24,7 +24,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | merged (fixed a negative zero-advance line width in text) | agent/P3-11 |
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | merged (approve with fixes: 0 blocker, 4 major, 8 minor) | agent/P3-12 |
 | [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | merged (pass: 0 blocker, 5 major, 10 minor; ratchet proposal in report) | agent/P3-13 |
-| [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | ready | — |
+| [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | merged (pass: 3 minor; F4 crash fixed by the master) | agent/P3-14 |
+| [P3-16](tasks/P3-16.md) | implementer | P3-12..P3-14 | E | ready | — |
+| [P3-18](tasks/P3-18.md) | implementer | P3-12, P3-14 | E | ready | — |
+| [P3-17](tasks/P3-17.md) | test-engineer | P3-16 | — | waits for P3-16 | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -123,3 +126,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - Master fixes (2026-10-15): scene node transforms are now relative to their parent group (the builder stored page transforms, so nested shapes were offset twice); the fixed palette RGB values come from [MS-VSDX] 2.2.7.6 (indices 14, 16 and 18 corrected), which closes the P3-02 "unverified" item. Master smoke render: all 15 corpus files render to PNG and SVG with exit 0; themed fills, gradients and text are visible.
 - P3-10 (open): the oracle comparison covers 3 of 15 corpus pages (`blue-box`, `qs-box`, `color-boxes`); the others skip on text drawn as paths, group flattening, unresolved themed paints, and a smaller geometry box than the oracle's on `testfile1`/`testfile5` arcs and ellipses (check the `Ellipse` and inherited-geometry cases). Tighten `skip_reason` in `crates/render/tests/oracle_render.rs` as those close. Golden metric may need loosening on Linux. The text fixture pins approximate tab and bullet rendering. Master fixes at merge: the root `**/fuzz/corpus/` ignore rule dropped the `render_document` seed corpus (now re-included by `crates/render/fuzz/.gitignore`), and `crates/vsdx/tests/fixtures.rs` now walks every fixture variant.
 - P3-11 (open): `text::layout` can emit non-finite glyph positions for extreme finite input (`line_spacing: f64::MAX`); the backends sanitize, so it is hardening for Phase 6. `render_svg` has no upper bound on `scale` (PNG caps the raster); P3-12 decides whether both backends share one cap. Report: `docs/reviews/phase-3-tests.md`.
+- P3-14 (fixed on main): `render_png` panicked in tiny-skia on huge finite coordinates under a rotation (F4). Fills, strokes and clips whose device-space bounds, widened by the stroke, pass +/-2^22 px are now skipped (`fits_device` in `png.rs`), with a regression test. Clean-room minors F1-F3 go to P3-18; the knot rule rests on [MS-VSDX] and the `DrawNURBS` remarks, not libvisio.
