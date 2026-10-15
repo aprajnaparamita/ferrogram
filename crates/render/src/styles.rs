@@ -686,6 +686,30 @@ mod tests {
         // Tile with a zero spacing.
         let text = "meta: {version: 1}\nfill_patterns:\n  - index: 2\n    kind: tile\n    tile: M 0 0 L 1 1\n    spacing: 0\n";
         assert_eq!(VisualStyles::parse(text), Err(Error::InvalidStyleData));
+        // Tile with a zero, negative or non-finite stroke width.
+        for width in ["0", "-1", "inf"] {
+            let text = format!(
+                "meta: {{version: 1}}\nfill_patterns:\n  - index: 2\n    kind: tile\n    \
+                 tile: M 0 0 L 1 1\n    spacing: 4\n    tile_stroke_width: {width}\n"
+            );
+            assert_eq!(VisualStyles::parse(&text), Err(Error::InvalidStyleData));
+        }
+    }
+
+    #[test]
+    fn a_tile_stroke_width_defaults_and_sticks() {
+        // The default of a tile that names none.
+        let text = "meta: {version: 1}\nfill_patterns:\n  - index: 2\n    kind: tile\n    tile: M 0 0 L 1 1\n    spacing: 4\n";
+        let styles = VisualStyles::parse(text).expect("valid file");
+        let tile = styles.fill_pattern(2).expect("tile");
+        assert_eq!(tile.tile_stroke_width, 0.05);
+        assert!(!tile.filled);
+        // An explicit value.
+        let text = "meta: {version: 1}\nfill_patterns:\n  - index: 2\n    kind: tile\n    tile: M 0 0 L 1 1\n    spacing: 4\n    filled: true\n    tile_stroke_width: 0.2\n";
+        let styles = VisualStyles::parse(text).expect("valid file");
+        let tile = styles.fill_pattern(2).expect("tile");
+        assert_eq!(tile.tile_stroke_width, 0.2);
+        assert!(tile.filled);
     }
 
     #[test]

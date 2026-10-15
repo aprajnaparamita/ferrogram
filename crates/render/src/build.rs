@@ -3109,6 +3109,45 @@ mod tests {
     }
 
     #[test]
+    fn a_marker_beyond_i32_matches_no_row_and_warns() {
+        // `marker_ix` clamps a marker `IX` beyond `i32::MAX`: the run
+        // matches no row and reads the defaults with warnings, never a
+        // wrapped `IX`.
+        let (mut doc, page, shape) = document_with_shape();
+        if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+            entity.sheet.cells = vec![
+                number_cell("PageWidth", 8.5),
+                number_cell("PageHeight", 11.0),
+            ];
+        }
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
+            entity.text = Some(ferrogram_model::TextContent {
+                parts: vec![
+                    TextPart::CharRun { ix: u32::MAX },
+                    TextPart::Text("Hi".to_owned()),
+                ],
+            });
+        }
+        with_geometry(
+            &mut doc,
+            shape,
+            vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => assert!(shape.text.is_some()),
+            other => panic!("expected a shape, got {other:?}"),
+        }
+        assert!(
+            scene.warnings.iter().any(|w| w.cell.as_str() == "Size"),
+            "{:?}",
+            scene.warnings
+        );
+    }
+
+    #[test]
     fn paragraph_markers_split_paragraphs_and_bullets_get_a_run() {
         let (mut doc, _page, shape) = document_with_shape();
         {
