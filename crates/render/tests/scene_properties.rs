@@ -389,7 +389,31 @@ fn material_document(spec: &DocSpec) -> Document {
     doc
 }
 
-/// Builds every page of `doc` through both backends; a panic fails.
+/// Parses an SVG output: the tags must balance and some element must
+/// parse (task P3-11: "PNG/SVG outputs parse").
+#[allow(clippy::panic)] // test helper; a broken output is a test failure
+fn assert_svg_parses(svg: &str) {
+    let mut reader = quick_xml::Reader::from_str(svg);
+    let mut depth = 0usize;
+    let mut seen = false;
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(_)) => {
+                depth += 1;
+                seen = true;
+            }
+            Ok(quick_xml::events::Event::End(_)) => depth = depth.saturating_sub(1),
+            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(_) => {}
+            Err(error) => panic!("the SVG output does not parse: {error}"),
+        }
+    }
+    assert!(seen, "no elements in the SVG output");
+    assert_eq!(depth, 0, "unbalanced tags in the SVG output");
+}
+
+/// Builds every page of `doc` through both backends; a panic fails. The
+/// outputs must parse: the PNG decodes, the SVG is well-formed XML.
 #[allow(clippy::expect_used)] // test code; a stale page id here is a generator bug
 fn exercise(doc: &Document) {
     for index in 0..doc.pages.len() {
@@ -399,8 +423,12 @@ fn exercise(doc: &Document) {
         let Ok(scene) = build_scene(doc, page, &BuildOptions::new()) else {
             continue;
         };
-        let _ = render_png(&scene, &PngOptions::new());
-        let _ = render_svg(&scene, &SvgOptions::new());
+        if let Ok(png) = render_png(&scene, &PngOptions::new()) {
+            tiny_skia::Pixmap::decode_png(&png).expect("the PNG output parses");
+        }
+        if let Ok(svg) = render_svg(&scene, &SvgOptions::new()) {
+            assert_svg_parses(&svg);
+        }
     }
 }
 
