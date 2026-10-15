@@ -21,6 +21,7 @@ serde-saphyr = "1.3"
 # Corpus tests (tests/build_scene.rs) read real `.vsdx` files through the
 # package reader (task P3-05).
 ferrogram-vsdx = { path = "../vsdx" }
+quick-xml = "0.41" # parses the SVG output in tests (P3-07)
 
 [lints]
 workspace = true
