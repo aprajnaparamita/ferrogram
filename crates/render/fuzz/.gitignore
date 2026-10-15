@@ -1,0 +1,8 @@
+# cargo-fuzz output; never committed. The seed corpus IS committed (ADR 0027
+# section 6), so it is re-included here over the root `**/fuzz/corpus/` rule:
+# the seeds are byte-identical copies of four `corpus/fixtures/` files plus
+# three hand-written junk files (see `corpus/PROVENANCE.md`).
+!corpus/
+artifacts
+coverage
+target
