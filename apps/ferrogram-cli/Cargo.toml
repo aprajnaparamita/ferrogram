@@ -17,5 +17,9 @@ ferrogram-model = { path = "../../crates/model" }
 ferrogram-render = { path = "../../crates/render" }
 ferrogram-vsdx = { path = "../../crates/vsdx" }
 
+[dev-dependencies]
+# Snapshot tests of the `inspect` output (AGENTS.md section 9).
+insta = "1"
+
 [lints]
 workspace = true
