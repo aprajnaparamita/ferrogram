@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **3 in progress** (group B)
+- Current phase: **3 in progress** (group C)
 - Phase 3 goal: rendering from cached values, plus the CLI (KICKOFF.md). Exit: every corpus file renders without panics, and every geometry row type has tests.
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
 
@@ -16,11 +16,11 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | merged (sources rows renumbered 11–12 on main) | agent/P3-04 |
 | [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | merged (added `Error::InvalidStyleData` in `error.rs`) | agent/P3-08 |
 | [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | merged (added `CellReader` row readers in model; `TextNode` gained `runs` and `rotation`) | agent/P3-05 |
-| [P3-15](tasks/P3-15.md) | implementer | P3-05 | B | ready (model fixes: geometry row union, theme variants, quiet defaults) | — |
+| [P3-15](tasks/P3-15.md) | implementer | P3-05 | B | merged (themed patterns and weights included) | agent/P3-15 |
 | [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | merged (conflict with P3-05 resolved on main; glyphs use their run colour) | agent/P3-06 |
 | [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | merged (stale base; glyph size, rotation and run colour wired on main) | agent/P3-07 |
 | [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | merged (page size fallback fixed on main) | agent/P3-09 |
-| [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | waits for B | — |
+| [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | ready | — |
 | [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | waits for C | — |
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | waits | — |
 | [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | waits | — |
@@ -119,3 +119,5 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-07 (open): `PatternPaint` has no `filled` flag or tile stroke width, so the SVG backend strokes open tiles as hairlines while the PNG backend fills the tile path; the two backends can differ on pattern fills (P3-12 decides the fix). Underline and strike-through are drawn by neither backend. Shadow blur needs `filter` in the ADR 0025 SVG subset. Line ends on dashed strokes are drawn solid. `render_svg`/`render_png` have no `InvalidOptions` error for a bad scale.
 - P3-09 (open): without `--background`, PNG output is transparent (`Scene::background` is always `None`); `export` takes no `--background`; the inspect shape count, the main.rs error branch and the page/export exit-code split are listed in the P3-09 Result. Master smoke run (2026-10-15): all 15 corpus files render to PNG and SVG after the page-size fix, but themed shapes are invisible because `Themed` patterns resolve to 0 (added to P3-15).
 - Master fix (2026-10-15): pages without a positive `PageWidth`/`PageHeight` (two corpus files have no page sheet) now render at 8.5 x 11 in instead of failing with `TooLarge`.
+- P3-15 (open): the style-matrix colour modulation (about a 0.73 factor) is not applied; themed dash presets and shadow patterns fall back; cells with no documented default still warn `Missing`; inherited geometry row cells are the master's cached values (master-sized geometry on resized instances) until the formula engine (Phase 6); `QuickStyle*Color` 200..206 has no published meaning and is resolved like 100..106 from corpus evidence; a themed `LineWeight` falls back to 0.7 pt.
+- Master fixes (2026-10-15): scene node transforms are now relative to their parent group (the builder stored page transforms, so nested shapes were offset twice); the fixed palette RGB values come from [MS-VSDX] 2.2.7.6 (indices 14, 16 and 18 corrected), which closes the P3-02 "unverified" item. Master smoke render: all 15 corpus files render to PNG and SVG with exit 0; themed fills, gradients and text are visible.
