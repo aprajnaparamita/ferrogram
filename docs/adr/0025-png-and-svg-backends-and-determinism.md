@@ -96,3 +96,26 @@ byte-stable.
   CI flaky; tolerance is the standard practice.
 - **Rendering at a fixed 1:1 scale only.** Rejected: the CLI must render
   print-scale and thumbnails.
+
+## Amendments
+
+### Amended 2026-10-15, P3-16: one scale cap for both backends
+
+The review (P3-12 minor 5) found the two backends treating `scale`
+differently: PNG capped the raster and reported a huge `--scale` as
+`TooLarge` (as if the document were too big), SVG wrote absurd
+dimensions. One shared cap now applies to both (the constant
+`render::MAX_DEVICE_EXTENT`, 16 384 pixels per side):
+
+- `Error::InvalidOptions` (new) when `scale` is not finite, not
+  positive, or **over the cap in pixels per inch** (a scale no page of
+  one inch can fit): the option is wrong for any scene.
+- `Error::TooLarge` when `page size x scale` exceeds the cap per side
+  (or the raster/byte caps apply): the document does not fit at that
+  scale.
+
+The CLI keeps exit 3 for both (ADR 0026) and reports the difference in
+its message ("the render options are not valid" vs "output is larger
+than the allowed caps"). `BuildOptions::scale` (the builder's flattening
+tolerance) keeps its documented fallback for a non-finite or
+non-positive value; the backends are the enforcement point.

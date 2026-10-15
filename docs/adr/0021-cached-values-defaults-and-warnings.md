@@ -287,3 +287,57 @@ no formula engine until Phase 6.
   the model cannot resolve a number to a family without `FaceNames`, and
   substituting the string `"0"` would break the renderer's theme-font
   fallback, so `Font` has no table entry yet.
+
+### Amended 2026-10-15, P3-16: non-finite numbers, formula degradations and row identity
+
+The Phase 3 review (P3-12) found one silent substitution and one latent
+lookup gap; this amendment closes both and records two smaller policy
+decisions the review left open.
+
+**A cached number that is not finite is a kind mismatch.** `V='inf'`
+parses to a non-finite `f64` (`f64::from_str` accepts `inf`, `nan` and
+`1e999`), and `CellReader::number_from` accepted it like any number. The
+builder then substituted `0` silently (`Ctx::finite`), the substitution
+the policy forbids. Now `number_from` and `number_from_or` reject a
+non-finite cached number with **one** `KindMismatch` warning and the
+usual substitute (the hard default, or the row's own default), and the
+documented-formula-default path (`related_number`, `LocPinX = Width*0.5`)
+passes on only finite cached values. The builder's `Ctx::finite` is
+gone: the model is the one policy point and its numbers are always
+finite.
+
+**A formula-encoded value that does not parse warns `KindMismatch`.** A
+`NURBS()`/`POLYLINE()` cached string the builder cannot parse degrades
+the row to a straight segment (the ADR 0022 amendment of P3-05) and
+warns `KindMismatch`, not `ErrorValue`: the file's cached value is not
+an error (`#VALUE!` and friends stay `ErrorValue`), the builder cannot
+use the formula. The CLI phrasing follows: "wrong kind", not "cached
+error".
+
+**Text run markers name rows by `IX` alone.** An extension of the ADR
+0019 decision 5 rule, which this crate implements: `CellReader::row_*`
+takes a `RowTarget` (`at(position)`, `by_ix(ix)`), the row identity
+reaches the lookup as `RepeatedCell::row`/`row_ix`, and a row named by
+`IX` alone (`row: None, row_ix: Some`) matches the row with that `IX`
+in the sheet's own rows and in the master chain, and no other row. The
+old builder fallback that read a marker's `IX` as a row *position* is
+gone: with a master whose `Character` rows are `IX` 0 and 5, the run
+marked `IX` 5 reads the master's row 5 (regression-tested). Position
+reads (`at`, the gradient and tab stops) are unchanged and still pick
+up the local row's `IX` for the master rung.
+
+**Row counts go through the same rungs as the row cells.** The new
+`Document::master_chain_shapes` returns the shapes the master rungs of
+the lookup visit (the ADR 0013 rungs: the position rule of P2-06b and
+the sub-shape walk), so a caller that counts rows (`section_rows`, the
+gradient and tab stops) counts them in the same master shape its row
+cells resolve from. The walk is depth-capped by the caller (the builder
+passes its `MAX_DEPTH`) and cycle-cut like the lookup.
+
+**Un-drawable glyphs: documented, not warned.** A glyph whose font index
+is out of range or whose outline is empty (a space, or a glyph id the
+font does not have) draws nothing; the scene builder's placement recipe
+(`render::scene`) records the skip as intentional. A warning per skipped
+glyph would fire on every space in every text and make `--strict`
+useless; the real failures are `text::Layout`'s own `MissingFont` and
+`MissingGlyph` warnings on `Layout::warnings`.
