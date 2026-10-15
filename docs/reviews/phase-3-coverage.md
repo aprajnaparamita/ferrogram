@@ -222,3 +222,176 @@ they are not worth chasing.
   the geometry rows, the render builder and text layout with their inline
   test modules. Coverage percentages are comparable; line counts are not a
   code-size measure on their own.
+
+## Follow-up (P3-17)
+
+- Task: P3-17 (test-engineer), 2026-10-15, branch `agent/P3-17` on top of
+  `main` (`305626d`). Tests only: 56 new tests, and the only additions to
+  non-test code are two `#[cfg(test)]` helpers
+  (`ferrogram_text::font::unparsable_for_test`,
+  `ferrogram_render::styles::parse_for_test`). No product behaviour
+  changed; no new dependencies. Line numbers below are the current ones
+  (several of the audit's moved in P3-16).
+
+### The five major findings
+
+1. **Render builder fallbacks for missing and wrong-kind cells —
+   closed.** Each substituted kind now has a test in
+   `crates/render/src/build.rs`:
+   `reader_errors_substitute_defaults_for_every_kind` (number, bool,
+   colour, row number, row text, row bool and row colour read from a
+   sheet the document does not hold: defaults `0`/`false`/black/empty
+   plus one `Missing` warning each),
+   `wrong_kind_cells_substitute_defaults_and_warn` (a `Str` where a
+   number, a boolean, a colour and a row number are wanted: `KindMismatch`
+   plus the default), `missing_cells_without_a_documented_default_warn`,
+   `a_dangling_sub_shape_warns_about_its_layer_membership` (`LayerMember`),
+   `shape_content_of_an_unknown_shape_warns_about_its_geometry` (the
+   geometry section) and `a_text_layout_failure_warns_about_the_text_cell`
+   (a negative `SpBefore` makes `text::layout` reject the block; the
+   builder drops the text and warns `KindMismatch` on `Text`).
+2. **PNG hostile-input guards — closed.**
+   `degenerate_gradients_draw_nothing` (non-finite linear endpoints, zero
+   and negative radial radii, non-finite centres),
+   `a_gradient_with_unusable_stops_still_rasterizes` (non-finite stop
+   offsets dropped), `degenerate_pattern_tiles_fall_back_to_the_foreground_colour`
+   (non-finite, sub-pixel and over-the-byte-cap tile boxes),
+   `a_stroke_wider_than_the_device_bound_is_skipped` (the `fits_device`
+   reach check of P3-14 F4) and `bad_text_draws_nothing_but_never_panics`
+   (non-finite text origin, out-of-range font index). The raster caps
+   (non-finite, sub-pixel, over-`MAX_DIMENSION`, over-`MAX_BYTES`) were
+   already pinned by `png::tests::oversize_scenes_are_too_large` and
+   `raster_size_is_checked_with_integer_math`.
+3. **SVG size cap and segment mapping — closed.**
+   `an_absurd_document_hits_the_output_cap` (`render_svg` returns
+   `Error::TooLarge` on a 60k-segment path whose coordinates print as
+   300-digit numbers), `the_document_assembly_enforces_the_output_cap`
+   (the `finish` check, where the header pushes the document over the
+   cap), `line_end_path_maps_quad_and_cubic_segments` (the quad/cubic
+   mapping and the `Close` arm) and `endpoint_reads_the_first_segment_direction`
+   (quad and cubic first segments, and a second `MoveTo`).
+4. **PNG line ends — closed.**
+   `line_ends_draw_the_start_arrowhead_and_outline_the_end` (the start
+   end, a colour override on a filled head, and an outlined head in the
+   stroke's own colour: filled body vs outline asserted on pixels) and
+   `degenerate_line_ends_are_skipped` (zero width, empty shape).
+   The end head with an override colour was already covered by
+   `line_ends_draw_at_the_vertices`.
+5. **CLI usage errors and the warning report — closed.**
+   `render_and_export_reject_extra_arguments_and_unknown_options` and
+   `an_unrecognizable_output_extension_is_a_usage_error` (parse.rs),
+   `warning_lines_name_every_kind` (all four `WarningKind`s),
+   `sheet_text_names_pages_shapes_and_fallbacks` and
+   `value_text_names_every_value_kind` (every `CellValue` kind). The
+   `inspect` variants of the two usage errors were already tested.
+
+### The minors
+
+- **Minor 1, the `nominal()` fallback — closed.**
+  `nominal_advances_replace_shaping_when_the_font_does_not_parse` (the
+  `harfrust::Font::new` failure arm) and
+  `nominal_advances_come_from_the_font` (advances from the face).
+- **Minor 2, font edge cases — closed except one.**
+  `advance_em_of_an_unparsable_font_is_zero`,
+  `path_pen_records_cubic_curves` (cubic glyph outlines; the bundled
+  faces are TrueType, so `curve_to` is exercised directly) and
+  `family_names_come_from_the_name_table`. The name-preference fallback
+  (`pick_name` keeping the first record when none is English) stays
+  uncovered: both bundled faces carry English name records and a
+  synthetic face was not cheap.
+- **Minor 3, style-level warnings — closed except two unreachable
+  branches.** `a_rectangular_gradient_direction_warns`,
+  `an_unknown_line_pattern_warns_and_draws_solid`,
+  `an_unknown_line_cap_falls_back_to_butt`,
+  `an_unknown_arrow_index_and_size_class_warn`,
+  `an_unknown_shadow_pattern_warns`,
+  `shadow_offsets_default_to_the_template`,
+  `a_line_end_template_with_no_shape_draws_nothing`,
+  `an_inverted_tile_swaps_the_colours`,
+  `vertical_align_bottom_moves_the_lines_down`,
+  `paragraph_alignment_and_line_spacing_branches` (right/justify and the
+  negative and positive `SpLine` branches),
+  `txt_placement_cells_override_the_shape_box` and
+  `an_infinite_line_clips_through_a_flipped_page`.
+- **Minor 4, `InvalidStyleData` on duplicate indices — closed.**
+  `styles::duplicate_style_indices_are_invalid_data` (line ends, fill
+  patterns and shadows).
+- **Minor 5, PNG pattern tiles, quad/cubic dashes and a second clip —
+  closed.** `a_stroked_tile_draws_its_outline`,
+  `a_pattern_tile_without_a_mark_draws_its_background`,
+  `quad_and_cubic_segments_stroke_and_dash`,
+  `path_ends_follow_curve_and_close_segments`,
+  `a_second_clip_intersects_into_the_mask` and
+  `transparent_and_non_finite_shadows_are_skipped`.
+- **Minor 6, the writer's `?` arms — cannot be covered.** The six
+  `?` call sites in `crates/vsdx/src/write/mod.rs` (`ensure_list`,
+  `contents_part`, `ensure_contents`) cannot see an error: all three
+  callees are infallible today. The arms are an API decision (making
+  them fallible), not a test gap; the Phase 2 major "the writer's
+  error-returning paths" stays open with this note. The second half,
+  `refresh_content_types` pushing a missing `Override`, is covered by
+  `write::tests::refresh_content_types_adds_a_missing_override`.
+- **Minor 7, `write/patch.rs` — not done.** The 57 miss arms and
+  ordering fallbacks need preserved fragments with missing or reordered
+  elements; each needs a hand-built tree. Not cheap; left for a task
+  that owns the writer.
+- **Minor 8, `write/emit.rs` — mislabelled.** The six flagged lines are
+  the `_ =>` arms of `match child` in test helper closures (map an
+  element's name, `"?"` for anything else). They are test code in the
+  "never-hit arms" class of the audit's own last section, not product
+  unit-code fallbacks.
+- **Minor 9, `package/read.rs` — behaviour pinned, attribution
+  disputed.** `parse_relationships_skips_non_element_children` pins the
+  non-element child rule and `rels_source_maps_rels_names_to_their_sources`
+  pins the root `/_rels/.rels` rule, but `cargo llvm-cov` still reports
+  those two lines (`:214`, `:379`) at zero executions while counting
+  their neighbours; it also reports `:378` (the element arm that the
+  same test executes twice) at 1. This looks like a line-attribution
+  artefact of the closure matches, not an untested path. The two arms
+  that genuinely cannot fire: `:156` (the inferred content type of a
+  part with no declaration — `infer_content_types` declares every entry
+  of a package without `[Content_Types].xml`, so the arm is defensive)
+  and `:220` (a `/_rels` directory with an empty parent; normalization
+  removes the leading slashes, so the directory is `_rels` and the
+  earlier branch takes it).
+
+### Coverage before and after
+
+`cargo llvm-cov --workspace --all-features` with the corpus present.
+Per-crate line counts (instrumented `src/` lines, including inline test
+code, as in the audit above):
+
+| Crate | Before | After |
+|---|---:|---:|
+| ferrogram-render | 5251/5542 (94.7%) | 6364/6447 (98.7%) |
+| ferrogram-cli | 1233/1290 (95.6%) | 1340/1375 (97.5%) |
+| ferrogram-vsdx | 6823/6934 (98.4%) | 6865/6971 (98.5%) |
+| ferrogram-text | 1596/1641 (97.3%) | 1714/1731 (99.0%) |
+
+Nothing dropped. `xtask` moved 8143/8808 to 8141/8808 between runs
+without a source change: run-to-run attribution noise in test code, and
+still well over its ratchet.
+
+### What stays uncovered in the touched files
+
+All of these are unreachable by construction or test-code noise; each is
+annotated where it sits:
+
+- `build.rs`: the `GeometryRow` catch-all (all 16 variants are matched),
+  `scale_path`'s quad/cubic arms (no committed tile template curves),
+  `append_curve`'s error return and `clip_infinite_line`'s non-finite
+  guard (the cached-value policy only ever delivers finite numbers),
+  `first_size <= 0` in the line-spacing rule (a run's size is always
+  positive after the default), `background_group`'s stale-page arms, and
+  the never-hit `panic!` arms of the inline tests (the audit's "tests
+  that assert nothing" class).
+- `png.rs`: the `Font::outline` error arm (a `Font` only exists when its
+  bytes parsed) and `pattern_transform`'s `None` arm (it is only called
+  after `tile_pixels` succeeded).
+- `svg.rs`: the same `Font::outline` arm, and the `_` catch-alls of the
+  `Segment` match (`Segment` is non-exhaustive and has no other variant
+  today).
+- `cli`: the `_` catch-alls of the `WarningKind` and `CellValue` matches
+  (both enums are non-exhaustive in `ferrogram-model`) and `unknown_option`'s
+  `Arg::Value` arm (a positional is handled before it can reach the
+  helper).
