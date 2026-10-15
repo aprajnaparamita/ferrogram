@@ -12,6 +12,10 @@ pub enum Error {
     /// An output dimension or byte count exceeds the caps for
     /// input-derived values (AGENTS.md section 6).
     TooLarge,
+    /// The render options cannot be right for any scene: a `scale` that
+    /// is not finite, not positive, or above the device extent cap
+    /// (ADR 0025 amendment, P3-16).
+    InvalidOptions,
     /// The operation is not implemented yet (a Phase 3 stub).
     NotImplemented,
     /// The committed visual style data does not parse (ADR 0023). This
@@ -30,6 +34,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::TooLarge => write!(f, "output is larger than the allowed caps"),
+            Error::InvalidOptions => write!(f, "the render options are not valid"),
             Error::NotImplemented => write!(f, "not implemented yet"),
             Error::InvalidStyleData => write!(f, "committed visual style data is not valid"),
             Error::Model(error) => write!(f, "model error: {error}"),
@@ -49,6 +54,10 @@ mod tests {
         assert_eq!(
             Error::TooLarge.to_string(),
             "output is larger than the allowed caps"
+        );
+        assert_eq!(
+            Error::InvalidOptions.to_string(),
+            "the render options are not valid"
         );
         assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
         assert_eq!(

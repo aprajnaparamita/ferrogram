@@ -16,8 +16,10 @@
 //!   multiples of the arrow size class;
 //! - a fill tile lives in the unit tile box `(0, 0)` to `(1, 1)` and is
 //!   repeated with pitch [`PatternTemplate::spacing`], a multiple of the
-//!   line width; `invert` marks tiles drawn in the background colour over
-//!   a foreground-coloured box;
+//!   line width; `filled` fills the tile shapes and `false` strokes them
+//!   with [`PatternTemplate::tile_stroke_width`], a fraction of the tile
+//!   box side; `invert` marks tiles drawn in the background colour over a
+//!   foreground-coloured box;
 //! - shadow offsets and blur are multiples of the line width.
 //!
 //! Paths in the data file use a small absolute-coordinate dialect of our
@@ -42,6 +44,10 @@ const MAX_PATH_SEGMENTS: usize = 4096;
 
 /// The largest dash vector a line pattern may hold.
 const MAX_DASHES: usize = 64;
+
+/// The tile stroke width of a template that does not name one, as a
+/// fraction of the tile box side (the unit-box convention).
+const DEFAULT_TILE_STROKE_WIDTH: f64 = 0.05;
 
 /// One line pattern: a dash rhythm as multiples of the line width
 /// (ADR 0023).
@@ -90,6 +96,9 @@ pub struct PatternTemplate {
     pub spacing: f64,
     /// Whether the tile shapes are filled or stroked.
     pub filled: bool,
+    /// The stroke width of a stroked tile (`filled: false`), as a
+    /// fraction of the tile box side (the unit-box convention).
+    pub tile_stroke_width: f64,
     /// Whether the tile draws the background colour over a
     /// foreground-coloured box (the `visBackDots` family). The builder
     /// swaps the two colours for these tiles.
@@ -250,6 +259,9 @@ struct RawFillPattern {
     /// Whether the tile shapes are filled or stroked.
     #[serde(default)]
     filled: bool,
+    /// The stroke width of a stroked tile, as a fraction of the tile box
+    /// side (default [`DEFAULT_TILE_STROKE_WIDTH`]).
+    tile_stroke_width: Option<f64>,
     /// Whether the tile draws the background colour.
     #[serde(default)]
     invert: bool,
@@ -322,6 +334,7 @@ impl RawFile {
                     tile_size: Size::new(1.0, 1.0),
                     spacing: 0.0,
                     filled: false,
+                    tile_stroke_width: DEFAULT_TILE_STROKE_WIDTH,
                     invert: false,
                 },
                 "solid" => PatternTemplate {
@@ -330,6 +343,7 @@ impl RawFile {
                     tile_size: Size::new(1.0, 1.0),
                     spacing: 0.0,
                     filled: false,
+                    tile_stroke_width: DEFAULT_TILE_STROKE_WIDTH,
                     invert: false,
                 },
                 "tile" => {
@@ -344,12 +358,18 @@ impl RawFile {
                         Some(spacing) if spacing.is_finite() && spacing > 0.0 => spacing,
                         _ => return Err(Error::InvalidStyleData),
                     };
+                    let tile_stroke_width =
+                        entry.tile_stroke_width.unwrap_or(DEFAULT_TILE_STROKE_WIDTH);
+                    if !tile_stroke_width.is_finite() || tile_stroke_width <= 0.0 {
+                        return Err(Error::InvalidStyleData);
+                    }
                     PatternTemplate {
                         kind: PatternKind::Tile,
                         tile,
                         tile_size: Size::new(1.0, 1.0),
                         spacing,
                         filled: entry.filled,
+                        tile_stroke_width,
                         invert: entry.invert,
                     }
                 }

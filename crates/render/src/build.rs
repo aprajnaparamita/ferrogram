@@ -54,8 +54,9 @@
 //!   (× the line width) otherwise, the blur is the template's ×
 //!   `ShapeShdwBlur`, and `ShdwForegndTrans` fades the shadow colour.
 //! - **Text**: runs come from `TextContent` and the `Character`/`Paragraph`
-//!   rows (the `cp`/`pp`/`tp` markers name row `IX` values, matched to row
-//!   positions), `\n` in literal text starts a new paragraph and `fld`
+//!   rows (the `cp`/`pp`/`tp` markers name rows by their `IX`, matched by
+//!   `IX` through the lookup, ADR 0019 decision 5), `\n` in literal text
+//!   starts a new paragraph and `fld`
 //!   markers are skipped (their display text follows as literal text). The
 //!   text block uses the shape's own `Txt*` cells when it has any and the
 //!   shape box otherwise. Font sizes are stored in inches and converted to
@@ -85,7 +86,7 @@ use ferrogram_geom::{
 };
 use ferrogram_model::{
     CellLookup, CellName, CellReader, CellValue, CellWarning, Color, Document, GeometryRow, PageId,
-    ShapeId, SheetRef, TextPart, WarningKind,
+    RowTarget, ShapeId, SheetRef, TextPart, WarningKind,
 };
 use ferrogram_text::{self as text, default_fonts};
 
@@ -150,11 +151,10 @@ impl BuildOptions {
 }
 
 impl Default for BuildOptions {
+    /// [`BuildOptions::new`]: `Default` and `new` agree (ADR 0021
+    /// amendment, P3-16).
     fn default() -> Self {
-        Self {
-            background: false,
-            scale: DEFAULT_SCALE,
-        }
+        Self::new()
     }
 }
 
@@ -233,16 +233,13 @@ impl<'d> Ctx<'d> {
         });
     }
 
-    /// A finite cell number, or `0` with a warning for a non-finite one.
-    fn finite(&mut self, value: f64) -> f64 {
-        if value.is_finite() { value } else { 0.0 }
-    }
-
-    /// Reads a number in canonical units (ADR 0021 policy).
+    /// Reads a number in canonical units (ADR 0021 policy). The reader
+    /// rejects non-finite cached values with one [`WarningKind::KindMismatch`]
+    /// warning, so a returned number is always finite.
     fn number(&mut self, sheet: SheetRef, cell: &str) -> f64 {
         let name = CellName::new(cell);
         match self.reader.number(sheet, &name) {
-            Ok(value) => self.finite(value),
+            Ok(value) => value,
             Err(error) => {
                 self.warnings.push(CellWarning {
                     sheet,
@@ -304,10 +301,10 @@ impl<'d> Ctx<'d> {
 
     /// Reads a number from one row of a repeated section (ADR 0021
     /// policy).
-    fn row_number(&mut self, sheet: SheetRef, section: &str, row: usize, cell: &str) -> f64 {
+    fn row_number(&mut self, sheet: SheetRef, section: &str, row: RowTarget, cell: &str) -> f64 {
         let name = CellName::new(cell);
         match self.reader.row_number(sheet, section, row, &name) {
-            Ok(value) => self.finite(value),
+            Ok(value) => value,
             Err(error) => {
                 self.warnings.push(CellWarning {
                     sheet,
@@ -322,7 +319,7 @@ impl<'d> Ctx<'d> {
 
     /// Reads a string from one row of a repeated section (ADR 0021
     /// policy).
-    fn row_text(&mut self, sheet: SheetRef, section: &str, row: usize, cell: &str) -> String {
+    fn row_text(&mut self, sheet: SheetRef, section: &str, row: RowTarget, cell: &str) -> String {
         let name = CellName::new(cell);
         match self.reader.row_text(sheet, section, row, &name) {
             Ok(value) => value,
@@ -340,7 +337,7 @@ impl<'d> Ctx<'d> {
 
     /// Reads a boolean from one row of a repeated section (ADR 0021
     /// policy).
-    fn row_boolean(&mut self, sheet: SheetRef, section: &str, row: usize, cell: &str) -> bool {
+    fn row_boolean(&mut self, sheet: SheetRef, section: &str, row: RowTarget, cell: &str) -> bool {
         let name = CellName::new(cell);
         match self.reader.row_boolean(sheet, section, row, &name) {
             Ok(flag) => flag,
@@ -358,7 +355,7 @@ impl<'d> Ctx<'d> {
 
     /// Reads a colour from one row of a repeated section (ADR 0021
     /// policy).
-    fn row_color(&mut self, sheet: SheetRef, section: &str, row: usize, cell: &str) -> Color {
+    fn row_color(&mut self, sheet: SheetRef, section: &str, row: RowTarget, cell: &str) -> Color {
         let name = CellName::new(cell);
         match self.reader.row_color(sheet, section, row, &name) {
             Ok(color) => color,
@@ -853,12 +850,7 @@ fn rows_to_path(
                         );
                     }
                     None => {
-                        warn_formula(
-                            warnings,
-                            sheet,
-                            "E",
-                            "a NURBS() formula that does not parse; drawing a straight segment",
-                        );
+                        warn_formula(warnings, sheet, "E");
                         path.push(Segment::LineTo(to));
                     }
                 }
@@ -879,12 +871,7 @@ fn rows_to_path(
                         append_curve(path, &Curve::Polyline(Polyline { points }), tolerance);
                     }
                     None => {
-                        warn_formula(
-                            warnings,
-                            sheet,
-                            "A",
-                            "a POLYLINE() list that does not parse; drawing a straight segment",
-                        );
+                        warn_formula(warnings, sheet, "A");
                         path.push(Segment::LineTo(to));
                     }
                 }
@@ -1009,11 +996,15 @@ fn rows_to_path(
 
 /// One builder warning for a formula-encoded value that does not parse
 /// (ADR 0021: the row degrades to a straight segment).
-fn warn_formula(warnings: &mut Vec<CellWarning>, sheet: SheetRef, cell: &str, what: &str) {
+///
+/// The kind is [`WarningKind::KindMismatch`], not
+/// [`WarningKind::ErrorValue`]: the file's cached value is not an error,
+/// the builder cannot use the formula (ADR 0021 amendment, P3-16).
+fn warn_formula(warnings: &mut Vec<CellWarning>, sheet: SheetRef, cell: &str) {
     warnings.push(CellWarning {
         sheet,
         cell: CellName::new(cell),
-        kind: WarningKind::ErrorValue(what.to_owned()),
+        kind: WarningKind::KindMismatch,
         substituted: CellValue::Str("LineTo".to_owned()),
     });
 }
@@ -1262,6 +1253,10 @@ fn build_fill(
                 background,
                 tile: scale_path(&template.tile, pitch, pitch),
                 tile_size: Size::new(pitch, pitch),
+                filled: template.filled,
+                // The template's stroke width is a fraction of the tile
+                // box side (the unit-box convention of `styles.rs`).
+                tile_stroke_width: template.tile_stroke_width * pitch,
             }))
         }
     }
@@ -1273,9 +1268,10 @@ fn build_gradient(ctx: &mut Ctx<'_>, sheet: SheetRef, width: f64, height: f64) -
     let mut stops = Vec::new();
     let rows = section_rows(ctx, sheet, "FillGradient");
     for row in 0..rows {
-        let offset = ctx.row_number(sheet, "FillGradient", row, "GradientStopPosition");
-        let color = ctx.row_color(sheet, "FillGradient", row, "GradientStopColor");
-        let trans = ctx.row_number(sheet, "FillGradient", row, "GradientStopColorTrans");
+        let target = RowTarget::at(row);
+        let offset = ctx.row_number(sheet, "FillGradient", target, "GradientStopPosition");
+        let color = ctx.row_color(sheet, "FillGradient", target, "GradientStopColor");
+        let trans = ctx.row_number(sheet, "FillGradient", target, "GradientStopColorTrans");
         stops.push(GradientStop {
             offset: offset.clamp(0.0, 1.0),
             color: rgba_of(color, trans),
@@ -1325,6 +1321,11 @@ fn build_gradient(ctx: &mut Ctx<'_>, sheet: SheetRef, width: f64, height: f64) -
 
 /// The number of rows of one repeated section (the shape's own rows, the
 /// master chain's otherwise).
+///
+/// The master shapes are the ones the cell lookup resolves through
+/// ([`Document::master_chain_shapes`], the ADR 0013 rungs), so the row
+/// count and the row cells come from the same master shape; the walk is
+/// bounded by the builder's [`MAX_DEPTH`] like every other recursion.
 fn section_rows(ctx: &Ctx<'_>, sheet: SheetRef, section: &str) -> usize {
     let SheetRef::Shape(shape) = sheet else {
         return 0;
@@ -1333,27 +1334,27 @@ fn section_rows(ctx: &Ctx<'_>, sheet: SheetRef, section: &str) -> usize {
     if section == "FillGradient" {
         names.push("Fill Gradient");
     }
-    let mut visited = Vec::new();
-    let mut current = Some(shape);
-    while let Some(id) = current {
-        if visited.contains(&id) || visited.len() >= 8 {
-            break;
+    let count = |entity: &ferrogram_model::Shape| {
+        names.iter().find_map(|name| {
+            entity
+                .sheet
+                .sections
+                .iter()
+                .find(|found| found.name.as_str() == *name && !found.rows.is_empty())
+                .map(|found| found.rows.len())
+        })
+    };
+    if let Some(entity) = ctx.doc.shape(shape)
+        && let Some(rows) = count(entity)
+    {
+        return rows;
+    }
+    for id in ctx.doc.master_chain_shapes(shape, MAX_DEPTH) {
+        if let Some(entity) = ctx.doc.shape(id)
+            && let Some(rows) = count(entity)
+        {
+            return rows;
         }
-        visited.push(id);
-        let Some(entity) = ctx.doc.shape(id) else {
-            break;
-        };
-        for name in &names {
-            for found in &entity.sheet.sections {
-                if found.name.as_str() == *name && !found.rows.is_empty() {
-                    return found.rows.len();
-                }
-            }
-        }
-        current = entity
-            .master
-            .and_then(|master| ctx.doc.master(master))
-            .and_then(|master| master.shapes.first().copied());
     }
     0
 }
@@ -1582,9 +1583,9 @@ fn text_placement(ctx: &mut Ctx<'_>, sheet: SheetRef, width: f64, height: f64) -
 /// row) pairs and the `Paragraph` row that formats it.
 struct ParaDraft {
     /// The runs, in order.
-    runs: Vec<(String, usize)>,
-    /// The position of the formatting `Paragraph` row.
-    para_row: usize,
+    runs: Vec<(String, RowTarget)>,
+    /// The formatting `Paragraph` row (named by its `IX`).
+    para_row: RowTarget,
 }
 
 /// The text block of one shape (ADR 0020, ADR 0024), or `None` for no
@@ -1600,10 +1601,10 @@ fn build_text(ctx: &mut Ctx<'_>, id: ShapeId, width: f64, height: f64) -> Option
     // The text parts to paragraphs of runs (ADR 0019).
     let mut drafts: Vec<ParaDraft> = vec![ParaDraft {
         runs: Vec::new(),
-        para_row: 0,
+        para_row: RowTarget::at(0),
     }];
-    let mut char_row = 0usize;
-    let mut para_row = 0usize;
+    let mut char_row = RowTarget::at(0);
+    let mut para_row = RowTarget::at(0);
     for part in &content.parts {
         match part {
             TextPart::Text(literal) => {
@@ -1626,17 +1627,21 @@ fn build_text(ctx: &mut Ctx<'_>, id: ShapeId, width: f64, height: f64) -> Option
                 }
             }
             TextPart::CharRun { ix } => {
-                char_row = row_position(ctx, sheet, "Character", *ix);
+                // A `cp` marker names its row by `IX` (ADR 0019 decision
+                // 5): the row is matched by `IX` in the sheet and in the
+                // master chain, never by position.
+                char_row = RowTarget::by_ix(marker_ix(*ix));
             }
             TextPart::ParaRun { ix } => {
-                para_row = row_position(ctx, sheet, "Paragraph", *ix);
+                para_row = RowTarget::by_ix(marker_ix(*ix));
                 drafts.push(ParaDraft {
                     runs: Vec::new(),
                     para_row,
                 });
             }
-            TextPart::TabsRun { ix } => {
-                let _ = row_position(ctx, sheet, "Tabs", *ix);
+            TextPart::TabsRun { .. } => {
+                // A `tp` marker names a `Tabs` row; `tabs_of` reads the
+                // stops in row order and does not single markers out.
             }
             TextPart::Field { .. } => {}
             _ => {}
@@ -1659,7 +1664,7 @@ fn build_text(ctx: &mut Ctx<'_>, id: ShapeId, width: f64, height: f64) -> Option
                 first_family = format.family.clone();
             }
             if text_runs.is_empty() {
-                first_size = style.size;
+                first_size = format.size;
             }
             runs.push(style);
             text_runs.push(text::Run {
@@ -1671,7 +1676,6 @@ fn build_text(ctx: &mut Ctx<'_>, id: ShapeId, width: f64, height: f64) -> Option
         bullets.push(if bullet.is_some() {
             let style = bullet.as_ref().map(|(style, _)| *style);
             runs.push(style.unwrap_or(TextRun {
-                size: first_size,
                 underline: false,
                 strikethrough: false,
                 color: Rgba::opaque(0, 0, 0),
@@ -1752,35 +1756,18 @@ fn build_text(ctx: &mut Ctx<'_>, id: ShapeId, width: f64, height: f64) -> Option
         layout,
         color,
         origin: placement.transform.apply(Point::new(0.0, placement.height)),
-        rotation: block.rotation,
     })
 }
 
-/// The row position a run marker's `IX` names: the row with that `IX`
-/// when the section has one, the `IX` itself otherwise.
-fn row_position(ctx: &Ctx<'_>, sheet: SheetRef, section: &str, ix: u32) -> usize {
-    let SheetRef::Shape(shape) = sheet else {
-        return ix as usize;
-    };
-    let Some(entity) = ctx.doc.shape(shape) else {
-        return ix as usize;
-    };
-    for found in &entity.sheet.sections {
-        if found.name.as_str() != section {
-            continue;
-        }
-        for (position, row) in found.rows.iter().enumerate() {
-            if row.ix == Some(ix as i32) {
-                return position;
-            }
-        }
-    }
-    ix as usize
+/// A run marker's `IX` as a row `IX`; a marker beyond `i32` matches no
+/// row and substitutes the defaults with one warning.
+fn marker_ix(ix: u32) -> i32 {
+    i32::try_from(ix).unwrap_or(i32::MAX)
 }
 
 /// The style of one text run from its `Character` row (ADR 0019, the
 /// ShapeSheet reference).
-fn run_style(ctx: &mut Ctx<'_>, sheet: SheetRef, row: usize) -> (TextRun, text::Format) {
+fn run_style(ctx: &mut Ctx<'_>, sheet: SheetRef, row: RowTarget) -> (TextRun, text::Format) {
     let mut family = ctx.row_text(sheet, "Character", row, "Font");
     if family.is_empty() {
         family = theme_minor_latin(ctx.doc);
@@ -1800,7 +1787,6 @@ fn run_style(ctx: &mut Ctx<'_>, sheet: SheetRef, row: usize) -> (TextRun, text::
     let color = ctx.row_rgba(sheet, "Character", row, "Color", "ColorTrans");
     (
         TextRun {
-            size,
             underline,
             strikethrough,
             color,
@@ -1831,7 +1817,7 @@ fn theme_minor_latin(doc: &Document) -> String {
 fn paragraph_bullet(
     ctx: &mut Ctx<'_>,
     sheet: SheetRef,
-    row: usize,
+    row: RowTarget,
     family: &str,
     size: f64,
 ) -> Option<(TextRun, text::Bullet)> {
@@ -1853,7 +1839,6 @@ fn paragraph_bullet(
     let color = ctx.row_rgba(sheet, "Character", row, "Color", "ColorTrans");
     Some((
         TextRun {
-            size,
             underline: false,
             strikethrough: false,
             color,
@@ -1872,7 +1857,7 @@ fn paragraph_bullet(
 fn paragraph_of<'a>(
     ctx: &mut Ctx<'_>,
     sheet: SheetRef,
-    row: usize,
+    row: RowTarget,
     runs: Vec<text::Run<'a>>,
     bullet: Option<text::Bullet>,
     first_size: f64,
@@ -1916,7 +1901,7 @@ fn paragraph_of<'a>(
 fn tabs_of(ctx: &mut Ctx<'_>, sheet: SheetRef) -> Vec<f64> {
     let rows = section_rows(ctx, sheet, "Tabs");
     (0..rows)
-        .map(|row| ctx.row_number(sheet, "Tabs", row, "Position"))
+        .map(|row| ctx.row_number(sheet, "Tabs", RowTarget::at(row), "Position"))
         .filter(|position| position.is_finite())
         .collect()
 }
@@ -1927,7 +1912,7 @@ impl Ctx<'_> {
         &mut self,
         sheet: SheetRef,
         section: &str,
-        row: usize,
+        row: RowTarget,
         color_cell: &str,
         trans_cell: &str,
     ) -> Rgba {
@@ -1940,7 +1925,8 @@ impl Ctx<'_> {
 #[cfg(test)]
 mod tests {
     use ferrogram_model::{
-        Cell, CellValue as Value, Page, Row, Section, SectionName, Shape as ModelShape,
+        Cell, CellValue as Value, Master, MasterId, Page, Row, Section, SectionName,
+        Shape as ModelShape,
     };
 
     use super::*;
@@ -2021,8 +2007,11 @@ mod tests {
     fn new_options_include_the_background() {
         assert!(BuildOptions::new().background);
         assert_eq!(BuildOptions::new().scale, 96.0);
-        assert!(!BuildOptions::default().background);
+        // `Default` agrees with `new` (P3-16): both include the
+        // background page.
+        assert!(BuildOptions::default().background);
         assert_eq!(BuildOptions::default().scale, 96.0);
+        assert_eq!(BuildOptions::default(), BuildOptions::new());
     }
 
     #[test]
@@ -2080,6 +2069,57 @@ mod tests {
         let at = transform.apply(Point::new(1.0, 0.0));
         assert!((at.x - 0.0).abs() < 1e-9, "{at:?}");
         assert!((at.y + 1.0).abs() < 1e-9, "{at:?}");
+    }
+
+    #[test]
+    fn a_non_finite_cell_renders_at_the_default_with_one_warning() {
+        // `V='inf'` parses to a non-finite number; the model rejects it
+        // with one `KindMismatch` warning and the shape renders at the
+        // default (ADR 0021, never a silent substitution).
+        let (mut doc, page, shape) = document_with_shape();
+        if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+            entity.sheet.cells = vec![
+                number_cell("PageWidth", 8.5),
+                number_cell("PageHeight", 11.0),
+            ];
+        }
+        if let Some(entity) = doc.shape_mut(shape) {
+            entity.sheet.cells = vec![
+                number_cell("PinX", f64::INFINITY),
+                number_cell("PinY", 0.0),
+                number_cell("Angle", 0.0),
+                number_cell("FlipX", 0.0),
+                number_cell("FlipY", 0.0),
+                number_cell("LocPinX", 0.0),
+                number_cell("LocPinY", 0.0),
+                number_cell("Width", 1.0),
+                number_cell("Height", 1.0),
+            ];
+        }
+        with_geometry(
+            &mut doc,
+            shape,
+            vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+        );
+        let scene = build(&doc);
+        // Exactly one warning for the non-finite value (the style cells
+        // warn `Missing` on their own, unrelated to it).
+        let mismatches: Vec<_> = scene
+            .warnings
+            .iter()
+            .filter(|w| w.kind == ferrogram_model::WarningKind::KindMismatch)
+            .collect();
+        assert_eq!(mismatches.len(), 1, "{:?}", scene.warnings);
+        assert_eq!(mismatches[0].cell, CellName::from_static("PinX"));
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => {
+                assert_eq!(
+                    shape.transform.apply(Point::new(0.0, 0.0)),
+                    Point::new(0.0, 0.0)
+                );
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
     }
 
     // --- geometry rows -----------------------------------------------
@@ -2215,12 +2255,10 @@ mod tests {
             }
             _ => panic!("expected a shape"),
         }
+        // The degradation warns `KindMismatch`, not `ErrorValue`: the
+        // cached value is not an error (ADR 0021 amendment, P3-16).
         assert!(scene.warnings.iter().any(|warning| {
-            warning.cell.as_str() == "E"
-                && matches!(
-                    warning.kind,
-                    WarningKind::ErrorValue(_) | WarningKind::Missing
-                )
+            warning.cell.as_str() == "E" && warning.kind == WarningKind::KindMismatch
         }));
     }
 
@@ -2873,6 +2911,81 @@ mod tests {
     }
 
     #[test]
+    fn section_rows_counts_the_master_shape_the_cells_resolve_from() {
+        // A master with two top-level shapes: the first holds three
+        // `FillGradient` rows (colours 4..6), the second two (colours 2
+        // and 3). The instance sits at page position 1, so its row cells
+        // resolve through the master's second shape and the row count
+        // must come from the same shape (P3-16; the old walk counted the
+        // master's first shape).
+        let mut doc = Document::new();
+        let filler = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 1));
+        let instance = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 2));
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.sheet.cells = vec![
+            number_cell("PageWidth", 8.5),
+            number_cell("PageHeight", 11.0),
+        ];
+        page.shapes.push(filler);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+
+        let mid = doc.masters.len();
+        let mut master = Master::new(MasterId { index: mid as u32 }, 1);
+        let many = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 3));
+        let one = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 4));
+        for (id, colors) in [(many, vec![4.0, 5.0, 6.0]), (one, vec![2.0, 3.0])] {
+            let entity = doc.shape_mut(id).expect("shape");
+            let mut section = Section::new(SectionName::new("FillGradient"));
+            for (index, color) in colors.iter().enumerate() {
+                let mut row = Row::new();
+                row.ix = Some(index as i32);
+                row.cells = vec![
+                    number_cell("GradientStopPosition", index as f64 / 2.0),
+                    number_cell("GradientStopColor", *color),
+                    number_cell("GradientStopColorTrans", 0.0),
+                ];
+                section.rows.push(row);
+            }
+            entity.sheet.sections.push(section);
+        }
+        master.shapes = vec![many, one];
+        doc.masters.push(master);
+        doc.shape_mut(instance).expect("shape").master = Some(MasterId { index: mid as u32 });
+        {
+            let entity = doc.shape_mut(instance).expect("shape");
+            entity.sheet.cells = vec![
+                number_cell("FillPattern", 30.0),
+                number_cell("FillGradientDir", 0.0),
+                number_cell("FillGradientAngle", 0.0),
+                number_cell("Width", 1.0),
+                number_cell("Height", 1.0),
+            ];
+        }
+        with_geometry(
+            &mut doc,
+            instance,
+            vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => match shape.fill.as_ref() {
+                Some(Paint::LinearGradient { stops, .. }) => {
+                    // Two stops, the colours of the master's second shape
+                    // (palette indices 2 and 3).
+                    assert_eq!(stops.len(), 2);
+                    for (stop, index) in stops.iter().zip([2u32, 3]) {
+                        let expected = ferrogram_model::palette(index).expect("palette entry");
+                        assert_eq!(stop.color, Rgba::opaque(expected.r, expected.g, expected.b));
+                    }
+                }
+                other => panic!("expected a linear gradient, got {other:?}"),
+            },
+            other => panic!("expected a shape, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn page_size_comes_from_the_page_sheet() {
         let (mut doc, page, _shape) = document_with_shape();
         if let Some(entity) = doc.pages.get_mut(page.index as usize) {
@@ -2917,13 +3030,82 @@ mod tests {
             Some(Node::Shape(shape)) => {
                 let text = shape.text.as_ref().expect("text");
                 assert_eq!(text.runs.len(), 1);
-                assert!((text.runs[0].size - 12.0).abs() < 1e-9);
                 assert_eq!(text.origin, Point::new(0.0, 1.0));
-                assert_eq!(text.rotation.radians(), 0.0);
+                // The size lives on the glyphs and the rotation on the
+                // layout (P3-16).
+                assert_eq!(text.layout.rotation.radians(), 0.0);
                 assert!(!text.layout.lines.is_empty());
+                let glyph = &text.layout.lines[0].glyphs[0];
+                assert!((glyph.size - 12.0).abs() < 1e-9, "{glyph:?}");
             }
             _ => panic!("expected a shape"),
         }
+    }
+
+    #[test]
+    fn a_run_marker_reads_the_master_row_with_that_ix() {
+        // The instance has no `Character` section; the master's rows are
+        // `IX` 0 and 5. The run marked `IX` 5 reads the master's row 5
+        // (matched by `IX`), not a row at position 5.
+        let (mut doc, page, shape) = document_with_shape();
+        if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+            entity.sheet.cells = vec![
+                number_cell("PageWidth", 8.5),
+                number_cell("PageHeight", 11.0),
+            ];
+        }
+        let mid = doc.masters.len();
+        let mut master = Master::new(MasterId { index: mid as u32 }, 1);
+        let content = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 2));
+        {
+            let entity = doc.shape_mut(content).expect("content");
+            let mut section = Section::new(SectionName::new("Character"));
+            let mut row_zero = Row::new();
+            row_zero.ix = Some(0);
+            row_zero.cells = vec![string_cell("Font", "Zero"), number_cell("Color", 2.0)];
+            let mut row_five = Row::new();
+            row_five.ix = Some(5);
+            row_five.cells = vec![string_cell("Font", "Five"), number_cell("Color", 3.0)];
+            section.rows.push(row_zero);
+            section.rows.push(row_five);
+            entity.sheet.sections.push(section);
+        }
+        master.shapes = vec![content];
+        doc.masters.push(master);
+        doc.shape_mut(shape).expect("shape").master = Some(MasterId { index: mid as u32 });
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
+            entity.text = Some(ferrogram_model::TextContent {
+                parts: vec![TextPart::CharRun { ix: 5 }, TextPart::Text("Hi".to_owned())],
+            });
+        }
+        with_geometry(
+            &mut doc,
+            shape,
+            vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => {
+                let text = shape.text.as_ref().expect("text");
+                assert_eq!(text.runs.len(), 1);
+                // The master's `IX` 5 row caches colour index 3; no row
+                // sits at position 5, so a positional read would fall
+                // back to the defaults (black).
+                let expected = ferrogram_model::palette(3).expect("palette entry");
+                assert_eq!(
+                    text.runs[0].color,
+                    Rgba::opaque(expected.r, expected.g, expected.b)
+                );
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
+        assert!(
+            !scene.warnings.iter().any(|w| w.cell.as_str() == "Color"),
+            "{:?}",
+            scene.warnings
+        );
     }
 
     #[test]
