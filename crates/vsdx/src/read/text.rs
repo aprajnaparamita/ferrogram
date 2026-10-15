@@ -253,4 +253,44 @@ mod tests {
         let content = map_text(&node, "part").expect("maps");
         assert!(content.parts.is_empty());
     }
+
+    #[test]
+    fn marker_ix_trims_whitespace_and_respects_the_bounds() {
+        // Whitespace around the row number is trimmed.
+        let node = element("Text", &[], vec![marker("cp", &[("IX", " 7 ")])]);
+        let content = map_text(&node, "part").expect("maps");
+        assert_eq!(content.parts, vec![TextPart::CharRun { ix: 7 }]);
+        // An empty, negative or out-of-range `IX` is an error.
+        for bad in ["", "  ", "-1", "4294967296", "1.5", "0x2"] {
+            let node = element("Text", &[], vec![marker("cp", &[("IX", bad)])]);
+            let error = map_text(&node, "part").expect_err("fails");
+            assert!(error.to_string().contains("IX"), "{bad}: {error}");
+        }
+    }
+
+    #[test]
+    fn fields_nested_in_fields_stack_their_markers() {
+        let node = element(
+            "Text",
+            &[],
+            vec![XmlChild::Element(element(
+                "fld",
+                &[("IX", "1")],
+                vec![
+                    XmlChild::Element(element("fld", &[("IX", "2")], vec![text("in")])),
+                    text("out"),
+                ],
+            ))],
+        );
+        let content = map_text(&node, "part").expect("maps");
+        assert_eq!(
+            content.parts,
+            vec![
+                TextPart::Field { ix: 1 },
+                TextPart::Field { ix: 2 },
+                TextPart::Text("in".to_owned()),
+                TextPart::Text("out".to_owned()),
+            ]
+        );
+    }
 }
