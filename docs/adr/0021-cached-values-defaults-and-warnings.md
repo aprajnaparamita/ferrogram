@@ -177,9 +177,9 @@ Open issues:
   A black-box check against Visio settles it.
 - A cached colour index of 24 or more that the document colour table does
   not hold (layer rows cache `Color V='255'`) may be a packed RGB value
-  ("custom colors have values of 24 and above" in numeric operations,
-  ShapeSheet reference) instead of a table index. It substitutes black
-  with a `Missing` warning for now.
+  instead of a table index: the ShapeSheet reference says a custom RGB
+  colour indexes at 24 and above when the cell is used numerically. It
+  substitutes black with a `Missing` warning for now.
 
 ### Amended 2026-10-15, P3-15: theme variant colours
 
