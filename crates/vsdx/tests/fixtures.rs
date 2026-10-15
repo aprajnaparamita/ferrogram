@@ -177,24 +177,7 @@ fn many_entries_exceed_the_entry_cap() {
 
 #[test]
 fn every_variant_builds_deterministically() {
-    let mut all = vec![Fixture::Drawing, Fixture::Stencil, Fixture::Template];
-    all.extend(
-        [
-            Malformed::TruncatedZip,
-            Malformed::BadCentralDirectory,
-            Malformed::NoContentTypes,
-            Malformed::DanglingRelationship,
-            Malformed::MissingMainPart,
-            Malformed::HugeDeclaredSize,
-            Malformed::DeepNesting,
-            Malformed::BadContentTypes,
-            Malformed::ZipBomb,
-            Malformed::ManyEntries,
-        ]
-        .map(Fixture::Malformed),
-    );
-    assert_eq!(all.len(), 13);
-    for fixture in all {
+    for fixture in all_fixtures() {
         assert_eq!(
             build(fixture),
             build(fixture),
@@ -206,26 +189,19 @@ fn every_variant_builds_deterministically() {
 #[test]
 fn file_names_are_distinct() {
     let mut seen = Vec::new();
-    let all = [
-        Fixture::Drawing,
-        Fixture::Stencil,
-        Fixture::Template,
-        Fixture::Malformed(Malformed::TruncatedZip),
-        Fixture::Malformed(Malformed::BadCentralDirectory),
-        Fixture::Malformed(Malformed::NoContentTypes),
-        Fixture::Malformed(Malformed::DanglingRelationship),
-        Fixture::Malformed(Malformed::MissingMainPart),
-        Fixture::Malformed(Malformed::HugeDeclaredSize),
-        Fixture::Malformed(Malformed::DeepNesting),
-        Fixture::Malformed(Malformed::BadContentTypes),
-        Fixture::Malformed(Malformed::ZipBomb),
-        Fixture::Malformed(Malformed::ManyEntries),
-    ];
-    for fixture in all {
+    for fixture in all_fixtures() {
         let name = file_name(&fixture);
         assert!(!seen.contains(&name), "duplicate file name {name}");
         seen.push(name);
     }
+}
+
+/// Every fixture: the committed ones plus the two generated only at test time.
+fn all_fixtures() -> Vec<Fixture> {
+    let mut all = COMMITTED_FIXTURES.to_vec();
+    all.extend([Malformed::ZipBomb, Malformed::ManyEntries].map(Fixture::Malformed));
+    assert_eq!(all.len(), 24, "a fixture variant is missing from the list");
+    all
 }
 
 #[test]
