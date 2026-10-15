@@ -247,9 +247,9 @@ pub struct ShapeGeometry {
 }
 
 impl Document {
-    /// The typed geometry of one shape, with row-level inheritance resolved
-    /// (ADR 0019): the shape's own rows where it has any, the master
-    /// chain's rows otherwise, each row cell resolved per the rules of
+    /// The typed geometry of one shape, with the row union resolved (ADR
+    /// 0019 and its amendment): the shape's own rows merged with its master
+    /// chain's rows, each row cell resolved per the rules of
     /// [`Document::resolve_row_cell`].
     ///
     /// A row's cached cells are read with the cached-value policy (ADR
@@ -260,7 +260,7 @@ impl Document {
         let mut paths = Vec::new();
         for source in path_sources(self, entity) {
             let mut rows = Vec::new();
-            for (position, row) in source.rows.iter().enumerate() {
+            for (position, merged) in source.rows.iter().enumerate() {
                 let context = RowContext {
                     sheet: SheetRef::Shape(shape),
                     at: crate::lookup::RepeatedCell {
@@ -268,15 +268,10 @@ impl Document {
                         section_ix: source.ix,
                         section_pos: Some(source.pos),
                         row: Some(position),
-                        row_ix: row.ix,
+                        row_ix: merged.ix,
                     },
                 };
-                rows.push(type_row(
-                    &mut reader,
-                    self,
-                    &context,
-                    row.row_type.as_deref(),
-                )?);
+                rows.push(type_row(&mut reader, self, &context, merged.row_type)?);
             }
             let section_context = RowContext {
                 sheet: SheetRef::Shape(shape),
@@ -305,8 +300,21 @@ impl Document {
     }
 }
 
+/// One merged `Geometry` row of a path (ADR 0019 amendment): the row at
+/// one position of the union of a shape's own rows and its master chain's
+/// rows. The row's cells are *not* merged here: every cell resolves
+/// through [`Document::resolve_row_cell`], which applies the same union
+/// per cell.
+struct MergedRow<'a> {
+    /// The row's `IX`, when it has one.
+    ix: Option<i32>,
+    /// The row type (`Row/@T`) of the nearest rung that declares one.
+    row_type: Option<&'a str>,
+}
+
 /// One `Geometry` section that defines a path: the section identity every
-/// row cell resolves with (ADR 0019 decision 5) and the rows to type.
+/// row cell resolves with (ADR 0019 decision 5) and the merged rows to
+/// type.
 struct PathSource<'a> {
     /// The section name as written (`"Geometry"`).
     name: &'a str,
@@ -314,83 +322,154 @@ struct PathSource<'a> {
     ix: Option<i32>,
     /// The section's position among the same-named sections of its sheet.
     pos: usize,
-    /// The rows to type: the shape's own, or the master chain's when the
-    /// shape has none.
-    rows: &'a [crate::section::Row],
+    /// The rows to type: the union of the shape's own rows and its master
+    /// chain's rows (ADR 0019 amendment).
+    rows: Vec<MergedRow<'a>>,
 }
 
 /// The `Geometry` sections of one sheet, with their position among the
 /// same-named sections.
 fn geometry_sections(entity: &crate::shape::Shape) -> Vec<(usize, &crate::section::Section)> {
-    entity
-        .sheet
-        .sections
-        .iter()
-        .enumerate()
-        .filter(|(_, section)| section.name.as_str() == "Geometry")
-        .collect()
+    let mut sections = Vec::new();
+    let mut position = 0;
+    for section in &entity.sheet.sections {
+        if section.name.as_str() == "Geometry" {
+            sections.push((position, section));
+            position += 1;
+        }
+    }
+    sections
 }
 
-/// The sections whose rows define one shape's geometry (ADR 0019): its own
-/// rows where it has any, the master chain's rows otherwise. A section with
-/// no rows of its own falls back to the master chain's matching section.
+/// The sections whose rows define one shape's geometry (ADR 0019
+/// amendment): one path per `Geometry` section, its rows the union of the
+/// shape's own rows and every master rung's rows of the matching section.
+///
+/// A shape without `Geometry` sections of its own takes the section
+/// identities from the nearest master rung that carries rows; the rows of
+/// the rungs further out still merge in.
 fn path_sources<'a>(doc: &'a Document, entity: &'a crate::shape::Shape) -> Vec<PathSource<'a>> {
+    let chain = master_chain_shapes(doc, entity.id);
+    let mut sheets: Vec<&'a crate::sheet::Sheet> = Vec::with_capacity(chain.len() + 1);
+    sheets.push(&entity.sheet);
+    sheets.extend(chain.iter().map(|target| &target.sheet));
     let own = geometry_sections(entity);
-    if !own.is_empty() {
-        return own
-            .iter()
-            .enumerate()
-            .map(|(pos, (_, section))| {
-                let rows = if section.rows.is_empty() {
-                    master_geometry_shape(doc, entity.id)
-                        .and_then(|target| {
-                            match_repeated_section(
-                                &target.sheet,
-                                "Geometry",
-                                section_ix_of(section),
-                                Some(pos),
-                            )
-                        })
-                        .map(|master_section| master_section.rows.as_slice())
-                        .unwrap_or(&[])
-                } else {
-                    section.rows.as_slice()
-                };
-                PathSource {
-                    name: section.name.as_str(),
-                    ix: section_ix_of(section),
-                    pos,
-                    rows,
-                }
-            })
-            .collect();
-    }
-    // No `Geometry` section at all: the master chain's sections and rows.
-    let Some(target) = master_geometry_shape(doc, entity.id) else {
-        return Vec::new();
+    let identities: Vec<(usize, &crate::section::Section)> = if !own.is_empty() {
+        own
+    } else {
+        let Some(target) = chain.iter().copied().find(|target| {
+            geometry_sections(target)
+                .iter()
+                .any(|(_, section)| !section.rows.is_empty())
+        }) else {
+            return Vec::new();
+        };
+        geometry_sections(target)
     };
-    geometry_sections(target)
-        .iter()
-        .enumerate()
-        .map(|(pos, (_, section))| PathSource {
-            name: section.name.as_str(),
-            ix: section_ix_of(section),
-            pos,
-            rows: section.rows.as_slice(),
+    identities
+        .into_iter()
+        .map(|(pos, section)| {
+            let ix = section_ix_of(section);
+            PathSource {
+                name: section.name.as_str(),
+                ix,
+                pos,
+                rows: merged_rows(&sheets, section.name.as_str(), ix, pos),
+            }
         })
         .collect()
 }
 
-/// The master-chain shape whose `Geometry` sections carry rows for `shape`,
-/// or `None` when the chain has none (a shape with no master, or a chain
-/// whose shapes have no rows). The walk is bounded by the visited set.
-fn master_geometry_shape(doc: &Document, shape: ShapeId) -> Option<&crate::shape::Shape> {
+/// The merged rows of one `Geometry` section identity (ADR 0019
+/// amendment): the rows of the master chain's matching sections form the
+/// base (the furthest rung first), and each nearer rung — the shape's own
+/// section last — applies its rows on top.
+fn merged_rows<'a>(
+    sheets: &[&'a crate::sheet::Sheet],
+    name: &str,
+    ix: Option<i32>,
+    pos: usize,
+) -> Vec<MergedRow<'a>> {
+    let mut merged: Vec<MergedRow<'a>> = Vec::new();
+    for sheet in sheets.iter().rev() {
+        if let Some(section) = match_repeated_section(sheet, name, ix, Some(pos)) {
+            apply_rows(&mut merged, &section.rows);
+        }
+    }
+    merged
+}
+
+/// Applies one rung's rows to the merged rows of the rungs further out
+/// (ADR 0019 amendment).
+///
+/// A row overrides the merged row it matches — by `IX` when both sides
+/// have one, else by position (the rule of [`Document::resolve_row_cell`])
+/// — and takes over its `T` when it declares one. A row with `Del`
+/// ([`crate::section::Row::is_deleted`]) removes the matched row. An
+/// unmatched row is inserted in `IX` order, or at its own position when it
+/// has no `IX`.
+fn apply_rows<'a>(merged: &mut Vec<MergedRow<'a>>, rows: &'a [crate::section::Row]) {
+    for (position, row) in rows.iter().enumerate() {
+        let matched = match row.ix {
+            Some(ix) => merged
+                .iter()
+                .position(|entry| entry.ix == Some(ix))
+                .or_else(|| {
+                    merged
+                        .get(position)
+                        .filter(|entry| entry.ix.is_none())
+                        .map(|_| position)
+                }),
+            None => merged.get(position).map(|_| position),
+        };
+        match matched {
+            Some(at) if row.is_deleted() => {
+                merged.remove(at);
+            }
+            Some(at) => {
+                if row.row_type.is_some() {
+                    merged[at].row_type = row.row_type.as_deref();
+                }
+            }
+            None if row.is_deleted() => {}
+            None => {
+                let entry = MergedRow {
+                    ix: row.ix,
+                    row_type: row.row_type.as_deref(),
+                };
+                if merged.is_empty() {
+                    merged.push(entry);
+                    continue;
+                }
+                let at = match row.ix {
+                    Some(ix) => merged
+                        .iter()
+                        .position(|entry| entry.ix.is_some_and(|other| other > ix))
+                        .unwrap_or(merged.len()),
+                    None => position.min(merged.len()),
+                };
+                merged.insert(at, entry);
+            }
+        }
+    }
+}
+
+/// The master-chain shapes whose `Geometry` sections may carry rows for
+/// `shape`, nearest rung first. The walk is the one of the lookup (ADR
+/// 0013): the master of the nearest shape that is an instance, its shape
+/// at the instance root's position, the sub-shape path down to `shape`,
+/// and the same again when that master shape is itself an instance. The
+/// walk is bounded by the visited set.
+fn master_chain_shapes(doc: &Document, shape: ShapeId) -> Vec<&crate::shape::Shape> {
+    let mut targets = Vec::new();
     let mut visited: Vec<crate::id::MasterId> = Vec::new();
-    let (mut current, root, mut path) = doc.instance_chain_start(shape)?;
+    let Some((mut current, root, mut path)) = doc.instance_chain_start(shape) else {
+        return targets;
+    };
     let position = doc.sibling_position(root);
     loop {
         if visited.contains(&current) {
-            return None;
+            break;
         }
         visited.push(current);
         let mut chained = None;
@@ -399,20 +478,16 @@ fn master_geometry_shape(doc: &Document, shape: ShapeId) -> Option<&crate::shape
             .and_then(|m| doc.master_shape(m, position))
         {
             let target = walk_down(doc, content, &path).unwrap_or(content);
-            if geometry_sections(target)
-                .iter()
-                .any(|(_, s)| !s.rows.is_empty())
-            {
-                return Some(target);
-            }
+            targets.push(target);
             chained = target.master;
             path.clear();
         }
         match chained {
             Some(next) => current = next,
-            None => return None,
+            None => break,
         }
     }
+    targets
 }
 
 /// The sheet and section/row identity one cell is read with (ADR 0019
@@ -1645,5 +1720,330 @@ mod tests {
             geometry.warnings[0].kind,
             crate::values::WarningKind::UnresolvedTheme
         );
+    }
+}
+
+#[cfg(test)]
+mod row_union_tests {
+    use crate::cell::{Cell, CellValue};
+    use crate::document::Document;
+    use crate::id::{MasterId, ShapeId};
+    use crate::lookup::{CellLookup, ValueSource};
+    use crate::master::Master;
+    use crate::name::{CellName, SectionName};
+    use crate::raw::{QName, XmlAttribute};
+    use crate::section::{Row, Section};
+    use crate::shape::Shape;
+
+    use super::*;
+
+    /// A cell with a cached number.
+    fn number_cell(name: &str, value: f64) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Number(value));
+        cell
+    }
+
+    /// A cell with a cached boolean.
+    fn bool_cell(name: &str, value: bool) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Bool(value));
+        cell
+    }
+
+    /// A cell whose formula is `Inh`: it does not define (ADR 0013).
+    fn inherited_cell(name: &str) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.formula = Some("Inh".to_owned());
+        cell.value = Some(CellValue::Number(99.0));
+        cell
+    }
+
+    /// A row with `T = row_type`, `IX = ix` and numeric `cells`.
+    fn row(row_type: &str, ix: i32, cells: &[(&str, f64)]) -> Row {
+        let mut row = Row::new();
+        row.row_type = Some(row_type.to_owned());
+        row.ix = Some(ix);
+        for (name, value) in cells {
+            row.cells.push(number_cell(name, *value));
+        }
+        row
+    }
+
+    /// A row with `Del = 1` (kept verbatim in `preserved`, ADR 0012).
+    fn deleted_row(row_type: &str, ix: i32) -> Row {
+        let mut row = Row::new();
+        row.row_type = Some(row_type.to_owned());
+        row.ix = Some(ix);
+        row.preserved.attributes.push(XmlAttribute {
+            name: QName {
+                prefix: None,
+                uri: None,
+                local: "Del".to_owned(),
+            },
+            value: "1".to_owned(),
+        });
+        row
+    }
+
+    /// A `Geometry` section with `rows` and section-level `flags`.
+    fn geometry(rows: Vec<Row>, flags: &[(&str, bool)]) -> Section {
+        let mut sec = Section::new(SectionName::from_static("Geometry"));
+        sec.rows = rows;
+        for (name, value) in flags {
+            sec.cells.push(bool_cell(name, *value));
+        }
+        sec
+    }
+
+    /// A document with one master whose shape carries `master_rows` and
+    /// one instance of it whose shape carries `instance_rows` (in a
+    /// `Geometry` section each).
+    fn two_rung(master_rows: Vec<Row>, instance_rows: Vec<Row>) -> (Document, ShapeId) {
+        let mut doc = Document::new();
+        let master_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(master_shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(master_rows, &[]));
+        doc.masters.push(Master::new(MasterId { index: 0 }, 1));
+        doc.masters[0].shapes.push(master_shape);
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        doc.shape_mut(instance).expect("exists").master = Some(MasterId { index: 0 });
+        doc.shape_mut(instance)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(instance_rows, &[]));
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        (doc, instance)
+    }
+
+    /// The row kinds and X values of one path, for order assertions.
+    fn kinds_and_x(rows: &[GeometryRow]) -> Vec<(&'static str, f64)> {
+        rows.iter()
+            .map(|row| match row {
+                GeometryRow::MoveTo { x, .. } => ("MoveTo", *x),
+                GeometryRow::LineTo { x, .. } => ("LineTo", *x),
+                _ => ("other", f64::NAN),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn sparse_instance_rows_merge_with_the_master_rows() {
+        // Acceptance: the instance carries only `LineTo` rows at `IX` 2..3
+        // (some cells `Inh`); the master holds the rest. The union is the
+        // master's row list with the instance's rows applied by `IX`.
+        let master_rows = vec![
+            row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)]),
+            row("LineTo", 2, &[("X", 2.0), ("Y", 2.0)]),
+            row("LineTo", 3, &[("X", 3.0), ("Y", 3.0)]),
+            row("LineTo", 4, &[("X", 4.0), ("Y", 4.0)]),
+            row("LineTo", 5, &[("X", 5.0), ("Y", 5.0)]),
+        ];
+        let mut overridden = row("LineTo", 2, &[("X", 20.0)]);
+        overridden.cells.push(inherited_cell("Y"));
+        let mut partial = row("LineTo", 3, &[("Y", 30.0)]);
+        partial.cells.push(inherited_cell("X"));
+        let (doc, instance) = two_rung(master_rows, vec![overridden, partial]);
+
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        assert_eq!(rows.len(), 5);
+        assert_eq!(
+            kinds_and_x(rows),
+            vec![
+                ("MoveTo", 1.0),
+                ("LineTo", 20.0),
+                ("LineTo", 3.0),
+                ("LineTo", 4.0),
+                ("LineTo", 5.0)
+            ]
+        );
+        // Partial cell override: row 2 keeps the master's Y (`Inh` does
+        // not define) and row 3 the master's X.
+        assert_eq!(rows[1], GeometryRow::LineTo { x: 20.0, y: 2.0 });
+        assert_eq!(rows[2], GeometryRow::LineTo { x: 3.0, y: 30.0 });
+    }
+
+    #[test]
+    fn an_instance_row_overrides_by_ix_not_by_position() {
+        // The instance's only row sits at position 0 but names `IX` 2: it
+        // overrides the master's row 2 and leaves row 1 in place.
+        let (doc, instance) = two_rung(
+            vec![
+                row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)]),
+                row("LineTo", 2, &[("X", 2.0), ("Y", 2.0)]),
+            ],
+            vec![row("LineTo", 2, &[("X", 20.0), ("Y", 20.0)])],
+        );
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        assert_eq!(kinds_and_x(rows), vec![("MoveTo", 1.0), ("LineTo", 20.0)]);
+    }
+
+    #[test]
+    fn a_deleted_row_removes_the_inherited_row() {
+        let (doc, instance) = two_rung(
+            vec![
+                row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)]),
+                row("LineTo", 2, &[("X", 2.0), ("Y", 2.0)]),
+                row("LineTo", 3, &[("X", 3.0), ("Y", 3.0)]),
+            ],
+            vec![deleted_row("LineTo", 2)],
+        );
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        assert_eq!(kinds_and_x(rows), vec![("MoveTo", 1.0), ("LineTo", 3.0)]);
+    }
+
+    #[test]
+    fn a_deleted_row_that_matches_nothing_removes_nothing() {
+        let (doc, instance) = two_rung(
+            vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
+            vec![deleted_row("LineTo", 9)],
+        );
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert_eq!(kinds_and_x(&geometry.paths[0].rows), vec![("MoveTo", 1.0)]);
+    }
+
+    #[test]
+    fn a_deleted_row_drops_its_own_row_too() {
+        // A shape with no master: `Del` removes the row it sits on.
+        let mut doc = Document::new();
+        let id = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(id)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(vec![deleted_row("MoveTo", 1)], &[]));
+        let geometry = doc.shape_geometry(id).expect("reads");
+        assert!(geometry.paths[0].rows.is_empty());
+    }
+
+    #[test]
+    fn section_level_cells_merge_across_rungs() {
+        // The master sets NoFill, NoShow and NoSnap; the instance turns
+        // NoFill off and inherits the rest (`NoQuickDrag` is nowhere: the
+        // rendering default `false`, without a warning).
+        let (mut doc, instance) = two_rung(
+            vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
+            vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
+        );
+        {
+            let master_shape = doc.masters[0].shapes[0];
+            let sec = &mut doc.shape_mut(master_shape).expect("exists").sheet.sections[0];
+            sec.cells.push(bool_cell("NoFill", true));
+            sec.cells.push(bool_cell("NoShow", true));
+            sec.cells.push(bool_cell("NoSnap", true));
+        }
+        {
+            let sec = &mut doc.shape_mut(instance).expect("exists").sheet.sections[0];
+            sec.cells.push(bool_cell("NoFill", false));
+        }
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let path = &geometry.paths[0];
+        assert!(!path.no_fill, "the instance's NoFill overrides");
+        assert!(path.no_show, "NoShow comes from the master");
+        assert!(geometry.warnings.is_empty(), "{:?}", geometry.warnings);
+        // NoSnap is a section-level cell with no slot on `GeometryPath`:
+        // the lookup resolves it the same way.
+        let resolved = doc
+            .resolve(instance, &CellName::from_static("NoSnap"))
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::Master(MasterId { index: 0 }));
+        assert_eq!(resolved.value, Some(&CellValue::Bool(true)));
+    }
+
+    #[test]
+    fn a_section_level_inh_cell_falls_through_to_the_master() {
+        let (mut doc, instance) = two_rung(
+            vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
+            vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
+        );
+        {
+            let master_shape = doc.masters[0].shapes[0];
+            let sec = &mut doc.shape_mut(master_shape).expect("exists").sheet.sections[0];
+            sec.cells.push(bool_cell("NoLine", true));
+        }
+        {
+            let sec = &mut doc.shape_mut(instance).expect("exists").sheet.sections[0];
+            let mut cell = Cell::new(CellName::from_static("NoLine"));
+            cell.formula = Some("Inh".to_owned());
+            cell.value = Some(CellValue::Bool(false));
+            sec.cells.push(cell);
+        }
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        assert!(geometry.paths[0].no_line);
+    }
+
+    #[test]
+    fn the_row_union_applies_through_every_master_rung() {
+        // Instance -> master A -> master B: B holds rows 1..2, A overrides
+        // row 2, the instance adds row 3.
+        let mut doc = Document::new();
+        let b_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(b_shape)
+            .expect("exists")
+            .sheet
+            .sections
+            .push(geometry(
+                vec![
+                    row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)]),
+                    row("LineTo", 2, &[("X", 2.0), ("Y", 2.0)]),
+                ],
+                &[],
+            ));
+        doc.masters.push(Master::new(MasterId { index: 0 }, 2));
+        doc.masters[0].shapes.push(b_shape);
+        let a_shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let shape = doc.shape_mut(a_shape).expect("exists");
+            shape.master = Some(MasterId { index: 0 });
+            shape.sheet.sections.push(geometry(
+                vec![row("LineTo", 2, &[("X", 20.0), ("Y", 20.0)])],
+                &[],
+            ));
+        }
+        doc.masters.push(Master::new(MasterId { index: 1 }, 1));
+        doc.masters[1].shapes.push(a_shape);
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 3));
+        {
+            let shape = doc.shape_mut(instance).expect("exists");
+            shape.master = Some(MasterId { index: 1 });
+            shape.sheet.sections.push(geometry(
+                vec![row("LineTo", 3, &[("X", 30.0), ("Y", 30.0)])],
+                &[],
+            ));
+        }
+        let mut page = crate::page::Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            kinds_and_x(rows),
+            vec![("MoveTo", 1.0), ("LineTo", 20.0), ("LineTo", 30.0)]
+        );
+        assert_eq!(rows[1], GeometryRow::LineTo { x: 20.0, y: 20.0 });
+    }
+
+    #[test]
+    fn an_instance_row_with_no_ix_matches_by_position() {
+        // Both sides have rows without `IX`: position 0 matches position 0.
+        let mut master_row = row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)]);
+        master_row.ix = None;
+        let mut local_row = row("LineTo", 1, &[("X", 9.0), ("Y", 9.0)]);
+        local_row.ix = None;
+        let (doc, instance) = two_rung(vec![master_row], vec![local_row]);
+        let geometry = doc.shape_geometry(instance).expect("reads");
+        let rows = &geometry.paths[0].rows;
+        assert_eq!(kinds_and_x(rows), vec![("LineTo", 9.0)]);
     }
 }
