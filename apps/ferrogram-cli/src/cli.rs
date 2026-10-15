@@ -4,9 +4,18 @@
 //! The `Command` enum is the seam to the Phase 4 command registry
 //! (`crates/commands`): each variant maps to a registry command id then,
 //! and the parser and exit codes do not change.
+//!
+//! Nothing writes to stdout except `inspect` output and `--help`
+//! (ADR 0026); errors and warnings go to stderr, one line each.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+
+mod exec;
+mod inspect;
+mod parse;
+
+use ferrogram_render::Rgba;
 
 /// The output formats the CLI writes (ADR 0026).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +25,16 @@ pub enum OutputFormat {
     Png,
     /// SVG document (ADR 0025).
     Svg,
+}
+
+/// The page background `render --background` asks for (ADR 0026).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Background {
+    /// `--background none`: a transparent page.
+    Transparent,
+    /// `--background #RRGGBB`: an opaque page colour.
+    Color(Rgba),
 }
 
 /// Arguments of `inspect` (ADR 0026).
@@ -42,6 +61,9 @@ pub struct Render {
     pub format: OutputFormat,
     /// Pixels per inch (ADR 0025).
     pub scale: f64,
+    /// The page background override (`--background`), or the page's own
+    /// background.
+    pub background: Option<Background>,
     /// Whether warnings fail the run (ADR 0021).
     pub strict: bool,
 }
@@ -111,8 +133,19 @@ pub enum Error {
     Render(String),
     /// The output could not be written.
     Io(String),
-    /// Not implemented yet (a Phase 3 stub).
-    NotImplemented,
+}
+
+impl Error {
+    /// The exit code of this failure (ADR 0026).
+    ///
+    /// [`Error::Read`] is the input error (exit 2); [`Error::Render`] and
+    /// [`Error::Io`] are render or output errors (exit 3).
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Error::Read(_) => exit::READ,
+            Error::Render(_) | Error::Io(_) => exit::RENDER,
+        }
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -121,7 +154,6 @@ impl std::fmt::Display for Error {
             Error::Read(m) => write!(f, "cannot read input: {m}"),
             Error::Render(m) => write!(f, "render failed: {m}"),
             Error::Io(m) => write!(f, "cannot write output: {m}"),
-            Error::NotImplemented => write!(f, "not implemented yet"),
         }
     }
 }
@@ -130,30 +162,43 @@ impl std::error::Error for Error {}
 
 /// Parses argv (without `argv[0]`) into a command.
 ///
-/// `Ok(None)` means help was requested and has been written to stdout.
-/// Returns a "not implemented" [`Usage`] until the CLI work lands (P3-09).
+/// `Ok(None)` means help was requested and has been written to stdout. An
+/// unknown or missing argument is a [`Usage`] whose message and usage text
+/// the caller writes to stderr (exit code 1, ADR 0026).
 pub fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Command>, Usage> {
-    let _ = args;
-    Err(Usage {
-        message: "not implemented yet".to_owned(),
-    })
+    parse::parse_to(args, &mut std::io::stdout())
 }
 
 /// Runs a command and returns the process exit code (ADR 0026).
 ///
-/// Returns [`Error::NotImplemented`] until the CLI work lands (P3-09).
+/// Returns [`exit::OK`], or [`exit::WARNINGS`] when warnings occurred and
+/// the command is `--strict` (the output is still written). A failure is
+/// printed to stderr as `error: <message>` and mapped to its exit code by
+/// [`Error::exit_code`]: [`exit::READ`] for input errors, [`exit::RENDER`]
+/// for render and output errors. `Err` is returned only when that report
+/// itself cannot be written.
 pub fn run(command: &Command) -> Result<i32, Error> {
-    let _ = command;
-    Err(Error::NotImplemented)
+    exec::run_to(command, &mut std::io::stdout(), &mut std::io::stderr())
 }
 
 /// The entry point used by `main` and by tests: parse, run, map to an exit
 /// code.
 ///
-/// Returns [`Error::NotImplemented`] until the CLI work lands (P3-09).
+/// A [`Usage`] error prints its message and the usage text to stderr and
+/// returns [`exit::USAGE`]; `--help` prints the usage text to stdout and
+/// returns [`exit::OK`].
 pub fn main_from(args: impl Iterator<Item = OsString>) -> Result<i32, Error> {
-    let _ = args;
-    Err(Error::NotImplemented)
+    match parse(args) {
+        Ok(None) => Ok(exit::OK),
+        Ok(Some(command)) => run(&command),
+        Err(usage) => {
+            let mut err = std::io::stderr();
+            exec::report(&mut err, &format!("error: {usage}"))
+                .and_then(|()| exec::report(&mut err, parse::USAGE_TEXT))
+                .map(|()| exit::USAGE)
+                .map_err(|error| Error::Io(error.to_string()))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -178,13 +223,19 @@ mod tests {
             Error::Io("x".to_owned()).to_string(),
             "cannot write output: x"
         );
-        assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
     }
 
     #[test]
     fn error_is_a_std_error() {
-        let e: Box<dyn std::error::Error> = Box::new(Error::NotImplemented);
-        assert!(e.to_string().contains("not implemented"));
+        let e: Box<dyn std::error::Error> = Box::new(Error::Render("x".to_owned()));
+        assert_eq!(e.to_string(), "render failed: x");
+    }
+
+    #[test]
+    fn error_exit_codes_follow_adr_0026() {
+        assert_eq!(Error::Read(String::new()).exit_code(), exit::READ);
+        assert_eq!(Error::Render(String::new()).exit_code(), exit::RENDER);
+        assert_eq!(Error::Io(String::new()).exit_code(), exit::RENDER);
     }
 
     #[test]
@@ -207,10 +258,14 @@ mod tests {
             page: None,
             format: OutputFormat::Png,
             scale: 96.0,
+            background: Some(Background::Transparent),
             strict: false,
         });
         match r {
-            Command::Render(r) => assert_eq!(r.scale, 96.0),
+            Command::Render(r) => {
+                assert_eq!(r.scale, 96.0);
+                assert_eq!(r.background, Some(Background::Transparent));
+            }
             _ => panic!("expected render"),
         }
         let e = Command::Export(Export {
@@ -236,24 +291,11 @@ mod tests {
     }
 
     #[test]
-    fn stubs_report_not_implemented() {
-        assert_eq!(
-            parse(Vec::new().into_iter()),
-            Err(Usage {
-                message: "not implemented yet".to_owned()
-            })
-        );
-        assert_eq!(
-            run(&Command::Inspect(Inspect {
-                file: PathBuf::new(),
-                json: false,
-                page: None,
-            })),
-            Err(Error::NotImplemented)
-        );
-        assert_eq!(
-            main_from(Vec::new().into_iter()),
-            Err(Error::NotImplemented)
-        );
+    fn background_holds_its_colour() {
+        let b = Background::Color(Rgba::opaque(0x12, 0x34, 0x56));
+        match b {
+            Background::Color(c) => assert_eq!(c, Rgba::opaque(0x12, 0x34, 0x56)),
+            _ => panic!("expected a colour"),
+        }
     }
 }
