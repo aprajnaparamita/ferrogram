@@ -505,8 +505,20 @@ impl<'d> CellReader<'d> {
 
     /// Records one warning and returns the substituted number.
     fn warn_number(&mut self, sheet: SheetRef, cell: &CellName, kind: WarningKind) -> f64 {
-        self.warn(sheet, cell, kind, CellValue::Number(0.0));
-        0.0
+        self.warn_number_as(sheet, cell, kind, 0.0)
+    }
+
+    /// Records one warning and returns `value` in the substituted value's
+    /// place (the visible fallbacks of ADR 0021).
+    fn warn_number_as(
+        &mut self,
+        sheet: SheetRef,
+        cell: &CellName,
+        kind: WarningKind,
+        value: f64,
+    ) -> f64 {
+        self.warn(sheet, cell, kind, CellValue::Number(value));
+        value
     }
 
     /// Records one warning and returns the substituted boolean.
@@ -701,52 +713,109 @@ impl<'d> CellReader<'d> {
         }
     }
 
-    /// The substitution for a `Themed` number cell. A themed `FillPattern`
-    /// resolves through the theme's fill style list (ADR 0021 amendment);
-    /// a themed transparency (`*Trans`) and any other themed value the
-    /// theme cannot answer substitute 0 with
-    /// [`WarningKind::UnresolvedTheme`].
+    /// The substitution for a `Themed` number cell (ADR 0021 amendment).
+    ///
+    /// Patterns, weights and transparencies resolve through the theme's
+    /// fill and line style lists where a published meaning exists. Where
+    /// it does not, a `Themed` pattern falls back to the **visible** value
+    /// (`FillPattern`/`LinePattern` 1, `ShdwPattern` 0) and a `Themed`
+    /// `LineWeight` to the documented hairline default, each warning
+    /// [`WarningKind::UnresolvedTheme`]; never 0 for a fill or a line.
     fn themed_number(&mut self, sheet: SheetRef, cell: &CellName) -> f64 {
-        if let Some(pattern) = self.themed_fill_pattern(sheet, cell) {
-            return pattern;
+        if let Some(value) = self.themed_value(sheet, cell) {
+            return value;
         }
-        self.warn_number(sheet, cell, WarningKind::UnresolvedTheme)
+        let fallback = match cell.as_str() {
+            "FillPattern" | "LinePattern" => 1.0,
+            // The `THEMEVAL` reference documents '0.7 pt.' as the value a
+            // theme-less document returns for `LineWeight` (a hairline
+            // default per the P3-15 note).
+            "LineWeight" => 0.7 / 72.0,
+            _ => 0.0,
+        };
+        self.warn_number_as(sheet, cell, WarningKind::UnresolvedTheme, fallback)
     }
 
-    /// The `FillPattern` value a themed fill style names (ADR 0021
-    /// amendment), or `None` for every other cell and for a matrix the
-    /// theme cannot answer (the root style sheet's matrix 0).
-    fn themed_fill_pattern(&self, sheet: SheetRef, cell: &CellName) -> Option<f64> {
-        if cell.as_str() != "FillPattern" {
-            return None;
+    /// The theme answers a `Themed` number cell: the pattern, weight or
+    /// transparency its style matrix names (ADR 0021 amendment), or `None`
+    /// when the theme cannot answer it.
+    fn themed_value(&self, sheet: SheetRef, cell: &CellName) -> Option<f64> {
+        match cell.as_str() {
+            "FillPattern" => Some(match self.themed_fill_style(sheet)?.kind {
+                crate::theme::ThemeFillKind::None => 0.0,
+                crate::theme::ThemeFillKind::Solid => 1.0,
+                // The scene builder reads 25..40 as a gradient (ADR 0022).
+                crate::theme::ThemeFillKind::Gradient => 25.0,
+            }),
+            "LinePattern" => match self.themed_line_style(sheet)?.kind {
+                crate::theme::ThemeLineKind::None => Some(0.0),
+                crate::theme::ThemeLineKind::Solid => Some(1.0),
+                // A dash preset names no Visio `LinePattern` index (no
+                // published meaning): fall back with a warning.
+                crate::theme::ThemeLineKind::Dashed => None,
+            },
+            // `a:ln/@w` is EMU (1/914400 inch, [ISO/IEC29500-1]).
+            "LineWeight" => {
+                let emu = self.themed_line_style(sheet)?.width_emu?;
+                let emu = i32::try_from(emu).ok()?;
+                Some(f64::from(emu) / 914400.0)
+            }
+            "FillForegndTrans" | "FillBkgndTrans" => {
+                Some(self.transparency_of(self.themed_fill_style(sheet)?.alpha))
+            }
+            "LineColorTrans" => Some(self.transparency_of(self.themed_line_style(sheet)?.alpha)),
+            _ => None,
         }
-        let kind = self.fill_style_kind(sheet)?;
-        Some(match kind {
-            crate::theme::ThemeFillKind::None => 0.0,
-            crate::theme::ThemeFillKind::Solid => 1.0,
-            // The scene builder reads 25..40 as a gradient (ADR 0022).
-            crate::theme::ThemeFillKind::Gradient => 25.0,
-        })
     }
 
-    /// The fill style a sheet's `QuickStyleFillMatrix` names ([MS-VSDX]):
-    /// 1..6 the `a:fmtScheme` `fillStyleLst` fills in order, 100..103 the
-    /// `fillIdx` of the first..fourth `vt:varStyle` of the variation style
-    /// scheme. 0 names the root style sheet, not the theme, and keeps the
-    /// warning.
-    fn fill_style_kind(&self, sheet: SheetRef) -> Option<crate::theme::ThemeFillKind> {
+    /// The transparency (0..1) of a themed style's `a:alpha` opacity
+    /// (0..100000); no alpha is the DrawingML default, opaque.
+    fn transparency_of(&self, alpha: Option<u32>) -> f64 {
+        1.0 - f64::from(alpha.unwrap_or(100_000).min(100_000)) / 100_000.0
+    }
+
+    /// The theme fill style a sheet's `QuickStyleFillMatrix` names (ADR
+    /// 0021 amendment), or `None` when the theme cannot answer it.
+    fn themed_fill_style(&self, sheet: SheetRef) -> Option<crate::theme::ThemeFillStyle> {
         let theme = self.doc.themes.first()?;
-        let index = self.index_cell(sheet, "QuickStyleFillMatrix")?;
-        let slot = match index {
-            1..=6 => index as usize - 1,
+        let slot = self.style_matrix_slot(sheet, "QuickStyleFillMatrix", |styles| {
+            styles.fill_indices.as_slice()
+        })?;
+        theme.fill_styles.get(slot).copied()
+    }
+
+    /// The theme line style a sheet's `QuickStyleLineMatrix` names (ADR
+    /// 0021 amendment), or `None` when the theme cannot answer it.
+    fn themed_line_style(&self, sheet: SheetRef) -> Option<crate::theme::ThemeLineStyle> {
+        let theme = self.doc.themes.first()?;
+        let slot = self.style_matrix_slot(sheet, "QuickStyleLineMatrix", |styles| {
+            styles.line_indices.as_slice()
+        })?;
+        theme.line_styles.get(slot).copied()
+    }
+
+    /// The style slot a `QuickStyle*Matrix` value names ([MS-VSDX]
+    /// `QuickStyleFillMatrix`): 1..6 the `a:fmtScheme` styles in order,
+    /// 100..103 the `fillIdx`/`lineIdx` of the first..fourth `vt:varStyle`
+    /// of the variation style scheme (1-based). 0 names the root style
+    /// sheet, not the theme.
+    fn style_matrix_slot(
+        &self,
+        sheet: SheetRef,
+        name: &str,
+        indices: fn(&crate::theme::ThemeVariationStyles) -> &[u32],
+    ) -> Option<usize> {
+        let theme = self.doc.themes.first()?;
+        let index = self.index_cell(sheet, name)?;
+        match index {
+            1..=6 => Some(index as usize - 1),
             100..=103 => {
                 let scheme = self.variation_style_scheme(sheet, theme)?;
-                let entry = *scheme.fill_indices.get(index as usize - 100)?;
-                usize::try_from(entry.checked_sub(1)?).ok()?
+                let entry = *indices(scheme).get(index as usize - 100)?;
+                usize::try_from(entry.checked_sub(1)?).ok()
             }
-            _ => return None,
-        };
-        theme.fill_kinds.get(slot).copied()
+            _ => None,
+        }
     }
 
     /// The substitution for a `Themed` boolean cell.
@@ -900,7 +969,10 @@ mod tests {
     use crate::id::ShapeId;
     use crate::name::CellName;
     use crate::shape::Shape;
-    use crate::theme::{ColorTableEntry, Theme, ThemeColors, ThemeFonts, ThemeVariation};
+    use crate::theme::{
+        ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts,
+        ThemeLineKind, ThemeLineStyle, ThemeVariation, ThemeVariationStyles,
+    };
 
     use super::*;
 
@@ -1407,9 +1479,11 @@ mod tests {
             reader.number(sheet, &CellName::from_static("LineColorTrans")),
             Ok(0.0)
         );
+        // The `LineWeight` fallback is the documented hairline default
+        // (0.7 point), never 0 (ADR 0021 amendment).
         assert_eq!(
             reader.number(sheet, &CellName::from_static("LineWeight")),
-            Ok(0.0)
+            Ok(0.7 / 72.0)
         );
         assert_eq!(
             reader.boolean(sheet, &CellName::from_static("FillGradientEnabled")),
@@ -1927,16 +2001,44 @@ mod tests {
         assert_eq!(reader.warnings()[0].kind, WarningKind::Missing);
     }
 
-    /// A theme with three fill styles and one variation style scheme.
+    /// A theme with three fill styles, three line styles and one
+    /// variation style scheme.
     fn theme_with_fills() -> Theme {
         let mut theme = theme_with_variations();
-        theme.fill_kinds = vec![
-            crate::theme::ThemeFillKind::Solid,
-            crate::theme::ThemeFillKind::Gradient,
-            crate::theme::ThemeFillKind::None,
+        theme.fill_styles = vec![
+            ThemeFillStyle {
+                kind: ThemeFillKind::Solid,
+                alpha: Some(50_000),
+            },
+            ThemeFillStyle {
+                kind: ThemeFillKind::Gradient,
+                alpha: None,
+            },
+            ThemeFillStyle {
+                kind: ThemeFillKind::None,
+                alpha: Some(100_000),
+            },
         ];
-        theme.variation_styles = vec![crate::theme::ThemeVariationStyles {
+        theme.line_styles = vec![
+            ThemeLineStyle {
+                kind: ThemeLineKind::Solid,
+                alpha: Some(100_000),
+                width_emu: Some(12_700),
+            },
+            ThemeLineStyle {
+                kind: ThemeLineKind::Dashed,
+                alpha: None,
+                width_emu: None,
+            },
+            ThemeLineStyle {
+                kind: ThemeLineKind::None,
+                alpha: None,
+                width_emu: Some(25_400),
+            },
+        ];
+        theme.variation_styles = vec![ThemeVariationStyles {
             fill_indices: vec![3, 2, 1],
+            line_indices: vec![2, 1, 3],
         }];
         theme
     }
@@ -1989,15 +2091,32 @@ mod tests {
         }
     }
 
+    /// The `QuickStyle*Matrix` cell of a themed pattern cell.
+    fn matrix_cell(pattern: &str) -> &'static str {
+        match pattern {
+            "FillPattern" => "QuickStyleFillMatrix",
+            _ => "QuickStyleLineMatrix",
+        }
+    }
+
     #[test]
-    fn a_themed_value_the_theme_cannot_answer_keeps_the_warning() {
+    fn a_themed_pattern_falls_back_to_the_visible_value_with_a_warning() {
         // Matrix 0 names the root style sheet (not the theme), 7 has no
-        // published meaning, `fillIdx` 0 is out of range, and a themed
-        // `LinePattern` is not mapped yet: each warns `UnresolvedTheme`.
-        for matrix in [0.0, 7.0, 103.0, 100.0] {
+        // published meaning, `fillIdx` 0 is out of range and a dashed line
+        // names no Visio pattern index: the fallback is the *visible*
+        // value (1) with `UnresolvedTheme`, never 0 (ADR 0021 amendment).
+        for (matrix, name) in [
+            (0.0, "FillPattern"),
+            (7.0, "FillPattern"),
+            (103.0, "FillPattern"),
+            (100.0, "FillPattern"),
+            (0.0, "LinePattern"),
+            (2.0, "LinePattern"),
+            (7.0, "LinePattern"),
+        ] {
             let (mut doc, shape) = document_with_cells(vec![
-                cell("QuickStyleFillMatrix", CellValue::Number(matrix)),
-                cell("FillPattern", CellValue::Str("Themed".to_owned())),
+                Cell::new(CellName::new(matrix_cell(name))),
+                cell(name, CellValue::Str("Themed".to_owned())),
             ]);
             let mut theme = theme_with_fills();
             if matrix == 100.0 {
@@ -2009,32 +2128,136 @@ mod tests {
             doc.themes.push(theme);
             let mut reader = CellReader::new(&doc);
             assert_eq!(
-                reader.number(
-                    SheetRef::Shape(shape),
-                    &CellName::from_static("FillPattern")
-                ),
-                Ok(0.0),
-                "{matrix}"
+                reader.number(SheetRef::Shape(shape), &CellName::new(name)),
+                Ok(1.0),
+                "{name} {matrix}"
             );
             assert_eq!(
                 reader.warnings()[0].kind,
                 WarningKind::UnresolvedTheme,
-                "{matrix}"
+                "{name} {matrix}"
             );
         }
+    }
+
+    #[test]
+    fn a_themed_shadow_pattern_falls_back_to_no_shadow_with_a_warning() {
+        let (mut doc, shape) = document_with_cells(vec![cell(
+            "ShdwPattern",
+            CellValue::Str("Themed".to_owned()),
+        )]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("ShdwPattern")
+            ),
+            Ok(0.0)
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::UnresolvedTheme);
+    }
+
+    #[test]
+    fn a_themed_line_pattern_resolves_through_the_line_style_matrix() {
+        // `QuickStyleLineMatrix` 1..3 name `lnStyleLst` entries 1..3:
+        // solid (1), dashed (no published index: the fallback 1 with a
+        // warning) and no line (0).
+        for (matrix, want, warns) in [(1.0, 1.0, false), (2.0, 1.0, true), (3.0, 0.0, false)] {
+            let (mut doc, shape) = document_with_cells(vec![
+                cell("QuickStyleLineMatrix", CellValue::Number(matrix)),
+                cell("LinePattern", CellValue::Str("Themed".to_owned())),
+            ]);
+            doc.themes.push(theme_with_fills());
+            let mut reader = CellReader::new(&doc);
+            assert_eq!(
+                reader.number(
+                    SheetRef::Shape(shape),
+                    &CellName::from_static("LinePattern")
+                ),
+                Ok(want),
+                "{matrix}"
+            );
+            assert_eq!(!reader.warnings().is_empty(), warns, "{matrix}");
+        }
+    }
+
+    #[test]
+    fn a_themed_line_weight_resolves_from_the_line_width() {
+        // `a:ln/@w` is EMU (1/914400 inch): 12700 EMU is 1 point. Without
+        // a width the fallback is 0.7 point with `UnresolvedTheme`.
         let (mut doc, shape) = document_with_cells(vec![
             cell("QuickStyleLineMatrix", CellValue::Number(1.0)),
-            cell("LinePattern", CellValue::Str("Themed".to_owned())),
+            cell("LineWeight", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LineWeight")),
+            Ok(12_700.0 / 914_400.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineMatrix", CellValue::Number(2.0)),
+            cell("LineWeight", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(SheetRef::Shape(shape), &CellName::from_static("LineWeight")),
+            Ok(0.7 / 72.0)
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::UnresolvedTheme);
+    }
+
+    #[test]
+    fn themed_transparencies_resolve_from_the_style_alpha() {
+        // `a:alpha` is opacity: 50000 is 50% transparent. No alpha is the
+        // DrawingML default, opaque.
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleFillMatrix", CellValue::Number(1.0)),
+            cell("FillForegndTrans", CellValue::Str("Themed".to_owned())),
         ]);
         doc.themes.push(theme_with_fills());
         let mut reader = CellReader::new(&doc);
         assert_eq!(
             reader.number(
                 SheetRef::Shape(shape),
-                &CellName::from_static("LinePattern")
+                &CellName::from_static("FillForegndTrans")
+            ),
+            Ok(0.5)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleFillMatrix", CellValue::Number(3.0)),
+            cell("FillBkgndTrans", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("FillBkgndTrans")
             ),
             Ok(0.0)
         );
-        assert_eq!(reader.warnings()[0].kind, WarningKind::UnresolvedTheme);
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        let (mut doc, shape) = document_with_cells(vec![
+            cell("QuickStyleLineMatrix", CellValue::Number(1.0)),
+            cell("LineColorTrans", CellValue::Str("Themed".to_owned())),
+        ]);
+        doc.themes.push(theme_with_fills());
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader.number(
+                SheetRef::Shape(shape),
+                &CellName::from_static("LineColorTrans")
+            ),
+            Ok(0.0)
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
     }
 }
