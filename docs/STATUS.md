@@ -21,10 +21,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | merged (stale base; glyph size, rotation and run colour wired on main) | agent/P3-07 |
 | [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | merged (page size fallback fixed on main) | agent/P3-09 |
 | [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | merged (render fuzz seed corpus re-included by the master) | agent/P3-10 |
-| [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | ready | — |
-| [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | waits | — |
-| [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | waits | — |
-| [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | waits | — |
+| [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | merged (fixed a negative zero-advance line width in text) | agent/P3-11 |
+| [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | ready | — |
+| [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | ready | — |
+| [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | ready | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -122,3 +122,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-15 (open): the style-matrix colour modulation (about a 0.73 factor) is not applied; themed dash presets and shadow patterns fall back; cells with no documented default still warn `Missing`; inherited geometry row cells are the master's cached values (master-sized geometry on resized instances) until the formula engine (Phase 6); `QuickStyle*Color` 200..206 has no published meaning and is resolved like 100..106 from corpus evidence; a themed `LineWeight` falls back to 0.7 pt.
 - Master fixes (2026-10-15): scene node transforms are now relative to their parent group (the builder stored page transforms, so nested shapes were offset twice); the fixed palette RGB values come from [MS-VSDX] 2.2.7.6 (indices 14, 16 and 18 corrected), which closes the P3-02 "unverified" item. Master smoke render: all 15 corpus files render to PNG and SVG with exit 0; themed fills, gradients and text are visible.
 - P3-10 (open): the oracle comparison covers 3 of 15 corpus pages (`blue-box`, `qs-box`, `color-boxes`); the others skip on text drawn as paths, group flattening, unresolved themed paints, and a smaller geometry box than the oracle's on `testfile1`/`testfile5` arcs and ellipses (check the `Ellipse` and inherited-geometry cases). Tighten `skip_reason` in `crates/render/tests/oracle_render.rs` as those close. Golden metric may need loosening on Linux. The text fixture pins approximate tab and bullet rendering. Master fixes at merge: the root `**/fuzz/corpus/` ignore rule dropped the `render_document` seed corpus (now re-included by `crates/render/fuzz/.gitignore`), and `crates/vsdx/tests/fixtures.rs` now walks every fixture variant.
+- P3-11 (open): `text::layout` can emit non-finite glyph positions for extreme finite input (`line_spacing: f64::MAX`); the backends sanitize, so it is hardening for Phase 6. `render_svg` has no upper bound on `scale` (PNG caps the raster); P3-12 decides whether both backends share one cap. Report: `docs/reviews/phase-3-tests.md`.
