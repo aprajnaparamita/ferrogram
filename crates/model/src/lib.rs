@@ -56,7 +56,7 @@ pub use sheet::Sheet;
 pub use style::{Style, Stylesheet};
 pub use text::{TextContent, TextPart};
 pub use theme::{
-    ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFonts, ThemeVariation,
-    ThemeVariationStyles,
+    ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts, ThemeLineKind,
+    ThemeLineStyle, ThemeVariation, ThemeVariationStyles,
 };
 pub use values::{CellReader, CellWarning, SheetRef, WarningKind, palette};

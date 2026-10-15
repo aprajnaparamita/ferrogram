@@ -221,20 +221,44 @@ The variant encodings of the open issue above are now resolved. The mapping
   The corpus snapshots show Visio's value after the modulation; the exact
   transform stays open.
 
-### Amended 2026-10-15, P3-15: themed `FillPattern` from the fill style matrix
+### Amended 2026-10-15, P3-15: themed patterns, weights and transparencies
 
-A themed `FillPattern` resolves through the fill style its
-`QuickStyleFillMatrix` names ([MS-VSDX] `QuickStyleFillMatrix`): 1..6 the
-`a:fmtScheme` `fillStyleLst` fills in order, 100..103 the `fillIdx` of the
-first..fourth `vt:varStyle` of the variation style scheme the
-`VariationStyleIndex` cell selects (`vt:variationStyleSchemeLst`; the
-`fillIdx` values are 1-based). The fill kind maps to the pattern value:
-`noFill` 0, `solidFill` 1, `gradFill` 25 (the renderer's gradient range;
-the stops still come from the shape's own `FillGradient` rows). Matrix 0
-names the root style sheet, not the theme, and keeps the `UnresolvedTheme`
-warning. Themed `LinePattern`, `ShdwPattern`, transparencies and gradient
-stop colours keep the warning: mapping them needs the line/effect style
-lists and their dash and shadow tables.
+A themed value other than a colour resolves through the theme's style
+lists where a published meaning exists (the P3-15 note from the master,
+after the CLI smoke run showed `Themed` patterns resolving to 0 made most
+corpus shapes invisible):
+
+- **`FillPattern`** resolves through the fill style its
+  `QuickStyleFillMatrix` names ([MS-VSDX] `QuickStyleFillMatrix`): 1..6
+  the `a:fmtScheme` `fillStyleLst` fills in order, 100..103 the `fillIdx`
+  of the first..fourth `vt:varStyle` of the variation style scheme the
+  `VariationStyleIndex` cell selects (`vt:variationStyleSchemeLst`; the
+  `fillIdx` values are 1-based). The fill kind maps to the pattern value:
+  `noFill` 0, `solidFill` 1, `gradFill` 25 (the renderer's gradient
+  range; the stops still come from the shape's own `FillGradient` rows).
+- **`LinePattern`** resolves the same way through `lnStyleLst` and
+  `QuickStyleLineMatrix`/`lineIdx`: `a:noFill` 0 and a solid line (no
+  `a:prstDash`, or `solid`) 1. A **dash preset** names no Visio
+  `LinePattern` index (no published meaning): it falls back like an
+  unresolvable pattern below.
+- **`LineWeight`** resolves from the line style's `a:ln/@w` width (EMU,
+  1/914400 inch per [ISO/IEC29500-1]).
+- **Transparencies** (`FillForegndTrans`, `FillBkgndTrans`,
+  `LineColorTrans`) resolve from the style's colour `a:alpha` (opacity
+  0..100000): transparency = 1 - alpha/100000. No `a:alpha` is the
+  DrawingML default, opaque (transparency 0).
+- Matrix 0 names the root style sheet, not the theme.
+
+**Fallbacks (visible, never 0 for fill and line).** Where the theme cannot
+answer, a `Themed` pattern falls back to the visible value —
+`FillPattern` 1, `LinePattern` 1, `ShdwPattern` 0 — and a `Themed`
+`LineWeight` to a hairline default, each substituting with the
+`UnresolvedTheme` warning. The hairline default is **0.7 point**, the
+value the `THEMEVAL` reference documents for a theme-less document ("the
+function returns '0.7 pt.'"); the P3-15 note said "a hairline default" and
+we took the documented value instead of inventing one. Any other themed
+number (a transparency the style lists cannot answer, `FillGradientDir`
+and friends) still substitutes 0 with `UnresolvedTheme`.
 
 ### Amended 2026-10-15, P3-15: quiet documented defaults
 
