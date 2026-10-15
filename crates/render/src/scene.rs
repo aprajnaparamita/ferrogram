@@ -5,8 +5,30 @@
 //! units, ADR 0011). Visual-style indices are resolved before the scene
 //! (ADR 0023): strokes carry concrete dash lengths and arrowhead paths.
 //! Text carries positioned glyphs and their fonts (ADR 0024).
+//!
+//! # Text placement
+//!
+//! [`TextNode::layout`] positions glyphs in the text block's layout space:
+//! the origin is the block box's top-left corner, y points down, and the
+//! block rotation is already applied to the positions (ADR 0024
+//! amendment). A backend draws one glyph as follows (all lengths in
+//! inches):
+//!
+//! 1. take the em-unit outline of `glyph.glyph` from `fonts[glyph.font]`
+//!    (y up, [`Font::outline`]);
+//! 2. scale it by `runs[glyph.run].size / 72` (points to inches);
+//! 3. rotate it by `-rotation` in the y-up sense (a positive [`TextNode::rotation`]
+//!    is a clockwise turn on screen) and mirror nothing: the flip between
+//!    the y-down layout space and the y-up shape space is already in step
+//!    4;
+//! 4. translate it to `origin + (glyph.x, -glyph.y)` in shape-local
+//!    coordinates.
+//!
+//! The shape's [`Shape::transform`] then maps it to the page. Underlines
+//! and strike-throughs are drawn from [`TextRun`]; layout does not draw
+//! them (ADR 0024).
 
-use ferrogram_geom::{Path, Point, Size, Transform};
+use ferrogram_geom::{Angle, Path, Point, Size, Transform};
 use ferrogram_model::CellWarning;
 use ferrogram_text::{Font, Layout};
 
@@ -79,7 +101,9 @@ pub struct PatternPaint {
     pub foreground: Rgba,
     /// The tile's background colour.
     pub background: Rgba,
-    /// The tile shape.
+    /// The tile shape in inches, inside the `(0, 0)` to `tile_size` box
+    /// (the builder scales the unit-box tile of `render::styles` to
+    /// `tile_size`).
     pub tile: Path,
     /// The tile size, in inches.
     pub tile_size: Size,
@@ -165,17 +189,41 @@ pub struct Clip {
     pub path: Path,
 }
 
+/// The style of one text run (the `Character` rows, ADR 0024).
+///
+/// A glyph's `run` index selects its style here (the builder maps the
+/// layout's run indices, bullet runs included, onto [`TextNode::runs`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextRun {
+    /// The font size, in points.
+    pub size: f64,
+    /// Whether the run is underlined (the renderer draws it).
+    pub underline: bool,
+    /// Whether the run is struck through (the renderer draws it).
+    pub strikethrough: bool,
+    /// The run's colour.
+    pub color: Rgba,
+}
+
 /// A laid-out text block (ADR 0020).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextNode {
     /// The fonts the glyphs index into (ADR 0024).
     pub fonts: Vec<Font>,
+    /// The style of every run the glyphs index into.
+    pub runs: Vec<TextRun>,
     /// The laid-out glyphs.
     pub layout: Layout,
-    /// The text colour.
+    /// The text colour (the runs carry their own colour).
     pub color: Rgba,
-    /// The block origin in shape-local coordinates, in inches.
+    /// The block origin in shape-local coordinates, in inches: the
+    /// position of the layout's `(0, 0)` (the unrotated block box's
+    /// top-left corner). See the module docs for the full placement
+    /// recipe.
     pub origin: Point,
+    /// The block rotation the layout applied to the glyph positions, in
+    /// radians (positive = from +x toward +y in the y-down layout space).
+    pub rotation: Angle,
 }
 
 /// One shape node: a filled and stroked path with optional text.
@@ -298,9 +346,16 @@ mod tests {
             clip: Some(Clip { path: Path::new() }),
             text: Some(TextNode {
                 fonts: Vec::new(),
+                runs: vec![TextRun {
+                    size: 12.0,
+                    underline: true,
+                    strikethrough: false,
+                    color: Rgba::opaque(255, 255, 255),
+                }],
                 layout: Layout::default(),
                 color: Rgba::opaque(255, 255, 255),
                 origin: Point::new(0.1, 0.1),
+                rotation: Angle::from_radians(0.25),
             }),
         };
         let group = Group {
@@ -311,6 +366,19 @@ mod tests {
         let mut scene = Scene::new(1.0, 1.0);
         scene.nodes.push(Node::Group(group));
         assert_eq!(scene.nodes.len(), 1);
+        match &scene.nodes[0] {
+            Node::Group(group) => match group.children.first() {
+                Some(Node::Shape(shape)) => {
+                    let text = shape.text.as_ref().expect("text");
+                    assert_eq!(text.runs[0].size, 12.0);
+                    assert!(text.runs[0].underline);
+                    assert_eq!(text.rotation.radians(), 0.25);
+                    assert_eq!(text.origin, Point::new(0.1, 0.1));
+                }
+                _ => panic!("expected a shape child"),
+            },
+            _ => panic!("expected a group"),
+        }
     }
 
     #[test]

@@ -117,18 +117,8 @@ impl<'d> CellReader<'d> {
 
     /// Reads a string.
     pub fn text(&mut self, sheet: SheetRef, cell: &CellName) -> Result<String, Error> {
-        let (value, source) = self.fetch(sheet, cell)?;
-        Ok(match value {
-            Some(CellValue::Str(text)) if text == THEMED => self.themed_text(sheet, cell),
-            Some(CellValue::Str(text)) if source != ValueSource::HardDefault => text,
-            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
-                self.warn_text(sheet, cell, WarningKind::ErrorValue(error))
-            }
-            Some(_) if source != ValueSource::HardDefault => {
-                self.warn_text(sheet, cell, WarningKind::KindMismatch)
-            }
-            _ => self.warn_text(sheet, cell, WarningKind::Missing),
-        })
+        let resolved = self.resolved(sheet, cell)?;
+        Ok(self.text_from(sheet, cell, resolved))
     }
 
     /// Reads a color, resolving palette and document-table indices
@@ -137,21 +127,8 @@ impl<'d> CellReader<'d> {
     /// A cached number is an index: 0..23 into the fixed palette
     /// ([`palette`]), 24 and up into `Document::color_table`.
     pub fn color(&mut self, sheet: SheetRef, cell: &CellName) -> Result<Color, Error> {
-        let (value, source) = self.fetch(sheet, cell)?;
-        Ok(match value {
-            Some(CellValue::Str(text)) if text == THEMED => self.themed_color(sheet, cell),
-            Some(CellValue::Color(color)) if source != ValueSource::HardDefault => color,
-            Some(CellValue::Number(index)) if source != ValueSource::HardDefault => {
-                self.indexed_color(sheet, cell, index)
-            }
-            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
-                self.warn_color(sheet, cell, WarningKind::ErrorValue(error))
-            }
-            Some(_) if source != ValueSource::HardDefault => {
-                self.warn_color(sheet, cell, WarningKind::KindMismatch)
-            }
-            _ => self.warn_color(sheet, cell, WarningKind::Missing),
-        })
+        let resolved = self.resolved(sheet, cell)?;
+        Ok(self.color_from(sheet, cell, resolved))
     }
 
     /// Reads a numeric list (`LayerMember` and friends) as its numbers.
@@ -160,24 +137,8 @@ impl<'d> CellReader<'d> {
     /// number is a one-element list. A list with an unparsable entry is a
     /// kind mismatch and substitutes the empty list.
     pub fn list(&mut self, sheet: SheetRef, cell: &CellName) -> Result<Vec<f64>, Error> {
-        let (value, source) = self.fetch(sheet, cell)?;
-        Ok(match value {
-            Some(CellValue::Str(text)) if text == THEMED => self.themed_list(sheet, cell),
-            Some(CellValue::List(raw)) if source != ValueSource::HardDefault => {
-                self.parse_list(sheet, cell, &raw)
-            }
-            Some(CellValue::Str(raw)) if source != ValueSource::HardDefault => {
-                self.parse_list(sheet, cell, &raw)
-            }
-            Some(CellValue::Number(number)) if source != ValueSource::HardDefault => vec![number],
-            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
-                self.warn_list(sheet, cell, WarningKind::ErrorValue(error))
-            }
-            Some(_) if source != ValueSource::HardDefault => {
-                self.warn_list(sheet, cell, WarningKind::KindMismatch)
-            }
-            _ => self.warn_list(sheet, cell, WarningKind::Missing),
-        })
+        let resolved = self.resolved(sheet, cell)?;
+        Ok(self.list_from(sheet, cell, resolved))
     }
 
     /// Reads a number from one row of a repeated section (ADR 0019).
@@ -202,6 +163,78 @@ impl<'d> CellReader<'d> {
                 row_ix: None,
             },
             cell,
+        )
+    }
+
+    /// Reads a string from one row of a repeated section (ADR 0019).
+    ///
+    /// `row` is the row's position in the section; `section` names the
+    /// section (the first section with that name when a sheet has several).
+    /// The value policy is the one of [`CellReader::text`].
+    pub fn row_text(
+        &mut self,
+        sheet: SheetRef,
+        section: &str,
+        row: usize,
+        cell: &CellName,
+    ) -> Result<String, Error> {
+        let resolved = self.row_resolved(sheet, section, row, cell)?;
+        Ok(self.text_from(sheet, cell, resolved))
+    }
+
+    /// Reads a boolean from one row of a repeated section (ADR 0019).
+    ///
+    /// `row` is the row's position in the section; `section` names the
+    /// section (the first section with that name when a sheet has several).
+    /// The value policy is the one of [`CellReader::boolean`].
+    pub fn row_boolean(
+        &mut self,
+        sheet: SheetRef,
+        section: &str,
+        row: usize,
+        cell: &CellName,
+    ) -> Result<bool, Error> {
+        let resolved = self.row_resolved(sheet, section, row, cell)?;
+        Ok(self.boolean_from(sheet, cell, resolved))
+    }
+
+    /// Reads a color from one row of a repeated section (ADR 0019).
+    ///
+    /// `row` is the row's position in the section; `section` names the
+    /// section (the first section with that name when a sheet has several).
+    /// The value policy is the one of [`CellReader::color`]: palette and
+    /// document-table indices resolve and `Themed` goes through the theme.
+    pub fn row_color(
+        &mut self,
+        sheet: SheetRef,
+        section: &str,
+        row: usize,
+        cell: &CellName,
+    ) -> Result<Color, Error> {
+        let resolved = self.row_resolved(sheet, section, row, cell)?;
+        Ok(self.color_from(sheet, cell, resolved))
+    }
+
+    /// The resolved cached value of one row cell (ADR 0019 decision 5): the
+    /// section named by `section`, the row at position `row`.
+    fn row_resolved(
+        &mut self,
+        sheet: SheetRef,
+        section: &str,
+        row: usize,
+        cell: &CellName,
+    ) -> Result<crate::lookup::Resolved<'d>, Error> {
+        self.doc.resolve_repeated_with_table(
+            sheet,
+            &crate::lookup::RepeatedCell {
+                section,
+                section_ix: None,
+                section_pos: Some(0),
+                row: Some(row),
+                row_ix: None,
+            },
+            cell,
+            crate::generated::CELLS,
         )
     }
 
@@ -347,20 +380,83 @@ impl<'d> CellReader<'d> {
         std::mem::take(&mut self.warnings)
     }
 
-    /// The resolved cached value of one cell and where it came from.
+    /// The string policy (ADR 0021) for an already-resolved cell.
     ///
-    /// A resolving error (a stale id) is an `Err`, because it is a caller
-    /// bug, not file data (ADR 0021).
-    fn fetch(
-        &self,
+    /// The row readers resolve row cells themselves and apply the policy
+    /// through this method.
+    pub(crate) fn text_from(
+        &mut self,
         sheet: SheetRef,
         cell: &CellName,
-    ) -> Result<(Option<CellValue>, ValueSource), Error> {
-        let resolved = match sheet {
-            SheetRef::Shape(shape) => self.doc.resolve(shape, cell)?,
-            SheetRef::Page(page) => self.doc.resolve_page_cell(page, cell)?,
-        };
-        Ok((resolved.value.cloned(), resolved.source))
+        resolved: crate::lookup::Resolved<'_>,
+    ) -> String {
+        let source = resolved.source;
+        let value = resolved.value.cloned();
+        match value {
+            Some(CellValue::Str(text)) if text == THEMED => self.themed_text(sheet, cell),
+            Some(CellValue::Str(text)) if source != ValueSource::HardDefault => text,
+            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
+                self.warn_text(sheet, cell, WarningKind::ErrorValue(error))
+            }
+            Some(_) if source != ValueSource::HardDefault => {
+                self.warn_text(sheet, cell, WarningKind::KindMismatch)
+            }
+            _ => self.warn_text(sheet, cell, WarningKind::Missing),
+        }
+    }
+
+    /// The color policy (ADR 0021) for an already-resolved cell: palette
+    /// and document-table indices resolve (ADR 0019, ADR 0021 amendment).
+    pub(crate) fn color_from(
+        &mut self,
+        sheet: SheetRef,
+        cell: &CellName,
+        resolved: crate::lookup::Resolved<'_>,
+    ) -> Color {
+        let source = resolved.source;
+        let value = resolved.value.cloned();
+        match value {
+            Some(CellValue::Str(text)) if text == THEMED => self.themed_color(sheet, cell),
+            Some(CellValue::Color(color)) if source != ValueSource::HardDefault => color,
+            Some(CellValue::Number(index)) if source != ValueSource::HardDefault => {
+                self.indexed_color(sheet, cell, index)
+            }
+            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
+                self.warn_color(sheet, cell, WarningKind::ErrorValue(error))
+            }
+            Some(_) if source != ValueSource::HardDefault => {
+                self.warn_color(sheet, cell, WarningKind::KindMismatch)
+            }
+            _ => self.warn_color(sheet, cell, WarningKind::Missing),
+        }
+    }
+
+    /// The list policy (ADR 0021) for an already-resolved cell.
+    pub(crate) fn list_from(
+        &mut self,
+        sheet: SheetRef,
+        cell: &CellName,
+        resolved: crate::lookup::Resolved<'_>,
+    ) -> Vec<f64> {
+        let source = resolved.source;
+        let value = resolved.value.cloned();
+        match value {
+            Some(CellValue::Str(text)) if text == THEMED => self.themed_list(sheet, cell),
+            Some(CellValue::List(raw)) if source != ValueSource::HardDefault => {
+                self.parse_list(sheet, cell, &raw)
+            }
+            Some(CellValue::Str(raw)) if source != ValueSource::HardDefault => {
+                self.parse_list(sheet, cell, &raw)
+            }
+            Some(CellValue::Number(number)) if source != ValueSource::HardDefault => vec![number],
+            Some(CellValue::Error(error)) if source != ValueSource::HardDefault => {
+                self.warn_list(sheet, cell, WarningKind::ErrorValue(error))
+            }
+            Some(_) if source != ValueSource::HardDefault => {
+                self.warn_list(sheet, cell, WarningKind::KindMismatch)
+            }
+            _ => self.warn_list(sheet, cell, WarningKind::Missing),
+        }
     }
 
     /// Records one warning and returns the substituted number.
@@ -1191,6 +1287,75 @@ mod tests {
         assert_eq!(
             reader.row_number(sheet, "Geometry", 9, &CellName::from_static("X")),
             Ok(0.0)
+        );
+    }
+
+    #[test]
+    fn row_text_boolean_and_color_read_row_cells_with_the_same_policy() {
+        let (mut doc, shape) = document_with_shape();
+        {
+            let shape = doc.shape_mut(shape).expect("exists");
+            let mut section =
+                crate::section::Section::new(crate::name::SectionName::from_static("Character"));
+            let mut row = crate::section::Row::new();
+            row.row_type = Some("Character".to_owned());
+            row.cells
+                .push(cell("Font", CellValue::Str("Calibri".into())));
+            row.cells.push(cell("Strikethru", CellValue::Number(1.0)));
+            row.cells.push(cell("Color", CellValue::Number(2.0)));
+            section.rows.push(row);
+            let mut bad = crate::section::Row::new();
+            bad.row_type = Some("Character".to_owned());
+            bad.cells.push(cell("Font", CellValue::Number(1.0)));
+            section.rows.push(bad);
+            shape.sheet.sections.push(section);
+        }
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        let font = CellName::from_static("Font");
+        let strike = CellName::from_static("Strikethru");
+        let color = CellName::from_static("Color");
+        assert_eq!(
+            reader.row_text(sheet, "Character", 0, &font),
+            Ok("Calibri".to_owned())
+        );
+        assert_eq!(reader.row_boolean(sheet, "Character", 0, &strike), Ok(true));
+        assert_eq!(
+            reader.row_color(sheet, "Character", 0, &color),
+            Ok(Color::new(255, 0, 0))
+        );
+        assert!(reader.warnings().is_empty());
+        // A bad kind substitutes with one warning, like the sheet readers.
+        assert_eq!(
+            reader.row_text(sheet, "Character", 1, &font),
+            Ok(String::new())
+        );
+        assert_eq!(reader.warnings()[0].kind, WarningKind::KindMismatch);
+        // A row past the end substitutes too.
+        assert_eq!(
+            reader.row_boolean(sheet, "Character", 9, &strike),
+            Ok(false)
+        );
+        assert_eq!(reader.warnings()[1].kind, WarningKind::Missing);
+    }
+
+    #[test]
+    fn row_readers_report_a_stale_shape() {
+        let doc = Document::new();
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(ShapeId { index: 3 });
+        let cell = CellName::from_static("Font");
+        assert_eq!(
+            reader.row_text(sheet, "Character", 0, &cell),
+            Err(Error::UnknownShape(ShapeId { index: 3 }))
+        );
+        assert_eq!(
+            reader.row_boolean(sheet, "Character", 0, &cell),
+            Err(Error::UnknownShape(ShapeId { index: 3 }))
+        );
+        assert_eq!(
+            reader.row_color(sheet, "Character", 0, &cell),
+            Err(Error::UnknownShape(ShapeId { index: 3 }))
         );
     }
 
