@@ -1618,4 +1618,394 @@ mod tests {
             Err(Error::TooLarge)
         );
     }
+
+    // --- hostile and degraded paints (P3-17, coverage finding major 2)
+    // -------------------------------------------------------------
+
+    /// A gradient paint over the whole scene.
+    fn gradient_shape(paint: ScenePaint) -> Scene {
+        scene_of(
+            1.0,
+            1.0,
+            vec![shape(path_rect(0.0, 0.0, 1.0, 1.0), Some(paint))],
+        )
+    }
+
+    #[test]
+    fn degenerate_gradients_draw_nothing() {
+        let stop = GradientStop {
+            offset: 0.0,
+            color: Rgba::opaque(255, 0, 0),
+        };
+        // A linear gradient with non-finite endpoints.
+        let scene = gradient_shape(ScenePaint::LinearGradient {
+            start: Point::new(f64::NAN, 0.0),
+            end: Point::new(1.0, 1.0),
+            stops: vec![stop],
+        });
+        assert!(render_png(&scene, &PngOptions::new()).is_ok());
+        assert!(ink(&raster(&scene)).is_empty());
+
+        // A radial gradient with a zero radius and with a non-finite
+        // centre.
+        let scene = gradient_shape(ScenePaint::RadialGradient {
+            center: Point::new(0.5, 0.5),
+            radius: 0.0,
+            stops: vec![stop],
+        });
+        assert!(ink(&raster(&scene)).is_empty());
+        let scene = gradient_shape(ScenePaint::RadialGradient {
+            center: Point::new(f64::INFINITY, 0.5),
+            radius: 1.0,
+            stops: vec![stop],
+        });
+        assert!(ink(&raster(&scene)).is_empty());
+    }
+
+    #[test]
+    fn a_gradient_with_unusable_stops_still_rasterizes() {
+        // Non-finite stop offsets are dropped; the clamp keeps the rest.
+        let scene = gradient_shape(ScenePaint::LinearGradient {
+            start: Point::new(0.0, 0.5),
+            end: Point::new(1.0, 0.5),
+            stops: vec![
+                GradientStop {
+                    offset: f64::NAN,
+                    color: Rgba::opaque(255, 0, 0),
+                },
+                GradientStop {
+                    offset: 0.0,
+                    color: Rgba::opaque(255, 0, 0),
+                },
+                GradientStop {
+                    offset: 2.0,
+                    color: Rgba::opaque(0, 0, 255),
+                },
+            ],
+        });
+        assert!(!ink(&raster(&scene)).is_empty());
+        assert!(gradient_shader(&solid_red()).is_none());
+        assert!(
+            gradient_shader(&ScenePaint::Pattern(pattern(Size::new(0.2, 0.2), true))).is_none()
+        );
+    }
+
+    /// A pattern paint with the given tile box.
+    fn pattern(tile_size: Size, filled: bool) -> PatternPaint {
+        let mut tile = Path::new();
+        tile.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        tile.push(Segment::LineTo(Point::new(
+            tile_size.width,
+            tile_size.height,
+        )));
+        PatternPaint {
+            foreground: Rgba::opaque(255, 0, 0),
+            background: Rgba::opaque(0, 0, 255),
+            tile,
+            tile_size,
+            filled,
+            tile_stroke_width: 0.02,
+        }
+    }
+
+    #[test]
+    fn degenerate_pattern_tiles_fall_back_to_the_foreground_colour() {
+        let degenerate = [
+            Size::new(f64::NAN, 0.2), // not finite
+            Size::new(0.001, 0.001),  // sub-pixel at 96 ppi
+            Size::new(100.0, 100.0),  // over the tile byte cap
+        ];
+        for tile_size in degenerate {
+            let scene = gradient_shape(ScenePaint::Pattern(pattern(tile_size, true)));
+            let pixmap = raster(&scene);
+            let red = ink(&pixmap)
+                .iter()
+                .filter(|(x, y)| pixel(&pixmap, *x, *y).0 == 255)
+                .count();
+            assert!(red > 0, "no foreground fallback for {tile_size:?}");
+        }
+    }
+
+    #[test]
+    fn a_stroked_tile_draws_its_outline() {
+        let scene = gradient_shape(ScenePaint::Pattern(pattern(Size::new(0.2, 0.2), false)));
+        assert!(!ink(&raster(&scene)).is_empty());
+    }
+
+    // --- clips, dashes and shadows (P3-17, minor 5) --------------------
+
+    #[test]
+    fn a_second_clip_intersects_into_the_mask() {
+        let mut node = shape(path_rect(0.0, 0.0, 1.0, 1.0), Some(solid_red()));
+        if let Node::Shape(shape) = &mut node {
+            shape.clip = Some(Clip {
+                path: path_rect(0.0, 0.0, 0.75, 1.0),
+            });
+        }
+        let group = Node::Group(Group {
+            transform: Transform::identity(),
+            clip: Some(Clip {
+                path: path_rect(0.25, 0.0, 1.0, 1.0),
+            }),
+            children: vec![node],
+        });
+        let scene = scene_of(1.0, 1.0, vec![group]);
+        let pixmap = raster(&scene);
+        assert_eq!(pixel(&pixmap, 12, 48).3, 0); // left of the group clip
+        assert!(pixel(&pixmap, 48, 48).3 > 0); // in both clips
+        assert_eq!(pixel(&pixmap, 84, 48).3, 0); // right of the shape clip
+    }
+
+    #[test]
+    fn quad_and_cubic_segments_stroke_and_dash() {
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.1, 0.5)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(0.5, 0.1),
+            to: Point::new(0.9, 0.5),
+        });
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(1.1, 0.9),
+            ctrl2: Point::new(1.3, 0.9),
+            to: Point::new(1.5, 0.5),
+        });
+        let mut node = shape(path, None);
+        if let Node::Shape(shape) = &mut node {
+            let mut stroke = stroke(ScenePaint::Solid(Rgba::opaque(0, 0, 0)), 0.05);
+            stroke.dash = vec![0.1, 0.1];
+            shape.stroke = Some(stroke);
+        }
+        let scene = scene_of(2.0, 1.0, vec![node]);
+        assert!(!ink(&raster(&scene)).is_empty());
+    }
+
+    #[test]
+    fn path_ends_follow_curve_and_close_segments() {
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(f64::NAN, 0.0)));
+        path.push(Segment::LineTo(Point::new(9.0, 9.0))); // no current point
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(1.0, 0.0),
+            to: Point::new(2.0, 1.0),
+        });
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(3.0, 1.0),
+            ctrl2: Point::new(4.0, 1.0),
+            to: Point::new(5.0, 0.0),
+        });
+        path.push(Segment::Close);
+        let (start, end) = path_ends(&path);
+        let (tip, travel) = start.expect("a start vertex");
+        assert_eq!(tip, Point::new(0.0, 0.0));
+        assert_eq!(travel, Point::new(1.0, 0.0)); // towards the quad control
+        let (tip, travel) = end.expect("an end vertex");
+        assert_eq!(tip, Point::new(0.0, 0.0)); // the close returns to the start
+        // The tangent is the last non-degenerate outgoing direction: the
+        // closing segment runs back to the start.
+        assert_eq!(travel, Point::new(-1.0, 0.0));
+    }
+
+    // --- line ends (P3-17, coverage finding major 4) -------------------
+
+    /// The unit-box arrowhead of the line-end tests.
+    fn arrow() -> Path {
+        let mut triangle = Path::new();
+        triangle.push(Segment::MoveTo(Point::new(0.0, 0.5)));
+        triangle.push(Segment::LineTo(Point::new(1.0, 0.0)));
+        triangle.push(Segment::LineTo(Point::new(1.0, 1.0)));
+        triangle.push(Segment::Close);
+        triangle
+    }
+
+    /// A 3 x 2 inch scene of one horizontal line from (0.5, 1) to (2.5,
+    /// 1) with the given line ends.
+    fn line_ends_scene(start: Option<LineEnd>, end: Option<LineEnd>) -> Scene {
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.5, 1.0)));
+        path.push(Segment::LineTo(Point::new(2.5, 1.0)));
+        let mut node = shape(path, None);
+        if let Node::Shape(shape) = &mut node {
+            let mut stroke = stroke(ScenePaint::Solid(Rgba::opaque(0, 0, 255)), 0.03);
+            stroke.start = start;
+            stroke.end = end;
+            shape.stroke = Some(stroke);
+        }
+        scene_of(3.0, 2.0, vec![node])
+    }
+
+    #[test]
+    fn line_ends_draw_the_start_arrowhead_and_outline_the_end() {
+        let scene = line_ends_scene(
+            Some(LineEnd {
+                shape: arrow(),
+                width: 0.4,
+                length: 0.6,
+                filled: true,
+                color: Some(Rgba::opaque(255, 0, 0)),
+            }),
+            Some(LineEnd {
+                shape: arrow(),
+                width: 0.4,
+                length: 0.6,
+                filled: false,
+                color: None,
+            }),
+        );
+        let pixmap = raster(&scene);
+        // The start arrowhead is filled with its colour override.
+        let (r, _, _, a) = pixel(&pixmap, 60, 96);
+        assert_eq!((r, a), (255, 255), "the start end did not fill");
+        // The end arrowhead is an outline in the stroke's own colour: its
+        // body off the line is not filled ...
+        assert_eq!(pixel(&pixmap, 210, 89).3, 0, "the end arrowhead filled");
+        // ... but its edge is drawn.
+        let blue = ink(&pixmap)
+            .iter()
+            .filter(|(x, y)| (180..=241).contains(x) && (70..=122).contains(y))
+            .filter(|(x, y)| {
+                let (_, g, b, a) = pixel(&pixmap, *x, *y);
+                a > 0 && b > 200 && g < 60
+            })
+            .count();
+        assert!(blue > 5, "the end arrowhead outline drew {blue} pixels");
+    }
+
+    #[test]
+    fn degenerate_line_ends_are_skipped() {
+        // A non-positive length and width draw nothing.
+        let scene = line_ends_scene(
+            None,
+            Some(LineEnd {
+                shape: arrow(),
+                width: 0.0,
+                length: 0.6,
+                filled: true,
+                color: Some(Rgba::opaque(255, 0, 0)),
+            }),
+        );
+        let pixmap = raster(&scene);
+        let red = ink(&pixmap)
+            .iter()
+            .filter(|(x, y)| pixel(&pixmap, *x, *y).0 == 255)
+            .count();
+        assert_eq!(red, 0, "a zero-width line end drew {red} pixels");
+
+        // An empty line-end shape draws nothing.
+        let scene = line_ends_scene(
+            None,
+            Some(LineEnd {
+                shape: Path::new(),
+                width: 0.4,
+                length: 0.6,
+                filled: true,
+                color: Some(Rgba::opaque(255, 0, 0)),
+            }),
+        );
+        let pixmap = raster(&scene);
+        let red = ink(&pixmap)
+            .iter()
+            .filter(|(x, y)| pixel(&pixmap, *x, *y).0 == 255)
+            .count();
+        assert_eq!(red, 0, "an empty line-end shape drew {red} pixels");
+    }
+
+    #[test]
+    fn transparent_and_non_finite_shadows_are_skipped() {
+        let scene_with = |shadow: Shadow| {
+            let mut node = shape(path_rect(0.25, 0.25, 0.75, 0.75), None);
+            if let Node::Shape(shape) = &mut node {
+                shape.shadow = Some(shadow);
+            }
+            scene_of(1.0, 1.0, vec![node])
+        };
+        let base = Shadow {
+            color: Rgba::new(0, 0, 0, 255),
+            offset: Point::new(0.1, 0.1),
+            blur: 0.0,
+        };
+        // A transparent shadow draws nothing.
+        let mut transparent = base;
+        transparent.color.a = 0;
+        assert!(ink(&raster(&scene_with(transparent))).is_empty());
+        // Neither does one with a non-finite offset.
+        let mut flying = base;
+        flying.offset = Point::new(f64::NAN, 0.1);
+        assert!(ink(&raster(&scene_with(flying))).is_empty());
+    }
+
+    // --- text guards (P3-17) -------------------------------------------
+
+    #[test]
+    fn bad_text_draws_nothing_but_never_panics() {
+        let mut scene = text_scene(Angle::from_degrees(0.0));
+        if let Node::Shape(shape) = &mut scene.nodes[0]
+            && let Some(text) = &mut shape.text
+        {
+            text.origin = Point::new(f64::NAN, 0.0);
+        }
+        assert!(ink(&raster(&scene)).is_empty());
+
+        let mut scene = text_scene(Angle::from_degrees(0.0));
+        if let Node::Shape(shape) = &mut scene.nodes[0]
+            && let Some(text) = &mut shape.text
+        {
+            for line in &mut text.layout.lines {
+                for glyph in &mut line.glyphs {
+                    glyph.font = usize::MAX;
+                }
+            }
+        }
+        assert!(ink(&raster(&scene)).is_empty());
+    }
+
+    #[test]
+    fn stroke_cap_join_and_miter_fallbacks_draw() {
+        let mut node = shape(path_rect(0.25, 0.25, 0.75, 0.75), None);
+        if let Node::Shape(shape) = &mut node {
+            let mut stroke = stroke(ScenePaint::Solid(Rgba::opaque(0, 0, 0)), 0.05);
+            stroke.cap = LineCap::Square;
+            stroke.join = LineJoin::Bevel;
+            stroke.miter_limit = f64::NAN;
+            shape.stroke = Some(stroke);
+        }
+        let scene = scene_of(1.0, 1.0, vec![node]);
+        assert!(!ink(&raster(&scene)).is_empty());
+
+        // The round join maps too.
+        let mut node = shape(path_rect(0.25, 0.25, 0.75, 0.75), None);
+        if let Node::Shape(shape) = &mut node {
+            let mut stroke = stroke(ScenePaint::Solid(Rgba::opaque(0, 0, 0)), 0.05);
+            stroke.join = LineJoin::Round;
+            shape.stroke = Some(stroke);
+        }
+        let scene = scene_of(1.0, 1.0, vec![node]);
+        assert!(!ink(&raster(&scene)).is_empty());
+    }
+
+    #[test]
+    fn a_stroke_wider_than_the_device_bound_is_skipped() {
+        // `fits_device` widens the path bounds by the stroke: a width
+        // whose reach is not finite leaves the device bound and is
+        // skipped instead of handed to `tiny-skia` (P3-14 F4).
+        let mut node = shape(path_rect(0.25, 0.25, 0.75, 0.75), Some(solid_red()));
+        if let Node::Shape(shape) = &mut node {
+            shape.stroke = Some(stroke(ScenePaint::Solid(Rgba::opaque(0, 0, 255)), 1.0e308));
+        }
+        let scene = scene_of(1.0, 1.0, vec![node]);
+        let pixmap = raster(&scene);
+        let blue = ink(&pixmap)
+            .iter()
+            .filter(|(x, y)| pixel(&pixmap, *x, *y).2 == 255)
+            .count();
+        assert_eq!(blue, 0, "a stroke past the device bound drew {blue} pixels");
+    }
+
+    #[test]
+    fn a_pattern_tile_without_a_mark_draws_its_background() {
+        let mut tileless = pattern(Size::new(0.2, 0.2), true);
+        tileless.tile = Path::new();
+        let scene = gradient_shape(ScenePaint::Pattern(tileless));
+        assert!(!ink(&raster(&scene)).is_empty());
+    }
 }
