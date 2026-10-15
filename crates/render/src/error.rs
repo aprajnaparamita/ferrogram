@@ -22,6 +22,8 @@ pub enum Error {
     /// The builder only walks ids it got from the document, so this is a
     /// caller bug (ADR 0021: a resolving error is not file data).
     Model(ferrogram_model::Error),
+    /// The rendered raster could not be encoded (PNG encoding failed).
+    Encode,
 }
 
 impl fmt::Display for Error {
@@ -31,6 +33,7 @@ impl fmt::Display for Error {
             Error::NotImplemented => write!(f, "not implemented yet"),
             Error::InvalidStyleData => write!(f, "committed visual style data is not valid"),
             Error::Model(error) => write!(f, "model error: {error}"),
+            Error::Encode => write!(f, "the output could not be encoded"),
         }
     }
 }
@@ -59,5 +62,6 @@ mod tests {
             .to_string(),
             "model error: unknown shape id 1"
         );
+        assert_eq!(Error::Encode.to_string(), "the output could not be encoded");
     }
 }
