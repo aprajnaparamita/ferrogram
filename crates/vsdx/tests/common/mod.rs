@@ -658,8 +658,7 @@ pub fn corrupt_central_directory(mut zip_bytes: Vec<u8>) -> Vec<u8> {
 // [MS-VSDX] and `docs/vsdx-inventory.md`; every value is chosen by us.
 
 const CT_THEME: &str = "application/vnd.openxmlformats-officedocument.theme+xml";
-const REL_THEME: &str =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+const REL_THEME: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
 
 /// The part set of one rendering feature package (see [`Feature`]).
 fn render_entries(feature: Feature) -> Vec<Entry> {
@@ -810,9 +809,8 @@ fn render_pages_xml(feature: Feature) -> String {
         Feature::PageSize => ("11", "8.5"),
         _ => ("8.5", "11"),
     };
-    let mut sheet = format!(
-        "<Cell N=\"PageWidth\" V=\"{width}\"/><Cell N=\"PageHeight\" V=\"{height}\"/>"
-    );
+    let mut sheet =
+        format!("<Cell N=\"PageWidth\" V=\"{width}\"/><Cell N=\"PageHeight\" V=\"{height}\"/>");
     if feature == Feature::Layers {
         sheet.push_str(
             "<Section N=\"Layer\">\
@@ -867,10 +865,12 @@ fn geo_row_xml(row_type: &str, ix: u32, cells: &[(&str, &str)]) -> String {
     format!("<Row T=\"{row_type}\" IX=\"{ix}\">{cells}</Row>")
 }
 
-/// A `Geometry` section of `rows`, with the open-path flags.
-fn geometry_section_xml(rows: &[String]) -> String {
+/// A `Geometry` section of `rows`: `no_fill` for stroked open paths.
+fn geometry_section_xml(rows: &[String], no_fill: bool) -> String {
+    let no_fill = if no_fill { "1" } else { "0" };
     format!(
-        "<Section N=\"Geometry\" IX=\"0\"><Cell N=\"NoFill\" V=\"1\"/><Cell N=\"NoLine\" V=\"0\"/>{}\
+        "<Section N=\"Geometry\" IX=\"0\"><Cell N=\"NoFill\" V=\"{no_fill}\"/>\
+         <Cell N=\"NoLine\" V=\"0\"/>{}\
          </Section>",
         rows.concat()
     )
@@ -880,19 +880,25 @@ fn geometry_section_xml(rows: &[String]) -> String {
 fn rect_xml(id: u32, pin: (&str, &str), size: (&str, &str), cells: &[(&str, &str)]) -> String {
     let (px, py) = pin;
     let (w, h) = size;
+    let half = |value: &str| {
+        let size: f64 = value.parse().unwrap_or(0.0);
+        format!("{}", size / 2.0)
+    };
     let own: String = cells.iter().map(|(n, v)| cell_xml(n, v)).collect();
     format!(
         "<Shape ID=\"{id}\" Type=\"Shape\" LineStyle=\"0\" FillStyle=\"0\" TextStyle=\"0\">\
          <Cell N=\"PinX\" V=\"{px}\"/><Cell N=\"PinY\" V=\"{py}\"/>\
          <Cell N=\"Width\" V=\"{w}\"/><Cell N=\"Height\" V=\"{h}\"/>\
-         <Cell N=\"LocPinX\" V=\"{w}\"/><Cell N=\"LocPinY\" V=\"{h}\"/>{own}\
+         <Cell N=\"LocPinX\" V=\"{lx}\"/><Cell N=\"LocPinY\" V=\"{ly}\"/>{own}\
          <Section N=\"Geometry\" IX=\"0\"><Cell N=\"NoFill\" V=\"0\"/><Cell N=\"NoLine\" V=\"0\"/>\
          <Row T=\"RelMoveTo\" IX=\"1\"><Cell N=\"X\" V=\"0\"/><Cell N=\"Y\" V=\"0\"/></Row>\
          <Row T=\"RelLineTo\" IX=\"2\"><Cell N=\"X\" V=\"1\"/><Cell N=\"Y\" V=\"0\"/></Row>\
          <Row T=\"RelLineTo\" IX=\"3\"><Cell N=\"X\" V=\"1\"/><Cell N=\"Y\" V=\"1\"/></Row>\
          <Row T=\"RelLineTo\" IX=\"4\"><Cell N=\"X\" V=\"0\"/><Cell N=\"Y\" V=\"1\"/></Row>\
          <Row T=\"RelLineTo\" IX=\"5\"><Cell N=\"X\" V=\"0\"/><Cell N=\"Y\" V=\"0\"/></Row>\
-         </Section></Shape>"
+         </Section></Shape>",
+        lx = half(w),
+        ly = half(h)
     )
 }
 
@@ -913,7 +919,7 @@ fn polyline_xml(id: u32, points: &[(&str, &str)], cells: &[(&str, &str)]) -> Str
          <Cell N=\"PinX\" V=\"0\"/><Cell N=\"PinY\" V=\"0\"/>\
          <Cell N=\"Width\" V=\"8.5\"/><Cell N=\"Height\" V=\"11\"/>\
          <Cell N=\"LocPinX\" V=\"0\"/><Cell N=\"LocPinY\" V=\"0\"/>{own}{}</Shape>",
-        geometry_section_xml(&rows)
+        geometry_section_xml(&rows, true)
     )
 }
 
@@ -931,8 +937,18 @@ fn render_shapes(feature: Feature) -> String {
         Feature::Layers => layers_shapes(),
         Feature::PageSize => format!(
             "{}{}",
-            rect_xml(1, ("3", "4.25"), ("2", "1"), &[("FillPattern", "1"), ("FillForegnd", "#27AE60")]),
-            rect_xml(2, ("8", "4.25"), ("2", "1"), &[("FillPattern", "1"), ("FillForegnd", "#C0392B")])
+            rect_xml(
+                1,
+                ("3", "4.25"),
+                ("2", "1"),
+                &[("FillPattern", "1"), ("FillForegnd", "#27AE60")]
+            ),
+            rect_xml(
+                2,
+                ("8", "4.25"),
+                ("2", "1"),
+                &[("FillPattern", "1"), ("FillForegnd", "#C0392B")]
+            )
         ),
         Feature::BackgroundPages => rect_xml(
             1,
@@ -975,12 +991,16 @@ fn geometry_absolute_shapes() -> String {
         ("Height", "11"),
         ("LocPinX", "0"),
         ("LocPinY", "0"),
+        ("FillPattern", "0"),
+        ("LinePattern", "1"),
+        ("LineWeight", "0.02"),
+        ("LineColor", "#1F2A44"),
     ];
     let rows = vec![
         geo_row_xml("MoveTo", 1, &[("X", "1"), ("Y", "2")]),
         geo_row_xml("LineTo", 2, &[("X", "3"), ("Y", "2")]),
         geo_row_xml("MoveTo", 3, &[("X", "1"), ("Y", "3.5")]),
-        geo_row_xml("ArcTo", 4, &[("X", "3"), ("Y", "3.5"), ("Bow", "0.5")]),
+        geo_row_xml("ArcTo", 4, &[("X", "3"), ("Y", "3.5"), ("A", "0.5")]),
         geo_row_xml("MoveTo", 5, &[("X", "1"), ("Y", "5")]),
         geo_row_xml(
             "EllipticalArcTo",
@@ -1005,7 +1025,7 @@ fn geometry_absolute_shapes() -> String {
                 ("B", "1"),
                 ("C", "0"),
                 ("D", "1"),
-                ("E", "NURBS(2, 1, 1, 1, 1, 1, 0.5, 1)"),
+                ("E", "NURBS(2, 1, 1, 1, 2, 7.5, 0.5, 1)"),
             ],
         ),
         geo_row_xml("MoveTo", 9, &[("X", "1"), ("Y", "8")]),
@@ -1018,13 +1038,27 @@ fn geometry_absolute_shapes() -> String {
         geo_row_xml(
             "SplineStart",
             12,
-            &[("X", "5"), ("Y", "2.6"), ("A", "0"), ("B", "0"), ("C", "1"), ("D", "2")],
+            &[
+                ("X", "5"),
+                ("Y", "2.6"),
+                ("A", "1"),
+                ("B", "0"),
+                ("C", "2"),
+                ("D", "2"),
+            ],
         ),
-        geo_row_xml("SplineKnot", 13, &[("X", "6"), ("Y", "2"), ("A", "1")]),
+        geo_row_xml("SplineKnot", 13, &[("X", "6"), ("Y", "2"), ("A", "1.5")]),
         geo_row_xml(
             "Ellipse",
             14,
-            &[("X", "5"), ("Y", "4"), ("A", "6"), ("B", "4"), ("C", "5"), ("D", "4.75")],
+            &[
+                ("X", "5"),
+                ("Y", "4"),
+                ("A", "6"),
+                ("B", "4"),
+                ("C", "5"),
+                ("D", "4.75"),
+            ],
         ),
         geo_row_xml(
             "InfiniteLine",
@@ -1032,7 +1066,7 @@ fn geometry_absolute_shapes() -> String {
             &[("X", "4"), ("Y", "6"), ("A", "7"), ("B", "6.5")],
         ),
     ];
-    free_shape_xml(1, &base, &geometry_section_xml(&rows), "")
+    free_shape_xml(1, &base, &geometry_section_xml(&rows, true), "")
 }
 
 /// One shape of every relative geometry row type (one subpath each).
@@ -1044,6 +1078,10 @@ fn geometry_relative_shapes() -> String {
         ("Height", "8"),
         ("LocPinX", "3"),
         ("LocPinY", "4"),
+        ("FillPattern", "0"),
+        ("LinePattern", "1"),
+        ("LineWeight", "0.02"),
+        ("LineColor", "#1F2A44"),
     ];
     let rows = vec![
         geo_row_xml("RelMoveTo", 1, &[("X", "0"), ("Y", "0")]),
@@ -1082,7 +1120,7 @@ fn geometry_relative_shapes() -> String {
             ],
         ),
     ];
-    free_shape_xml(1, &base, &geometry_section_xml(&rows), "")
+    free_shape_xml(1, &base, &geometry_section_xml(&rows, true), "")
 }
 
 /// Solid, gradient and pattern fills: four shapes in a row.
@@ -1096,7 +1134,11 @@ fn fills_shapes() -> String {
         1,
         ("1.4", "6.5"),
         ("1.8", "1.8"),
-        &[("FillPattern", "1"), ("FillForegnd", "#3366CC"), ("FillBkgnd", "#FFFFFF")],
+        &[
+            ("FillPattern", "1"),
+            ("FillForegnd", "#3366CC"),
+            ("FillBkgnd", "#FFFFFF"),
+        ],
     );
     let linear = free_shape_xml(
         2,
@@ -1114,21 +1156,42 @@ fn fills_shapes() -> String {
         ],
         &format!(
             "{}{gradient_stops}",
-            geometry_section_xml(&rect_rows())
+            geometry_section_xml(&rect_rows(), false)
         ),
         "",
     );
-    let radial = rect_xml(
+    let radial_stops = "<Section N=\"FillGradient\">\
+         <Row IX=\"0\"><Cell N=\"GradientStopPosition\" V=\"0\"/>\
+         <Cell N=\"GradientStopColor\" V=\"5\"/></Row>\
+         <Row IX=\"1\"><Cell N=\"GradientStopPosition\" V=\"1\"/>\
+         <Cell N=\"GradientStopColor\" V=\"4\"/></Row></Section>";
+    let radial = free_shape_xml(
         3,
-        ("5", "6.5"),
-        ("1.8", "1.8"),
-        &[("FillPattern", "30"), ("FillGradientDir", "1")],
+        &[
+            ("PinX", "5"),
+            ("PinY", "6.5"),
+            ("Width", "1.8"),
+            ("Height", "1.8"),
+            ("LocPinX", "0.9"),
+            ("LocPinY", "0.9"),
+            ("FillPattern", "30"),
+            ("FillGradientDir", "1"),
+        ],
+        &format!(
+            "{}{radial_stops}",
+            geometry_section_xml(&rect_rows(), false)
+        ),
+        "",
     );
     let pattern = rect_xml(
         4,
         ("6.8", "6.5"),
         ("1.8", "1.8"),
-        &[("FillPattern", "7"), ("FillForegnd", "#3366CC"), ("FillBkgnd", "#FFFFFF")],
+        &[
+            ("FillPattern", "7"),
+            ("FillForegnd", "#3366CC"),
+            ("FillBkgnd", "#FFFFFF"),
+        ],
     );
     format!("{solid}{linear}{radial}{pattern}")
 }
@@ -1149,12 +1212,20 @@ fn lines_shapes() -> String {
     let thick = polyline_xml(
         1,
         &[("1", "8"), ("3", "9"), ("5", "8")],
-        &[("LineWeight", "0.05"), ("LineColor", "#C0392B"), ("LinePattern", "1")],
+        &[
+            ("LineWeight", "0.05"),
+            ("LineColor", "#C0392B"),
+            ("LinePattern", "1"),
+        ],
     );
     let dashed = polyline_xml(
         2,
         &[("1", "6.5"), ("3", "7.5"), ("5", "6.5")],
-        &[("LineWeight", "0.02"), ("LineColor", "#2980B9"), ("LinePattern", "2")],
+        &[
+            ("LineWeight", "0.02"),
+            ("LineColor", "#2980B9"),
+            ("LinePattern", "2"),
+        ],
     );
     let ends = polyline_xml(
         3,
@@ -1219,6 +1290,13 @@ fn shadows_shapes() -> String {
 
 /// Text with runs and paragraphs, and text with bullets and tabs.
 fn text_shapes() -> String {
+    let runs_sections = "<Section N=\"Character\">\
+         <Row IX=\"0\"><Cell N=\"Font\" V=\"Calibri\"/><Cell N=\"Size\" V=\"0.1666666666666667\"/>\
+         <Cell N=\"Style\" V=\"0\"/><Cell N=\"Color\" V=\"#1F2A44\"/></Row>\
+         <Row IX=\"1\"><Cell N=\"Font\" V=\"Calibri\"/><Cell N=\"Size\" V=\"0.25\"/>\
+         <Cell N=\"Style\" V=\"1\"/><Cell N=\"Color\" V=\"#C0392B\"/></Row>\
+         </Section><Section N=\"Paragraph\"><Row IX=\"0\"><Cell N=\"HorzAlign\" V=\"0\"/>\
+         <Cell N=\"SpBefore\" V=\"0.02\"/><Cell N=\"SpAfter\" V=\"0.02\"/></Row></Section>";
     let runs = free_shape_xml(
         1,
         &[
@@ -1232,16 +1310,28 @@ fn text_shapes() -> String {
             ("FillForegnd", "#F5F7FA"),
             ("VerticalAlign", "0"),
         ],
-        &geometry_section_xml(&rect_rows()),
+        &format!(
+            "{}{runs_sections}",
+            geometry_section_xml(&rect_rows(), false)
+        ),
         "<cp IX=\"0\"/>Plain <cp IX=\"1\"/>bold red<cp IX=\"0\"/> and plain again\r\nsecond line",
     );
-    let runs_sections = "<Section N=\"Character\">\
-         <Row IX=\"0\"><Cell N=\"Font\" V=\"Calibri\"/><Cell N=\"Size\" V=\"0.1666666666666667\"/>\
-         <Cell N=\"Style\" V=\"0\"/><Cell N=\"Color\" V=\"#1F2A44\"/></Row>\
-         <Row IX=\"1\"><Cell N=\"Font\" V=\"Calibri\"/><Cell N=\"Size\" V=\"0.25\"/>\
-         <Cell N=\"Style\" V=\"1\"/><Cell N=\"Color\" V=\"#C0392B\"/></Row>\
-         </Section><Section N=\"Paragraph\"><Row IX=\"0\"><Cell N=\"HorzAlign\" V=\"0\"/>\
-         <Cell N=\"SpBefore\" V=\"0.02\"/><Cell N=\"SpAfter\" V=\"0.02\"/></Row></Section>";
+    let bullet_sections = "<Section N=\"Character\"><Row IX=\"0\"><Cell N=\"Font\" V=\"Calibri\"/>\
+         <Cell N=\"Size\" V=\"0.1666666666666667\"/><Cell N=\"Style\" V=\"0\"/>\
+         <Cell N=\"Color\" V=\"#1F2A44\"/></Row></Section>\
+         <Section N=\"Paragraph\">\
+         <Row IX=\"0\"><Cell N=\"Bullet\" V=\"1\"/><Cell N=\"BulletStr\" V=\"• \"/>\
+         <Cell N=\"BulletFontSize\" V=\"0.1666666666666667\"/>\
+         <Cell N=\"TextPosAfterBullet\" V=\"0.2\"/><Cell N=\"IndFirst\" V=\"-0.2\"/>\
+         <Cell N=\"IndLeft\" V=\"0.2\"/></Row>\
+         <Row IX=\"1\"><Cell N=\"Bullet\" V=\"3\"/><Cell N=\"BulletStr\" V=\"▪ \"/>\
+         <Cell N=\"BulletFontSize\" V=\"0.1666666666666667\"/>\
+         <Cell N=\"TextPosAfterBullet\" V=\"0.2\"/><Cell N=\"IndFirst\" V=\"-0.2\"/>\
+         <Cell N=\"IndLeft\" V=\"0.4\"/></Row>\
+         <Row IX=\"2\"><Cell N=\"Bullet\" V=\"0\"/><Cell N=\"HorzAlign\" V=\"1\"/></Row>\
+         </Section><Section N=\"Tabs\">\
+         <Row IX=\"0\"><Cell N=\"Position\" V=\"1\"/></Row>\
+         <Row IX=\"1\"><Cell N=\"Position\" V=\"2\"/></Row></Section>";
     let bullets = free_shape_xml(
         2,
         &[
@@ -1256,22 +1346,8 @@ fn text_shapes() -> String {
             ("VerticalAlign", "1"),
         ],
         &format!(
-            "{}{runs_sections}{}",
-            geometry_section_xml(&rect_rows()),
-            "<Section N=\"Character\"><Row IX=\"0\"><Cell N=\"Font\" V=\"Calibri\"/>\
-             <Cell N=\"Size\" V=\"0.1666666666666667\"/><Cell N=\"Style\" V=\"0\"/>\
-             <Cell N=\"Color\" V=\"#1F2A44\"/></Row></Section>\
-             <Section N=\"Paragraph\">\
-             <Row IX=\"0\"><Cell N=\"Bullet\" V=\"1\"/><Cell N=\"BulletFontSize\" V=\"0.1666666666666667\"/>\
-             <Cell N=\"TextPosAfterBullet\" V=\"0.2\"/><Cell N=\"IndFirst\" V=\"-0.2\"/>\
-             <Cell N=\"IndLeft\" V=\"0.2\"/></Row>\
-             <Row IX=\"1\"><Cell N=\"Bullet\" V=\"3\"/><Cell N=\"BulletFontSize\" V=\"0.1666666666666667\"/>\
-             <Cell N=\"TextPosAfterBullet\" V=\"0.2\"/><Cell N=\"IndFirst\" V=\"-0.2\"/>\
-             <Cell N=\"IndLeft\" V=\"0.4\"/></Row>\
-             <Row IX=\"2\"><Cell N=\"Bullet\" V=\"0\"/><Cell N=\"HorzAlign\" V=\"1\"/></Row>\
-             </Section><Section N=\"Tabs\">\
-             <Row IX=\"0\"><Cell N=\"Position\" V=\"1\"/></Row>\
-             <Row IX=\"1\"><Cell N=\"Position\" V=\"2\"/></Row></Section>"
+            "{}{bullet_sections}",
+            geometry_section_xml(&rect_rows(), false)
         ),
         "<pp IX=\"0\"/>first bullet<pp IX=\"1\"/>nested bullet<pp IX=\"2\"/>plain <tp IX=\"0\"/>after tab",
     );
@@ -1306,6 +1382,7 @@ fn theme_shapes() -> String {
         ("2", "7"),
         ("2", "1.5"),
         &[
+            ("FillPattern", "1"),
             ("FillForegnd", "Themed"),
             ("QuickStyleFillColor", "2"),
             ("LineColor", "Themed"),
@@ -1324,6 +1401,7 @@ fn theme_shapes() -> String {
         ("6", "7"),
         ("2", "1.5"),
         &[
+            ("FillPattern", "1"),
             ("FillForegnd", "Themed"),
             ("QuickStyleFillColor", "100"),
             ("VariationColorIndex", "0"),
@@ -1343,7 +1421,7 @@ fn theme_shapes() -> String {
             "{}<Section N=\"Character\"><Row IX=\"0\"><Cell N=\"Color\" V=\"Themed\"/>\
              <Cell N=\"QuickStyleFontColor\" V=\"0\"/><Cell N=\"Size\" V=\"0.3333333333333333\"/>\
              </Row></Section>",
-            geometry_section_xml(&rect_rows())
+            geometry_section_xml(&rect_rows(), false)
         ),
         "Theme text",
     );
@@ -1356,13 +1434,21 @@ fn layers_shapes() -> String {
         1,
         ("2.5", "7"),
         ("2", "1.5"),
-        &[("FillPattern", "1"), ("FillForegnd", "#27AE60"), ("LayerMember", "0")],
+        &[
+            ("FillPattern", "1"),
+            ("FillForegnd", "#27AE60"),
+            ("LayerMember", "0"),
+        ],
     );
     let hidden = rect_xml(
         2,
         ("6", "7"),
         ("2", "1.5"),
-        &[("FillPattern", "1"), ("FillForegnd", "#C0392B"), ("LayerMember", "1")],
+        &[
+            ("FillPattern", "1"),
+            ("FillForegnd", "#C0392B"),
+            ("LayerMember", "1"),
+        ],
     );
     let unlayered = rect_xml(
         3,
@@ -1377,7 +1463,8 @@ fn layers_shapes() -> String {
 /// colour scheme and a font scheme ([MS-VSDX] `/visio/theme/theme{N}.xml`;
 /// every RGB value and font name here is chosen by us).
 fn theme_xml() -> String {
-    let scheme = |name: &str, value: &str| format!("<a:{name}><a:srgbClr val=\"{value}\"/></a:{name}>");
+    let scheme =
+        |name: &str, value: &str| format!("<a:{name}><a:srgbClr val=\"{value}\"/></a:{name}>");
     let var_color = |n: u32, value: &str| {
         format!("<vt:varColor{n}><a:srgbClr val=\"{value}\"/></vt:varColor{n}>")
     };
