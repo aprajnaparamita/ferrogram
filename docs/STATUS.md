@@ -19,7 +19,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-15](tasks/P3-15.md) | implementer | P3-05 | B | ready (model fixes: geometry row union, theme variants, quiet defaults) | — |
 | [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | merged (conflict with P3-05 resolved on main; glyphs use their run colour) | agent/P3-06 |
 | [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | merged (stale base; glyph size, rotation and run colour wired on main) | agent/P3-07 |
-| [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | waits for B | — |
+| [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | ready | — |
 | [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | waits for B | — |
 | [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | waits for C | — |
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | waits | — |
