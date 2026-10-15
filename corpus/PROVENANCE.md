@@ -71,6 +71,14 @@ copies of every committed fixture above, used as the seed corpus of the
 (MIT); `fixtures/` stays the single source of truth and a copy that drifts is
 a bug.
 
+The seed corpus of the `render_document` fuzz target
+(`crates/render/fuzz/corpus/`, task P3-10, ADR 0027 section 6) holds
+byte-identical copies of four committed fixtures above
+(`render-geometry-absolute.vsdx`, `render-fills.vsdx`, `render-text.vsdx`,
+`render-theme.vsdx`) plus three tiny hand-written junk files
+(`junk-text.bin`, `junk-zip-header.bin`, `junk-zeros.bin`). Same author and
+license (P3-10, MIT).
+
 All rows above are our own work: hand-written XML and a plain zip container
 produced by `crates/vsdx/tests/common/mod.rs` (task P2-08). Element names,
 content types and relationship type URIs are structural facts recorded in

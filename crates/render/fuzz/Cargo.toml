@@ -1,0 +1,31 @@
+[package]
+name = "ferrogram-render-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.ferrogram-render]
+path = ".."
+
+[dependencies.ferrogram-model]
+path = "../../model"
+
+[dependencies.ferrogram-vsdx]
+path = "../../vsdx"
+
+# Prevent this from interfering with workspaces (the cargo-fuzz way).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "render_document"
+path = "fuzz_targets/render_document.rs"
+test = false
+doc = false
+bench = false
