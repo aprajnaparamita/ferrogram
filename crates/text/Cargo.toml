@@ -16,5 +16,10 @@ skrifa = "0.48"
 harfrust = "0.14"
 unicode-linebreak = "0.1"
 
+[dev-dependencies]
+# The layout property tests (tests/layout_properties.rs), task P3-11
+# (ADR 0027 section 6).
+proptest = "1"
+
 [lints]
 workspace = true
