@@ -111,7 +111,10 @@ fn arb_text() -> impl Strategy<Value = String> {
 
 /// One cell value.
 fn arb_value() -> impl Strategy<Value = Val> {
-    prop_oneof![arb_number().prop_map(Val::Num), arb_text().prop_map(Val::Text)]
+    prop_oneof![
+        arb_number().prop_map(Val::Num),
+        arb_text().prop_map(Val::Text)
+    ]
 }
 
 /// One cell with a name from `names`.
@@ -246,11 +249,20 @@ fn arb_shape(depth: u32) -> impl Strategy<Value = ShapeSpec> {
     }
 }
 
+/// The layer names a generated `Layer` row may carry.
+const LAYER_NAMES: &[&str] = &["", "L0", "Flow", "Hidden", "ab"];
+
 /// One page.
 fn arb_page() -> impl Strategy<Value = PageSpec> {
     (
         proptest::collection::vec(arb_cell(SHAPE_CELLS), 0..10),
-        proptest::collection::vec((proptest::string::string_regex("[A-Za-z]{0,4}").unwrap(), any::<bool>()), 0..3),
+        proptest::collection::vec(
+            (
+                prop::sample::select(LAYER_NAMES).prop_map(str::to_owned),
+                any::<bool>(),
+            ),
+            0..3,
+        ),
         proptest::option::of(0u32..4),
         proptest::collection::vec(arb_shape(1), 0..4),
     )
@@ -323,10 +335,10 @@ fn material_shapes(
             });
         }
         let id = doc.add_shape(shape);
-        if let Some(parent) = parent {
-            if let Some(entity) = doc.shape_mut(parent) {
-                entity.children.push(id);
-            }
+        if let Some(parent) = parent
+            && let Some(entity) = doc.shape_mut(parent)
+        {
+            entity.children.push(id);
         }
         out.push(id);
         material_shapes(doc, &spec.children, Some(id), out);

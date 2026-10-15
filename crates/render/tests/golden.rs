@@ -232,7 +232,7 @@ fn a_large_delta_on_a_small_fraction_matches() {
     a.fill(Color::from_rgba8(255, 255, 255, 255));
     let mut b = Pixmap::new(400, 250).expect("size");
     b.fill(Color::from_rgba8(255, 255, 255, 255));
-    for pixel in b.pixels_mut().into_iter().take(250) {
+    for pixel in b.pixels_mut().iter_mut().take(250) {
         *pixel = rgba(0, 0, 0, 255);
     }
     assert_eq!(
@@ -252,7 +252,7 @@ fn a_large_delta_on_too_many_pixels_differs() {
     a.fill(Color::from_rgba8(255, 255, 255, 255));
     let mut b = Pixmap::new(400, 250).expect("size");
     b.fill(Color::from_rgba8(255, 255, 255, 255));
-    for pixel in b.pixels_mut().into_iter().take(600) {
+    for pixel in b.pixels_mut().iter_mut().take(600) {
         *pixel = rgba(0, 0, 0, 255);
     }
     assert!(
