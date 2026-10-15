@@ -15,7 +15,7 @@ determinism (same input, same bytes) so a diff means a real change.
 
 ### PNG: `tiny-skia`
 
-`tiny-skia` (MIT) rasterizes paths, gradients and dashing. It is pure Rust
+`tiny-skia` (BSD-3-Clause) rasterizes paths, gradients and dashing. It is pure Rust
 (no C), builds for `wasm32-unknown-unknown` (the web app renders too), and
 is the standard choice in the Rust graphics stack. Anti-aliasing is on by
 default and can be turned off in `PngOptions` for debugging.
@@ -76,7 +76,7 @@ byte-stable.
 
 ## Consequences
 
-- `cargo deny` stays green: `tiny-skia` is MIT; no MPL crate outside
+- `cargo deny` stays green: `tiny-skia` is BSD-3-Clause; no MPL crate outside
   `vsd-binary`.
 - The wasm build gains `tiny-skia` through `ferrogram-render`; the web app
   can render PNGs in the browser in Phase 8.
