@@ -15,11 +15,12 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-03](tasks/P3-03.md) | implementer | P3-01 | A | merged (knot rule flagged for P3-14) | agent/P3-03 |
 | [P3-04](tasks/P3-04.md) | implementer | P3-01 | A | merged (sources rows renumbered 11–12 on main) | agent/P3-04 |
 | [P3-08](tasks/P3-08.md) | implementer | P3-01 | A | merged (added `Error::InvalidStyleData` in `error.rs`) | agent/P3-08 |
-| [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | ready | — |
+| [P3-05](tasks/P3-05.md) | implementer | P3-02, P3-03, P3-04, P3-08 | B | merged (added `CellReader` row readers in model; `TextNode` gained `runs` and `rotation`) | agent/P3-05 |
+| [P3-15](tasks/P3-15.md) | implementer | P3-05 | B | ready (model fixes: geometry row union, theme variants, quiet defaults) | — |
 | [P3-06](tasks/P3-06.md) | implementer | P3-02, P3-03, P3-04 | B | ready | — |
 | [P3-07](tasks/P3-07.md) | implementer | P3-02, P3-03, P3-04 | B | ready | — |
 | [P3-09](tasks/P3-09.md) | implementer | P3-05, P3-06, P3-07 | C | waits for B | — |
-| [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08 | C | waits for B | — |
+| [P3-10](tasks/P3-10.md) | implementer | P3-05..P3-08, P3-15 | C | waits for B | — |
 | [P3-11](tasks/P3-11.md) | test-engineer | P3-09, P3-10 | — | waits for C | — |
 | [P3-12](tasks/P3-12.md) | reviewer | P3-11 | D | waits | — |
 | [P3-13](tasks/P3-13.md) | coverage-auditor | P3-11 | D | waits | — |
@@ -113,3 +114,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-04 (decided, ADR 0024 amendment): `layout` bakes the block rotation into glyph positions, and the backends (P3-06, P3-07) rotate each glyph outline; `Warning::MissingGlyph` carries the `char`; a bullet sits at `indent_left + bullet.indent`; Selawik has no italic faces, so an italic Segoe UI run falls back to Carlito Italic with a `MissingFont` warning (a synthetic slant needs an API extension). The bundled fonts are 2.96 MB and are compiled into every binary, including the web build; revisit lazy loading in Phase 6.
 - P3-03 (open): the knot-vector rule (stored `n + 1` knots padded with the last knot) is unconfirmed: no corpus file has `NURBSTo` or spline rows, and the Result cites libvisio's reading, so P3-14 checks its provenance (master note). Spline and NURBS curves come out as straight chords within tolerance, not as fitted curves. The `NURBSTo` fallback rule and the knot-list assembly go to P3-05 (master note).
 - P3-02 (open): palette indices 0..23 have names from `VisDefaultColors` but no Microsoft source gives their RGB values, and the corpus has none below index 24; the RGB values are the conventional ones and are flagged unverified (check in the screenshot pass). Deferred: variant theme colours (`QuickStyle*` values 100+ and 200+), the `a:fmtScheme` line and effect matrices, the `dk1`/`lt1` slot check, the packed-RGB index guess, `PolylineTo` `xType`/`yType` (dropped by the fixed enum), and addressing several sections of the same name through the public API.
+- P3-05 (open, the rest go to P3-15): `Txt*` placement cells are used only when the shape defines them; `TextBkgnd` has no slot in `TextNode`; tab stops ignore the `tp` row and multi-stop rows; bullets use the run family and our own symbols. Approximations for the screenshot pass: `Rounding > 0` becomes a round join; line gradients are ignored; rectangular and path gradients degrade to linear with a warning; the arrow size scale and the pattern tile pitch are ours. `Scene::background` is always `None`. A group with its own geometry emits its shape as the first child of its `Group`.
