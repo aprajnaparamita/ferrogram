@@ -16,19 +16,24 @@
 //!
 //! 1. take the em-unit outline of `glyph.glyph` from `fonts[glyph.font]`
 //!    (y up, [`Font::outline`]);
-//! 2. scale it by `runs[glyph.run].size / 72` (points to inches);
-//! 3. rotate it by `-rotation` in the y-up sense (a positive [`TextNode::rotation`]
-//!    is a clockwise turn on screen) and mirror nothing: the flip between
-//!    the y-down layout space and the y-up shape space is already in step
-//!    4;
+//! 2. scale it by `glyph.size / 72` (points to inches,
+//!    [`GlyphPos::size`](ferrogram_text::GlyphPos));
+//! 3. rotate it by minus [`Layout::rotation`](ferrogram_text::Layout) in
+//!    the y-up sense (a positive layout rotation is a clockwise turn on
+//!    screen) and mirror nothing: the flip between the y-down layout
+//!    space and the y-up shape space is already in step 4;
 //! 4. translate it to `origin + (glyph.x, -glyph.y)` in shape-local
 //!    coordinates.
 //!
-//! The shape's [`Shape::transform`] then maps it to the page. Underlines
-//! and strike-throughs are drawn from [`TextRun`]; layout does not draw
-//! them (ADR 0024).
+//! The shape's [`Shape::transform`] maps it into the enclosing group's
+//! space; the chain of ancestor transforms maps it to the page.
+//! Underlines and strike-throughs are drawn from [`TextRun`]; layout does
+//! not draw them (ADR 0024). A glyph whose font index is out of range or
+//! whose outline is empty (a space, or a glyph id the font does not have)
+//! draws nothing; the skip is intentional, `text::Layout` reports missing
+//! fonts and glyphs as its own warnings.
 
-use ferrogram_geom::{Angle, Path, Point, Size, Transform};
+use ferrogram_geom::{Path, Point, Size, Transform};
 use ferrogram_model::CellWarning;
 use ferrogram_text::{Font, Layout};
 
@@ -107,6 +112,10 @@ pub struct PatternPaint {
     pub tile: Path,
     /// The tile size, in inches.
     pub tile_size: Size,
+    /// Whether the tile shapes are filled (`true`) or stroked (`false`).
+    pub filled: bool,
+    /// The stroke width of a stroked tile, in inches (`filled: false`).
+    pub tile_stroke_width: f64,
 }
 
 /// The shape of a stroke's ends.
@@ -195,8 +204,6 @@ pub struct Clip {
 /// layout's run indices, bullet runs included, onto [`TextNode::runs`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextRun {
-    /// The font size, in points.
-    pub size: f64,
     /// Whether the run is underlined (the renderer draws it).
     pub underline: bool,
     /// Whether the run is struck through (the renderer draws it).
@@ -219,11 +226,8 @@ pub struct TextNode {
     /// The block origin in shape-local coordinates, in inches: the
     /// position of the layout's `(0, 0)` (the unrotated block box's
     /// top-left corner). See the module docs for the full placement
-    /// recipe.
+    /// recipe. The block rotation lives on [`Layout::rotation`].
     pub origin: Point,
-    /// The block rotation the layout applied to the glyph positions, in
-    /// radians (positive = from +x toward +y in the y-down layout space).
-    pub rotation: Angle,
 }
 
 /// One shape node: a filled and stroked path with optional text.
@@ -299,6 +303,8 @@ impl Scene {
 
 #[cfg(test)]
 mod tests {
+    use ferrogram_geom::Angle;
+
     use super::*;
 
     #[test]
@@ -350,15 +356,16 @@ mod tests {
             text: Some(TextNode {
                 fonts: Vec::new(),
                 runs: vec![TextRun {
-                    size: 12.0,
                     underline: true,
                     strikethrough: false,
                     color: Rgba::opaque(255, 255, 255),
                 }],
-                layout: Layout::default(),
+                layout: Layout {
+                    rotation: Angle::from_radians(0.25),
+                    ..Layout::default()
+                },
                 color: Rgba::opaque(255, 255, 255),
                 origin: Point::new(0.1, 0.1),
-                rotation: Angle::from_radians(0.25),
             }),
         };
         let group = Group {
@@ -373,9 +380,9 @@ mod tests {
             Node::Group(group) => match group.children.first() {
                 Some(Node::Shape(shape)) => {
                     let text = shape.text.as_ref().expect("text");
-                    assert_eq!(text.runs[0].size, 12.0);
                     assert!(text.runs[0].underline);
-                    assert_eq!(text.rotation.radians(), 0.25);
+                    // The rotation lives on the layout (P3-16).
+                    assert_eq!(text.layout.rotation.radians(), 0.25);
                     assert_eq!(text.origin, Point::new(0.1, 0.1));
                 }
                 _ => panic!("expected a shape child"),
@@ -412,8 +419,16 @@ mod tests {
             background: Rgba::opaque(255, 255, 255),
             tile: Path::new(),
             tile_size: Size::new(0.1, 0.1),
+            filled: true,
+            tile_stroke_width: 0.005,
         });
-        assert!(matches!(pat, Paint::Pattern(_)));
+        match pat {
+            Paint::Pattern(pattern) => {
+                assert!(pattern.filled);
+                assert_eq!(pattern.tile_stroke_width, 0.005);
+            }
+            _ => panic!("expected a pattern"),
+        }
         assert_eq!(LineCap::default(), LineCap::Butt);
         assert_eq!(LineJoin::default(), LineJoin::Miter);
     }

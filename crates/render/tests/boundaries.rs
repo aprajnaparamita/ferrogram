@@ -187,15 +187,17 @@ fn a_huge_page_is_capped_not_a_panic() {
     );
     let scene = build(&doc);
     assert_eq!((scene.width, scene.height), (1.0e6, 1.0e6));
-    // The raster is over the dimension cap: a clean `TooLarge`.
+    // The device extent is over the cap both backends share (ADR 0025
+    // amendment, P3-16): a clean `TooLarge` in each.
     assert_eq!(render_png(&scene, &PngOptions::new()), Err(Error::TooLarge));
-    // The SVG is text: it writes and parses at any page size.
-    let svg = render_svg(&scene, &SvgOptions::new()).expect("writes");
-    assert!(parse_svg(&svg).contains("<svg"));
+    assert_eq!(render_svg(&scene, &SvgOptions::new()), Err(Error::TooLarge));
 }
 
 #[test]
-fn a_huge_scale_caps_the_raster_not_the_svg_text() {
+fn a_huge_scale_is_invalid_options_in_both_backends() {
+    // The scale cap both backends share (ADR 0025 amendment, P3-16): a
+    // scale that is not finite, not positive or over the cap is a bad
+    // option (`InvalidOptions`), not a document that is too big.
     let (mut doc, _page, shape) = document_with_shape();
     with_geometry(
         &mut doc,
@@ -203,15 +205,92 @@ fn a_huge_scale_caps_the_raster_not_the_svg_text() {
         vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
     );
     let scene = build(&doc);
-    let mut options = PngOptions::new();
-    options.scale = 1.0e300;
-    assert_eq!(render_png(&scene, &options), Err(Error::TooLarge));
-    // The SVG is text and its byte cap bounds the output, so a huge
-    // scale writes a valid document instead of erroring (the documented
-    // boundary of `render_svg`).
-    let svg_options = SvgOptions { scale: 1.0e300 };
-    let svg = render_svg(&scene, &svg_options).expect("writes");
-    parse_svg(&svg);
+    for scale in [1.0e300, f64::INFINITY, f64::NAN, 0.0, -96.0, 20_000.0] {
+        let png_options = PngOptions {
+            scale,
+            antialias: true,
+        };
+        assert_eq!(
+            render_png(&scene, &png_options),
+            Err(Error::InvalidOptions),
+            "scale {scale}"
+        );
+        let svg_options = SvgOptions { scale };
+        assert_eq!(
+            render_svg(&scene, &svg_options),
+            Err(Error::InvalidOptions),
+            "scale {scale}"
+        );
+    }
+}
+
+#[test]
+fn an_open_tile_draws_the_same_marks_in_both_backends() {
+    // The ADR 0023 example tile (`M 0 0 L 1 1`) as an open stroke: the
+    // scene's `filled` flag and `tile_stroke_width` draw the same mark in
+    // both backends (P3-16), at the same device size.
+    use ferrogram_geom::{Path, Point, Segment, Size, Transform};
+    use ferrogram_render::scene::{Paint, PatternPaint, Shape as SceneShape};
+
+    let mut tile = Path::new();
+    tile.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+    tile.push(Segment::LineTo(Point::new(1.0, 1.0)));
+    let mut path = Path::new();
+    path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+    path.push(Segment::LineTo(Point::new(1.0, 0.0)));
+    path.push(Segment::LineTo(Point::new(1.0, 1.0)));
+    path.push(Segment::LineTo(Point::new(0.0, 1.0)));
+    path.push(Segment::Close);
+    let shape = SceneShape {
+        transform: Transform::identity(),
+        path,
+        fill: Some(Paint::Pattern(PatternPaint {
+            foreground: ferrogram_render::Rgba::opaque(255, 0, 0),
+            background: ferrogram_render::Rgba::opaque(255, 255, 255),
+            tile,
+            tile_size: Size::new(1.0, 1.0),
+            filled: false,
+            tile_stroke_width: 0.1,
+        })),
+        stroke: None,
+        shadow: None,
+        clip: None,
+        text: None,
+    };
+    let mut scene = Scene::new(1.0, 1.0);
+    scene.nodes.push(Node::Shape(Box::new(shape)));
+
+    // PNG: the diagonal mark crosses the tile, 0.1 in wide at 72 pixels
+    // per inch. The scene is y up, the raster y down.
+    let scale = 72.0;
+    let png = render_png(
+        &scene,
+        &PngOptions {
+            scale,
+            antialias: false,
+        },
+    )
+    .expect("renders");
+    let raster = decode_png(&png);
+    let at = |x: u32, y: u32| {
+        let pixel = raster.pixels()[y as usize * raster.width() as usize + x as usize];
+        (pixel.red(), pixel.green(), pixel.blue())
+    };
+    assert_eq!(at(36, 36), (255, 0, 0), "on the diagonal mark");
+    assert_eq!(at(61, 61), (255, 255, 255), "off the mark");
+
+    // SVG: the same mark in the same tile at the same device size (a
+    // 72 by 72 pixel tile with a corner-to-corner diagonal stroked 7.2
+    // pixels).
+    let svg = render_svg(&scene, &SvgOptions { scale }).expect("writes");
+    assert!(parse_svg(&svg).contains(
+        "<pattern id=\"p0\" patternUnits=\"userSpaceOnUse\" x=\"0.000000\" y=\"0.000000\" \
+         width=\"72.000000\" height=\"72.000000\">"
+    ));
+    assert!(svg.contains(
+        "<path d=\"M 0.000000 0.000000 L 72.000000 72.000000\" fill=\"none\" \
+         stroke=\"#ff0000\" stroke-width=\"7.200000\" />"
+    ));
 }
 
 #[test]

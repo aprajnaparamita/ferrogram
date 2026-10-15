@@ -43,9 +43,10 @@
 //!
 //! - Paint coordinates (gradient points, pattern tiles) are in the
 //!   painted node's local space, in inches. A pattern tile is drawn in
-//!   one tile of the paint's `tile_size`; a tile path with a `Close`
-//!   segment fills, an open one strokes with a hairline (one pixel),
-//!   because the scene carries no tile fill-or-stroke flag.
+//!   one tile of the paint's `tile_size`; the tile mark fills when
+//!   `PatternPaint::filled` and strokes with
+//!   `PatternPaint::tile_stroke_width` otherwise — the same mark the PNG
+//!   backend rasterizes.
 //! - A line end follows the unit-box convention of `render::styles`
 //!   (ADR 0023): `x = 0` is the tip at the path's vertex, `x = 1` is
 //!   the tail along the line, `y = 0.5` is the line centre; `length`
@@ -83,7 +84,9 @@ use crate::scene::{
 /// Options for SVG output (ADR 0025).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SvgOptions {
-    /// Pixels per inch (default 96).
+    /// Pixels per inch (default 96). Must be finite, positive and at
+    /// most [`crate::MAX_DEVICE_EXTENT`], or the render fails with
+    /// [`Error::InvalidOptions`].
     pub scale: f64,
 }
 
@@ -117,21 +120,26 @@ type Attr = (String, String);
 /// Writes a scene as a standalone SVG document (ADR 0025).
 ///
 /// The output is deterministic: the same scene and options always
-/// render to the same bytes. Returns [`Error::TooLarge`] when the
-/// options or the scene dimensions are not finite and positive, when
-/// the group nesting exceeds the depth cap, or when the document would
-/// exceed the output byte cap. Never panics (AGENTS.md section 6).
+/// render to the same bytes. Returns [`Error::InvalidOptions`] for a
+/// scale that is not finite, not positive or over the shared scale cap
+/// ([`crate::MAX_DEVICE_EXTENT`] pixels per inch), and
+/// [`Error::TooLarge`] when the scene dimensions or the device extent
+/// exceed the caps, when the group nesting exceeds the depth cap, or
+/// when the document would exceed the output byte cap. Never panics
+/// (AGENTS.md section 6).
 pub fn render_svg(scene: &Scene, options: &SvgOptions) -> Result<String, Error> {
-    let scale = options.scale;
-    if !scale.is_finite() || scale <= 0.0 {
-        return Err(Error::TooLarge);
-    }
+    let scale = crate::checked_scale(options.scale)?;
     let (width, height) = (scene.width, scene.height);
     if !width.is_finite() || !height.is_finite() || width < 0.0 || height < 0.0 {
         return Err(Error::TooLarge);
     }
     let (w_px, h_px) = (width * scale, height * scale);
-    if !w_px.is_finite() || !h_px.is_finite() {
+    // The same device extent cap as `png.rs` (ADR 0025 amendment).
+    if !w_px.is_finite()
+        || !h_px.is_finite()
+        || w_px > f64::from(crate::MAX_DEVICE_EXTENT)
+        || h_px > f64::from(crate::MAX_DEVICE_EXTENT)
+    {
         return Err(Error::TooLarge);
     }
     let mut writer = Writer::new(scale, OUTPUT_CAP);
@@ -576,7 +584,10 @@ impl Writer {
         }
     }
 
-    /// Writes one pattern's background box and tile mark.
+    /// Writes one pattern's background box and tile mark. The mark fills
+    /// when [`PatternPaint::filled`] and strokes with
+    /// [`PatternPaint::tile_stroke_width`] otherwise, the same mark the
+    /// PNG backend rasterizes.
     fn pattern_tile(
         &mut self,
         pattern: &PatternPaint,
@@ -594,14 +605,14 @@ impl Writer {
         box_attrs.extend(fill_attrs(self, Some(&Paint::Solid(pattern.background)))?);
         self.tag(true, 3, "path", &box_attrs, true)?;
         let mut tile_attrs = vec![("d".to_string(), path_d(&pattern.tile, self.scale))];
-        let filled = pattern
-            .tile
-            .segments()
-            .iter()
-            .any(|segment| matches!(segment, Segment::Close));
-        if filled {
+        if pattern.filled {
             tile_attrs.extend(fill_attrs(self, Some(&Paint::Solid(pattern.foreground)))?);
         } else {
+            let width = if pattern.tile_stroke_width.is_finite() {
+                (pattern.tile_stroke_width * self.scale).max(0.0)
+            } else {
+                0.0
+            };
             tile_attrs.push(("fill".to_string(), "none".to_string()));
             tile_attrs.push(("stroke".to_string(), color_hex(pattern.foreground)));
             if pattern.foreground.a < 255 {
@@ -610,7 +621,7 @@ impl Writer {
                     num(f64::from(pattern.foreground.a) / 255.0),
                 ));
             }
-            tile_attrs.push(("stroke-width".to_string(), "1.000000".to_string()));
+            tile_attrs.push(("stroke-width".to_string(), num(width)));
         }
         self.tag(true, 3, "path", &tile_attrs, true)
     }
@@ -1049,6 +1060,8 @@ mod tests {
                 background: Rgba::opaque(255, 255, 255),
                 tile: unit_path(&[(0.0, 0.0), (0.05, 0.05), (0.1, 0.0)], false),
                 tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                filled: false,
+                tile_stroke_width: 0.01,
             })),
             stroke: Some(stroke),
             shadow: Some(Shadow {
@@ -1146,6 +1159,8 @@ mod tests {
                 background: color(255, 255, 255, 128),
                 tile: unit_path(&[(0.0, 0.0), (0.25, 0.0), (0.25, 0.5)], true),
                 tile_size: ferrogram_geom::Size::new(0.25, 0.5),
+                filled: true,
+                tile_stroke_width: 0.05,
             })),
             stroke: None,
             shadow: None,
@@ -1170,7 +1185,10 @@ mod tests {
     }
 
     #[test]
-    fn an_open_pattern_tile_strokes_with_a_hairline() {
+    fn an_open_pattern_tile_strokes_with_its_width() {
+        // The scene is the single source of drawing intent (ADR 0020,
+        // P3-16): the tile strokes with `tile_stroke_width`, not with a
+        // hairline of its own.
         let mut scene = Scene::new(1.0, 1.0);
         let shape = Shape {
             transform: Transform::identity(),
@@ -1180,6 +1198,8 @@ mod tests {
                 background: Rgba::opaque(255, 255, 255),
                 tile: unit_path(&[(0.0, 0.0), (0.1, 0.1)], false),
                 tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                filled: false,
+                tile_stroke_width: 0.02,
             })),
             stroke: None,
             shadow: None,
@@ -1188,7 +1208,8 @@ mod tests {
         };
         scene.nodes.push(Node::Shape(Box::new(shape)));
         let svg = render_svg(&scene, &SvgOptions::new()).unwrap();
-        assert!(svg.contains("stroke-width=\"1.000000\""));
+        // 0.02 in at 96 pixels per inch.
+        assert!(svg.contains("stroke-width=\"1.920000\""));
         assert!(svg.contains("<path d=\"M 0.000000 0.000000 L 9.600000 9.600000\" fill=\"none\""));
         parse_xml(&svg);
     }
@@ -1427,7 +1448,6 @@ mod tests {
         let text = TextNode {
             fonts: vec![font],
             runs: Vec::new(),
-            rotation: Angle::from_degrees(0.0),
             layout: Layout {
                 lines: vec![Line {
                     glyphs: vec![GlyphPos {
@@ -1483,12 +1503,10 @@ mod tests {
         let text = TextNode {
             fonts: vec![font],
             runs: vec![crate::scene::TextRun {
-                size: 24.0,
                 underline: false,
                 strikethrough: false,
                 color: Rgba::opaque(255, 0, 0),
             }],
-            rotation: Angle::from_degrees(90.0),
             layout: Layout {
                 lines: vec![Line {
                     glyphs: vec![GlyphPos {
@@ -1546,7 +1564,6 @@ mod tests {
         let text = TextNode {
             fonts: vec![font],
             runs: Vec::new(),
-            rotation: Angle::from_degrees(0.0),
             layout: Layout {
                 lines: vec![Line {
                     glyphs: vec![
@@ -1616,10 +1633,11 @@ mod tests {
 
     #[test]
     fn invalid_options_and_dimensions_error() {
+        // The scale cap both backends share (ADR 0025 amendment, P3-16).
         let scene = Scene::new(1.0, 1.0);
-        for scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        for scale in [0.0, -1.0, f64::NAN, f64::INFINITY, 1.0e300, 20_000.0] {
             let options = SvgOptions { scale };
-            assert_eq!(render_svg(&scene, &options), Err(Error::TooLarge));
+            assert_eq!(render_svg(&scene, &options), Err(Error::InvalidOptions));
         }
         let options = SvgOptions::new();
         for (w, h) in [
@@ -1628,6 +1646,8 @@ mod tests {
             (f64::NAN, 1.0),
             (1.0, f64::NAN),
             (f64::MAX, f64::MAX),
+            // Over the device extent cap at the default scale.
+            (200.0, 1.0),
         ] {
             let scene = Scene::new(w, h);
             assert_eq!(render_svg(&scene, &options), Err(Error::TooLarge));
