@@ -679,10 +679,21 @@ fn group_children_compose_through_the_parent_chain() {
                 Point::new(5.0, 1.0)
             );
             match group.children.first() {
-                Some(Node::Shape(shape)) => assert_eq!(
-                    shape.transform.apply(Point::new(0.0, 0.0)),
-                    Point::new(6.0, 3.0)
-                ),
+                Some(Node::Shape(shape)) => {
+                    // Node transforms are relative to the enclosing group;
+                    // the backends compose the chain (ADR 0020).
+                    assert_eq!(
+                        shape.transform.apply(Point::new(0.0, 0.0)),
+                        Point::new(1.0, 2.0)
+                    );
+                    assert_eq!(
+                        shape
+                            .transform
+                            .then(group.transform)
+                            .apply(Point::new(0.0, 0.0)),
+                        Point::new(6.0, 3.0)
+                    );
+                }
                 other => panic!("expected a shape child, got {other:?}"),
             }
         }
