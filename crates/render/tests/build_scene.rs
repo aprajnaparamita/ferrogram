@@ -599,8 +599,11 @@ fn an_unparsable_nurbs_formula_wins_a_warning_and_a_line() {
     );
     let scene = build(&doc);
     assert_eq!(first_path(&scene)[1], Segment::LineTo(Point::new(2.0, 0.0)));
+    // Formula-parse degradations warn `KindMismatch` (ADR 0021
+    // amendment, P3-16), never `ErrorValue`: the cached value is not an
+    // error.
     assert!(scene.warnings.iter().any(|warning| {
-        warning.cell.as_str() == "E" && matches!(warning.kind, WarningKind::ErrorValue(_))
+        warning.cell.as_str() == "E" && warning.kind == WarningKind::KindMismatch
     }));
 }
 
@@ -892,9 +895,13 @@ fn text_runs_resolve_through_the_character_rows() {
         .as_ref()
         .expect("text");
     assert_eq!(text.runs.len(), 2);
-    assert!((text.runs[0].size - 12.0).abs() < 1e-9);
-    assert!((text.runs[1].size - 18.0).abs() < 1e-9);
     assert!(!text.layout.lines.is_empty());
+    // The glyph size comes from `GlyphPos::size` (P3-16: `TextRun` no
+    // longer carries one).
+    for glyph in text.layout.lines.iter().flat_map(|line| &line.glyphs) {
+        let expected = if glyph.run == 0 { 12.0 } else { 18.0 };
+        assert!((glyph.size - expected).abs() < 1e-9, "{glyph:?}");
+    }
 }
 
 // --- layers, pages, warnings ----------------------------------------

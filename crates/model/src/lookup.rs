@@ -138,8 +138,10 @@ impl Document {
 
 /// The identity of one cell of a repeated section for a lookup: the
 /// section by name, `IX` and position among same-named sections, and the
-/// row by position and `IX` (ADR 0019 decision 5). `row: None` names a
-/// section-level cell (the `NoFill` family of `Geometry`).
+/// row by position and `IX` (ADR 0019 decision 5). `row: None, row_ix:
+/// None` names a section-level cell (the `NoFill` family of `Geometry`);
+/// `row: None, row_ix: Some` names a row by its `IX` alone (the text run
+/// markers).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RepeatedCell<'a> {
     /// The section name as written.
@@ -149,7 +151,7 @@ pub(crate) struct RepeatedCell<'a> {
     /// The section's position among the same-named sections of its sheet.
     pub(crate) section_pos: Option<usize>,
     /// The row's position in the section, or `None` for a section-level
-    /// cell.
+    /// cell or a row named by its `IX` alone.
     pub(crate) row: Option<usize>,
     /// The row's `IX`, when both sides have one.
     pub(crate) row_ix: Option<i32>,
@@ -163,8 +165,10 @@ impl Document {
     ///
     /// `row` is the row's position in the section and `row_ix` the row's own
     /// `IX` (used to match the master's row "by `IX` when both sides have
-    /// one", ADR 0019 decision 5). `row: None` resolves a section-level cell
-    /// (the `NoFill` family of `Geometry`).
+    /// one", ADR 0019 decision 5). `row: None, row_ix: None` resolves a
+    /// section-level cell (the `NoFill` family of `Geometry`); `row: None,
+    /// row_ix: Some` resolves the row with that `IX` wherever it sits (the
+    /// text run markers).
     pub(crate) fn resolve_repeated_with_table(
         &self,
         sheet: crate::values::SheetRef,
@@ -552,6 +556,47 @@ impl Document {
             }
         }
     }
+
+    /// The shapes the master rungs of the lookup of
+    /// [`Document::resolve_row_cell`] visit, in rung order (ADR 0013): the
+    /// sub-shape the instance's path walks down to (or the master's own
+    /// shape), once per rung. A cyclic master chain is cut as in the
+    /// lookup, and at most `max_depth` rungs are visited (the caller
+    /// passes its own recursion cap).
+    ///
+    /// The first rung is the instance's own master; a nested master
+    /// continues the chain (P2-06b decision 2). An instance of no master
+    /// yields no shapes.
+    pub fn master_chain_shapes(&self, shape: ShapeId, max_depth: usize) -> Vec<ShapeId> {
+        let mut targets = Vec::new();
+        let Some((first, root, mut path)) = self.instance_chain_start(shape) else {
+            return targets;
+        };
+        let position = self.sibling_position(root);
+        let mut visited: Vec<MasterId> = Vec::new();
+        let mut current = first;
+        loop {
+            if visited.contains(&current) || targets.len() >= max_depth {
+                break;
+            }
+            visited.push(current);
+            let mut chained = None;
+            if let Some(content) = self
+                .master(current)
+                .and_then(|m| self.master_shape(m, position))
+            {
+                let target = walk_down(self, content, &path).unwrap_or(content);
+                targets.push(target.id);
+                chained = target.master;
+                path.clear();
+            }
+            match chained {
+                Some(next) => current = next,
+                None => break,
+            }
+        }
+        targets
+    }
 }
 
 /// The corresponding shape of `root` at the child positions `path`, or
@@ -666,28 +711,37 @@ fn repeated_cell<'a>(
 /// A row whose `IX` differs from `row_ix` never matches by position: both
 /// sides have an `IX` and they disagree. A positional match applies only
 /// when the row at `row` has no `IX` of its own.
+///
+/// `row: None, row_ix: Some` names a row by its `IX` alone (the text run
+/// markers of `CellReader::row_*`): the row with that `IX` matches and
+/// nothing else. `row: None, row_ix: None` names the section itself (a
+/// section-level cell like `NoFill`).
 fn matched_row_cell<'a>(
     section: &'a Section,
     row: Option<usize>,
     row_ix: Option<i32>,
     cell: &CellName,
 ) -> Option<&'a Cell> {
-    let Some(row) = row else {
-        return repeated_cell(section, None, cell);
-    };
-    let matched = match row_ix {
-        Some(row_ix) => match section
+    let matched = match (row, row_ix) {
+        (None, None) => return repeated_cell(section, None, cell),
+        (None, Some(row_ix)) => section
             .rows
             .iter()
-            .find(|candidate| candidate.ix == Some(row_ix))
-        {
-            Some(found) => Some(found),
-            None => section
+            .find(|candidate| candidate.ix == Some(row_ix)),
+        (Some(row), None) => section.rows.get(row),
+        (Some(row), Some(row_ix)) => {
+            match section
                 .rows
-                .get(row)
-                .filter(|candidate| candidate.ix.is_none()),
-        },
-        None => section.rows.get(row),
+                .iter()
+                .find(|candidate| candidate.ix == Some(row_ix))
+            {
+                Some(found) => Some(found),
+                None => section
+                    .rows
+                    .get(row)
+                    .filter(|candidate| candidate.ix.is_none()),
+            }
+        }
     };
     matched?.cells.iter().find(|c| c.name == *cell)
 }
@@ -3019,5 +3073,92 @@ mod phase3_tests {
             )
             .expect("resolves");
         assert_eq!(resolved.source, ValueSource::HardDefault);
+    }
+
+    #[test]
+    fn a_row_named_by_ix_alone_matches_only_that_ix() {
+        // A text run marker names its row by `IX` alone (`row: None,
+        // `row_ix: Some`): the master row with that `IX` matches wherever
+        // it sits, and no other row does.
+        let (mut doc, instance) = instance_of_master(Vec::new());
+        let master_shape = doc.masters[0].shapes[0];
+        {
+            let shape = doc.shape_mut(master_shape).expect("exists");
+            let sec = &mut shape.sheet.sections[0];
+            sec.rows.clear();
+            let mut first = Row::new();
+            first.row_type = Some("LineTo".to_owned());
+            first.ix = Some(0);
+            first.cells.push(number_cell("X", 1.0));
+            let mut second = Row::new();
+            second.row_type = Some("LineTo".to_owned());
+            second.ix = Some(5);
+            second.cells.push(number_cell("X", 5.0));
+            sec.rows.push(first);
+            sec.rows.push(second);
+        }
+        let target = RepeatedCell {
+            section: "Geometry",
+            section_ix: None,
+            section_pos: Some(0),
+            row: None,
+            row_ix: Some(5),
+        };
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &target,
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.value, Some(&CellValue::Number(5.0)));
+
+        // An `IX` no row has matches no row at all: the hard default, not
+        // the row at that position.
+        let target = RepeatedCell {
+            row_ix: Some(1),
+            ..target
+        };
+        let resolved = doc
+            .resolve_repeated_with_table(
+                SheetRef::Shape(instance),
+                &target,
+                &CellName::from_static("X"),
+                CELLS,
+            )
+            .expect("resolves");
+        assert_eq!(resolved.source, ValueSource::HardDefault);
+    }
+
+    #[test]
+    fn master_chain_shapes_follow_the_master_rungs() {
+        // A master with two top-level shapes: the instance at page
+        // position 1 resolves through the second one (P2-06b decision 2),
+        // the same shape the row cells resolve through.
+        let mut doc = Document::new();
+        let filler = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        let instance = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.shapes.push(filler);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        let many = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 3));
+        let one = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 4));
+        let mut master = crate::master::Master::new(MasterId { index: 0 }, 1);
+        master.shapes = vec![many, one];
+        doc.masters.push(master);
+        doc.shape_mut(instance).expect("shape").master = Some(MasterId { index: 0 });
+        assert_eq!(doc.master_chain_shapes(instance, 128), vec![one]);
+
+        // A nested master that chains back to itself: one rung, no loop.
+        doc.shape_mut(one).expect("shape").master = Some(MasterId { index: 0 });
+        assert_eq!(doc.master_chain_shapes(instance, 128), vec![one]);
+
+        // The depth cap bounds the walk.
+        assert!(doc.master_chain_shapes(instance, 0).is_empty());
+
+        // A shape of no master has no rungs.
+        assert!(doc.master_chain_shapes(many, 128).is_empty());
     }
 }

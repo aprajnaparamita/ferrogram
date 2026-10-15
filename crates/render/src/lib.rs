@@ -21,3 +21,20 @@ pub use error::Error;
 pub use png::{PngOptions, render_png};
 pub use scene::{Rgba, Scene};
 pub use svg::{SvgOptions, render_svg};
+
+/// The largest device extent of one page side, in pixels (ADR 0025
+/// amendment, P3-16): both backends cap `page size x scale` at this per
+/// side. A `scale` of more than this many pixels per inch cannot fit any
+/// page of one inch and is [`Error::InvalidOptions`]; a page that does not
+/// fit the cap at the requested scale is [`Error::TooLarge`].
+pub const MAX_DEVICE_EXTENT: u32 = 16_384;
+
+/// The scale policy shared by both backends (ADR 0025 amendment): a scale
+/// that is not finite, not positive, or above [`MAX_DEVICE_EXTENT`] pixels
+/// per inch returns [`Error::InvalidOptions`].
+pub(crate) fn checked_scale(scale: f64) -> Result<f64, Error> {
+    if !scale.is_finite() || scale <= 0.0 || scale > f64::from(MAX_DEVICE_EXTENT) {
+        return Err(Error::InvalidOptions);
+    }
+    Ok(scale)
+}

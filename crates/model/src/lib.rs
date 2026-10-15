@@ -59,4 +59,4 @@ pub use theme::{
     ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts, ThemeLineKind,
     ThemeLineStyle, ThemeVariation, ThemeVariationStyles,
 };
-pub use values::{CellReader, CellWarning, SheetRef, WarningKind, palette};
+pub use values::{CellReader, CellWarning, RowTarget, SheetRef, WarningKind, palette};
