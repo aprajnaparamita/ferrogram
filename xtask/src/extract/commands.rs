@@ -375,7 +375,13 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
     collect_controls(&layout_365, &mut controls);
 
     let visuicmds_path = super::visuicmds::input_path(in_dir);
-    let entries = build_entries(&vis_cmds, &controls, &visuicmds_path)?;
+    let mut entries = build_entries(&vis_cmds, &controls, &visuicmds_path)?;
+
+    // The hand-written half (P4-02, ADR 0006 amendment): our own
+    // command ids, then the Fluent bindings for the controls our
+    // commands cover.
+    add_our_commands(&mut entries);
+    apply_fluent_commands(&mut entries, &controls);
 
     // Hard cross-check (B1): every fluent_id must be a real Fluent
     // control name in at least one layout.
@@ -551,6 +557,110 @@ pub fn cross_check_fluent_ids(
         }
     }
     Ok(())
+}
+
+/// The Ferrogram-only command ids (ADR 0028 "Ids beyond `commands.yaml`",
+/// the ADR 0006 amendment): affordances with no Microsoft counterpart.
+/// Each becomes its own `commands.yaml` row with `fluent_ids: []` and
+/// `mapping_confidence: unknown`. Keyed as (id, label); sorted by id.
+pub const OUR_COMMANDS: &[(&str, &str)] = &[
+    ("app.quit", "Exit"),
+    ("file.export", "Export"),
+    ("file.inspect", "Inspect"),
+    ("file.render", "Render"),
+    ("help.about", "About"),
+    ("page.next", "Next Page"),
+    ("page.previous", "Previous Page"),
+    ("view.ui_layout.visio_2016", "Visio 2016 Ribbon"),
+    ("view.ui_layout.visio_365", "Microsoft 365 Ribbon"),
+    ("view.zoom.fit", "Fit to Window"),
+];
+
+/// Adds one row per [`OUR_COMMANDS`] id (task P4-02, ADR 0006
+/// amendment).
+///
+/// An id the mechanical derivation already produced keeps its row
+/// (with its label, `visuicmd` and Fluent ids): the "our own" list
+/// only claims ids nothing else has.
+pub fn add_our_commands(entries: &mut Vec<CommandEntry>) {
+    for (id, label) in OUR_COMMANDS {
+        if entries.iter().any(|entry| &entry.id == id) {
+            continue;
+        }
+        entries.push(CommandEntry {
+            id: (*id).to_string(),
+            label: (*label).to_string(),
+            visuicmd: None,
+            fluent_ids: Vec::new(),
+            confidence: Confidence::Unknown,
+        });
+    }
+    sort_entries(entries);
+}
+
+/// Applies the [`super::fluent::FLUENT_COMMANDS`] bindings (task P4-02).
+///
+/// A binding moves its Fluent id onto the row of the target command id
+/// (whatever row holds the id now) and drops the row left with neither
+/// a `visuicmd` nor a Fluent id: it existed only for the moved control.
+/// A binding onto a row with a `visuicmd` counts as [`Confidence::Inferred`]
+/// (a hand-written pairing of the two names); a row without a constant
+/// stays [`Confidence::Unknown`] (ADR 0006).
+///
+/// A binding the extracted data cannot express is skipped, not an
+/// error: the extractor's own tests run over a small fixture tree with
+/// none of the real control names. The real data is pinned by the
+/// `real_fluent_command_bindings_apply` test below.
+pub fn apply_fluent_commands(
+    entries: &mut Vec<CommandEntry>,
+    controls: &BTreeMap<String, ControlMeta>,
+) {
+    let mut bound: BTreeSet<String> = BTreeSet::new();
+    for (fluent, id) in crate::extract::fluent::FLUENT_COMMANDS {
+        if !controls.contains_key(*fluent) {
+            continue;
+        }
+        if !entries.iter().any(|entry| &entry.id == id) {
+            continue;
+        }
+        for entry in entries.iter_mut() {
+            if &entry.id != id {
+                entry.fluent_ids.retain(|f| f != fluent);
+            }
+        }
+        let Some(target) = entries.iter_mut().find(|entry| &entry.id == id) else {
+            continue;
+        };
+        if !target.fluent_ids.iter().any(|f| f == *fluent) {
+            target.fluent_ids.push((*fluent).to_string());
+            target.fluent_ids.sort();
+        }
+        bound.insert((*id).to_string());
+    }
+    entries.retain(|entry| {
+        entry.visuicmd.is_some()
+            || !entry.fluent_ids.is_empty()
+            || OUR_COMMANDS.iter().any(|(id, _)| *id == entry.id)
+    });
+    for entry in entries.iter_mut() {
+        if entry.visuicmd.is_none() || entry.fluent_ids.is_empty() {
+            entry.confidence = Confidence::Unknown;
+        } else if bound.contains(&entry.id) && entry.confidence == Confidence::Unknown {
+            entry.confidence = Confidence::Inferred;
+        }
+    }
+    sort_entries(entries);
+}
+
+/// The `commands.yaml` row order: exact, then inferred, then unknown,
+/// each by id.
+fn sort_entries(entries: &mut [CommandEntry]) {
+    entries.sort_by(|a, b| {
+        a.confidence
+            .order()
+            .cmp(&b.confidence.order())
+            .then_with(|| a.id.cmp(&b.id))
+    });
 }
 
 /// Joins the VisUICmds constants with the layout control names.
@@ -747,12 +857,7 @@ pub fn build_entries(
         });
     }
 
-    entries.sort_by(|a, b| {
-        a.confidence
-            .order()
-            .cmp(&b.confidence.order())
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    sort_entries(&mut entries);
     Ok(entries)
 }
 
@@ -1629,6 +1734,160 @@ controls:
                     Path::new("ui-spec/commands.yaml"),
                 )
                 .unwrap_or_else(|e| panic!("FLUENT_OVERRIDES {name} -> {id}: {e}"));
+        }
+    }
+
+    // ---- the P4-02 hand-written half ---------------------------------
+
+    /// A constant-backed row with no Fluent ids.
+    fn constant_row(id: &str, visuicmd: &str) -> CommandEntry {
+        CommandEntry {
+            id: id.into(),
+            label: "L".into(),
+            visuicmd: Some(visuicmd.into()),
+            fluent_ids: Vec::new(),
+            confidence: Confidence::Unknown,
+        }
+    }
+
+    /// A Fluent-only row surfacing one control.
+    fn fluent_row(id: &str, fluent: &str) -> CommandEntry {
+        CommandEntry {
+            id: id.into(),
+            label: "L".into(),
+            visuicmd: None,
+            fluent_ids: vec![fluent.into()],
+            confidence: Confidence::Unknown,
+        }
+    }
+
+    #[test]
+    fn our_commands_add_ten_unknown_rows() {
+        let mut entries = vec![constant_row("view.grid", "visCmdGrid")];
+        add_our_commands(&mut entries);
+        assert_eq!(entries.len(), 1 + OUR_COMMANDS.len());
+        for (id, label) in OUR_COMMANDS {
+            let row = entries.iter().find(|e| &e.id == id).expect("our row");
+            assert_eq!(row.label, *label, "{id}");
+            assert!(row.fluent_ids.is_empty(), "{id}");
+            assert_eq!(row.visuicmd, None, "{id}");
+            assert_eq!(row.confidence, Confidence::Unknown, "{id}");
+        }
+        // Idempotent: adding twice adds nothing.
+        add_our_commands(&mut entries);
+        assert_eq!(entries.len(), 1 + OUR_COMMANDS.len());
+    }
+
+    #[test]
+    fn our_commands_keep_a_row_the_derivation_already_made() {
+        let mut entries = vec![
+            constant_row("view.zoom.fit", "visCmdZoomFit"),
+            constant_row("view.grid", "visCmdGrid"),
+        ];
+        entries[0].label = "Kept".into();
+        add_our_commands(&mut entries);
+        let row = entries.iter().find(|e| e.id == "view.zoom.fit").unwrap();
+        assert_eq!(row.label, "Kept");
+        assert_eq!(row.visuicmd.as_deref(), Some("visCmdZoomFit"));
+    }
+
+    #[test]
+    fn fluent_command_bindings_move_the_fluent_id() {
+        let mut entries = vec![
+            constant_row("view.grid", "visCmdGrid"),
+            constant_row("view.toggle_grid", "visCmdViewGrid"),
+            constant_row("view.rulers", "visCmdViewRulers"),
+            fluent_row("view.show.ruler.visio", "ShowRulerVisio"),
+            fluent_row("view.zoom.fit.to.window.visio", "ZoomFitToWindowVisio"),
+        ];
+        entries[0]
+            .fluent_ids
+            .push("ShowGrid".into());
+        entries[0].confidence = Confidence::Inferred;
+        add_our_commands(&mut entries);
+        let controls = controls(&[
+            ("ShowGrid", "checkBox"),
+            ("ShowRulerVisio", "checkBox"),
+            ("ZoomFitToWindowVisio", "button"),
+        ]);
+        apply_fluent_commands(&mut entries, &controls);
+
+        let row = entries.iter().find(|e| e.id == "view.grid").unwrap();
+        assert!(row.fluent_ids.is_empty(), "{:?}", row.fluent_ids);
+        assert_eq!(row.confidence, Confidence::Unknown);
+        let row = entries.iter().find(|e| e.id == "view.toggle_grid").unwrap();
+        assert_eq!(row.fluent_ids, vec!["ShowGrid"]);
+        assert_eq!(row.confidence, Confidence::Inferred);
+        let row = entries.iter().find(|e| e.id == "view.rulers").unwrap();
+        assert_eq!(row.fluent_ids, vec!["ShowRulerVisio"]);
+        assert_eq!(row.confidence, Confidence::Inferred);
+        let row = entries.iter().find(|e| e.id == "view.zoom.fit").unwrap();
+        assert_eq!(row.fluent_ids, vec!["ZoomFitToWindowVisio"]);
+        assert_eq!(row.confidence, Confidence::Unknown, "no VisUICmds constant");
+        // The rows that existed only for the moved controls are gone.
+        assert!(!entries.iter().any(|e| e.id == "view.show.ruler.visio"));
+        assert!(
+            !entries
+                .iter()
+                .any(|e| e.id == "view.zoom.fit.to.window.visio")
+        );
+    }
+
+    #[test]
+    fn bindings_the_data_cannot_express_are_skipped() {
+        // The fixture reference tree has none of the real control
+        // names and none of the target ids; extraction must not fail.
+        let mut entries = vec![constant_row("view.grid", "visCmdGrid")];
+        add_our_commands(&mut entries);
+        let before = entries.clone();
+        apply_fluent_commands(&mut entries, &controls(&[("Other", "button")]));
+        assert_eq!(entries, before);
+    }
+
+    /// The real committed data: every [`super::fluent::FLUENT_COMMANDS`]
+    /// binding resolved when `cargo xtask extract` last ran, and the
+    /// command id exists in `commands.yaml`. (No `reference/` needed.)
+    #[test]
+    fn real_fluent_command_bindings_apply() {
+        let root = crate::util::root();
+        let read = |rel: &str| {
+            std::fs::read_to_string(root.join(rel))
+                .unwrap_or_else(|e| panic!("read {rel}: {e}"))
+        };
+        let commands: Value = serde_saphyr::from_str(&read("ui-spec/commands.yaml"))
+            .unwrap_or_else(|e| panic!("parse commands.yaml: {e}"));
+        let rows = commands.as_array().expect("commands.yaml is a list");
+        let mut layouts: BTreeMap<String, String> = BTreeMap::new();
+        for name in ["ui-spec/visio-2016.yaml", "ui-spec/visio-365.yaml"] {
+            let value: Value = serde_saphyr::from_str(&read(name))
+                .unwrap_or_else(|e| panic!("parse {name}: {e}"));
+            visit_objects(&value, &mut |obj| {
+                if let Some(id) = obj.get("id").and_then(Value::as_str)
+                    && let Some(command) = obj.get("command").and_then(Value::as_str)
+                {
+                    layouts.insert(id.to_string(), command.to_string());
+                }
+            });
+        }
+        for (fluent, id) in crate::extract::fluent::FLUENT_COMMANDS {
+            assert_eq!(
+                layouts.get(*fluent).map(String::as_str),
+                Some(*id),
+                "control {fluent} must dispatch {id}"
+            );
+            let row = rows
+                .iter()
+                .find(|row| row.get("id").and_then(Value::as_str) == Some(*id))
+                .unwrap_or_else(|| panic!("commands.yaml has no row for {id}"));
+            let fluent_ids: Vec<&str> = row
+                .get("fluent_ids")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            assert!(
+                fluent_ids.contains(fluent),
+                "commands.yaml row {id} must list {fluent}"
+            );
         }
     }
 }
