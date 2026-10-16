@@ -8,6 +8,20 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# The GUI stack (ADR 0030): egui for widgets, rfd for native file dialogs
+# (ADR 0036). Nothing below L6 sees these crates (ADR 0002). Licences
+# checked by cargo deny.
+egui = "0.37"
+rfd = "0.17"
+ferrogram-commands = { path = "../commands" }
+ferrogram-geom = { path = "../geom" }
+ferrogram-model = { path = "../model" }
+ferrogram-render = { path = "../render" }
+ferrogram-ui-spec = { path = "../ui-spec" }
+
+[dev-dependencies]
+# Headless UI tests (ADR 0030, ADR 0037).
+egui_kittest = "0.37"
 
 [lints]
 workspace = true
