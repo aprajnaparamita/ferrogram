@@ -402,7 +402,11 @@ pub fn dispatch(
     scope: ShortcutScope,
 ) -> Result<Option<Intent>, UiError> {
     let now = egui_ctx.input(|input| input.time);
-    let active = ActiveScopes::new(scope, egui_ctx.text_edit_focused(), !app.selection.is_empty());
+    let active = ActiveScopes::new(
+        scope,
+        egui_ctx.text_edit_focused(),
+        !app.selection.is_empty(),
+    );
     // A sequence that is only a prefix of longer ones fires when the
     // longer ones time out (no key event on that frame).
     if let Some(entry) = pick_entry(&map.expire(now), &active) {
@@ -1063,9 +1067,21 @@ mod tests {
     #[test]
     fn an_exact_repeat_is_dropped_without_a_warning() {
         let map_source = shortcuts(vec![
-            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Global),
-            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Global),
-            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Page),
+            shortcut(
+                &["Ctrl", "H"],
+                "arrange.flip_horizontal",
+                ShortcutScope::Global,
+            ),
+            shortcut(
+                &["Ctrl", "H"],
+                "arrange.flip_horizontal",
+                ShortcutScope::Global,
+            ),
+            shortcut(
+                &["Ctrl", "H"],
+                "arrange.flip_horizontal",
+                ShortcutScope::Page,
+            ),
         ]);
         let map = ShortcutMap::from_shortcuts(&map_source).expect("map");
         assert_eq!(map.len(), 2, "the exact repeat is dropped");
@@ -1256,10 +1272,7 @@ mod tests {
         assert!(map.pending());
         assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS / 2.0).is_empty());
         assert!(map.pending());
-        assert!(
-            map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.1)
-                .is_empty()
-        );
+        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.1).is_empty());
         assert!(!map.pending());
     }
 
