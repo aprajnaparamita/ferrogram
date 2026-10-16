@@ -2,8 +2,9 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **3 in progress** (group C)
+- Current phase: **3 complete; Phase 4 waits for the user's "continue"**
 - Phase 3 goal: rendering from cached values, plus the CLI (KICKOFF.md). Exit: every corpus file renders without panics, and every geometry row type has tests.
+- Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
 
 ## Phase 3 task board
@@ -27,7 +28,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P3-14](tasks/P3-14.md) | cleanroom-auditor | P3-11 | D | merged (pass: 3 minor; F4 crash fixed by the master) | agent/P3-14 |
 | [P3-16](tasks/P3-16.md) | implementer | P3-12..P3-14 | E | merged (also fixed PNG tile marks drawn pitch times too small) | agent/P3-16 |
 | [P3-18](tasks/P3-18.md) | implementer | P3-12, P3-14 | E | merged (docs only; knot rule re-sourced) | agent/P3-18 |
-| [P3-17](tasks/P3-17.md) | test-engineer | P3-16 | — | ready | — |
+| [P3-17](tasks/P3-17.md) | test-engineer | P3-16 | — | merged (56 tests; render 98.5%) | agent/P3-17 |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `docs/sources.md` is owned by P3-04, and P3-02 and P3-08 each append rows (the master merges them). `ATTRIBUTION.md` is edited by P3-04 first, then P3-10. In `crates/render`, P3-05 owns `lib.rs`, `scene.rs`, `build.rs` and `Cargo.toml`. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -81,6 +82,8 @@ States: not written · outline · ready · in progress · in review · merged ·
 |---|---|---|
 | 0 | [phase-0.md](progress/phase-0.md) | green (2026-10-12) |
 | 1 | [phase-1.md](progress/phase-1.md) | green (2026-10-13) |
+| 2 | [phase-2.md](progress/phase-2.md) | green (2026-10-14) |
+| 3 | [phase-3.md](progress/phase-3.md) | green (2026-10-16) |
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 

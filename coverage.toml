@@ -24,11 +24,13 @@ ferrogram-cli = 50.0
 
 [ratchet]
 ferrogram = 66.6
-ferrogram-cli = 66.6
+ferrogram-cli = 96.8
 ferrogram-geom = 100.0
 ferrogram-model = 99.7
+ferrogram-render = 98.4
 ferrogram-shapesheet = 100.0
+ferrogram-text = 98.8
 ferrogram-ui-spec = 99.3
-ferrogram-vsdx = 97.7
+ferrogram-vsdx = 98.0
 ferrogram-web = 0.0
 xtask = 91.6
