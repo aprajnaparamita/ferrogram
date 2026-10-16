@@ -546,10 +546,11 @@ fn the_most_specific_active_scope_wins() {
 }
 
 #[test]
-fn ctrl_c_resolves_on_the_canvas_and_inside_a_text_edit() {
+fn ctrl_c_is_edit_copy_on_the_canvas_and_egui_copy_in_a_text_edit() {
     // `Ctrl+C` is `edit.copy` in `global` and `window` (the committed
-    // table): it resolves to its command with the canvas focused and
-    // inside a text edit (P4-14 acceptance).
+    // table): it resolves to its command with the canvas focused.
+    // Inside a text edit it is egui's own copy (ADR 0036), so the
+    // chord is left for the widget.
     let mut map = map_of(committed_shortcuts().entries.clone());
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
@@ -586,10 +587,8 @@ fn ctrl_c_resolves_on_the_canvas_and_inside_a_text_edit() {
         0.2,
         true,
     );
-    assert_eq!(
-        text.intent.expect("Ctrl+C in text").command.as_str(),
-        "edit.copy"
-    );
+    assert!(text.intent.is_none(), "egui copies the text");
+    assert_eq!(text.events_left, 1, "the chord stays with egui");
 }
 
 #[test]
@@ -679,15 +678,14 @@ fn typing_and_caret_chords_reach_the_text_edit_untouched() {
 }
 
 #[test]
-fn a_bound_ctrl_chord_dispatches_inside_a_text_edit() {
-    // Ctrl+Z is `edit.undo` (global). A bound Ctrl chord dispatches
-    // even in a text edit (P4-14: that is what makes Ctrl+C resolve
-    // there); an unbound one is left alone.
-    let mut map = map_of(vec![shortcut(
-        &["Ctrl", "Z"],
-        "edit.undo",
-        ShortcutScope::Global,
-    )]);
+fn egui_undo_wins_inside_a_text_edit_and_other_bound_ctrl_chords_dispatch() {
+    // Ctrl+Z is `edit.undo` (global), but inside a text edit it is
+    // egui's text undo. A bound Ctrl chord egui does not use (Ctrl+G)
+    // still dispatches there.
+    let mut map = map_of(vec![
+        shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
+        shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+    ]);
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
 
@@ -709,11 +707,22 @@ fn a_bound_ctrl_chord_dispatches_inside_a_text_edit() {
         0.1,
         true,
     );
-    assert_eq!(
-        undo.intent.expect("Ctrl+Z fires").command.as_str(),
-        "edit.undo"
+    assert!(undo.intent.is_none(), "egui undoes the text edit");
+    assert_eq!(undo.events_left, 1, "the chord stays with egui");
+    let group = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::G, ctrl())],
+        0.2,
+        true,
     );
-    assert_eq!(undo.events_left, 0, "the chord is consumed");
+    assert_eq!(
+        group.intent.expect("Ctrl+G fires").command.as_str(),
+        "arrange.group"
+    );
+    assert_eq!(group.events_left, 0, "the chord is consumed");
 }
 
 #[test]

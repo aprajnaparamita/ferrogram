@@ -481,17 +481,29 @@ fn scope_rank(scope: ShortcutScope) -> u8 {
     }
 }
 
-/// Whether egui's text edit owns this chord while it has focus: the
-/// chords without `Ctrl` or `Alt` — plain typing, shift-typing and the
-/// caret keys (ADR 0036 "egui's own shortcuts apply only inside text
-/// edits"). A chord with `Ctrl` or `Alt` is ours: P4-14 dispatches
-/// `Ctrl+C` and `Ctrl+Shift+C` inside a text edit, where the most
-/// specific active scope decides.
+/// Key tokens egui's text edit binds with `Ctrl` (Cmd on macOS):
+/// select all, the clipboard, undo/redo and delete word.
+const EGUI_CTRL_TEXT_TOKENS: [&str; 8] = ["A", "C", "V", "X", "Z", "Y", "Backspace", "Delete"];
+
+/// Key tokens egui's text edit binds with `Ctrl+Shift`: redo and
+/// select by word.
+const EGUI_CTRL_SHIFT_TEXT_TOKENS: [&str; 2] = ["Z", ARROWS_TOKEN];
+
+/// Whether egui's text edit owns this chord while it has focus (ADR
+/// 0036 "egui's own shortcuts apply only inside text edits"): plain
+/// typing, shift-typing and the caret keys, plus egui's own `Ctrl`
+/// editing chords (clipboard, select all, undo/redo, delete word).
+/// Every other `Ctrl` or `Alt` chord is ours, so `Ctrl+Shift+C` picks
+/// the `text` binding inside a text edit.
 fn defers_to_egui(chord: &KeyChord) -> bool {
-    !chord
-        .modifiers
-        .iter()
-        .any(|modifier| modifier == "Ctrl" || modifier == "Alt")
+    let has = |name: &str| chord.modifiers.iter().any(|modifier| modifier == name);
+    let key = chord.key.as_str();
+    match (has("Ctrl"), has("Shift"), has("Alt")) {
+        (_, _, true) => false,
+        (false, _, false) => true,
+        (true, false, false) => EGUI_CTRL_TEXT_TOKENS.contains(&key),
+        (true, true, false) => EGUI_CTRL_SHIFT_TEXT_TOKENS.contains(&key),
+    }
 }
 
 /// True when `token` is a key or modifier token the egui mapping table
@@ -1369,15 +1381,22 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_and_alt_chords_do_not_defer() {
-        // Ctrl+C and Ctrl+Shift+C dispatch inside a text edit (P4-14).
-        assert!(!defers_to_egui(&chord("C", &["Ctrl"])));
+    fn egui_text_editing_chords_defer() {
+        for key in ["A", "C", "V", "X", "Z", "Y", "Backspace", "Delete"] {
+            assert!(defers_to_egui(&chord(key, &["Ctrl"])), "Ctrl+{key}");
+        }
+        assert!(defers_to_egui(&chord("Z", &["Ctrl", "Shift"])));
+        assert!(defers_to_egui(&chord(ARROWS_TOKEN, &["Ctrl", "Shift"])));
+    }
+
+    #[test]
+    fn other_ctrl_and_alt_chords_do_not_defer() {
+        // Ctrl+Shift+C picks the `text` binding inside a text edit.
         assert!(!defers_to_egui(&chord("C", &["Ctrl", "Shift"])));
-        assert!(!defers_to_egui(&chord("Z", &["Ctrl", "Shift"])));
-        assert!(!defers_to_egui(&chord("Backspace", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("I", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("<", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("F4", &["Alt"])));
+        assert!(!defers_to_egui(&chord("C", &["Ctrl", "Alt"])));
     }
 
     #[test]
