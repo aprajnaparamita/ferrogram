@@ -8,6 +8,19 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# The registry runs over the model, the renderer and the readers (ADR 0028),
+# and takes its ids and layout kinds from the ui-spec data (ADRs 0006, 0029).
+# `serde` is for the persisted `Settings` only (ADR 0029). Licences checked
+# by cargo deny.
+ferrogram-geom = { path = "../geom" }
+ferrogram-model = { path = "../model" }
+ferrogram-render = { path = "../render" }
+ferrogram-ui-spec = { path = "../ui-spec" }
+ferrogram-vsdx = { path = "../vsdx" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1"
 
 [lints]
 workspace = true
