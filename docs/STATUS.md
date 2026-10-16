@@ -15,7 +15,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-02](tasks/P4-02.md) | implementer | P4-01 | A | ready | — |
 | [P4-04](tasks/P4-04.md) | implementer | P4-01 | A | ready | — |
 | [P4-05](tasks/P4-05.md) | implementer | P4-01 | A | merged (`show_rulers` takes units; notes for P4-03) | agent/P4-05 |
-| [P4-06](tasks/P4-06.md) | implementer | P4-01 | A | ready | — |
+| [P4-06](tasks/P4-06.md) | implementer | P4-01 | A | merged (12 + 9 original masters) | agent/P4-06 |
 | [P4-03](tasks/P4-03.md) | implementer | P4-02 | B | waits for P4-02 | — |
 | [P4-07](tasks/P4-07.md) | implementer | P4-03 | C | waits for B | — |
 | [P4-08](tasks/P4-08.md) | implementer | P4-03 | C | waits for B | — |
@@ -153,3 +153,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P3-18 (open): the black-box check of the knot rule stays open (no corpus file has `NURBSTo` or spline rows); a periodic spline (first knot repeated fewer than `degree + 1` times) is read as clamped, a documented divergence.
 - P3-16 (open): `text::Layout` `MissingFont`/`MissingGlyph` warnings do not reach `Scene::warnings` or the CLI; boolean and list coercions still accept non-finite values (Phase 6); `Character`/`Paragraph`/`Tabs` rows without an `IX` no longer match run markers by position (every corpus row has an `IX`); un-drawable glyphs are skipped by documented rule, not warned.
 - P4-05 (open): the canvas cache detects document changes by comparing a `Document` snapshot every frame (O(document)) because `DocumentSession` has no generation counter; switch to a counter once `crates/commands` has one. Our own UI choices to revisit in the parity pass: 1/8 in grid and ruler ticks, zoom range 0.1..64, 10% per wheel notch, Ctrl+0 for `view.zoom.fit`. The raster scale is also capped by the GPU `max_texture_side`.
+- P4-06 (open, Phase 5): stencil drag onto the page should set `PinX`/`PinY` at the drop point and glue to `MasterDef::connection_points`; `instantiate` has no size parameter; Shape Data values are strings until the formula engine. Master fix at merge: the preview test now requires a raster for every master (it predated `render_raster`).
