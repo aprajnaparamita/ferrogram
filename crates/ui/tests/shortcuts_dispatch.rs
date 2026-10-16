@@ -1,0 +1,556 @@
+//! Shortcut dispatch against a plain `egui::Context` (task P4-08,
+//! ADR 0036): every entry of the committed `ui-spec/shortcuts.yaml`
+//! loads, single-chord shortcuts resolve per scope, multi-chord
+//! sequences and their timeout work, scopes filter by focus, and
+//! egui's own text-editing keys are never stolen.
+
+use egui::{Context, Event, Key, Modifiers, RawInput};
+use ferrogram_commands::{AppCtx, Settings};
+use ferrogram_ui::Intent;
+use ferrogram_ui::shortcuts::{SEQUENCE_TIMEOUT_SECONDS, ShortcutMap, dispatch, token_is_known};
+use ferrogram_ui_spec::{
+    CommandId as SpecCommandId, LayoutKind, Loader, Shortcut, ShortcutScope, Shortcuts,
+};
+
+/// The committed shortcut table (embedded, same bytes as the file).
+#[allow(clippy::expect_used)] // test helper: a failure here is the bug
+fn committed_shortcuts() -> Shortcuts {
+    let sets = Loader::from_embedded().expect("the embedded ui-spec loads");
+    sets.get(LayoutKind::Visio2016).shortcuts.clone()
+}
+
+#[allow(clippy::expect_used)] // test helper: a failure here is the bug
+fn shortcut(tokens: &[&str], command: &str, scope: ShortcutScope) -> Shortcut {
+    Shortcut {
+        sequence: vec![tokens.iter().map(|t| (*t).to_owned()).collect()],
+        command: SpecCommandId::parse(command).expect("id"),
+        scope,
+        section: None,
+    }
+}
+
+#[allow(clippy::expect_used)] // test helper: a failure here is the bug
+fn multi_shortcut(chords: &[&[&str]], command: &str, scope: ShortcutScope) -> Shortcut {
+    Shortcut {
+        sequence: chords
+            .iter()
+            .map(|chord| chord.iter().map(|t| (*t).to_owned()).collect())
+            .collect(),
+        command: SpecCommandId::parse(command).expect("id"),
+        scope,
+        section: None,
+    }
+}
+
+#[allow(clippy::expect_used)] // test helper: a failure here is the bug
+fn map_of(entries: Vec<Shortcut>) -> ShortcutMap {
+    ShortcutMap::from_shortcuts(&Shortcuts { entries }).expect("map")
+}
+
+fn key_event(key: Key, modifiers: Modifiers) -> Event {
+    Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
+}
+
+fn ctrl() -> Modifiers {
+    Modifiers {
+        ctrl: true,
+        ..Default::default()
+    }
+}
+
+fn ctrl_shift() -> Modifiers {
+    Modifiers {
+        ctrl: true,
+        shift: true,
+        ..Default::default()
+    }
+}
+
+fn alt() -> Modifiers {
+    Modifiers {
+        alt: true,
+        ..Default::default()
+    }
+}
+
+/// One frame: `dispatch` first (before the widgets, ADR 0036), then an
+/// optional focused text edit.
+struct Frame {
+    /// What `dispatch` returned.
+    intent: Option<Intent>,
+    /// How many input events survived `dispatch` (not consumed).
+    events_left: usize,
+    /// `ShortcutMap::pending` after the frame.
+    pending: bool,
+}
+
+#[allow(clippy::expect_used)] // test helper: a failure here is the bug
+fn frame(
+    ctx: &Context,
+    map: &mut ShortcutMap,
+    app: &AppCtx,
+    scope: ShortcutScope,
+    events: Vec<Event>,
+    time: f64,
+    with_text_edit: bool,
+) -> Frame {
+    let mut text = String::from("hello");
+    let mut frame = Frame {
+        intent: None,
+        events_left: 0,
+        pending: false,
+    };
+    let mut output = ctx.run_ui(
+        RawInput {
+            events,
+            time: Some(time),
+            ..Default::default()
+        },
+        |ctx| {
+            frame.intent = dispatch(ctx, map, app, scope).expect("dispatch");
+            frame.events_left = ctx.input(|input| input.events.len());
+            frame.pending = map.pending();
+            if with_text_edit {
+                let mut edit_id = None;
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let output = egui::TextEdit::singleline(&mut text).show(ui);
+                    edit_id = Some(output.response.id);
+                });
+                if let Some(id) = edit_id {
+                    ctx.memory_mut(|memory| memory.request_focus(id));
+                }
+            }
+        },
+    );
+    output.textures_delta.clear();
+    frame
+}
+
+#[test]
+fn the_committed_shortcut_table_loads() {
+    let committed = committed_shortcuts();
+    assert!(!committed.entries.is_empty());
+    let map = map_of(committed.entries.clone());
+    assert!(!map.is_empty());
+    // First-wins: every entry either lands in the map or is recorded
+    // as a conflict.
+    assert_eq!(map.len() + map.conflicts().len(), committed.entries.len());
+}
+
+#[test]
+fn the_token_table_covers_the_committed_file() {
+    for shortcut in &committed_shortcuts().entries {
+        for chord in &shortcut.sequence {
+            for token in chord {
+                assert!(
+                    token_is_known(token),
+                    "token {token:?} of {} is not in the egui table",
+                    shortcut.command
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_single_chord_shortcut_per_scope_resolves() {
+    let mut map = map_of(vec![
+        shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+        shortcut(&["F2"], "help.contents", ShortcutScope::Window),
+        shortcut(
+            &["Ctrl", "Shift", "P"],
+            "view.zoom.fit",
+            ShortcutScope::Page,
+        ),
+        shortcut(&["Alt", "R"], "file.print", ShortcutScope::Ribbon),
+    ]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    let global = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::G, ctrl())],
+        0.0,
+        false,
+    );
+    let intent = global.intent.expect("a Global shortcut fires");
+    assert_eq!(intent.command.as_str(), "arrange.group");
+    assert_eq!(
+        intent.invocation.source,
+        ferrogram_commands::Source::Shortcut
+    );
+    assert_eq!(global.events_left, 0, "the matched chord is consumed");
+
+    let window = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::F2, Modifiers::default())],
+        0.1,
+        false,
+    );
+    assert_eq!(
+        window
+            .intent
+            .expect("a Window shortcut fires")
+            .command
+            .as_str(),
+        "help.contents"
+    );
+
+    let page = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Page,
+        vec![key_event(Key::P, ctrl_shift())],
+        0.2,
+        false,
+    );
+    assert_eq!(
+        page.intent.expect("a Page shortcut fires").command.as_str(),
+        "view.zoom.fit"
+    );
+
+    // Page scope off: not dispatched (and the chord is consumed).
+    let no_page = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::P, ctrl_shift())],
+        0.3,
+        false,
+    );
+    assert!(no_page.intent.is_none());
+    assert_eq!(no_page.events_left, 0);
+
+    let ribbon = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Ribbon,
+        vec![key_event(Key::R, alt())],
+        0.4,
+        false,
+    );
+    assert_eq!(
+        ribbon
+            .intent
+            .expect("a Ribbon shortcut fires")
+            .command
+            .as_str(),
+        "file.print"
+    );
+}
+
+#[test]
+fn a_text_shortcut_fires_only_with_a_focused_text_edit() {
+    let mut map = map_of(vec![shortcut(
+        &["Ctrl", "I"],
+        "format.text.italic",
+        ShortcutScope::Text,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    // No text edit: the shortcut does not fire.
+    let no_focus = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::I, ctrl())],
+        0.0,
+        false,
+    );
+    assert!(no_focus.intent.is_none());
+
+    // Frame 1 focuses a text edit; frame 2 dispatches before the
+    // widgets, as the shell does.
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.1,
+        true,
+    );
+    let focused = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::I, ctrl())],
+        0.2,
+        true,
+    );
+    let intent = focused
+        .intent
+        .expect("a Text shortcut fires in a text edit");
+    assert_eq!(intent.command.as_str(), "format.text.italic");
+}
+
+#[test]
+fn a_selection_shortcut_never_fires_in_phase_4() {
+    let mut map = map_of(vec![shortcut(
+        &["Ctrl", "Shift", "U"],
+        "arrange.ungroup",
+        ShortcutScope::Selection,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    assert!(app.selection.is_empty());
+    let ctx = Context::default();
+
+    for focus in [
+        ShortcutScope::Global,
+        ShortcutScope::Page,
+        ShortcutScope::Ribbon,
+    ] {
+        let outcome = frame(
+            &ctx,
+            &mut map,
+            &app,
+            focus,
+            vec![key_event(Key::U, ctrl_shift())],
+            0.0,
+            false,
+        );
+        assert!(outcome.intent.is_none(), "{focus:?} must not fire");
+    }
+}
+
+#[test]
+fn a_multi_chord_sequence_resolves_after_its_chords() {
+    let mut map = map_of(vec![multi_shortcut(
+        &[&["Alt", "H"], &["F"]],
+        "arrange.group",
+        ShortcutScope::Global,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    let first = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::H, alt())],
+        0.0,
+        false,
+    );
+    assert!(first.intent.is_none());
+    assert!(first.pending, "the half-typed sequence is pending");
+    assert_eq!(first.events_left, 0, "the chord is consumed");
+
+    let second = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::F, Modifiers::default())],
+        0.1,
+        false,
+    );
+    let intent = second.intent.expect("the sequence resolves");
+    assert_eq!(intent.command.as_str(), "arrange.group");
+    assert!(!second.pending);
+}
+
+#[test]
+fn a_half_typed_sequence_sets_pending_and_times_out() {
+    let mut map = map_of(vec![multi_shortcut(
+        &[&["Alt", "H"], &["F"]],
+        "arrange.group",
+        ShortcutScope::Global,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    let first = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::H, alt())],
+        10.0,
+        false,
+    );
+    assert!(first.pending);
+
+    // Within the timeout the buffer stays.
+    let soon = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        11.0,
+        false,
+    );
+    assert!(soon.pending);
+
+    // After 2 seconds (ADR 0036) it is gone.
+    let late = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.5,
+        false,
+    );
+    assert!(!late.pending);
+    assert!(late.intent.is_none());
+}
+
+#[test]
+fn a_conflicting_sequence_first_wins_with_one_recorded_conflict() {
+    let mut map = map_of(vec![
+        shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+        shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Selection),
+        shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Page),
+    ]);
+    assert_eq!(map.len(), 1);
+    assert_eq!(map.conflicts().len(), 2);
+    assert!(map.conflicts()[0].contains("arrange.group"));
+
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+    let outcome = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::G, ctrl())],
+        0.0,
+        false,
+    );
+    assert_eq!(
+        outcome
+            .intent
+            .expect("the first entry wins")
+            .command
+            .as_str(),
+        "arrange.group"
+    );
+}
+
+#[test]
+fn egui_text_editing_keys_are_never_stolen() {
+    let mut map = map_of(vec![
+        shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
+        shortcut(&["Ctrl", "I"], "format.text.italic", ShortcutScope::Text),
+    ]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    // Focus a text edit first (frame 1).
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.0,
+        true,
+    );
+
+    // Ctrl+Z is egui's text undo: no dispatch, no consumption.
+    let undo = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::Z, ctrl())],
+        0.1,
+        true,
+    );
+    assert!(undo.intent.is_none());
+    assert_eq!(undo.events_left, 1, "the chord stays with egui");
+
+    // Plain typing also stays with the text edit.
+    let typing = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::F, Modifiers::default())],
+        0.2,
+        true,
+    );
+    assert!(typing.intent.is_none());
+    assert_eq!(typing.events_left, 1);
+
+    // Without a text edit the same Ctrl+Z dispatches edit.undo.
+    let outside = frame(
+        &Context::default(),
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::Z, ctrl())],
+        0.3,
+        false,
+    );
+    assert_eq!(
+        outside.intent.expect("Ctrl+Z fires").command.as_str(),
+        "edit.undo"
+    );
+}
+
+#[test]
+fn an_unmatched_chord_is_left_for_the_widgets() {
+    let mut map = map_of(vec![shortcut(
+        &["Ctrl", "G"],
+        "arrange.group",
+        ShortcutScope::Global,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+    let outcome = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::F5, Modifiers::default())],
+        0.0,
+        false,
+    );
+    assert!(outcome.intent.is_none());
+    assert_eq!(outcome.events_left, 1);
+}
+
+#[test]
+fn the_arrow_keys_dispatch_the_nudge_shortcut_on_a_page() {
+    let mut map = map_of(vec![shortcut(
+        &["Arrow Keys"],
+        "arrange.nudge",
+        ShortcutScope::Page,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+    let outcome = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Page,
+        vec![key_event(Key::ArrowLeft, Modifiers::default())],
+        0.0,
+        false,
+    );
+    assert_eq!(
+        outcome.intent.expect("arrows nudge").command.as_str(),
+        "arrange.nudge"
+    );
+}
