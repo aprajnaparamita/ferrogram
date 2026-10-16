@@ -8,6 +8,32 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# GUI stack (ADR 0030): eframe window and event loop over the L6 UI crate.
+# Licences checked by cargo deny.
+# The glow backend only (ADR 0030): no wgpu tree. `persistence` backs the
+# settings store (ADR 0032).
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "glow",
+    "persistence",
+    "wayland",
+    "x11",
+] }
+# winit with its default features (rwh_06, x11, wayland, wayland-dlopen,
+# wayland-csd-adwaita): eframe's own `default` list enables
+# `winit/default`, and a dependency feature list cannot contain slashes,
+# so the desktop app re-enables them directly (ADR 0030). Same 0.30 line
+# eframe uses; the features unify in one build.
+winit = "0.30"
+ferrogram-commands = { path = "../../crates/commands" }
+ferrogram-ui = { path = "../../crates/ui" }
+ferrogram-ui-spec = { path = "../../crates/ui-spec" }
+
+[dev-dependencies]
+# Headless UI tests (ADR 0030, ADR 0037).
+egui_kittest = "0.37"
 
 [lints]
 workspace = true

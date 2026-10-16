@@ -315,3 +315,20 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
   `serde_norway` is the documented fallback.
 - **Pin `jsonschema` to 0.18.** Rejected (M5): the 0.18 line is no
   longer the latest. We use the latest 0.x as of Phase 1 start.
+
+## Amendments
+
+### Amended 2026-10-16, P4-01: a placement is a path, ids repeat (P1-14 note)
+
+The P1-14 finding is now a rule: **a Fluent id is not unique within a
+layout**. The same control appears in several places (ribbon, quick access
+toolbar, backstage) and a placement is identified by its path
+(`tab/TabHome/GroupClipboard/PasteGallery`; the parity matrix's `path`
+column). The ribbon (ADR 0031) renders every placement; repeats inside one
+container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in
+one group) are kept in the data and deduplicated at render time only when
+id, label and order match exactly in one container (first wins), since
+those look like P1-04 extractor artefacts. Command ids stay unique
+(enforced by the registry, ADR 0028). The two namespaces never collide:
+`FluentId` matches `^[A-Za-z][A-Za-z0-9_]*$`, `CommandId` matches
+`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`.
