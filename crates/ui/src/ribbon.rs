@@ -2216,6 +2216,40 @@ mod tests {
     }
 
     #[test]
+    fn the_builtin_registry_enables_its_ribbon_controls() {
+        // P4-04 was written against the registry stub; with P4-02's
+        // builtins every ribbon control bound to `view.toggle_grid` or
+        // `view.zoom.fit` resolves to an implemented command, enabled
+        // once a document is open.
+        let registry = ferrogram_commands::builtins::registry().expect("registry");
+        let mut app = AppCtx::new(Settings::default());
+        // One rectangle on a new page: `view.zoom.fit` needs a page.
+        let mut document = ferrogram_model::Document::new();
+        let master = ferrogram_model::stencils::basic_shapes().masters[0].clone();
+        ferrogram_model::stencils::instantiate(&mut document, &master);
+        app.open_document(ferrogram_commands::DocumentSession::new(document, None));
+        for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+            let mut bound = 0;
+            for tab in &sets().get(kind).layout.tabs {
+                for group in &tab.groups {
+                    for control in &group.controls {
+                        let command = control.command.as_ref().map(|id| id.as_str());
+                        if matches!(command, Some("view.toggle_grid" | "view.zoom.fit")) {
+                            bound += 1;
+                            assert!(
+                                matches!(action_for(control, &registry, &app), Action::Emit(_)),
+                                "{kind:?} {} is not enabled",
+                                control.id.as_str()
+                            );
+                        }
+                    }
+                }
+            }
+            assert!(bound >= 2, "{kind:?}: {bound} bound controls");
+        }
+    }
+
+    #[test]
     fn with_ui_renders_a_whole_ribbon_without_panicking() {
         // Smoke test on the plain egui test ui (no harness).
         let set = sets().get(LayoutKind::Visio365).clone();
