@@ -1,0 +1,30 @@
+---
+source: crates/ui/src/ribbon.rs
+expression: report
+---
+layout: panel-2016
+ribbon tabs: 16
+ribbon groups: 77
+ribbon controls: 262
+ribbon nested controls: 154
+backstage tabs: 8
+backstage controls: 46
+backstage nested controls: 26
+context menus: 43
+context menu controls: 0
+context menu nested controls: 0
+quick access controls: 9
+quick access nested controls: 0
+layout: panel-365
+ribbon tabs: 19
+ribbon groups: 91
+ribbon controls: 296
+ribbon nested controls: 160
+backstage tabs: 10
+backstage controls: 109
+backstage nested controls: 96
+context menus: 43
+context menu controls: 0
+context menu nested controls: 0
+quick access controls: 9
+quick access nested controls: 0
