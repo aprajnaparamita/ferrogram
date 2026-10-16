@@ -4,12 +4,12 @@
 //! The desktop app, the web app, the CLI and the parity generator
 //! (ADR 0037) all build their registry here, so "which commands are
 //! implemented" has exactly one answer. Implementers add their handlers
-//! to [`BUILTINS`] when their command lands.
+//! to the `BUILTINS` table when their command lands.
 //!
 //! [`registry`] starts from the stubs of `ui-spec/commands.yaml`
 //! ([`Registry::from_mappings`], ADR 0006) and registers the real
-//! [`Builtin`]s over them, so [`CommandStatus`] is accurate for every
-//! id the data file knows.
+//! builtins over them, so [`CommandStatus`] is accurate for every id
+//! the data file knows.
 
 mod file;
 mod view;
