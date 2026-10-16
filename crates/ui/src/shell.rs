@@ -19,12 +19,12 @@
 //!
 //! Owned by task P4-03.
 
-use egui::{Context, Ui};
+use egui::{Context, PointerButton, Ui};
 use ferrogram_commands::{
     AppCtx, ArgValue, CommandError, CommandId, Enabled, Invocation, NeededInput, Outcome,
     PathPurpose, Payload, Registry, Source, UiRequest,
 };
-use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets};
+use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
 
 use crate::canvas::{self, CanvasCache};
 use crate::dialogs::{
@@ -34,6 +34,7 @@ use crate::panels;
 use crate::ribbon::Ribbon;
 use crate::settings;
 use crate::shapes_window::ShapesWindow;
+use crate::shortcuts::{self, ShortcutMap};
 use crate::{Intent, UiError};
 
 /// The File menu items (registry ids, in order).
@@ -96,6 +97,16 @@ pub struct Shell {
     cache: CanvasCache,
     /// The dialog seam (ADR 0036); tests inject a fake picker.
     picker: Box<dyn FilePicker>,
+    /// The keyboard shortcut map from `shortcuts.yaml`, dispatched
+    /// before the widgets (ADR 0036, P4-14).
+    shortcuts: ShortcutMap,
+    /// The surface the keyboard shortcuts apply to (ADR 0036 scopes,
+    /// P4-14 focus tracking).
+    focus: ShortcutScope,
+    /// The canvas area of the previous frame (focus tracking).
+    canvas_rect: Option<egui::Rect>,
+    /// The ribbon strip of the previous frame (focus tracking).
+    ribbon_rect: Option<egui::Rect>,
     /// A command waiting for an asynchronous pick (the wasm upload,
     /// ADR 0036).
     pending: Option<(CommandId, Invocation)>,
@@ -116,10 +127,20 @@ pub struct Shell {
 impl Shell {
     /// Builds a shell from its three owned parts.
     ///
-    /// The widget state, the canvas cache and the native file picker
-    /// are created here (ADR 0029: widget-local state lives in
-    /// `crates/ui`).
+    /// The widget state, the canvas cache, the native file picker and
+    /// the keyboard shortcut map are created here (ADR 0029:
+    /// widget-local state lives in `crates/ui`; ADR 0036: the map is
+    /// built from the loader's `shortcuts.yaml`, the same embedded
+    /// source the ribbon uses). `Shell::new`'s signature is fixed; a
+    /// table that fails to load falls back to an empty map with one
+    /// warning, and [`Shell::set_shortcuts`] replaces the map later.
     pub fn new(registry: Registry, layouts: LayoutSets, app: AppCtx) -> Self {
+        let mut app = app;
+        let kind = app.settings.ui_layout;
+        let (shortcuts, warnings) = load_shortcuts(&layouts.get(kind).shortcuts);
+        for warning in warnings {
+            app.record_warning(warning);
+        }
         let ribbon = Ribbon::new(app.settings.ui_layout);
         Self {
             registry,
@@ -129,6 +150,10 @@ impl Shell {
             shapes: ShapesWindow::new(),
             cache: CanvasCache::new(),
             picker: Box::new(NativeFilePicker),
+            shortcuts,
+            focus: ShortcutScope::Global,
+            canvas_rect: None,
+            ribbon_rect: None,
             pending: None,
             status: String::new(),
             options_open: false,
@@ -158,6 +183,28 @@ impl Shell {
         &self.status
     }
 
+    /// The status line shown in the title strip: the chords typed so
+    /// far while a shortcut sequence is half-typed (ADR 0036, P4-14),
+    /// else the last command message.
+    pub fn status_line(&self) -> String {
+        if self.shortcuts.pending() {
+            self.shortcuts.pending_display()
+        } else {
+            self.status.clone()
+        }
+    }
+
+    /// Replaces the shortcut map (tests, and a future layout switch):
+    /// the same `shortcuts.yaml` load rules as in [`Shell::new`], with
+    /// the load warnings copied into `AppCtx::warnings` (ADR 0036).
+    pub fn set_shortcuts(&mut self, shortcuts: &Shortcuts) {
+        let (map, warnings) = load_shortcuts(shortcuts);
+        for warning in warnings {
+            self.app.record_warning(warning);
+        }
+        self.shortcuts = map;
+    }
+
     /// Whether the window was asked to close (File > Exit, ADR 0028).
     pub fn quit_requested(&self) -> bool {
         self.quit_requested
@@ -177,6 +224,41 @@ impl Shell {
         }
     }
 
+    /// Records which surface the pointer pressed last (the ADR 0036
+    /// shortcut scopes): the canvas area is `Page`, the ribbon strip
+    /// is `Ribbon`, and any other press falls back to `Global`. This
+    /// is the smallest focus tracking that gives the three scopes
+    /// (P4-14): the rects are the ones the previous frame drew, so a
+    /// press takes effect in its own frame, before the widgets draw.
+    fn note_pointer_focus(&mut self, egui_ctx: &Context) {
+        let pressed = egui_ctx.input(|input| {
+            if input.pointer.button_pressed(PointerButton::Primary) {
+                input.pointer.interact_pos()
+            } else {
+                None
+            }
+        });
+        let Some(pos) = pressed else {
+            return;
+        };
+        if self.canvas_rect.is_some_and(|rect| rect.contains(pos)) {
+            self.focus = ShortcutScope::Page;
+        } else if self.ribbon_rect.is_some_and(|rect| rect.contains(pos)) {
+            self.focus = ShortcutScope::Ribbon;
+        } else {
+            self.focus = ShortcutScope::Global;
+        }
+    }
+
+    /// Shows the reason of a disabled command in the status bar (ADR
+    /// 0036 "a disabled status-bar hint"), for every intent source;
+    /// the error still goes back to the caller untouched.
+    fn note_disabled(&mut self, error: &CommandError) {
+        if matches!(error, CommandError::NotEnabled { .. }) {
+            self.note_error(error.to_string());
+        }
+    }
+
     /// Draws one frame and returns the intents the widgets produced.
     ///
     /// This is the fixed P4-01 entry point. egui 0.37 hands the root
@@ -190,15 +272,28 @@ impl Shell {
 
     /// Draws one frame into `ui` and returns the intents (ADR 0031).
     ///
-    /// Widget stubs report [`UiError::NotImplemented`] in this task's
-    /// absence; their error text goes to the status bar and the frame
-    /// still renders.
+    /// The keyboard shortcut pass runs before the widgets (ADR 0036,
+    /// P4-14) and its intent joins the widget intents. Widget stubs
+    /// report [`UiError::NotImplemented`] in this task's absence;
+    /// their error text goes to the status bar and the frame still
+    /// renders.
     pub fn show_in(&mut self, ui: &mut Ui) -> Result<Vec<Intent>, UiError> {
         let mut intents = Vec::new();
         self.finish_pick();
         if self.quit_requested {
             self.quit_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+
+        // Keyboard shortcuts first, before the widgets draw (ADR 0036
+        // "Precedence over egui"): the intent joins the frame's other
+        // intents and runs through `Shell::dispatch` like any other
+        // (`Source::Shortcut`).
+        self.note_pointer_focus(ui.ctx());
+        match shortcuts::dispatch(ui.ctx(), &mut self.shortcuts, &self.app, self.focus) {
+            Ok(Some(intent)) => intents.push(intent),
+            Ok(None) => {}
+            Err(error) => self.note_error(error.to_string()),
         }
 
         // Title strip: document title, status line, quick access
@@ -209,7 +304,7 @@ impl Shell {
                 ui.separator();
                 ui.label(self.title_text());
                 ui.separator();
-                ui.label(self.status.clone());
+                ui.label(self.status_line());
                 let kind = self.app.settings.ui_layout;
                 let set = self.layouts.get(kind);
                 let produced = self
@@ -234,6 +329,7 @@ impl Shell {
             self.ribbon.set_kind(kind);
         }
         egui::Panel::top("shell-ribbon").show(ui, |ui| {
+            self.ribbon_rect = Some(ui.max_rect());
             let set = self.layouts.get(kind);
             let produced = self.ribbon.show(ui, set, &self.registry, &self.app);
             self.absorb(produced, &mut intents);
@@ -302,10 +398,12 @@ impl Shell {
     }
 
     /// The canvas area: the page raster with the rulers over its
-    /// bands (ADR 0033), or a placeholder with no open document.
+    /// bands (ADR 0033), or a placeholder with no open document. The
+    /// area is remembered for the shortcut focus tracking (P4-14).
     fn show_canvas_area(&mut self, ui: &mut Ui, intents: &mut Vec<Intent>) {
         let units = self.app.settings.units;
         let rect = ui.available_rect_before_wrap();
+        self.canvas_rect = Some(rect);
         if self.app.active_document().is_none() {
             ui.centered_and_justified(|ui| {
                 ui.label("No document");
@@ -558,7 +656,10 @@ impl Shell {
                             invocation,
                         ) {
                             Ok(outcome) => outcome,
-                            Err(UiError::Command(error)) => return Ok(Err(error)),
+                            Err(UiError::Command(error)) => {
+                                self.note_disabled(&error);
+                                return Ok(Err(error));
+                            }
                             Err(error) => return Err(error),
                         }
                     }
@@ -572,7 +673,10 @@ impl Shell {
                     }
                 }
             }
-            Err(UiError::Command(error)) => return Ok(Err(error)),
+            Err(UiError::Command(error)) => {
+                self.note_disabled(&error);
+                return Ok(Err(error));
+            }
             Err(error) => return Err(error),
         };
         self.apply_outcome(&outcome)?;
@@ -702,6 +806,23 @@ enum Ask {
     Cancelled,
     /// No dialog answers this input; hand the error back.
     NoDialog(NeededInput),
+}
+
+/// Builds the shortcut map of a `shortcuts.yaml` table with its load
+/// warnings (ADR 0036: `ShortcutMap::conflicts` go to
+/// `AppCtx::warnings` at load). A table that fails to load becomes an
+/// empty map with one warning (AGENTS.md section 6: never crash).
+fn load_shortcuts(shortcuts: &Shortcuts) -> (ShortcutMap, Vec<String>) {
+    match ShortcutMap::from_shortcuts(shortcuts) {
+        Ok(map) => {
+            let warnings = map.conflicts().to_vec();
+            (map, warnings)
+        }
+        Err(error) => (
+            ShortcutMap::default(),
+            vec![format!("shortcuts not loaded: {error}")],
+        ),
+    }
 }
 
 /// Fills the `path` (desktop) or `name` + `data` (upload) arguments of
@@ -1289,5 +1410,278 @@ mod tests {
         shell.note_error("ribbon is not implemented yet");
         shell.note_error("ribbon is not implemented yet");
         assert_eq!(shell.app.warnings.len(), 1);
+    }
+
+    /// One shell frame with the given input events (the shortcut pass
+    /// runs inside `show_in`, before the widgets).
+    #[allow(clippy::expect_used)] // test helper: a failure here is the bug
+    fn shell_frame(shell: &mut Shell, events: Vec<egui::Event>, time: f64) {
+        let ctx = Context::default();
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events,
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                let intents = shell.show_in(ui).expect("the frame renders");
+                let _ = shell.dispatch(&intents).expect("dispatch");
+            },
+        );
+        output.textures_delta.clear();
+    }
+
+    #[allow(clippy::expect_used)] // test helper: a failure here is the bug
+    fn key_event(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    #[allow(clippy::expect_used)] // test helper: a failure here is the bug
+    fn press_event(pos: egui::Pos2) -> egui::Event {
+        egui::Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        }
+    }
+
+    /// The committed `shortcuts.yaml` table (the loader's).
+    #[allow(clippy::expect_used)] // test helper: a failure here is the bug
+    fn committed_shortcuts() -> Shortcuts {
+        sets().get(LayoutKind::Visio2016).shortcuts.clone()
+    }
+
+    /// A two-chord sequence (`Alt+H, F`): the committed table has
+    /// none (P4-14 Result).
+    #[allow(clippy::expect_used)] // test helper: a failure here is the bug
+    fn keytip_table() -> Shortcuts {
+        Shortcuts {
+            entries: vec![ferrogram_ui_spec::Shortcut {
+                sequence: vec![vec!["Alt".to_owned(), "H".to_owned()], vec!["F".to_owned()]],
+                command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                scope: ShortcutScope::Global,
+                section: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn the_shell_loads_the_committed_table_without_conflicts() {
+        // The same embedded `shortcuts.yaml` the ribbon uses; the
+        // committed table has no (sequence, scope) conflict (P4-14).
+        let mut shell = full_shell();
+        shell.set_shortcuts(&committed_shortcuts());
+        assert!(shell.app.warnings.is_empty(), "{:?}", shell.app.warnings);
+    }
+
+    #[test]
+    fn alt_f6_dispatches_view_zoom_in_through_the_registry() {
+        // `Alt+F6` is `view.zoom.in` (`global` in shortcuts.yaml): a
+        // synthesized key event in a real frame runs the command
+        // through the registry and changes the zoom, and the key event
+        // never reaches the widgets (P4-14 acceptance).
+        let mut shell = full_shell();
+        shell
+            .app
+            .open_document(DocumentSession::new(Document::new(), None));
+        let zoom_before = shell.app.active_document().expect("document").view.zoom;
+        let ctx = Context::default();
+        // egui may run the closure for several passes (`run_ui`
+        // multipass); the key event arrives in the first one. Collect
+        // the intents of every pass, like the app does per pass.
+        let mut events_after: Vec<usize> = Vec::new();
+        let mut intents_seen: Vec<Intent> = Vec::new();
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events: vec![key_event(
+                    egui::Key::F6,
+                    egui::Modifiers {
+                        alt: true,
+                        ..Default::default()
+                    },
+                )],
+                time: Some(0.0),
+                ..Default::default()
+            },
+            |ui| {
+                let intents = shell.show_in(ui).expect("the frame renders");
+                events_after.push(ui.input(|input| input.events.len()));
+                let results = shell.dispatch(&intents).expect("dispatch");
+                assert!(results.iter().all(|result| result.is_ok()));
+                intents_seen.extend(intents);
+            },
+        );
+        output.textures_delta.clear();
+        let fired: Vec<&Intent> = intents_seen
+            .iter()
+            .filter(|intent| intent.invocation.source == Source::Shortcut)
+            .collect();
+        assert_eq!(fired.len(), 1, "{intents_seen:?}");
+        assert_eq!(fired[0].command.as_str(), "view.zoom.in");
+        assert!(
+            events_after.iter().all(|left| *left == 0),
+            "the key event does not reach the widgets: {events_after:?}"
+        );
+        let zoom_after = shell.app.active_document().expect("document").view.zoom;
+        assert!(zoom_after > zoom_before, "view.zoom.in changed the zoom");
+    }
+
+    #[test]
+    fn a_half_typed_sequence_shows_in_the_status_line() {
+        let mut shell = full_shell();
+        shell.set_shortcuts(&keytip_table());
+        shell_frame(&mut shell, Vec::new(), 0.0);
+        assert_eq!(shell.status_line(), "");
+
+        // `Alt+H` starts the sequence: the chords typed so far show.
+        shell_frame(
+            &mut shell,
+            vec![key_event(
+                egui::Key::H,
+                egui::Modifiers {
+                    alt: true,
+                    ..Default::default()
+                },
+            )],
+            1.0,
+        );
+        assert!(shell.shortcuts.pending(), "half-typed");
+        assert_eq!(shell.status_line(), "Alt+H");
+
+        // `F` completes it: the status line is the message again.
+        shell_frame(
+            &mut shell,
+            vec![key_event(egui::Key::F, egui::Modifiers::default())],
+            2.0,
+        );
+        assert!(!shell.shortcuts.pending());
+        assert_eq!(shell.status_line(), shell.status());
+    }
+
+    #[test]
+    fn clicking_the_canvas_or_the_ribbon_sets_the_focus_scope() {
+        let mut shell = full_shell();
+        shell_frame(&mut shell, Vec::new(), 0.0);
+        let canvas = shell.canvas_rect.expect("the canvas rect is recorded");
+        let ribbon = shell.ribbon_rect.expect("the ribbon rect is recorded");
+        assert_eq!(shell.focus, ShortcutScope::Global);
+
+        shell_frame(&mut shell, vec![press_event(canvas.center())], 1.0);
+        assert_eq!(shell.focus, ShortcutScope::Page);
+
+        shell_frame(&mut shell, vec![press_event(ribbon.center())], 2.0);
+        assert_eq!(shell.focus, ShortcutScope::Ribbon);
+
+        shell_frame(&mut shell, vec![press_event(egui::pos2(0.0, 0.0))], 3.0);
+        assert_eq!(shell.focus, ShortcutScope::Global);
+    }
+
+    #[test]
+    fn shortcut_conflicts_reach_the_warnings_at_load() {
+        let mut shell = shell();
+        let table = Shortcuts {
+            entries: vec![
+                ferrogram_ui_spec::Shortcut {
+                    sequence: vec![vec!["Ctrl".to_owned(), "G".to_owned()]],
+                    command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                    scope: ShortcutScope::Global,
+                    section: None,
+                },
+                ferrogram_ui_spec::Shortcut {
+                    sequence: vec![vec!["Ctrl".to_owned(), "G".to_owned()]],
+                    command: ferrogram_ui_spec::CommandId::parse("arrange.ungroup").expect("id"),
+                    scope: ShortcutScope::Global,
+                    section: None,
+                },
+                ferrogram_ui_spec::Shortcut {
+                    sequence: vec![vec!["Ctrl".to_owned(), "H".to_owned()]],
+                    command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                    scope: ShortcutScope::Global,
+                    section: None,
+                },
+            ],
+        };
+        shell.set_shortcuts(&table);
+        assert_eq!(
+            shell.app.warnings.len(),
+            1,
+            "one real conflict, the rest is legal"
+        );
+        assert!(shell.app.warnings[0].contains("conflicting shortcut"));
+    }
+
+    #[test]
+    fn a_table_that_fails_to_load_records_one_warning() {
+        let mut shell = shell();
+        let bad = Shortcuts {
+            entries: vec![ferrogram_ui_spec::Shortcut {
+                sequence: vec![vec!["Warp".to_owned()]],
+                command: ferrogram_ui_spec::CommandId::parse("edit.undo").expect("id"),
+                scope: ShortcutScope::Global,
+                section: None,
+            }],
+        };
+        shell.set_shortcuts(&bad);
+        assert_eq!(shell.app.warnings.len(), 1);
+        assert!(shell.app.warnings[0].contains("shortcuts not loaded"));
+    }
+
+    #[test]
+    fn a_disabled_command_shows_its_reason_in_the_status_bar() {
+        /// A command whose enabled-state says no, with a reason.
+        struct Disabled;
+
+        impl Command for Disabled {
+            fn meta(&self) -> &CommandMeta {
+                use std::sync::OnceLock;
+                static META: OnceLock<CommandMeta> = OnceLock::new();
+                META.get_or_init(|| {
+                    CommandMeta::new(
+                        CommandId::parse("file.disabled").expect("id"),
+                        "Disabled",
+                        CommandStatus::Implemented,
+                    )
+                })
+            }
+            fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+                Enabled::no("nothing to close")
+            }
+            fn execute(
+                &self,
+                _ctx: &mut AppCtx,
+                _invocation: &Invocation,
+            ) -> Result<Outcome, CommandError> {
+                Ok(Outcome::message("ran"))
+            }
+        }
+
+        let mut registry = Registry::new();
+        registry.register(Box::new(Disabled)).expect("register");
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        let results = shell
+            .dispatch(&[intent("file.disabled", Source::Shortcut)])
+            .expect("dispatch");
+        assert!(matches!(results[0], Err(CommandError::NotEnabled { .. })));
+        // The reason reaches the status bar for any intent source.
+        assert!(
+            shell
+                .app
+                .warnings
+                .last()
+                .is_some_and(|warning| warning.contains("nothing to close")),
+            "{:?}",
+            shell.app.warnings
+        );
     }
 }
