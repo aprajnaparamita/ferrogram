@@ -6,6 +6,14 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# RUSTSEC-2026-0192: `ttf-parser` is unmaintained. It reaches us only
+# through `winit` -> `sctk-adwaita` -> `ab_glyph` (Wayland window
+# decorations), for font parsing of our own UI chrome. No vulnerability,
+# no fixed release exists; revisit when winit replaces the dependency
+# (ADR 0030).
+ignore = [
+    { id = "RUSTSEC-2026-0192", reason = "transitive via winit (sctk-adwaita/ab_glyph); unmaintained, no fix available" },
+]
 
 [licenses]
 version = 2
@@ -33,6 +41,15 @@ allow = [
 [[licenses.exceptions]]
 crate = "ferrogram-vsd-binary"
 allow = ["MPL-2.0"]
+
+# egui's dependency-supplied chrome fonts (ADR 0030): the epaint default
+# font set is (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0. The
+# Ubuntu Font Licence v1.0 is permissive (free use, modification and
+# redistribution with the notice kept); no Microsoft font is involved.
+# A row in ATTRIBUTION.md records the set (task P4-03).
+[[licenses.exceptions]]
+crate = "epaint_default_fonts"
+allow = ["MIT", "Apache-2.0", "OFL-1.1", "Ubuntu-font-1.0"]
 
 [licenses.private]
 # Check our own workspace crates too, so a stray MPL license anywhere else fails.
