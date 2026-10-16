@@ -1454,7 +1454,12 @@ dependencies = [
  "ferrogram-render",
  "ferrogram-ui-spec",
  "insta",
+ "js-sys",
  "rfd",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -1493,6 +1498,9 @@ dependencies = [
  "ferrogram-commands",
  "ferrogram-ui",
  "ferrogram-ui-spec",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

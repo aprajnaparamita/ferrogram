@@ -19,6 +19,26 @@ ferrogram-geom = { path = "../geom" }
 ferrogram-model = { path = "../model" }
 ferrogram-render = { path = "../render" }
 ferrogram-ui-spec = { path = "../ui-spec" }
+# The settings slot format (ADR 0032): `Settings` as JSON in the
+# eframe storage key. MIT OR Apache-2.0 (already in the tree).
+serde_json = "1"
+
+# The wasm picker bridge (ADR 0036): `wasm-bindgen-futures` completes
+# rfd's async upload dialog on the browser event loop and `web-sys`
+# downloads the saved bytes (rfd has no wasm save). All are MIT OR
+# Apache-2.0 (already in the tree through eframe; ADR 0030).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Blob",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Url",
+    "Window",
+] }
 
 [dev-dependencies]
 # Headless UI tests (ADR 0030, ADR 0037).
