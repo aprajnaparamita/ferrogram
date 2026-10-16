@@ -3,10 +3,10 @@
 //! [`render_raster`] shares the PNG backend's rasterization path: the
 //! same pixels, without the PNG encoding step. The egui canvas (L6)
 //! uploads the result as a texture; `render_png` encodes the same raster
-//! for files and goldens.
-//!
-//! Alpha status (task P4-01): the interface is fixed here;
-//! `render_raster` returns [`Error::NotImplemented`] until P4-05.
+//! for files and goldens. The bytes are straight (non-premultiplied)
+//! RGBA, exactly the bytes the PNG encoder writes, so decoding a rendered
+//! PNG yields the same buffer (the parity test in `tests/raster.rs`
+//! pins this).
 
 use crate::build::DEFAULT_SCALE;
 use crate::error::Error;
@@ -62,10 +62,17 @@ impl Default for RasterOptions {
 /// `scale` that is not finite, not positive or above the device extent
 /// cap; [`Error::TooLarge`] when the page at that scale does not fit.
 ///
-/// Not implemented yet (P4-05).
+/// The output is exactly the raster [`crate::render_png`] encodes, as
+/// straight (non-premultiplied) RGBA bytes: `render_png` and
+/// `render_raster` share one rasterizer (ADR 0033), so the PNG goldens
+/// cover these pixels.
 pub fn render_raster(scene: &Scene, opts: &RasterOptions) -> Result<RasterImage, Error> {
-    let _ = (scene, opts);
-    Err(Error::NotImplemented)
+    let pixmap = crate::png::rasterize(scene, opts.scale, opts.antialias)?;
+    Ok(RasterImage {
+        width: pixmap.width(),
+        height: pixmap.height(),
+        rgba: pixmap.take_demultiplied(),
+    })
 }
 
 #[cfg(test)]
@@ -91,15 +98,40 @@ mod tests {
     }
 
     #[test]
-    fn render_raster_is_a_stub() {
-        let scene = Scene {
-            width: 1.0,
-            height: 1.0,
-            background: None,
-            nodes: Vec::new(),
-            warnings: Vec::new(),
-        };
-        let error = render_raster(&scene, &RasterOptions::new()).expect_err("stub");
-        assert_eq!(error, Error::NotImplemented);
+    fn render_raster_draws_the_background_at_the_requested_scale() {
+        let mut scene = Scene::new(2.0, 1.0);
+        scene.background = Some(crate::scene::Rgba::opaque(255, 255, 255));
+        let image = render_raster(&scene, &RasterOptions::new()).expect("raster");
+        assert_eq!((image.width, image.height), (192, 96));
+        assert_eq!(image.rgba.len(), 192 * 96 * 4);
+        assert_eq!(&image.rgba[0..4], &[255, 255, 255, 255]);
+        assert_eq!(image.pixel_count(), 192 * 96);
+    }
+
+    #[test]
+    fn render_raster_keeps_a_transparent_background_transparent() {
+        let scene = Scene::new(1.0, 1.0);
+        let image = render_raster(&scene, &RasterOptions::new()).expect("raster");
+        assert_eq!(image.rgba.len(), 96 * 96 * 4);
+        assert_eq!(&image.rgba[0..4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn render_raster_enforces_the_adr_0025_caps() {
+        let scene = Scene::new(1.0, 1.0);
+        for scale in [0.0, -1.0, f64::NAN, f64::INFINITY, 16_385.0] {
+            let error = render_raster(
+                &scene,
+                &RasterOptions {
+                    scale,
+                    antialias: true,
+                },
+            )
+            .expect_err("bad scale");
+            assert_eq!(error, Error::InvalidOptions, "scale {scale}");
+        }
+        let big = Scene::new(20_000.0, 1.0);
+        let error = render_raster(&big, &RasterOptions::new()).expect_err("page too large");
+        assert_eq!(error, Error::TooLarge);
     }
 }
