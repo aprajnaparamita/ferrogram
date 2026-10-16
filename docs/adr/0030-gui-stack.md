@@ -23,6 +23,8 @@ the whole new dependency tree, and the macOS and wasm builds must work.
 | `eframe` | 0.37 | MIT OR Apache-2.0 | `apps/ferrogram`, `apps/ferrogram-web` (L7) | window + event loop + storage, desktop and wasm |
 | `egui_kittest` | 0.37 | MIT OR Apache-2.0 | dev-dependency of `crates/ui`, `apps/ferrogram` | headless UI tests (KICKOFF) |
 | `rfd` | 0.17 | MIT OR Apache-2.0 | `crates/ui` (L6) | native file dialogs on desktop (KICKOFF) |
+| `serde_json` | 1 | MIT OR Apache-2.0 | `crates/ui` (L6) | the settings slot format (ADR 0032); added by P4-03 |
+| `wasm-bindgen`, `wasm-bindgen-futures`, `js-sys`, `web-sys` | 0.2 / 0.4 / 0.3 / 0.3 | MIT OR Apache-2.0 | `crates/ui` and `apps/ferrogram-web`, wasm32 only | the async upload bridge and the download save (ADR 0036); added by P4-03 |
 
 `egui`, `eframe` and `egui_kittest` are released in lockstep; the three are
 pinned to the same 0.x minor. `rfd` is the only dialog crate; on wasm the
