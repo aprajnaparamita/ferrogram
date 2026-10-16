@@ -29,6 +29,7 @@ mod raw;
 mod section;
 mod shape;
 mod sheet;
+pub mod stencils;
 mod style;
 mod text;
 mod theme;
