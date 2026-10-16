@@ -1366,6 +1366,7 @@ dependencies = [
 name = "ferrogram-cli"
 version = "0.0.1"
 dependencies = [
+ "ferrogram-commands",
  "ferrogram-geom",
  "ferrogram-model",
  "ferrogram-render",
@@ -1386,6 +1387,8 @@ dependencies = [
  "ferrogram-vsdx",
  "proptest",
  "serde",
+ "serde-saphyr",
+ "serde_json",
 ]
 
 [[package]]

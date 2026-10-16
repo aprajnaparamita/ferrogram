@@ -1,9 +1,10 @@
 //! Commands, argument parsing and execution (ADR 0026).
 //!
-//! Parsing produces a [`Command`]; `run` executes it through library calls.
-//! The `Command` enum is the seam to the Phase 4 command registry
-//! (`crates/commands`): each variant maps to a registry command id then,
-//! and the parser and exit codes do not change.
+//! Parsing produces a [`Command`]; `run` dispatches it through the
+//! Phase 4 command registry (`crates/commands`, task P4-02): each
+//! variant maps to a registry command id (`inspect` -> `file.inspect`,
+//! `render` -> `file.render`, `export` -> `file.export`) and the
+//! parser, exit codes and output do not change.
 //!
 //! Nothing writes to stdout except `inspect` output and `--help`
 //! (ADR 0026); errors and warnings go to stderr, one line each.
