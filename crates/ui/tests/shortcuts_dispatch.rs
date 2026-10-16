@@ -609,11 +609,7 @@ fn ctrl_shift_c_is_the_format_painter_outside_text_and_align_center_inside() {
         false,
     );
     assert_eq!(
-        global
-            .intent
-            .expect("the format painter")
-            .command
-            .as_str(),
+        global.intent.expect("the format painter").command.as_str(),
         "tools.format_painter"
     );
 
