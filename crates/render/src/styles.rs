@@ -416,6 +416,13 @@ impl RawFile {
     }
 }
 
+/// Parses a data file for the builder's tests (the same entry
+/// [`VisualStyles::load`] uses on the committed file).
+#[cfg(test)]
+pub(crate) fn parse_for_test(text: &str) -> Result<VisualStyles, Error> {
+    VisualStyles::parse(text)
+}
+
 /// Whether a size-like value is finite and not negative.
 fn is_size(value: f64) -> bool {
     value.is_finite() && value >= 0.0
@@ -826,5 +833,37 @@ mod tests {
             "meta: {{version: 1}}\nfill_patterns:\n  - index: 2\n    kind: tile\n    tile: \"{tile}\"\n    spacing: 4\n"
         );
         assert_eq!(VisualStyles::parse(&text), Err(Error::InvalidStyleData));
+    }
+
+    #[test]
+    fn duplicate_style_indices_are_invalid_data() {
+        // One entry per repeated-index arm of the builder: line ends,
+        // fill patterns and shadows.
+        let line_ends = "meta:\n  version: 1\nline_ends:\n  - index: 1\n  - index: 1\n";
+        assert_eq!(
+            VisualStyles::parse(line_ends),
+            Err(Error::InvalidStyleData),
+            "duplicate line_end index parsed"
+        );
+        let fill_patterns = concat!(
+            "meta:\n  version: 1\nfill_patterns:\n",
+            "  - index: 1\n    kind: none\n",
+            "  - index: 1\n    kind: none\n"
+        );
+        assert_eq!(
+            VisualStyles::parse(fill_patterns),
+            Err(Error::InvalidStyleData),
+            "duplicate fill_pattern index parsed"
+        );
+        let shadows = concat!(
+            "meta:\n  version: 1\nshadows:\n",
+            "  - index: 1\n    kind: none\n",
+            "  - index: 1\n    kind: none\n"
+        );
+        assert_eq!(
+            VisualStyles::parse(shadows),
+            Err(Error::InvalidStyleData),
+            "duplicate shadow index parsed"
+        );
     }
 }

@@ -699,4 +699,32 @@ mod tests {
         let usage = usage_error("bad");
         assert_eq!(usage.to_string(), "bad");
     }
+
+    #[test]
+    fn render_and_export_reject_extra_arguments_and_unknown_options() {
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "a.png", "extra.vsdx"]),
+            "unexpected argument: extra.vsdx"
+        );
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "a.png", "--bogus"]),
+            "unknown option: --bogus"
+        );
+        assert_eq!(
+            error(&["export", "a.vsdx", "--out", "out", "extra.vsdx"]),
+            "unexpected argument: extra.vsdx"
+        );
+        assert_eq!(
+            error(&["export", "a.vsdx", "--out", "out", "--bogus"]),
+            "unknown option: --bogus"
+        );
+    }
+
+    #[test]
+    fn an_unrecognizable_output_extension_is_a_usage_error() {
+        assert_eq!(
+            error(&["render", "a.vsdx", "--out", "out.xyz"]),
+            "cannot tell the output format from out.xyz; use --format"
+        );
+    }
 }

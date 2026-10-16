@@ -1862,4 +1862,66 @@ mod layout_tests {
             1
         );
     }
+
+    // --- the shaper fallback (P3-17, coverage finding minor 1) -------
+
+    #[test]
+    fn nominal_advances_replace_shaping_when_the_font_does_not_parse() {
+        let font = crate::font::unparsable_for_test();
+        let pairs = shape_pairs(&font, "ab");
+        assert_eq!(pairs.len(), 2, "one glyph per character");
+        for (glyph, advance, x_off, y_off, cluster) in pairs {
+            assert_eq!(glyph, GlyphId(0)); // the fallback glyph
+            assert_eq!(advance, 0.0);
+            assert_eq!((x_off, y_off), (0.0, 0.0));
+            assert!(cluster < 2);
+        }
+    }
+
+    #[test]
+    fn nominal_advances_come_from_the_font() {
+        let fonts = default_fonts();
+        let Some(font) = fonts.fonts().first() else {
+            return;
+        };
+        let pairs = nominal(font, "A");
+        assert_eq!(pairs.len(), 1);
+        let (glyph, advance, _, _, cluster) = pairs[0];
+        assert_eq!(glyph, font.glyph_of('A').expect("a glyph for A"));
+        assert!(advance > 0.0, "advance {advance}");
+        assert_eq!(cluster, 0);
+    }
+
+    #[test]
+    fn bullets_with_no_fonts_shape_no_glyphs() {
+        // A bullet of size 0 uses the default size; with an empty font
+        // stack the bullet shapes nothing and the block still lays out.
+        let block = Block {
+            paragraphs: vec![Paragraph {
+                runs: Vec::new(),
+                align: Align::Left,
+                line_spacing: 1.0,
+                space_before: 0.0,
+                space_after: 0.0,
+                indent_first: 0.0,
+                indent_left: 0.25,
+                bullet: Some(Bullet {
+                    text: "*".to_owned(),
+                    family: "Nowhere".to_owned(),
+                    size: 0.0,
+                    indent: 0.25,
+                }),
+                tabs: Vec::new(),
+            }],
+            width: 2.0,
+            height: 1.0,
+            valign: VAlign::Top,
+            margins: Insets::default(),
+            rotation: Angle::from_degrees(0.0),
+            wrap: true,
+        };
+        let layout = layout(&block, &FontStack::new()).expect("lays out");
+        let glyphs: usize = layout.lines.iter().map(|line| line.glyphs.len()).sum();
+        assert_eq!(glyphs, 0, "the bullet shaped glyphs without a font");
+    }
 }
