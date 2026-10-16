@@ -798,10 +798,10 @@ fn canvas_status(session: &DocumentSession, cache: &CanvasCache) -> String {
     status
 }
 
-/// A build or raster failure as a [`UiError`]. `crates/ui` has no
-/// render variant yet (the P4-05 Result asks P4-03 for one).
+/// A build or raster failure as a [`UiError`] (task P4-03 added the
+/// render variant the P4-05 Result asked for).
 fn render_error(error: ferrogram_render::Error) -> UiError {
-    UiError::Io {
+    UiError::Render {
         message: format!("the canvas raster failed: {error}"),
     }
 }
