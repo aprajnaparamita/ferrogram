@@ -18,6 +18,7 @@
 
 use std::collections::BTreeMap;
 
+pub mod embedded;
 pub mod error;
 pub mod loader;
 pub mod lookup;
