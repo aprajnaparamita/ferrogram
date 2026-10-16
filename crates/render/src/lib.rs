@@ -12,6 +12,7 @@
 pub mod build;
 mod error;
 pub mod png;
+pub mod raster;
 pub mod scene;
 pub mod styles;
 pub mod svg;
@@ -19,6 +20,7 @@ pub mod svg;
 pub use build::{BuildOptions, build_scene};
 pub use error::Error;
 pub use png::{PngOptions, render_png};
+pub use raster::{RasterImage, RasterOptions, render_raster};
 pub use scene::{Rgba, Scene};
 pub use svg::{SvgOptions, render_svg};
 
