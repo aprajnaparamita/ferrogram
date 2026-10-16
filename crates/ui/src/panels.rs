@@ -8,10 +8,9 @@
 //!
 //! # Missing values
 //!
-//! A missing, non-finite or empty value renders `"—"` (the
-//! [`MISSING_VALUE`] marker) and adds one warning row
-//! (`PanelRow::read_only("Warning", "<label>: <reason>")`) after it. The
-//! row builders take `&AppCtx`, so they cannot push to
+//! A missing, non-finite or empty value renders `"—"` and adds one
+//! warning row (`PanelRow::read_only("Warning", "<label>: <reason>")`)
+//! after it. The row builders take `&AppCtx`, so they cannot push to
 //! [`AppCtx::warnings`](ferrogram_commands::AppCtx::warnings); the
 //! warning text therefore rides along in the `value` of a `PanelRow`,
 //! which the caller can show or record. Task P4-07 note: giving the
