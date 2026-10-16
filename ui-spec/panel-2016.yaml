@@ -4451,7 +4451,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: view.grid
+            command: view.toggle_grid
             icon_ref: null
             id: ShowGrid
             keytip: null
@@ -4475,7 +4475,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: view.show.ruler.visio
+            command: view.rulers
             icon_ref: null
             id: ShowRulerVisio
             keytip: null
@@ -4591,7 +4591,7 @@ tabs:
             visual_notes: null
           - aliases: []
             bounds: null
-            command: view.zoom.fit.to.window.visio
+            command: view.zoom.fit
             icon_ref: null
             id: ZoomFitToWindowVisio
             keytip: null

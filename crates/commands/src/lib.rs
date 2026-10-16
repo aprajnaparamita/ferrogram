@@ -10,12 +10,9 @@
 //! value as an [`Args`] entry.
 //!
 //! Layer L4 (ADR 0002): the crate depends on the model, the renderer,
-//! the readers and the ui-spec data, never on egui.
-//!
-//! Alpha status: this module defines the interfaces (task P4-01); the
-//! registry machinery and the built-in commands are implemented in
-//! P4-02. Functions marked "not implemented" return
-//! [`CommandError::Unsupported`].
+//! the readers and the ui-spec data, never on egui. Adding a user
+//! action is one handler in [`builtins`] plus (when it has a Microsoft
+//! counterpart) extractor mapping rules.
 
 #![forbid(unsafe_code)]
 
@@ -198,6 +195,8 @@ pub enum ArgValue {
     Flag(bool),
     /// A list of strings.
     List(Vec<String>),
+    /// Raw bytes (the wasm upload case of `file.open`, ADR 0036).
+    Bytes(Vec<u8>),
 }
 
 /// Named arguments of one invocation.
@@ -267,6 +266,14 @@ impl Args {
     pub fn flag(&self, name: &str) -> Option<bool> {
         match self.entries.get(name) {
             Some(ArgValue::Flag(b)) => Some(*b),
+            _ => None,
+        }
+    }
+
+    /// The argument under `name` as raw bytes, when it is one.
+    pub fn bytes(&self, name: &str) -> Option<&[u8]> {
+        match self.entries.get(name) {
+            Some(ArgValue::Bytes(b)) => Some(b.as_slice()),
             _ => None,
         }
     }
@@ -390,15 +397,37 @@ pub enum UiRequest {
     },
 }
 
+/// A binary payload a command hands back instead of writing a file
+/// (ADR 0036: the wasm download case of `file.save`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Payload {
+    /// Raw bytes with the file name the caller should save them under.
+    Bytes {
+        /// Suggested file name, e.g. `drawing.vsdx`.
+        name: String,
+        /// The file content.
+        data: Vec<u8>,
+    },
+}
+
 /// The result of a successful execution (ADR 0028).
 #[derive(Default)]
+#[non_exhaustive]
 pub struct Outcome {
-    /// A one-line message for the status bar.
+    /// A one-line message for the status bar (the `file.inspect`
+    /// summary is the one multi-line exception, ADR 0026).
     pub message: Option<String>,
     /// The undoable edit the command produced, if any (ADR 0028).
     pub edit: Option<Box<dyn Edit>>,
     /// A follow-up request for interactive dispatchers.
     pub ui_request: Option<UiRequest>,
+    /// A file to hand to the caller instead of writing it to disk
+    /// (ADR 0036).
+    pub payload: Option<Payload>,
+    /// Warning lines the run produced (ADR 0021), one line each,
+    /// without the `warning: ` prefix.
+    pub warnings: Vec<String>,
 }
 
 impl std::fmt::Debug for Outcome {
@@ -407,6 +436,13 @@ impl std::fmt::Debug for Outcome {
             .field("message", &self.message)
             .field("edit", &self.edit.as_ref().map(|edit| edit.label()))
             .field("ui_request", &self.ui_request)
+            .field(
+                "payload",
+                &self.payload.as_ref().map(|payload| match payload {
+                    Payload::Bytes { name, data } => format!("{name} ({} bytes)", data.len()),
+                }),
+            )
+            .field("warnings", &self.warnings)
             .finish()
     }
 }
@@ -418,6 +454,8 @@ impl Outcome {
             message: Some(message.into()),
             edit: None,
             ui_request: None,
+            payload: None,
+            warnings: Vec::new(),
         }
     }
 }
@@ -501,14 +539,16 @@ mod tests {
             .with("int", ArgValue::Integer(-2))
             .with("num", ArgValue::Number(1.5))
             .with("flag", ArgValue::Flag(true))
-            .with("list", ArgValue::List(vec!["x".into()]));
-        assert_eq!(args.len(), 6);
+            .with("list", ArgValue::List(vec!["x".into()]))
+            .with("data", ArgValue::Bytes(vec![1, 2, 3]));
+        assert_eq!(args.len(), 7);
         assert!(!args.is_empty());
         assert_eq!(args.path("path"), Some(Path::new("a.vsdx")));
         assert_eq!(args.text("text"), Some("hi"));
         assert_eq!(args.integer("int"), Some(-2));
         assert_eq!(args.number("num"), Some(1.5));
         assert_eq!(args.flag("flag"), Some(true));
+        assert_eq!(args.bytes("data"), Some(&[1u8, 2, 3][..]));
         assert!(matches!(args.get("list"), Some(ArgValue::List(_))));
         assert_eq!(args.get("missing"), None);
         assert_eq!(args.path("text"), None);
@@ -516,6 +556,7 @@ mod tests {
         assert_eq!(args.integer("num"), None);
         assert_eq!(args.number("flag"), None);
         assert_eq!(args.flag("list"), None);
+        assert_eq!(args.bytes("list"), None);
     }
 
     #[test]
@@ -558,7 +599,31 @@ mod tests {
         assert_eq!(outcome.message.as_deref(), Some("saved"));
         assert!(outcome.edit.is_none());
         assert!(outcome.ui_request.is_none());
+        assert!(outcome.payload.is_none());
+        assert!(outcome.warnings.is_empty());
         let empty = Outcome::default();
         assert!(empty.message.is_none());
+    }
+
+    #[test]
+    fn outcome_carries_a_payload_and_warnings() {
+        let mut outcome = Outcome::message("saved");
+        outcome.payload = Some(Payload::Bytes {
+            name: "drawing.vsdx".into(),
+            data: vec![0, 1],
+        });
+        outcome
+            .warnings
+            .push("shape 1 PinX: wrong kind, using 0".into());
+        let text = format!("{outcome:?}");
+        assert!(text.contains("drawing.vsdx (2 bytes)"), "{text}");
+        assert!(text.contains("PinX"), "{text}");
+        match outcome.payload {
+            Some(Payload::Bytes { name, data }) => {
+                assert_eq!(name, "drawing.vsdx");
+                assert_eq!(data, vec![0, 1]);
+            }
+            other => panic!("expected bytes, got {other:?}"),
+        }
     }
 }

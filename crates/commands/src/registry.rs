@@ -5,10 +5,6 @@
 //! reads [`CommandStatus`] and [`Registry::enabled`] to decide whether a
 //! control renders enabled, greyed with a reason, or disabled with the
 //! "Not yet implemented" tooltip (ADR 0031).
-//!
-//! Alpha status (task P4-01): [`Registry::new`] and the accessors are
-//! defined; `register`, `from_mappings`, `enabled` and `execute` are
-//! "not implemented" stubs until P4-02.
 
 use ferrogram_ui_spec::{CommandMapping, FluentId, MappingConfidence};
 
@@ -163,24 +159,47 @@ impl Registry {
 
     /// Registers a command.
     ///
-    /// Not implemented yet (P4-02).
+    /// A real ([`CommandStatus::Implemented`]) command registered over
+    /// a [`StubCommand`] replaces it: that is how
+    /// [`builtins::registry()`](crate::builtins::registry) puts the
+    /// implemented commands over their `commands.yaml` stubs. Two
+    /// commands with one id (and a stub over anything) are a build bug
+    /// and return [`RegistryError::Duplicate`].
     pub fn register(&mut self, command: Box<dyn Command>) -> Result<(), RegistryError> {
-        let _ = command;
-        Err(RegistryError::NotImplemented {
-            what: "Registry::register",
-        })
+        let id = command.meta().id;
+        let new_real = command.meta().status == CommandStatus::Implemented;
+        if let Some(position) = self.commands.iter().position(|c| c.meta().id == id) {
+            let existing_real = self
+                .commands
+                .get(position)
+                .map(|c| c.meta().status == CommandStatus::Implemented)
+                .unwrap_or(false);
+            if !new_real || existing_real {
+                return Err(RegistryError::Duplicate { id: id.to_string() });
+            }
+            if let Some(slot) = self.commands.get_mut(position) {
+                *slot = command;
+            }
+            return Ok(());
+        }
+        self.commands.push(command);
+        Ok(())
     }
 
     /// Builds a registry of stubs from `ui-spec/commands.yaml` (ADR 0006).
     ///
-    /// Not implemented yet (P4-02).
+    /// One [`StubCommand`] per entry, in file order. A duplicated id in
+    /// the table is [`RegistryError::Duplicate`]; a malformed id is
+    /// [`RegistryError::BadId`].
     pub fn from_mappings(
         mappings: &ferrogram_ui_spec::Commands,
     ) -> Result<Registry, RegistryError> {
-        let _ = mappings;
-        Err(RegistryError::NotImplemented {
-            what: "Registry::from_mappings",
-        })
+        let mut registry = Registry::new();
+        for mapping in &mappings.entries {
+            let meta = CommandMeta::from_mapping(mapping)?;
+            registry.register(Box::new(StubCommand::new(meta)))?;
+        }
+        Ok(registry)
     }
 
     /// Whether the command can run in the current state (ADR 0028).
@@ -196,17 +215,30 @@ impl Registry {
 
     /// Dispatches one invocation (ADR 0028).
     ///
-    /// Not implemented yet (P4-02).
+    /// Unknown ids return [`CommandError::UnknownCommand`]; a stub
+    /// reports [`CommandError::Unsupported`] (ADR 0037); a command
+    /// whose enabled-state says no returns [`CommandError::NotEnabled`]
+    /// (never a dialog, never a side effect).
     pub fn execute(
         &self,
         id: &CommandId,
         ctx: &mut AppCtx,
         invocation: Invocation,
     ) -> Result<Outcome, CommandError> {
-        let _ = (id, ctx, invocation);
-        Err(CommandError::NotImplemented {
-            what: "Registry::execute",
-        })
+        let Some(command) = self.get(id) else {
+            return Err(CommandError::UnknownCommand { id: id.to_string() });
+        };
+        if command.meta().status == CommandStatus::Stub {
+            return Err(CommandError::Unsupported { id: id.to_string() });
+        }
+        let enabled = command.enabled(ctx);
+        if !enabled.value {
+            return Err(CommandError::NotEnabled {
+                id: id.to_string(),
+                reason: enabled.reason,
+            });
+        }
+        command.execute(ctx, &invocation)
     }
 }
 
@@ -214,7 +246,7 @@ impl Registry {
 mod tests {
     use super::*;
     use crate::app::Settings;
-    use crate::{Args, Source};
+    use crate::{ArgValue, Args, Source};
 
     fn meta(id: &'static str) -> CommandMeta {
         CommandMeta::new(
@@ -280,18 +312,180 @@ mod tests {
         assert!(!enabled.is_enabled());
     }
 
+    /// A real (implemented) command for the register/execute paths.
+    struct RealCommand {
+        meta: CommandMeta,
+        enabled: bool,
+    }
+
+    impl RealCommand {
+        fn new(id: &'static str, enabled: bool) -> Box<Self> {
+            let mut meta = meta(id);
+            meta.status = CommandStatus::Implemented;
+            Box::new(Self { meta, enabled })
+        }
+    }
+
+    impl Command for RealCommand {
+        fn meta(&self) -> &CommandMeta {
+            &self.meta
+        }
+
+        fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+            if self.enabled {
+                Enabled::yes()
+            } else {
+                Enabled::no("test says no")
+            }
+        }
+
+        fn execute(
+            &self,
+            _ctx: &mut AppCtx,
+            invocation: &Invocation,
+        ) -> Result<Outcome, CommandError> {
+            if invocation.args.flag("fail").unwrap_or(false) {
+                return Err(CommandError::failed("test failure"));
+            }
+            Ok(Outcome::message(format!("ran {}", self.meta.id)))
+        }
+    }
+
     #[test]
-    fn registry_operations_are_stubs() {
+    fn register_replaces_a_stub_but_never_a_second_command() {
         let mut registry = Registry::new();
-        assert!(
-            registry
-                .register(Box::new(StubCommand::new(meta("file.save"))))
-                .is_err()
+        registry
+            .register(Box::new(StubCommand::new(meta("file.save"))))
+            .expect("stub registers");
+        registry
+            .register(RealCommand::new("file.save", true))
+            .expect("the real command replaces its stub");
+        assert_eq!(registry.len(), 1);
+        assert_eq!(
+            registry.status(&CommandId::parse("file.save").unwrap()),
+            CommandStatus::Implemented
         );
-        assert!(Registry::from_mappings(&ferrogram_ui_spec::Commands::default()).is_err());
+
+        // Two real commands with one id are a build bug.
+        let dup = registry.register(RealCommand::new("file.save", true));
+        assert!(matches!(dup, Err(RegistryError::Duplicate { .. })));
+        // A stub never displaces anything.
+        let dup = registry.register(Box::new(StubCommand::new(meta("file.save"))));
+        assert!(matches!(dup, Err(RegistryError::Duplicate { .. })));
+        // A second stub for one id is a duplicate too.
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(StubCommand::new(meta("file.save"))))
+            .expect("stub registers");
+        let dup = registry.register(Box::new(StubCommand::new(meta("file.save"))));
+        assert!(matches!(dup, Err(RegistryError::Duplicate { .. })));
+    }
+
+    fn mapping(id: &str) -> ferrogram_ui_spec::CommandMapping {
+        ferrogram_ui_spec::CommandMapping {
+            id: ferrogram_ui_spec::CommandId::new(id),
+            label: "Label".to_owned(),
+            visuicmd: None,
+            fluent_ids: Vec::new(),
+            mapping_confidence: MappingConfidence::Unknown,
+        }
+    }
+
+    #[test]
+    fn from_mappings_builds_one_stub_per_entry() {
+        let mappings = ferrogram_ui_spec::Commands {
+            entries: vec![mapping("file.save"), mapping("file.open")],
+        };
+        let registry = Registry::from_mappings(&mappings).expect("stubs");
+        assert_eq!(registry.len(), 2);
         let id = CommandId::parse("file.save").expect("id");
+        assert_eq!(registry.status(&id), CommandStatus::Stub);
+        let enabled = registry.enabled(&id, &AppCtx::new(Settings::default()));
+        assert!(!enabled.is_enabled());
+        assert_eq!(enabled.reason.as_deref(), Some("not yet implemented"));
+
+        // A duplicated id in the table is a build bug.
+        let mappings = ferrogram_ui_spec::Commands {
+            entries: vec![mapping("file.save"), mapping("file.save")],
+        };
+        assert!(matches!(
+            Registry::from_mappings(&mappings),
+            Err(RegistryError::Duplicate { .. })
+        ));
+
+        // A malformed id names the bad id.
+        let mappings = ferrogram_ui_spec::Commands {
+            entries: vec![mapping("file.")],
+        };
+        assert!(matches!(
+            Registry::from_mappings(&mappings),
+            Err(RegistryError::BadId { .. })
+        ));
+    }
+
+    #[test]
+    fn execute_dispatches_and_reports_every_failure() {
+        let mut registry = Registry::new();
+        registry
+            .register(RealCommand::new("file.save", true))
+            .expect("register");
+        registry
+            .register(RealCommand::new("edit.undo", false))
+            .expect("register");
+        registry
+            .register(Box::new(StubCommand::new(meta("file.open"))))
+            .expect("register");
         let mut ctx = AppCtx::new(Settings::default());
-        let outcome = registry.execute(&id, &mut ctx, Invocation::new(Args::new(), Source::Test));
-        assert!(outcome.is_err());
+
+        let outcome = registry
+            .execute(
+                &CommandId::parse("file.save").unwrap(),
+                &mut ctx,
+                Invocation::empty(Source::Test),
+            )
+            .expect("execute");
+        assert_eq!(outcome.message.as_deref(), Some("ran file.save"));
+
+        let error = registry
+            .execute(
+                &CommandId::parse("file.save").unwrap(),
+                &mut ctx,
+                Invocation::new(Args::new().with("fail", ArgValue::Flag(true)), Source::Test),
+            )
+            .expect_err("the command fails");
+        assert_eq!(error.to_string(), "test failure");
+
+        let error = registry
+            .execute(
+                &CommandId::parse("edit.undo").unwrap(),
+                &mut ctx,
+                Invocation::empty(Source::Test),
+            )
+            .expect_err("disabled");
+        assert_eq!(
+            error.to_string(),
+            "command edit.undo is disabled: test says no"
+        );
+
+        let error = registry
+            .execute(
+                &CommandId::parse("file.open").unwrap(),
+                &mut ctx,
+                Invocation::empty(Source::Test),
+            )
+            .expect_err("stub");
+        assert_eq!(
+            error.to_string(),
+            "command file.open is not implemented yet"
+        );
+
+        let error = registry
+            .execute(
+                &CommandId::parse("file.nope").unwrap(),
+                &mut ctx,
+                Invocation::empty(Source::Test),
+            )
+            .expect_err("unknown");
+        assert_eq!(error.to_string(), "unknown command file.nope");
     }
 }
