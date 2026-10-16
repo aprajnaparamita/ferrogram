@@ -1800,9 +1800,7 @@ controls:
             fluent_row("view.show.ruler.visio", "ShowRulerVisio"),
             fluent_row("view.zoom.fit.to.window.visio", "ZoomFitToWindowVisio"),
         ];
-        entries[0]
-            .fluent_ids
-            .push("ShowGrid".into());
+        entries[0].fluent_ids.push("ShowGrid".into());
         entries[0].confidence = Confidence::Inferred;
         add_our_commands(&mut entries);
         let controls = controls(&[
@@ -1851,16 +1849,15 @@ controls:
     fn real_fluent_command_bindings_apply() {
         let root = crate::util::root();
         let read = |rel: &str| {
-            std::fs::read_to_string(root.join(rel))
-                .unwrap_or_else(|e| panic!("read {rel}: {e}"))
+            std::fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
         };
         let commands: Value = serde_saphyr::from_str(&read("ui-spec/commands.yaml"))
             .unwrap_or_else(|e| panic!("parse commands.yaml: {e}"));
         let rows = commands.as_array().expect("commands.yaml is a list");
         let mut layouts: BTreeMap<String, String> = BTreeMap::new();
         for name in ["ui-spec/panel-2016.yaml", "ui-spec/panel-365.yaml"] {
-            let value: Value = serde_saphyr::from_str(&read(name))
-                .unwrap_or_else(|e| panic!("parse {name}: {e}"));
+            let value: Value =
+                serde_saphyr::from_str(&read(name)).unwrap_or_else(|e| panic!("parse {name}: {e}"));
             visit_objects(&value, &mut |obj| {
                 if let Some(id) = obj.get("id").and_then(Value::as_str)
                     && let Some(command) = obj.get("command").and_then(Value::as_str)

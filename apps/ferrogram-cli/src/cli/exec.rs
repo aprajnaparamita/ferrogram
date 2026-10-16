@@ -1,31 +1,36 @@
 //! Command execution (ADR 0026).
 //!
-//! `run_to` executes one [`Command`] through library calls
-//! (`ferrogram_vsdx::read_document`, `ferrogram_render::build_scene`,
-//! `render_png`/`render_svg`) and maps every outcome to an exit code.
-//! Nothing writes to stdout except `inspect` output; errors and warnings
-//! are one line each on the error stream (ADR 0021/0026).
+//! `run_to` maps one [`Command`] to its registry command id and
+//! [`Args`](ferrogram_commands::Args) and dispatches through
+//! [`builtins::registry`](ferrogram_commands::builtins::registry) with
+//! [`Source::Cli`] (the ADR 0026 seam moved to `crates/commands` in
+//! Phase 4). The printed output does not change: nothing to stdout
+//! except `inspect` output and `--help`; warnings and errors are one
+//! line each on the error stream (ADR 0021/0026).
 
 use std::io::Write;
-use std::path::Path;
 
-use ferrogram_model::{CellValue, Document, Page, PageId, SheetRef};
-use ferrogram_render::{
-    BuildOptions, PngOptions, Scene, SvgOptions, build_scene, render_png, render_svg,
-};
-use ferrogram_vsdx::{Limits, read_document};
+use ferrogram_commands::app::{AppCtx, Settings};
+use ferrogram_commands::builtins;
+use ferrogram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Source};
 
-use super::inspect::{PageSummary, Summary, kind_text, shape_count};
-use crate::cli::{Background, Command, Error, Export, Inspect, OutputFormat, Render, exit};
+use crate::cli::{Background, Command, Error, OutputFormat, exit};
 
 /// The default device scale: 96 pixels per inch (ADR 0025).
 pub(crate) const DEFAULT_SCALE: f64 = ferrogram_render::build::DEFAULT_SCALE;
 
+/// The ADR 0026 report prefixes of [`CommandError::Failed`]: the CLI
+/// maps them to its exit codes (`cannot read input` is the input error,
+/// the other two are render or output errors).
+const READ_PREFIX: &str = "cannot read input: ";
+const IO_PREFIX: &str = "cannot write output: ";
+const RENDER_PREFIX: &str = "render failed: ";
+
 /// Runs a command against the given output and error streams.
 ///
-/// A failure is reported to `err` as `error: <message>` and mapped to its
-/// exit code by [`Error::exit_code`]. `Err` is returned only when that
-/// report cannot be written.
+/// A failure is reported to `err` as `error: <message>` and mapped to
+/// its exit code by [`Error::exit_code`]. `Err` is returned only when
+/// that report cannot be written.
 pub(crate) fn run_to(
     command: &Command,
     out: &mut dyn Write,
@@ -49,156 +54,143 @@ pub(crate) fn report(to: &mut dyn Write, line: &str) -> std::io::Result<()> {
     to.flush()
 }
 
-/// Executes a command and returns the exit code of a successful or
-/// warning-laden run (ADR 0026).
+/// Dispatches one command through the registry and prints its result
+/// (ADR 0026 output contract).
 fn execute(command: &Command, out: &mut dyn Write, err: &mut dyn Write) -> Result<i32, Error> {
-    match command {
-        Command::Inspect(args) => inspect(args, out, err),
-        Command::Render(args) => render(args, err),
-        Command::Export(args) => export(args, err),
+    let registry = builtins::registry().map_err(|error| Error::Render(error.to_string()))?;
+    let mut ctx = AppCtx::new(Settings::default());
+    let (id, invocation, strict) = invocation_for(command)?;
+    match registry.execute(&id, &mut ctx, invocation) {
+        Ok(outcome) => {
+            print_warnings(err, &outcome.warnings)?;
+            if matches!(command, Command::Inspect(_)) {
+                write_summary(out, outcome.message.as_deref().unwrap_or(""))?;
+            }
+            Ok(strict_exit(strict, outcome.warnings.len()))
+        }
+        Err(error) => {
+            // Warnings the command recorded before it failed still
+            // print (ADR 0021).
+            print_warnings(err, &ctx.warnings)?;
+            Err(classify(&error))
+        }
     }
 }
 
-/// `inspect`: the document summary to `out`, the warnings to `err`.
-fn inspect(args: &Inspect, out: &mut dyn Write, err: &mut dyn Write) -> Result<i32, Error> {
-    let doc = load(&args.file)?;
-    let pages: Vec<(usize, &Page)> = match args.page {
-        Some(number) => vec![(number as usize, select_page(&doc, Some(number))?)],
-        None => doc
-            .pages
-            .iter()
-            .enumerate()
-            .map(|(index, page)| (index.saturating_add(1), page))
-            .collect(),
+/// Maps one CLI command to its registry id, arguments and `--strict`
+/// flag (ADR 0028 gives the argument names).
+fn invocation_for(command: &Command) -> Result<(CommandId, Invocation, bool), Error> {
+    let static_id =
+        |id: &'static str| CommandId::parse(id).map_err(|error| Error::Render(error.to_string()));
+    let (id, invocation, strict) = match command {
+        Command::Inspect(args) => {
+            let mut entries = Args::new()
+                .with("path", ArgValue::Path(args.file.clone()))
+                .with("json", ArgValue::Flag(args.json));
+            if let Some(page) = args.page {
+                entries.set("page", ArgValue::Integer(page.into()));
+            }
+            (
+                static_id("file.inspect")?,
+                Invocation::new(entries, Source::Cli),
+                false,
+            )
+        }
+        Command::Render(args) => {
+            let mut entries = Args::new()
+                .with("path", ArgValue::Path(args.file.clone()))
+                .with("out", ArgValue::Path(args.out.clone()))
+                .with(
+                    "format",
+                    ArgValue::Text(format_text(args.format).to_owned()),
+                )
+                .with("scale", ArgValue::Number(args.scale))
+                .with("strict", ArgValue::Flag(args.strict));
+            if let Some(page) = args.page {
+                entries.set("page", ArgValue::Integer(page.into()));
+            }
+            if let Some(background) = args.background {
+                entries.set("background", ArgValue::Text(background_text(background)));
+            }
+            (
+                static_id("file.render")?,
+                Invocation::new(entries, Source::Cli),
+                args.strict,
+            )
+        }
+        Command::Export(args) => {
+            let entries = Args::new()
+                .with("path", ArgValue::Path(args.file.clone()))
+                .with("out", ArgValue::Path(args.out.clone()))
+                .with(
+                    "format",
+                    ArgValue::Text(format_text(args.format).to_owned()),
+                )
+                .with("scale", ArgValue::Number(args.scale))
+                .with("strict", ArgValue::Flag(args.strict));
+            (
+                static_id("file.export")?,
+                Invocation::new(entries, Source::Cli),
+                args.strict,
+            )
+        }
     };
-    let mut summaries = Vec::new();
-    for (number, page) in pages {
-        let scene = build(&doc, page.id, DEFAULT_SCALE)?;
-        print_warnings(&doc, &scene.warnings, err)?;
-        summaries.push(PageSummary {
-            index: number,
-            name: page.name.clone(),
-            width: scene.width,
-            height: scene.height,
-            shapes: shape_count(&doc, page),
-            warnings: scene.warnings.len(),
-        });
+    Ok((id, invocation, strict))
+}
+
+/// The `format` argument text (ADR 0026).
+fn format_text(format: OutputFormat) -> &'static str {
+    match format {
+        OutputFormat::Png => "png",
+        OutputFormat::Svg => "svg",
     }
-    let summary = Summary {
-        kind: kind_text(doc.kind),
-        pages: summaries,
-        masters: doc.masters.len(),
-        styles: doc.stylesheet.styles.len(),
-        themes: doc.themes.len(),
+}
+
+/// The `background` argument text (ADR 0026 `--background #RRGGBB|none`).
+fn background_text(background: Background) -> String {
+    match background {
+        Background::Transparent => "none".to_owned(),
+        Background::Color(color) => format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b),
+    }
+}
+
+/// Maps a registry failure to the ADR 0026 error class (and so to the
+/// exit code): the report prefix the file commands write decides.
+fn classify(error: &CommandError) -> Error {
+    let CommandError::Failed { message } = error else {
+        // The CLI parser validates its arguments, so no other variant
+        // can reach `run`; treat one as a render failure (exit 3).
+        return Error::Render(error.to_string());
     };
-    let text = if args.json {
-        summary.json()
+    if let Some(cause) = message.strip_prefix(READ_PREFIX) {
+        Error::Read(cause.to_owned())
+    } else if let Some(cause) = message.strip_prefix(IO_PREFIX) {
+        Error::Io(cause.to_owned())
+    } else if let Some(cause) = message.strip_prefix(RENDER_PREFIX) {
+        Error::Render(cause.to_owned())
     } else {
-        summary.text()
-    };
-    let mut text = text.into_bytes();
+        Error::Render(message.clone())
+    }
+}
+
+/// Prints one `warning: ` line per warning to `err` (ADR 0021).
+fn print_warnings(err: &mut dyn Write, warnings: &[String]) -> Result<(), Error> {
+    for warning in warnings {
+        report(err, &format!("warning: {warning}"))
+            .map_err(|error| Error::Io(format!("standard error: {error}")))?;
+    }
+    Ok(())
+}
+
+/// Writes the `inspect` summary to `out`, ending in one newline.
+fn write_summary(out: &mut dyn Write, text: &str) -> Result<(), Error> {
+    let mut text = text.as_bytes().to_vec();
     if text.last() != Some(&b'\n') {
         text.push(b'\n');
     }
     out.write_all(&text)
         .and_then(|()| out.flush())
-        .map_err(|error| Error::Io(format!("standard output: {error}")))?;
-    Ok(exit::OK)
-}
-
-/// `render`: one page to one file.
-fn render(args: &Render, err: &mut dyn Write) -> Result<i32, Error> {
-    let doc = load(&args.file)?;
-    let page = select_page(&doc, args.page)?;
-    let mut scene = build(&doc, page.id, args.scale)?;
-    match args.background {
-        Some(Background::Transparent) => scene.background = None,
-        Some(Background::Color(color)) => scene.background = Some(color),
-        None => {}
-    }
-    let warnings = std::mem::take(&mut scene.warnings);
-    print_warnings(&doc, &warnings, err)?;
-    let bytes = encode(&scene, args.format, args.scale)?;
-    write_file(&args.out, &bytes)?;
-    Ok(strict_exit(args.strict, warnings.len()))
-}
-
-/// `export`: every page into `--out` as `page-<N>.<ext>` (ADR 0026).
-fn export(args: &Export, err: &mut dyn Write) -> Result<i32, Error> {
-    let doc = load(&args.file)?;
-    if doc.pages.is_empty() {
-        return Err(Error::Read(
-            "the document has no pages to export".to_owned(),
-        ));
-    }
-    std::fs::create_dir_all(&args.out)
-        .map_err(|error| Error::Io(format!("{}: {error}", args.out.display())))?;
-    let extension = match args.format {
-        OutputFormat::Png => "png",
-        OutputFormat::Svg => "svg",
-    };
-    let mut warnings_total = 0usize;
-    for (index, page) in doc.pages.iter().enumerate() {
-        let number = index.saturating_add(1);
-        let scene = build(&doc, page.id, args.scale)?;
-        print_warnings(&doc, &scene.warnings, err)?;
-        warnings_total = warnings_total.saturating_add(scene.warnings.len());
-        let bytes = encode(&scene, args.format, args.scale)?;
-        write_file(&args.out.join(format!("page-{number}.{extension}")), &bytes)?;
-    }
-    Ok(strict_exit(args.strict, warnings_total))
-}
-
-/// Reads and parses the input file (ADR 0026 exit code 2).
-fn load(path: &Path) -> Result<Document, Error> {
-    let bytes =
-        std::fs::read(path).map_err(|error| Error::Read(format!("{}: {error}", path.display())))?;
-    read_document(&bytes, &Limits::DEFAULT)
-        .map_err(|error| Error::Read(format!("{}: {error}", path.display())))
-}
-
-/// The selected page (1-based), or the first one.
-fn select_page(doc: &Document, page: Option<u32>) -> Result<&Page, Error> {
-    let number = page.unwrap_or(1);
-    doc.pages
-        .get(number.saturating_sub(1) as usize)
-        .ok_or_else(|| {
-            Error::Read(format!(
-                "page {number} does not exist; the document has {} pages",
-                doc.pages.len()
-            ))
-        })
-}
-
-/// Builds the scene of one page (ADR 0020/0021).
-fn build(doc: &Document, page: PageId, scale: f64) -> Result<Scene, Error> {
-    let mut options = BuildOptions::new();
-    options.scale = scale;
-    build_scene(doc, page, &options).map_err(|error| Error::Render(error.to_string()))
-}
-
-/// Encodes a scene in the requested format (ADR 0025).
-fn encode(scene: &Scene, format: OutputFormat, scale: f64) -> Result<Vec<u8>, Error> {
-    match format {
-        OutputFormat::Png => {
-            let options = PngOptions {
-                scale,
-                antialias: true,
-            };
-            render_png(scene, &options).map_err(|error| Error::Render(error.to_string()))
-        }
-        OutputFormat::Svg => {
-            let options = SvgOptions { scale };
-            let svg =
-                render_svg(scene, &options).map_err(|error| Error::Render(error.to_string()))?;
-            Ok(svg.into_bytes())
-        }
-    }
-}
-
-/// Writes one output file (ADR 0026 exit code 3).
-fn write_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
-    std::fs::write(path, bytes).map_err(|error| Error::Io(format!("{}: {error}", path.display())))
+        .map_err(|error| Error::Io(format!("standard output: {error}")))
 }
 
 /// The exit code of a run that produced warnings (ADR 0021).
@@ -210,67 +202,17 @@ fn strict_exit(strict: bool, warnings: usize) -> i32 {
     }
 }
 
-/// Prints one line per warning to `err` (ADR 0021).
-fn print_warnings(
-    doc: &Document,
-    warnings: &[ferrogram_model::CellWarning],
-    err: &mut dyn Write,
-) -> Result<(), Error> {
-    for warning in warnings {
-        let line = format!("warning: {}", warning_line(doc, warning));
-        report(err, &line).map_err(|error| Error::Io(format!("standard error: {error}")))?;
-    }
-    Ok(())
-}
-
-/// One warning line, e.g. `shape 12 LineWeight: no cached value, using 0`
-/// (ADR 0021).
-fn warning_line(doc: &Document, warning: &ferrogram_model::CellWarning) -> String {
-    let used = value_text(&warning.substituted);
-    let reason = match &warning.kind {
-        ferrogram_model::WarningKind::Missing => format!("no cached value, using {used}"),
-        ferrogram_model::WarningKind::ErrorValue(error) => {
-            format!("cached error {error:?}, using {used}")
-        }
-        ferrogram_model::WarningKind::KindMismatch => format!("wrong kind, using {used}"),
-        ferrogram_model::WarningKind::UnresolvedTheme => {
-            format!("the theme cannot supply it, using {used}")
-        }
-        _ => format!("value unavailable, using {used}"),
-    };
-    format!(
-        "{} {}: {reason}",
-        sheet_text(doc, warning.sheet),
-        warning.cell.as_str()
-    )
-}
-
-/// The sheet of a warning as `shape 12` or `page 2`.
-fn sheet_text(doc: &Document, sheet: SheetRef) -> String {
-    match sheet {
-        SheetRef::Shape(id) => match doc.shape(id) {
-            Some(shape) => format!("shape {}", shape.visio_id),
-            None => format!("shape #{}", id.index),
-        },
-        SheetRef::Page(id) => match doc.page(id) {
-            Some(page) => format!("page {}", page.visio_id),
-            None => format!("page #{}", id.index),
-        },
-    }
-}
-
-/// The substituted value of a warning, for the report line.
-fn value_text(value: &CellValue) -> String {
-    match value {
-        CellValue::Number(number) => format!("{number}"),
-        CellValue::Str(text) => text.clone(),
-        CellValue::Bool(flag) => flag.to_string(),
-        CellValue::Color(color) => format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b),
-        CellValue::List(text) => text.clone(),
-        CellValue::Error(text) => text.clone(),
-        _ => String::new(),
-    }
-}
+// The three names below exist for the unchanged ADR 0026 tests, which
+// take them from `super::*`: `warning_line` and friends format the
+// warning report, `Document` and `Path` build the test fixtures.
+#[cfg(test)]
+use crate::cli::{Export, Inspect, Render};
+#[cfg(test)]
+use ferrogram_commands::builtins::{sheet_text, value_text, warning_line};
+#[cfg(test)]
+use ferrogram_model::Document;
+#[cfg(test)]
+use std::path::Path;
 
 #[cfg(test)]
 mod tests {
