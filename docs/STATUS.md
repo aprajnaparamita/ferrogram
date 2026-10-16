@@ -2,10 +2,18 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **3 complete; Phase 4 waits for the user's "continue"**
-- Phase 3 goal: rendering from cached values, plus the CLI (KICKOFF.md). Exit: every corpus file renders without panics, and every geometry row type has tests.
+- Current phase: **4 in progress** (planning)
+- Phase 4 goal: app shell and switchable ribbon (KICKOFF.md). Exit: both layouts load and switch without a restart, and opening corpus files shows them on the canvas.
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
+
+## Phase 4 task board
+
+| Task | Role | Depends on | Group | State | Branch |
+|---|---|---|---|---|---|
+| [P4-01](tasks/P4-01.md) | architect | Phase 3 | — | ready | — |
+
+The architect proposes the rest of the board in its Result.
 
 ## Phase 3 task board
 
