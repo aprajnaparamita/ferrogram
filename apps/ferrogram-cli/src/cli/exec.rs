@@ -278,7 +278,10 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use ferrogram_model::{Cell, CellName, CellValue, Shape, ShapeId, Stylesheet, Theme};
+    use ferrogram_model::{
+        Cell, CellName, CellValue, CellWarning, Color, Page, PageId, Shape, ShapeId, SheetRef,
+        Stylesheet, Theme, WarningKind,
+    };
     use ferrogram_vsdx::{from_model, write_package};
 
     use super::*;
@@ -732,5 +735,109 @@ mod tests {
         assert_eq!(strict_exit(true, 0), exit::OK);
         assert_eq!(strict_exit(true, 1), exit::WARNINGS);
         assert_eq!(strict_exit(false, 1), exit::OK);
+    }
+
+    // --- the warning report (P3-17, coverage finding major 5) ---------
+
+    /// One warning of `kind`, substituting `value`, on `sheet`.
+    fn warning(sheet: SheetRef, cell: &str, kind: WarningKind, value: CellValue) -> CellWarning {
+        CellWarning {
+            sheet,
+            cell: CellName::new(cell),
+            kind,
+            substituted: value,
+        }
+    }
+
+    #[test]
+    fn warning_lines_name_every_kind() {
+        let doc = Document::new();
+        let sheet = SheetRef::Shape(ShapeId { index: 0 });
+        let line = warning_line(
+            &doc,
+            &warning(
+                sheet,
+                "LineWeight",
+                WarningKind::Missing,
+                CellValue::Number(0.5),
+            ),
+        );
+        assert_eq!(line, "shape #0 LineWeight: no cached value, using 0.5");
+
+        let line = warning_line(
+            &doc,
+            &warning(
+                sheet,
+                "PinX",
+                WarningKind::ErrorValue("#VALUE!".to_owned()),
+                CellValue::Number(0.0),
+            ),
+        );
+        assert_eq!(line, "shape #0 PinX: cached error \"#VALUE!\", using 0");
+
+        let line = warning_line(
+            &doc,
+            &warning(
+                sheet,
+                "Width",
+                WarningKind::KindMismatch,
+                CellValue::Number(0.0),
+            ),
+        );
+        assert_eq!(line, "shape #0 Width: wrong kind, using 0");
+
+        let line = warning_line(
+            &doc,
+            &warning(
+                sheet,
+                "FillForegnd",
+                WarningKind::UnresolvedTheme,
+                CellValue::Color(Color::new(0, 0, 0)),
+            ),
+        );
+        assert_eq!(
+            line,
+            "shape #0 FillForegnd: the theme cannot supply it, using #000000"
+        );
+    }
+
+    #[test]
+    fn sheet_text_names_pages_shapes_and_fallbacks() {
+        let mut doc = Document::new();
+        doc.add_shape(Shape::new(ShapeId { index: 0 }, 12));
+        doc.pages.push(Page::new(PageId { index: 0 }, 5));
+        assert_eq!(
+            sheet_text(&doc, SheetRef::Shape(ShapeId { index: 0 })),
+            "shape 12"
+        );
+        assert_eq!(
+            sheet_text(&doc, SheetRef::Page(PageId { index: 0 })),
+            "page 5"
+        );
+        // A sheet the document does not hold falls back to the arena id.
+        assert_eq!(
+            sheet_text(&doc, SheetRef::Shape(ShapeId { index: 7 })),
+            "shape #7"
+        );
+        assert_eq!(
+            sheet_text(&doc, SheetRef::Page(PageId { index: 7 })),
+            "page #7"
+        );
+    }
+
+    #[test]
+    fn value_text_names_every_value_kind() {
+        assert_eq!(value_text(&CellValue::Number(1.5)), "1.5");
+        assert_eq!(value_text(&CellValue::Str("wide".to_owned())), "wide");
+        assert_eq!(value_text(&CellValue::Bool(true)), "true");
+        assert_eq!(
+            value_text(&CellValue::Color(Color::new(1, 2, 3))),
+            "#010203"
+        );
+        assert_eq!(value_text(&CellValue::List("1;2".to_owned())), "1;2");
+        assert_eq!(
+            value_text(&CellValue::Error("#VALUE!".to_owned())),
+            "#VALUE!"
+        );
     }
 }

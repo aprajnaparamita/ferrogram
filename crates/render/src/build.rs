@@ -1926,7 +1926,7 @@ impl Ctx<'_> {
 mod tests {
     use ferrogram_model::{
         Cell, CellValue as Value, Master, MasterId, Page, Row, Section, SectionName,
-        Shape as ModelShape,
+        Shape as ModelShape, TextContent, TextPart,
     };
 
     use super::*;
@@ -3281,5 +3281,524 @@ mod tests {
                 Segment::Close,
             ]
         );
+    }
+
+    // --- degraded input: substituted defaults (P3-17, coverage finding
+    // major 1) ----------------------------------------------------------
+
+    /// A cached string cell.
+    fn str_cell(name: &str, value: &str) -> Cell {
+        string_cell(name, value)
+    }
+
+    /// Whether `warnings` holds one warning for `cell` with `kind`.
+    fn warned(warnings: &[CellWarning], cell: &str, kind: WarningKind) -> bool {
+        warnings
+            .iter()
+            .any(|warning| warning.cell.as_str() == cell && warning.kind == kind)
+    }
+
+    /// The style set of every test build.
+    fn styles() -> VisualStyles {
+        VisualStyles::load().expect("styles")
+    }
+
+    #[test]
+    fn reader_errors_substitute_defaults_for_every_kind() {
+        // The fallback arms of `Ctx` for a sheet the document does not
+        // hold: every reader call errors and the builder substitutes the
+        // documented default with one `Missing` warning.
+        let (doc, _page, _shape) = document_with_shape();
+        let mut ctx = Ctx::new(&doc, styles(), 0.01);
+        let missing = SheetRef::Shape(ShapeId { index: 9 });
+
+        assert_eq!(ctx.number(missing, "Width"), 0.0);
+        assert!(!ctx.boolean(missing, "FlipX"));
+        assert_eq!(ctx.color(missing, "FillForegnd"), Color::new(0, 0, 0));
+        assert_eq!(
+            ctx.row_number(missing, "Geometry", RowTarget::at(0), "X"),
+            0.0
+        );
+        assert_eq!(
+            ctx.row_text(missing, "Character", RowTarget::at(0), "Font"),
+            ""
+        );
+        assert!(!ctx.row_boolean(missing, "Character", RowTarget::at(0), "Strikethru"));
+        assert_eq!(
+            ctx.row_color(missing, "Character", RowTarget::at(0), "Color"),
+            Color::new(0, 0, 0)
+        );
+
+        for cell in [
+            "Width",
+            "FlipX",
+            "FillForegnd",
+            "X",
+            "Font",
+            "Strikethru",
+            "Color",
+        ] {
+            assert!(
+                warned(&ctx.warnings, cell, WarningKind::Missing),
+                "no Missing warning for {cell}: {:?}",
+                ctx.warnings
+            );
+        }
+        // A page sheet the document does not hold degrades the same way
+        // in `has_local` and `section_rows`.
+        let missing_page = SheetRef::Page(PageId { index: 9 });
+        assert!(!ctx.has_local(missing_page, &TXT_CELLS));
+        assert_eq!(section_rows(&ctx, missing_page, "Character"), 0);
+    }
+
+    #[test]
+    fn a_dangling_sub_shape_warns_about_its_layer_membership() {
+        // The `LayerMember` fallback: a child id the arena does not hold.
+        let (mut doc, _page, shape) = document_with_shape();
+        if let Some(entity) = doc.shape_mut(shape) {
+            entity.children.push(ShapeId { index: 9 });
+        }
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "LayerMember", WarningKind::Missing));
+    }
+
+    #[test]
+    fn layer_visibility_of_an_unknown_page_warns_about_the_layer_list() {
+        let (mut doc, _page, shape) = document_with_shape();
+        if let Some(entity) = doc.shape_mut(shape) {
+            entity.sheet.cells.push(number_cell("LayerMember", 1.0));
+        }
+        let mut ctx = Ctx::new(&doc, styles(), 0.01);
+        assert!(!hidden_by_layer(&mut ctx, PageId { index: 9 }, shape));
+        assert!(warned(&ctx.warnings, "Layer", WarningKind::Missing));
+    }
+
+    #[test]
+    fn shape_content_of_an_unknown_shape_warns_about_its_geometry() {
+        // The `Geometry` fallback: a sheet the document does not hold
+        // draws nothing and substitutes the empty geometry.
+        let (doc, page, _shape) = document_with_shape();
+        let mut ctx = Ctx::new(&doc, styles(), 0.01);
+        let (path, fill, stroke, shadow, text) =
+            shape_content(&mut ctx, page, ShapeId { index: 9 }, Transform::identity());
+        assert!(path.is_empty());
+        assert!(fill.is_none());
+        assert!(stroke.is_none());
+        assert!(shadow.is_none());
+        assert!(text.is_none());
+        assert!(warned(&ctx.warnings, "Geometry", WarningKind::Missing));
+    }
+
+    #[test]
+    fn a_text_layout_failure_warns_about_the_text_cell() {
+        // A negative `SpBefore` makes `text::layout` reject the block
+        // (`Error::InvalidBlock`); the builder drops the text and warns.
+        let (mut doc, _page, shape) = document_with_shape();
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.text = Some(TextContent {
+                parts: vec![TextPart::Text("hi".to_owned())],
+            });
+            let mut section = Section::new(SectionName::new("Paragraph"));
+            let mut row = Row::new();
+            row.cells.push(number_cell("SpBefore", -1.0));
+            section.rows.push(row);
+            entity.sheet.sections.push(section);
+        }
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "Text", WarningKind::KindMismatch));
+        // With the text dropped the shape draws nothing and is omitted.
+        assert!(scene.nodes.is_empty());
+    }
+
+    #[test]
+    fn wrong_kind_cells_substitute_defaults_and_warn() {
+        // One fixture per substituted kind: a number, a boolean and a
+        // colour cell caching the wrong kind, plus a row number cell.
+        let (mut doc, _page, shape) = document_with_shape();
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.sheet.cells = vec![
+                str_cell("Width", "wide"),
+                str_cell("Height", "tall"),
+                str_cell("FlipX", "yes"),
+                number_cell("FillPattern", 1.0),
+                str_cell("FillForegnd", "red"),
+            ];
+            let mut section = Section::new(SectionName::new("Geometry"));
+            let mut row = grow("MoveTo", &[("Y", 1.0)]);
+            row.cells.push(str_cell("X", "zero"));
+            section.rows.push(row);
+            entity.sheet.sections.push(section);
+        }
+        let scene = build(&doc);
+        for cell in ["Width", "Height", "FlipX", "FillForegnd", "X"] {
+            assert!(
+                warned(&scene.warnings, cell, WarningKind::KindMismatch),
+                "no KindMismatch warning for {cell}: {:?}",
+                scene.warnings
+            );
+        }
+    }
+
+    #[test]
+    fn missing_cells_without_a_documented_default_warn() {
+        let (mut doc, _page, shape) = document_with_shape();
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
+        }
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "LineWeight", WarningKind::Missing));
+    }
+
+    // --- style-level warnings (P3-17, coverage finding minor 3) -------
+
+    /// A shape with `cells`, drawn by a one-inch square geometry.
+    fn shape_with_cells(doc: &mut Document, shape: ShapeId, cells: Vec<Cell>) {
+        if let Some(entity) = doc.shape_mut(shape) {
+            entity.sheet.cells = cells;
+        }
+        with_geometry(
+            doc,
+            shape,
+            vec![
+                grow("MoveTo", &[("X", 0.0), ("Y", 0.0)]),
+                grow("LineTo", &[("X", 1.0), ("Y", 0.0)]),
+                grow("LineTo", &[("X", 1.0), ("Y", 1.0)]),
+            ],
+        );
+    }
+
+    #[test]
+    fn an_unknown_line_pattern_warns_and_draws_solid() {
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(&mut doc, shape, vec![number_cell("LinePattern", 99.0)]);
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "LinePattern", WarningKind::Missing));
+    }
+
+    #[test]
+    fn an_unknown_line_cap_falls_back_to_butt() {
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![number_cell("LinePattern", 1.0), number_cell("LineCap", 5.0)],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => {
+                let stroke = shape.stroke.as_ref().expect("stroke");
+                assert_eq!(stroke.cap, LineCap::Butt);
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_unknown_arrow_index_and_size_class_warn() {
+        // An index the data file does not define.
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("LinePattern", 1.0),
+                number_cell("EndArrow", 99.0),
+                number_cell("EndArrowSize", 9.0),
+            ],
+        );
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "EndArrow", WarningKind::Missing));
+
+        // A defined index with a size class outside 0..=6.
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("LinePattern", 1.0),
+                number_cell("EndArrow", 1.0),
+                number_cell("EndArrowSize", 9.0),
+            ],
+        );
+        let scene = build(&doc);
+        assert!(warned(
+            &scene.warnings,
+            "EndArrowSize",
+            WarningKind::Missing
+        ));
+    }
+
+    #[test]
+    fn an_unknown_shadow_pattern_warns() {
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("ShapeShdwShow", 1.0),
+                number_cell("ShdwPattern", 99.0),
+            ],
+        );
+        let scene = build(&doc);
+        assert!(warned(&scene.warnings, "ShdwPattern", WarningKind::Missing));
+    }
+
+    #[test]
+    fn shadow_offsets_default_to_the_template() {
+        // No `ShapeShdwOffsetX`/`Y` cells: the template offsets scale
+        // with the line width.
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("ShapeShdwShow", 1.0),
+                number_cell("ShdwPattern", 1.0),
+                number_cell("LineWeight", 0.02),
+            ],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => {
+                assert!(shape.shadow.is_some(), "no shadow built");
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_rectangular_gradient_direction_warns() {
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("FillPattern", 1.0),
+                number_cell("FillGradientEnabled", 1.0),
+                number_cell("FillGradientDir", 9.0),
+            ],
+        );
+        let scene = build(&doc);
+        assert!(warned(
+            &scene.warnings,
+            "FillGradientDir",
+            WarningKind::Missing
+        ));
+    }
+
+    #[test]
+    fn txt_placement_cells_override_the_shape_box() {
+        let (mut doc, _page, shape) = document_with_shape();
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.text = Some(TextContent {
+                parts: vec![TextPart::Text("hi".to_owned())],
+            });
+            entity.sheet.cells = vec![
+                number_cell("Width", 1.0),
+                number_cell("Height", 1.0),
+                number_cell("TxtPinX", 2.0),
+                number_cell("TxtPinY", 3.0),
+                number_cell("TxtLocPinX", 0.5),
+                number_cell("TxtLocPinY", 0.5),
+                number_cell("TxtWidth", 4.0),
+                number_cell("TxtHeight", 5.0),
+                number_cell("TxtAngle", core::f64::consts::PI),
+            ];
+        }
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(shape)) => {
+                let text = shape.text.as_ref().expect("text");
+                // The block origin is the placement transform applied to
+                // (0, height): translate(-0.5, -0.5), a half turn and
+                // translate(2, 3) put (0, 5) at (2.5, -1.5).
+                assert!(
+                    (text.origin.x - 2.5).abs() < 1e-9 && (text.origin.y + 1.5).abs() < 1e-9,
+                    "{:?}",
+                    text.origin
+                );
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn vertical_align_bottom_moves_the_lines_down() {
+        let scene_with = |align: f64| {
+            let (mut doc, _page, shape) = document_with_shape();
+            {
+                let entity = doc.shape_mut(shape).expect("shape");
+                entity.text = Some(TextContent {
+                    parts: vec![TextPart::Text("hi".to_owned())],
+                });
+                entity.sheet.cells = vec![
+                    number_cell("Width", 1.0),
+                    number_cell("Height", 2.0),
+                    number_cell("VerticalAlign", align),
+                ];
+            }
+            build(&doc)
+        };
+        let glyph_y = |scene: &Scene| -> f64 {
+            match scene.nodes.first() {
+                Some(Node::Shape(shape)) => {
+                    let text = shape.text.as_ref().expect("text");
+                    text.layout
+                        .lines
+                        .first()
+                        .and_then(|line| line.glyphs.first())
+                        .map(|glyph| glyph.y)
+                        .expect("a glyph")
+                }
+                other => panic!("expected a shape, got {other:?}"),
+            }
+        };
+        // In the layout's y-down space a bottom-aligned line sits below
+        // the top-aligned one.
+        assert!(glyph_y(&scene_with(2.0)) > glyph_y(&scene_with(0.0)));
+    }
+
+    /// A paragraph row for `shape` with `cells`, and text that uses it.
+    fn shape_with_paragraph(doc: &mut Document, shape: ShapeId, cells: Vec<Cell>) {
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.text = Some(TextContent {
+                parts: vec![TextPart::Text("hi".to_owned())],
+            });
+            let mut section = Section::new(SectionName::new("Paragraph"));
+            let mut row = Row::new();
+            row.ix = Some(0);
+            row.cells = cells;
+            section.rows.push(row);
+            entity.sheet.sections.push(section);
+        }
+    }
+
+    #[test]
+    fn paragraph_alignment_and_line_spacing_branches() {
+        // `HorzAlign` 2 (right) and a negative `SpLine` (multiple).
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_paragraph(
+            &mut doc,
+            shape,
+            vec![number_cell("HorzAlign", 2.0), number_cell("SpLine", -1.5)],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(node)) => {
+                let text = node.text.as_ref().expect("text");
+                assert_eq!(text.layout.lines.len(), 1);
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
+
+        // `HorzAlign` 3 (justify) and a positive `SpLine` (a multiple of
+        // the first run's size).
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_paragraph(
+            &mut doc,
+            shape,
+            vec![number_cell("HorzAlign", 3.0), number_cell("SpLine", 24.0)],
+        );
+        let scene = build(&doc);
+        assert!(
+            scene
+                .nodes
+                .iter()
+                .any(|node| matches!(node, Node::Shape(_)))
+        );
+    }
+
+    // --- style data fallbacks (P3-17 minor 4) -------------------------
+
+    /// A cached colour cell.
+    fn color_cell(name: &str, value: Color) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(Value::Color(value));
+        cell
+    }
+
+    #[test]
+    fn a_line_end_template_with_no_shape_draws_nothing() {
+        // A data file whose line-end entry carries no shape: the parse
+        // substitutes an empty path and the builder drops the line end
+        // without a warning.
+        let yaml = "meta:\n  version: 1\nline_ends:\n  - index: 5\n";
+        let styles = crate::styles::parse_for_test(yaml).expect("parses");
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("LinePattern", 1.0),
+                number_cell("EndArrow", 5.0),
+            ],
+        );
+        let mut ctx = Ctx::new(&doc, styles, 0.01);
+        let (_path, _fill, stroke, _shadow, _text) =
+            shape_content(&mut ctx, PageId { index: 0 }, shape, Transform::identity());
+        let stroke = stroke.expect("a stroke");
+        assert!(stroke.end.is_none(), "{:?}", stroke.end);
+    }
+
+    #[test]
+    fn an_inverted_tile_swaps_the_colours() {
+        // `invert: true` tiles draw the background colour over a
+        // foreground-coloured box: the builder swaps the two.
+        let yaml = concat!(
+            "meta:\n  version: 1\nfill_patterns:\n",
+            "  - index: 7\n    kind: tile\n    tile: \"M 0 0 L 1 0 L 1 1 z\"\n",
+            "    spacing: 1.0\n    invert: true\n"
+        );
+        let styles = crate::styles::parse_for_test(yaml).expect("parses");
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(
+            &mut doc,
+            shape,
+            vec![
+                number_cell("FillPattern", 7.0),
+                color_cell("FillForegnd", Color::new(255, 0, 0)),
+                color_cell("FillBkgnd", Color::new(0, 0, 255)),
+            ],
+        );
+        let mut ctx = Ctx::new(&doc, styles, 0.01);
+        let paint = build_fill(&mut ctx, SheetRef::Shape(shape), 1.0, 1.0, 0.02);
+        match paint {
+            Some(Paint::Pattern(pattern)) => {
+                assert_eq!(pattern.foreground, Rgba::opaque(0, 0, 255));
+                assert_eq!(pattern.background, Rgba::opaque(255, 0, 0));
+            }
+            other => panic!("expected a pattern, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_infinite_line_clips_through_a_flipped_page() {
+        // A flipped shape reverses the page winding in its local space:
+        // the infinite-line clip reverses the polygon before it clips.
+        let (mut doc, _page, shape) = document_with_shape();
+        shape_with_cells(&mut doc, shape, vec![number_cell("FlipY", 1.0)]);
+        with_geometry(
+            &mut doc,
+            shape,
+            vec![grow(
+                "InfiniteLine",
+                &[("X", 1.0), ("Y", -0.5), ("A", 7.0), ("B", -0.5)],
+            )],
+        );
+        let scene = build(&doc);
+        match scene.nodes.first() {
+            Some(Node::Shape(node)) => {
+                assert!(
+                    !node.path.is_empty(),
+                    "the line through the page drew nothing"
+                );
+            }
+            other => panic!("expected a shape, got {other:?}"),
+        }
     }
 }

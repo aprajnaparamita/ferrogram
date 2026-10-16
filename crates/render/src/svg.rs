@@ -1800,4 +1800,262 @@ mod tests {
         assert!(svg.contains("<defs>"));
         parse_xml(&svg);
     }
+
+    // --- caps and segment mapping (P3-17, coverage finding major 3) ---
+
+    #[test]
+    fn the_document_assembly_enforces_the_output_cap() {
+        // The header and footer count against the cap too: a writer
+        // whose pushes fit can still overflow when `finish` assembles
+        // the document.
+        let mut writer = Writer::new(96.0, 100);
+        let attrs = vec![("d".to_string(), "M 0.000000 0.000000".to_string())];
+        writer
+            .tag(false, 0, "path", &attrs, true)
+            .expect("the body fits the cap");
+        assert_eq!(writer.finish(10.0, 10.0), Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn an_absurd_document_hits_the_output_cap() {
+        // One path whose coordinates print as 300-digit numbers: no
+        // output cap can hold it. The cap is 64 MiB; each quadratic
+        // prints about 1.2 KiB.
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        for _ in 0..60_000 {
+            path.push(Segment::QuadTo {
+                ctrl: Point::new(1.0e300, 1.0e300),
+                to: Point::new(1.0e300, 1.0e300),
+            });
+        }
+        let mut scene = Scene::new(1.0, 1.0);
+        scene.nodes.push(Node::Shape(Box::new(Shape {
+            transform: Transform::identity(),
+            path,
+            fill: Some(solid(0, 0, 0)),
+            stroke: None,
+            shadow: None,
+            clip: None,
+            text: None,
+        })));
+        assert_eq!(render_svg(&scene, &SvgOptions::new()), Err(Error::TooLarge));
+    }
+
+    #[test]
+    fn line_end_path_maps_quad_and_cubic_segments() {
+        let path = unit_path(&[(0.0, 0.0), (1.0, 0.0)], false);
+        let mut shape = Path::new();
+        shape.push(Segment::MoveTo(Point::new(0.0, 0.5)));
+        shape.push(Segment::QuadTo {
+            ctrl: Point::new(0.5, 0.0),
+            to: Point::new(1.0, 0.5),
+        });
+        shape.push(Segment::CubicTo {
+            ctrl1: Point::new(1.2, 0.5),
+            ctrl2: Point::new(1.4, 0.5),
+            to: Point::new(1.6, 0.5),
+        });
+        shape.push(Segment::Close);
+        let end = LineEnd {
+            shape,
+            width: 0.2,
+            length: 0.4,
+            filled: true,
+            color: None,
+        };
+        let drawn = line_end_path(&path, &end, false).expect("maps the shape");
+        assert!(
+            drawn
+                .segments()
+                .iter()
+                .any(|segment| matches!(segment, Segment::QuadTo { .. })),
+            "{:?}",
+            drawn.segments()
+        );
+        assert!(
+            drawn
+                .segments()
+                .iter()
+                .any(|segment| matches!(segment, Segment::CubicTo { .. })),
+            "{:?}",
+            drawn.segments()
+        );
+        assert!(matches!(drawn.segments().last(), Some(Segment::Close)));
+    }
+
+    #[test]
+    fn endpoint_reads_the_first_segment_direction() {
+        // A quad first segment points the start at its control point.
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(1.0, 0.0),
+            to: Point::new(2.0, 2.0),
+        });
+        assert_eq!(
+            endpoint(&path, true),
+            Some((Point::new(0.0, 0.0), Point::new(1.0, 0.0)))
+        );
+
+        // A cubic first segment the same, at its first control point.
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(0.0, 1.0),
+            ctrl2: Point::new(2.0, 1.0),
+            to: Point::new(2.0, 0.0),
+        });
+        assert_eq!(
+            endpoint(&path, true),
+            Some((Point::new(0.0, 0.0), Point::new(0.0, 1.0)))
+        );
+
+        // A second subpath start has no single start vertex.
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::MoveTo(Point::new(2.0, 2.0)));
+        assert_eq!(endpoint(&path, true), None);
+    }
+
+    // --- attribute fallbacks (P3-17 minor 3 and minor 5) --------------
+
+    #[test]
+    fn shadow_and_line_end_strokes_write_their_attributes() {
+        let mut stroke = plain_stroke(solid(0, 0, 0));
+        // A translucent stroke paint writes `stroke-opacity` on the
+        // shape, on the shadow's stroke and on an outlined line end.
+        stroke.paint = Paint::Solid(color(0, 0, 0, 128));
+        stroke.end = Some(LineEnd {
+            shape: unit_path(&[(0.0, 0.5), (1.0, 0.0), (1.0, 1.0)], true),
+            width: 0.2,
+            length: 0.4,
+            filled: false,
+            color: None,
+        });
+        let mut scene = Scene::new(2.0, 2.0);
+        scene.nodes.push(Node::Shape(Box::new(Shape {
+            transform: Transform::identity(),
+            path: unit_path(&[(0.0, 0.0), (1.0, 0.0)], false),
+            fill: None,
+            stroke: Some(stroke),
+            shadow: Some(Shadow {
+                color: color(0, 0, 0, 64),
+                offset: Point::new(0.02, -0.02),
+                blur: 0.0,
+            }),
+            clip: None,
+            text: None,
+        })));
+        let svg = render_svg(&scene, &SvgOptions::new()).unwrap();
+        assert!(svg.contains("stroke-opacity=\"0.501961\""));
+        parse_xml(&svg);
+    }
+
+    #[test]
+    fn a_stroked_pattern_tile_writes_its_stroke_attributes() {
+        // A non-finite tile stroke width falls back to 0 and a
+        // translucent foreground writes a stroke opacity on the tile.
+        let mut scene = Scene::new(1.0, 1.0);
+        scene.nodes.push(Node::Shape(Box::new(Shape {
+            transform: Transform::identity(),
+            path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
+            fill: Some(Paint::Pattern(PatternPaint {
+                foreground: color(0, 0, 0, 128),
+                background: Rgba::opaque(255, 255, 255),
+                tile: unit_path(&[(0.0, 0.0), (0.05, 0.05), (0.1, 0.0)], false),
+                tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                filled: false,
+                tile_stroke_width: f64::NAN,
+            })),
+            stroke: None,
+            shadow: None,
+            clip: None,
+            text: None,
+        })));
+        let svg = render_svg(&scene, &SvgOptions::new()).unwrap();
+        assert!(svg.contains("stroke-width=\"0.000000\""));
+        assert!(svg.contains("stroke-opacity=\"0.501961\""));
+        parse_xml(&svg);
+    }
+
+    #[test]
+    fn a_gradient_stop_with_a_non_finite_offset_writes_zero() {
+        let mut scene = Scene::new(1.0, 1.0);
+        scene.nodes.push(Node::Shape(Box::new(Shape {
+            transform: Transform::identity(),
+            path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
+            fill: Some(Paint::LinearGradient {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(1.0, 0.0),
+                stops: vec![GradientStop {
+                    offset: f64::NAN,
+                    color: Rgba::opaque(255, 0, 0),
+                }],
+            }),
+            stroke: None,
+            shadow: None,
+            clip: None,
+            text: None,
+        })));
+        let svg = render_svg(&scene, &SvgOptions::new()).unwrap();
+        assert!(svg.contains("offset=\"0.000000\""));
+        parse_xml(&svg);
+    }
+
+    #[test]
+    fn a_solid_paint_def_is_its_colour_value() {
+        let mut writer = Writer::new(96.0, 1 << 20);
+        assert_eq!(
+            writer.paint_def(&Paint::Solid(Rgba::opaque(1, 2, 3))),
+            Ok("#010203".to_owned())
+        );
+    }
+
+    #[test]
+    fn text_skips_glyphs_without_a_size() {
+        let fonts = default_fonts();
+        let Some(font) = fonts.fonts().first().cloned() else {
+            return;
+        };
+        let mut scene = Scene::new(2.0, 2.0);
+        let text = TextNode {
+            fonts: vec![font],
+            runs: Vec::new(),
+            layout: Layout {
+                lines: vec![Line {
+                    glyphs: vec![GlyphPos {
+                        glyph: GlyphId(36),
+                        font: 0,
+                        x: 0.25,
+                        y: 0.5,
+                        run: 0,
+                        size: 0.0,
+                    }],
+                    baseline: 0.5,
+                    width: 0.2,
+                    paragraph: 0,
+                }],
+                width: 0.2,
+                height: 0.2,
+                overflow: false,
+                rotation: Angle::from_degrees(0.0),
+                warnings: Vec::new(),
+            },
+            color: Rgba::opaque(0, 0, 255),
+            origin: Point::new(1.0, 2.0),
+        };
+        scene.nodes.push(Node::Shape(Box::new(Shape {
+            transform: Transform::identity(),
+            path: Path::new(),
+            fill: None,
+            stroke: None,
+            shadow: None,
+            clip: None,
+            text: Some(text),
+        })));
+        let svg = render_svg(&scene, &SvgOptions::new()).unwrap();
+        assert!(!svg.contains("matrix(16.000000"));
+        parse_xml(&svg);
+    }
 }
