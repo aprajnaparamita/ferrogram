@@ -1450,6 +1450,7 @@ dependencies = [
  "ferrogram-model",
  "ferrogram-render",
  "ferrogram-ui-spec",
+ "insta",
  "rfd",
 ]
 
