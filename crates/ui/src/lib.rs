@@ -69,6 +69,12 @@ pub enum UiError {
         /// The formatted cause.
         message: String,
     },
+    /// A scene build or raster operation failed (the canvas, task
+    /// P4-05's request to P4-03).
+    Render {
+        /// The formatted cause.
+        message: String,
+    },
 }
 
 impl fmt::Display for UiError {
@@ -78,6 +84,7 @@ impl fmt::Display for UiError {
             UiError::Command(error) => write!(f, "command error: {error}"),
             UiError::Layout(error) => write!(f, "ui-spec error: {error}"),
             UiError::Io { message } => write!(f, "io error: {message}"),
+            UiError::Render { message } => write!(f, "render error: {message}"),
         }
     }
 }
@@ -138,6 +145,10 @@ mod tests {
             message: "denied".into(),
         };
         assert_eq!(io.to_string(), "io error: denied");
+        let render = UiError::Render {
+            message: "too large".into(),
+        };
+        assert_eq!(render.to_string(), "render error: too large");
     }
 
     #[test]
