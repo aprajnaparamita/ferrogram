@@ -727,12 +727,6 @@
   mapping_confidence: inferred
   visuicmd: visCmdFitContainerToContents
 - fluent_ids:
-    - ShowGrid
-  id: view.grid
-  label: Show Grid
-  mapping_confidence: inferred
-  visuicmd: visCmdGrid
-- fluent_ids:
     - ShowGuides
   id: view.guides
   label: Show Guides
@@ -758,11 +752,23 @@
   mapping_confidence: inferred
   visuicmd: visCmdPanZoom
 - fluent_ids:
+    - ShowRulerVisio
+  id: view.rulers
+  label: Rulers
+  mapping_confidence: inferred
+  visuicmd: visCmdViewRulers
+- fluent_ids:
     - ShowIgnoredIssues
   id: view.show.ignored.issues.toggle
   label: Show Ignored Issues
   mapping_confidence: inferred
   visuicmd: visCmdShowIgnoredIssuesToggle
+- fluent_ids:
+    - ShowGrid
+  id: view.toggle_grid
+  label: Toggle Grid
+  mapping_confidence: inferred
+  visuicmd: visCmdViewGrid
 - fluent_ids:
     - WindowNew
   id: view.window.new.window
@@ -856,6 +862,11 @@
     - OfficeFeedbackIcon
   id: app.office.feedback.icon
   label: Office Feedback Icon
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: app.quit
+  label: Exit
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
@@ -1838,6 +1849,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdFileExit
 - fluent_ids: []
+  id: file.export
+  label: Export
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: file.export.database.addon
   label: Addon
   mapping_confidence: unknown
@@ -1852,6 +1868,11 @@
   label: Import
   mapping_confidence: unknown
   visuicmd: visCmdFileImport
+- fluent_ids: []
+  id: file.inspect
+  label: Inspect
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids: []
   id: file.last.file1
   label: File1
@@ -2028,6 +2049,11 @@
   label: Services
   mapping_confidence: unknown
   visuicmd: visCmdPublishToVisioServices
+- fluent_ids: []
+  id: file.render
+  label: Render
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids: []
   id: file.save.as.drawing
   label: Drawing
@@ -2418,6 +2444,11 @@
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
+  id: help.about
+  label: About
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: help.about.visio
   label: Visio
   mapping_confidence: unknown
@@ -2722,10 +2753,20 @@
   mapping_confidence: unknown
   visuicmd: visCmdMultipleFileImport
 - fluent_ids: []
+  id: page.next
+  label: Next Page
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: page.pages.list
   label: List
   mapping_confidence: unknown
   visuicmd: visCmdPagesList
+- fluent_ids: []
+  id: page.previous
+  label: Previous Page
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - PageRelayoutGallery
   id: page.relayout
@@ -4721,6 +4762,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdGoToPageToolbar
 - fluent_ids: []
+  id: view.grid
+  label: Show Grid
+  mapping_confidence: unknown
+  visuicmd: visCmdGrid
+- fluent_ids: []
   id: view.hide.all.toolbars
   label: Toolbars
   mapping_confidence: unknown
@@ -4810,11 +4856,6 @@
   label: Dlg
   mapping_confidence: unknown
   visuicmd: visCmdRulerGridDlg
-- fluent_ids: []
-  id: view.rulers
-  label: Rulers
-  mapping_confidence: unknown
-  visuicmd: visCmdViewRulers
 - fluent_ids:
     - ShowCommentsMenu
   id: view.show.comments
@@ -4836,12 +4877,6 @@
     - ShowPageBreaks
   id: view.show.page.breaks
   label: Show Page Breaks
-  mapping_confidence: unknown
-  visuicmd: null
-- fluent_ids:
-    - ShowRulerVisio
-  id: view.show.ruler.visio
-  label: Show Ruler Visio
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids:
@@ -4964,11 +4999,6 @@
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
-  id: view.toggle_grid
-  label: Toggle Grid
-  mapping_confidence: unknown
-  visuicmd: visCmdViewGrid
-- fluent_ids: []
   id: view.toggle_guides
   label: Toggle Guides
   mapping_confidence: unknown
@@ -4978,6 +5008,16 @@
   label: Dlg
   mapping_confidence: unknown
   visuicmd: visCmdToolbarsDlg
+- fluent_ids: []
+  id: view.ui_layout.visio_2016
+  label: Visio 2016 Ribbon
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: view.ui_layout.visio_365
+  label: Microsoft 365 Ribbon
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids: []
   id: view.view100
   label: View100
@@ -5054,8 +5094,8 @@
   visuicmd: null
 - fluent_ids:
     - ZoomFitToWindowVisio
-  id: view.zoom.fit.to.window.visio
-  label: Zoom Fit To Window Visio
+  id: view.zoom.fit
+  label: Fit to Window
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []

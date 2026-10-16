@@ -25,6 +25,28 @@ use super::schema::Schema;
 use super::util::{emit_yaml, write_and_validate};
 use super::{ExtractError, ExtractResult};
 
+/// Hand-written Fluent control -> Ferrogram command id bindings
+/// (P4-02, ADR 0006 amendment).
+///
+/// A control listed here surfaces the given command id whatever the
+/// mechanical derivation in [`super::commands`] would pick. The rules
+/// bind the controls our own commands cover: `ShowRulerVisio` is the
+/// Rulers check box (`view.rulers`), `ShowGrid` is the Grid check box
+/// (`view.toggle_grid`, the `visCmdViewGrid` id), and
+/// `ZoomFitToWindowVisio` is the Fit to Window button (`view.zoom.fit`).
+///
+/// Every control name must exist in `ui-spec/panel-2016.yaml` or
+/// `ui-spec/panel-365.yaml`; [`super::commands`] fails the extraction
+/// for a rule that names a control in neither layout. The `FileExit`
+/// family of the task has no control in either layout (the Fluent rows
+/// are dropped as "Not in the Ribbon"), so `app.quit` has no binding
+/// here yet.
+pub const FLUENT_COMMANDS: &[(&str, &str)] = &[
+    ("ShowGrid", "view.toggle_grid"),
+    ("ShowRulerVisio", "view.rulers"),
+    ("ZoomFitToWindowVisio", "view.zoom.fit"),
+];
+
 /// Per-extractor entry point. Reads from `in_dir` (the
 /// `reference/` root), writes to `out_dir` (the workspace root), and
 /// returns the list of files written.
