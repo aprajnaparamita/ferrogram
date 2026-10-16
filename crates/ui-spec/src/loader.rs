@@ -271,6 +271,47 @@ impl Loader {
             })
         }
     }
+
+    /// Loads both layout sets from the embedded YAML (ADR 0031).
+    ///
+    /// Same validation path as [`Self::load_all`], minus the file
+    /// reads: the schema and the four data documents are compiled into
+    /// the binary (the schema by `include_str!`, the documents by
+    /// [`crate::embedded`]), so this works without a filesystem (the
+    /// wasm build). Every document still goes through the full staged
+    /// load of `load_text` (parse, schema validation, document
+    /// kind, decode) and the three ADR 0007 cross-references run over
+    /// the pair of layouts, exactly as on disk.
+    pub fn from_embedded() -> Result<LayoutSets, LoadError> {
+        use crate::embedded::{COMMANDS_YAML, SHORTCUTS_YAML, VISIO_365_YAML, VISIO_2016_YAML};
+        let loader = Self {
+            workspace_root: PathBuf::from(DATA_DIR),
+            validator: compile_schema(SCHEMA_JSON)?,
+        };
+        let path = |name: &str| PathBuf::from(DATA_DIR).join(name);
+        let name_2016 = LayoutKind::Visio2016.file_name();
+        let name_365 = LayoutKind::Visio365.file_name();
+        let visio_2016 = loader.load_text(VISIO_2016_YAML, &path(name_2016), DocKind::Layout)?;
+        let visio_365 = loader.load_text(VISIO_365_YAML, &path(name_365), DocKind::Layout)?;
+        let commands_path = path(COMMANDS_FILE);
+        let entries: Vec<CommandMapping> =
+            loader.load_text(COMMANDS_YAML, &commands_path, DocKind::Commands)?;
+        check_duplicate_command_ids(&entries, &commands_path)?;
+        let commands = Commands { entries };
+        let entries: Vec<Shortcut> =
+            loader.load_text(SHORTCUTS_YAML, &path(SHORTCUTS_FILE), DocKind::Shortcuts)?;
+        let shortcuts = Shortcuts { entries };
+        let docs = Documents {
+            visio_2016,
+            visio_365,
+            commands,
+            shortcuts,
+        };
+        let union = docs.fluent_union();
+        let layouts = [&docs.visio_2016, &docs.visio_365];
+        check_references(&layouts, &union, &docs.commands, &docs.shortcuts)?;
+        Ok(docs.into_sets())
+    }
 }
 
 /// The four data documents of one workspace, read and validated
