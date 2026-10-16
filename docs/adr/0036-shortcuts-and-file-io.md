@@ -45,10 +45,20 @@ impl ShortcutMap {
   selection (Phase 5: always false in Phase 4); `Ribbon` when the ribbon
   has focus; `Window` always in the single-window Phase 4 shell. A shortcut
   whose scope does not match is not dispatched.
-- **Conflicts:** when two entries share an identical chord sequence, the
-  first in file order wins and one warning is recorded on
-  `AppCtx::warnings` at load. Sequences that are prefixes of each other
-  are legal (the trie waits for the next chord).
+- **Conflicts:** the conflict key is the chord sequence **and** the
+  scope. One sequence may be bound in several scopes (the committed
+  table binds `Ctrl+C` in both `page` and `text`, and `Ctrl+Shift+C` to
+  `format.text.align_center` in `text` and to `tools.format_painter` in
+  `global`); each binding fires when its scope is active. When more
+  than one bound scope is active, the most specific wins: `Text`, then
+  `Selection`, `Page`, `Ribbon`, `Window`, `Global`. Two entries with the
+  same sequence and scope: the first in file order wins and one warning
+  is recorded on `AppCtx::warnings` at load, except when both name the
+  same command (an exact repeat across sections of the source table is
+  dropped silently). Sequences that are prefixes of each other are
+  legal (the trie waits for the next chord). (Amended at the P4-08
+  merge: the first rule keyed on the sequence alone and dropped 29 of
+  the 90 committed entries.)
 - **Precedence over egui:** the shell consumes matched chords before
   passing input to widgets (`egui::Context::input_mut` +
   `Event::consume`); egui's own shortcuts apply only inside text edits
