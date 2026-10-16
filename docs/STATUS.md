@@ -16,9 +16,9 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-04](tasks/P4-04.md) | implementer | P4-01 | A | merged (registry-backed test added by the master) | agent/P4-04 |
 | [P4-05](tasks/P4-05.md) | implementer | P4-01 | A | merged (`show_rulers` takes units; notes for P4-03) | agent/P4-05 |
 | [P4-06](tasks/P4-06.md) | implementer | P4-01 | A | merged (12 + 9 original masters) | agent/P4-06 |
-| [P4-03](tasks/P4-03.md) | implementer | P4-02 | B | ready | — |
-| [P4-07](tasks/P4-07.md) | implementer | P4-03 | C | waits for B | — |
-| [P4-08](tasks/P4-08.md) | implementer | P4-03 | C | waits for B | — |
+| [P4-03](tasks/P4-03.md) | implementer | P4-02 | B | merged (shell, settings, pickers, both apps) | agent/P4-03 |
+| [P4-07](tasks/P4-07.md) | implementer | P4-03 | C | ready | — |
+| [P4-08](tasks/P4-08.md) | implementer | P4-03 | C | ready | — |
 | [P4-09](tasks/P4-09.md) | implementer | P4-03..P4-08 | D | waits for C | — |
 | [P4-10](tasks/P4-10.md) | test-engineer | P4-09 | E | waits for D | — |
 | [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | waits | — |
@@ -156,3 +156,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P4-06 (open, Phase 5): stencil drag onto the page should set `PinX`/`PinY` at the drop point and glue to `MasterDef::connection_points`; `instantiate` has no size parameter; Shape Data values are strings until the formula engine. Master fix at merge: the preview test now requires a raster for every master (it predated `render_raster`).
 - P4-02 (open): `file.open` does not update `Settings::recent_files`; `view.zoom.fit` repeats the renderer's 8.5 x 11 in page fallback (keep the two in step); a wasm `file.save` with a `path` argument fails at runtime; `app.quit` stays a stub (the shell quits itself). `DocumentSession` has no change counter, so the canvas keeps its per-frame document comparison: Phase 5 should bump a counter on every document edit (undo stack) and the canvas should use it.
 - P4-04 (open): the ADR 0031 dedup key (id, label, order) does not collapse the extractor's nine `TabSave` placements (their orders differ), so nine widgets render; decide in an ADR 0007 review or fix in the extractor. A dropdown button with items does not dispatch its own command. P4-04 added `insta` and egui's `default_fonts` feature to `crates/ui/Cargo.toml` (P4-03's file).
+- P4-03 (open): the shell does not host `shortcuts::dispatch` or call `Ribbon::set_context_menu` yet (P4-09 wiring). `app.quit` and `app.office.center.options` are intercepted by `Shell::dispatch` because their registry rows are stubs; a `view.options` builtin returning `UiRequest::ShowOptions` and one quit id (`app.quit` vs `file.exit`) would remove the intercepts. `Shell::show(&Context)` panics inside `eframe::App::ui` (egui 0.37 `root_ui`), so the apps call `Shell::show_in`. On wasm only one async pick runs at a time; the desktop `NativeFilePicker` bodies are untested (flows tested through a fake picker). Settings persist on change, at `App::save` and on shutdown.
