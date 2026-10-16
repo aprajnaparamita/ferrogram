@@ -1,7 +1,16 @@
 //! Keyboard shortcut dispatch (ADR 0036): chord sequences from
 //! `ui-spec/shortcuts.yaml`, scoped by focus, dispatched as [`Intent`]s.
 //!
-//! Owned by task P4-08.
+//! Owned by task P4-08; the conflict rule and the per-scope bindings
+//! were amended for task P4-14 (ADR 0036 "Conflicts", amended at the
+//! P4-08 merge): the conflict key is the chord sequence **and** the
+//! scope, so one sequence may be bound in several scopes and each
+//! binding fires when its scope is active. When more than one bound
+//! scope is active, the most specific wins: `Text`, then `Selection`,
+//! `Page`, `Ribbon`, `Window`, `Global`. Two entries with the same
+//! sequence and scope: the first in file order wins and one warning is
+//! recorded, except when both name the same command (an exact repeat
+//! is dropped silently).
 //!
 //! A **chord** is one key plus its modifier tokens. Both sides are
 //! normalized before matching: modifiers are deduplicated and sorted
@@ -20,9 +29,12 @@
 //! `Page` and `Ribbon` match when the shell reports that surface as
 //! focused, `Text` matches only while an egui text edit has focus, and
 //! `Selection` matches only with a non-empty selection (never in
-//! Phase 4). While a text edit has focus, the chords egui owns for
-//! text editing (typing, caret moves, its Ctrl editing keys) are never
-//! matched or consumed: they pass straight through to egui.
+//! Phase 4). While a text edit has focus, the chords without `Ctrl` or
+//! `Alt` (typing, shift-typing, the caret keys) are never matched or
+//! consumed: they pass straight through to egui. A chord with `Ctrl`
+//! or `Alt` is matched even inside a text edit, and the most specific
+//! active scope decides what it dispatches (P4-14: `Ctrl+C` resolves
+//! in a text edit and `Ctrl+Shift+C` picks the `text` binding there).
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -49,29 +61,6 @@ const MODIFIER_TOKENS: [&str; 3] = ["Ctrl", "Shift", "Alt"];
 /// layouts. A chord whose key is one of these drops its `Shift`
 /// modifier on both sides of the match.
 const SHIFTED_SYMBOL_TOKENS: [&str; 3] = ["+", "<", ">"];
-
-/// Key tokens egui's text edit binds with Ctrl (select, clipboard,
-/// undo/redo, delete word/line). They defer to egui inside a text
-/// edit, even when `shortcuts.yaml` binds them.
-const EGUI_CTRL_TEXT_TOKENS: [&str; 17] = [
-    "A",
-    "B",
-    "C",
-    "E",
-    "F",
-    "H",
-    "K",
-    "N",
-    "P",
-    "U",
-    "V",
-    "W",
-    "X",
-    "Y",
-    "Z",
-    "Backspace",
-    "Delete",
-];
 
 /// One chord: modifiers plus one key, as `shortcuts.yaml` token strings
 /// (`Ctrl`, `Shift`, `Alt`, `A`, `F1`, ...; ADR 0036).
@@ -114,8 +103,8 @@ impl Entry {
 /// One node of the chord-sequence trie.
 #[derive(Debug, Default)]
 struct Node {
-    /// The entry whose sequence ends here, if any.
-    end: Option<Entry>,
+    /// The bindings whose sequence ends here, one per scope (P4-14).
+    ends: Vec<Entry>,
     /// Longer sequences continuing from here.
     children: BTreeMap<KeyChord, Node>,
 }
@@ -124,40 +113,81 @@ struct Node {
 ///
 /// Multi-chord sequences are stateful: [`ShortcutMap::resolve`] records
 /// the chords typed so far and resets on a mismatch or a timeout.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ShortcutMap {
     /// The chord-sequence trie.
     root: Node,
-    /// Number of sequences inserted (conflicts are not counted).
-    entries: usize,
+    /// Number of bindings kept (see [`ShortcutMap::len`]).
+    bindings: usize,
     /// The chords typed so far of a half-typed sequence.
     pending: Vec<KeyChord>,
-    /// A completed entry held back because its sequence is a prefix of
+    /// The bindings held back because their sequence is a prefix of
     /// longer ones: the trie waits for the next chord (ADR 0036).
-    deferred: Option<Entry>,
+    deferred: Vec<Entry>,
     /// The egui frame time of the last typed chord, for the timeout.
     last_chord_time: Option<f64>,
-    /// One line per duplicate sequence dropped at load (first wins).
+    /// One line per (sequence, scope) conflict dropped at load (first
+    /// wins). An exact repeat is dropped without a line.
     conflicts: Vec<String>,
+}
+
+/// The shortcut scopes active at one dispatch (ADR 0036).
+///
+/// A binding fires when its scope is active: `Global` and `Window`
+/// always, `Page` and `Ribbon` when the shell reports that surface as
+/// focused, `Text` while an egui text edit has focus, `Selection` with
+/// a non-empty selection. When several bindings of one sequence are
+/// active, the most specific wins.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ActiveScopes {
+    /// A drawing page (the canvas) has focus.
+    pub page: bool,
+    /// The ribbon has focus.
+    pub ribbon: bool,
+    /// An egui text edit has focus.
+    pub text: bool,
+    /// Shapes are selected (Phase 5; false in Phase 4).
+    pub selection: bool,
+}
+
+impl ActiveScopes {
+    /// The scopes active for one dispatch: the focused surface, an
+    /// egui text edit and a selection (ADR 0036).
+    pub fn new(focus: ShortcutScope, text_edit: bool, selection: bool) -> Self {
+        Self {
+            page: focus == ShortcutScope::Page,
+            ribbon: focus == ShortcutScope::Ribbon,
+            text: text_edit,
+            selection,
+        }
+    }
+
+    /// Whether a binding of scope `scope` fires (ADR 0036).
+    pub fn contains(&self, scope: ShortcutScope) -> bool {
+        match scope {
+            ShortcutScope::Global | ShortcutScope::Window => true,
+            ShortcutScope::Page => self.page,
+            ShortcutScope::Ribbon => self.ribbon,
+            ShortcutScope::Text => self.text,
+            ShortcutScope::Selection => self.selection,
+        }
+    }
 }
 
 impl ShortcutMap {
     /// Builds the map from `ui-spec/shortcuts.yaml` (ADR 0007).
     ///
-    /// Entries are inserted in file order. When two entries share an
-    /// identical chord sequence, the first wins and one line is added
-    /// to [`ShortcutMap::conflicts`] (ADR 0036). An unknown key token,
-    /// a chord with no key or with more than one key, and a shortcut
-    /// with no chord are load-time errors.
+    /// Entries are inserted in file order, one binding per (chord
+    /// sequence, scope) pair: the same sequence may be bound in
+    /// several scopes and each binding is kept (P4-14). A repeated
+    /// (sequence, scope) pair is dropped first-wins — silently when it
+    /// names the same command (an exact repeat), with one line in
+    /// [`ShortcutMap::conflicts`] when it names a different command (a
+    /// conflict, ADR 0036 amended). An unknown key token, a chord with
+    /// no key or with more than one key, and a shortcut with no chord
+    /// are load-time errors.
     pub fn from_shortcuts(shortcuts: &Shortcuts) -> Result<ShortcutMap, UiError> {
-        let mut map = ShortcutMap {
-            root: Node::default(),
-            entries: 0,
-            pending: Vec::new(),
-            deferred: None,
-            last_chord_time: None,
-            conflicts: Vec::new(),
-        };
+        let mut map = ShortcutMap::default();
         for shortcut in &shortcuts.entries {
             if shortcut.sequence.is_empty() {
                 return Err(load_error("a shortcut needs at least one chord"));
@@ -176,35 +206,49 @@ impl ShortcutMap {
             for chord in &chords {
                 node = node.children.entry(chord.clone()).or_default();
             }
-            if let Some(kept) = &node.end {
-                map.conflicts.push(format!(
-                    "conflicting shortcut [{}]: {} (scope {}) wins over {} (scope {})",
-                    sequence_display(&chords),
-                    kept.command,
-                    kept.scope.as_str(),
-                    entry.command,
-                    entry.scope.as_str(),
-                ));
+            if let Some(kept) = node.ends.iter().find(|kept| kept.scope == entry.scope) {
+                if kept.command != entry.command {
+                    map.conflicts.push(format!(
+                        "conflicting shortcut [{}] (scope {}): {} wins over {}",
+                        sequence_display(&chords),
+                        kept.scope.as_str(),
+                        kept.command,
+                        entry.command,
+                    ));
+                }
+                // An exact repeat (same command) is dropped silently.
                 continue;
             }
-            node.end = Some(entry);
-            map.entries += 1;
+            node.ends.push(entry);
+            map.bindings += 1;
         }
         Ok(map)
     }
 
     /// Matches typed chords against the map; `Some` when a sequence
-    /// completes (ADR 0036). Scope filtering happens in [`dispatch`].
+    /// completes and one of its bindings fires (ADR 0036): the
+    /// binding of the most specific active scope.
     ///
     /// The chords are processed in order and the first completed
     /// sequence wins; the remaining chords are dropped. Each call
-    /// extends the half-typed sequence recorded by earlier calls.
-    pub fn resolve(&mut self, chords: &[KeyChord]) -> Result<Option<Intent>, UiError> {
-        Ok(self.resolve_entry(chords).map(Entry::into_intent))
+    /// extends the half-typed sequence recorded by earlier calls. A
+    /// completed sequence whose bindings are all inactive resolves to
+    /// `None` (the sequence is still consumed).
+    pub fn resolve(
+        &mut self,
+        chords: &[KeyChord],
+        active: &ActiveScopes,
+    ) -> Result<Option<Intent>, UiError> {
+        Ok(self
+            .resolve_entries(chords)
+            .and_then(|entries| pick_entry(&entries, active))
+            .map(Entry::into_intent))
     }
 
-    /// The conflict warnings recorded at load (ADR 0036): one line per
-    /// duplicate sequence that lost to the first entry.
+    /// The conflict warnings recorded at load (ADR 0036 amended): one
+    /// line per (sequence, scope) pair dropped in favour of the first
+    /// entry when the two name different commands. An exact repeat
+    /// (same sequence, scope and command) is dropped without a line.
     pub fn conflicts(&self) -> &[String] {
         &self.conflicts
     }
@@ -217,34 +261,48 @@ impl ShortcutMap {
         !self.pending.is_empty()
     }
 
-    /// Number of shortcut sequences in the map (first-wins count).
-    pub fn len(&self) -> usize {
-        self.entries
+    /// The chords typed so far of a half-typed sequence.
+    pub fn pending_chords(&self) -> &[KeyChord] {
+        &self.pending
     }
 
-    /// True when the map holds no sequences.
+    /// The half-typed chords as `Alt+H` (the shell's status line).
+    pub fn pending_display(&self) -> String {
+        sequence_display(&self.pending)
+    }
+
+    /// Number of shortcut **bindings** in the map: one per distinct
+    /// (chord sequence, scope) pair kept. The same sequence bound in
+    /// several scopes counts once per scope. A repeated pair is
+    /// dropped first-wins and not counted (an exact repeat silently, a
+    /// conflict with one [`ShortcutMap::conflicts`] line).
+    pub fn len(&self) -> usize {
+        self.bindings
+    }
+
+    /// True when the map holds no bindings.
     pub fn is_empty(&self) -> bool {
-        self.entries == 0
+        self.bindings == 0
     }
 
     /// Feeds the chords to the trie in order; the first completed
-    /// entry wins and later chords are dropped.
-    fn resolve_entry(&mut self, chords: &[KeyChord]) -> Option<Entry> {
+    /// sequence wins and later chords are dropped.
+    fn resolve_entries(&mut self, chords: &[KeyChord]) -> Option<Vec<Entry>> {
         let mut fired = None;
         for chord in chords {
             let chord = normalize_chord(chord.key.clone(), chord.modifiers.clone());
-            if let Some(entry) = self.step(chord, None) {
-                fired = Some(entry);
+            if let Some(entries) = self.step(chord, None) {
+                fired = Some(entries);
                 break;
             }
         }
         fired
     }
 
-    /// Feeds one typed chord to the trie and returns the entry it
+    /// Feeds one typed chord to the trie and returns the bindings it
     /// completed, if any. `now` is the egui frame time of the chord
     /// (when called from [`dispatch`]).
-    fn step(&mut self, chord: KeyChord, now: Option<f64>) -> Option<Entry> {
+    fn step(&mut self, chord: KeyChord, now: Option<f64>) -> Option<Vec<Entry>> {
         if let Some(now) = now {
             self.last_chord_time = Some(now);
         }
@@ -252,15 +310,15 @@ impl ShortcutMap {
         candidate.push(chord.clone());
         match self.probe(&candidate) {
             // Complete, but longer sequences share the prefix: wait.
-            Some((true, Some(entry))) => {
+            Some((true, Some(entries))) => {
                 self.pending = candidate;
-                self.deferred = Some(entry);
+                self.deferred = entries;
                 None
             }
             // Complete and no longer sequence to wait for: fire.
-            Some((_, Some(entry))) => {
+            Some((_, Some(entries))) => {
                 self.reset();
-                Some(entry)
+                Some(entries)
             }
             // A prefix of longer sequences: keep typing.
             Some((true, None)) => {
@@ -270,9 +328,9 @@ impl ShortcutMap {
             // Mismatch: fire the held-back completion, else retry the
             // chord as the start of a fresh sequence.
             _ => {
-                if let Some(entry) = self.deferred.take() {
+                if !self.deferred.is_empty() {
                     self.reset();
-                    return Some(entry);
+                    return Some(std::mem::take(&mut self.deferred));
                 }
                 let had_progress = !self.pending.is_empty();
                 self.reset();
@@ -288,30 +346,35 @@ impl ShortcutMap {
     /// completion that was waiting on a longer sequence (ADR 0036: a
     /// sequence that is a prefix of another fires when the longer one
     /// times out).
-    fn expire(&mut self, now: f64) -> Option<Entry> {
-        if self.pending.is_empty() && self.deferred.is_none() {
+    fn expire(&mut self, now: f64) -> Vec<Entry> {
+        if self.pending.is_empty() && self.deferred.is_empty() {
             self.last_chord_time = None;
-            return None;
+            return Vec::new();
         }
         let expired = self
             .last_chord_time
             .is_some_and(|last| now - last > SEQUENCE_TIMEOUT_SECONDS);
         if expired {
             self.reset();
-            self.deferred.take()
+            std::mem::take(&mut self.deferred)
         } else {
-            None
+            Vec::new()
         }
     }
 
-    /// The trie node at `chords`: `(has_children, entry)`, or `None`
-    /// when the chords are not a path in the trie.
-    fn probe(&self, chords: &[KeyChord]) -> Option<(bool, Option<Entry>)> {
+    /// The trie node at `chords`: `(has_children, bindings)`, or
+    /// `None` when the chords are not a path in the trie.
+    fn probe(&self, chords: &[KeyChord]) -> Option<(bool, Option<Vec<Entry>>)> {
         let mut node = &self.root;
         for chord in chords {
             node = node.children.get(chord)?;
         }
-        Some((!node.children.is_empty(), node.end.clone()))
+        let ends = if node.ends.is_empty() {
+            None
+        } else {
+            Some(node.ends.clone())
+        };
+        Some((!node.children.is_empty(), ends))
     }
 
     /// Clears the typed-chord buffer and its clock.
@@ -325,11 +388,13 @@ impl ShortcutMap {
 /// for the given scope (ADR 0036).
 ///
 /// `scope` is the surface the shell reports as focused (`Global` when
-/// none of `Page`, `Ribbon`, `Text` or `Selection` has focus). A
-/// matched chord is consumed before the widgets see it, even when its
-/// scope does not match; a chord that matches nothing is left alone.
-/// While an egui text edit has focus, the chords egui owns for text
-/// editing are never matched or consumed.
+/// none of `Page` or `Ribbon` has focus). The bindings of the most
+/// specific active scope fire ([`ActiveScopes`], ADR 0036 order). A
+/// matched chord is consumed before the widgets see it, even when no
+/// binding of its sequence is active; a chord that matches nothing is
+/// left alone. While an egui text edit has focus, the chords without
+/// `Ctrl` or `Alt` (typing and the caret keys) are never matched or
+/// consumed; a chord with `Ctrl` or `Alt` is matched even there.
 pub fn dispatch(
     egui_ctx: &Context,
     map: &mut ShortcutMap,
@@ -337,12 +402,12 @@ pub fn dispatch(
     scope: ShortcutScope,
 ) -> Result<Option<Intent>, UiError> {
     let now = egui_ctx.input(|input| input.time);
+    let active = ActiveScopes::new(scope, egui_ctx.text_edit_focused(), !app.selection.is_empty());
     // A sequence that is only a prefix of longer ones fires when the
     // longer ones time out (no key event on that frame).
-    if let Some(entry) = map.expire(now) {
+    if let Some(entry) = pick_entry(&map.expire(now), &active) {
         return Ok(Some(entry.into_intent()));
     }
-    let text_edit = egui_ctx.text_edit_focused();
     let mut fired: Option<Entry> = None;
     let mut consumed: Vec<usize> = Vec::new();
 
@@ -363,15 +428,15 @@ pub fn dispatch(
             let Some(chord) = chord_from_event(*key, *modifiers) else {
                 continue;
             };
-            if text_edit && defers_to_egui(&chord) {
+            if active.text && defers_to_egui(&chord) {
                 continue;
             }
             let matched = map.step(chord, Some(now));
             if matched.is_some() || map.pending() {
                 consumed.push(index);
             }
-            if let Some(entry) = matched
-                && scope_active(entry.scope, scope, app, text_edit)
+            if let Some(entries) = matched
+                && let Some(entry) = pick_entry(&entries, &active)
             {
                 fired = Some(entry);
             }
@@ -389,36 +454,40 @@ pub fn dispatch(
     Ok(fired.map(Entry::into_intent))
 }
 
-/// Whether a shortcut of scope `want` dispatches: `Global` and
-/// `Window` always, `Page` and `Ribbon` when the shell reports that
-/// surface focused, `Text` only inside an egui text edit, and
-/// `Selection` only with a selection (none in Phase 4).
-fn scope_active(want: ShortcutScope, focus: ShortcutScope, app: &AppCtx, text_edit: bool) -> bool {
-    match want {
-        ShortcutScope::Global | ShortcutScope::Window => true,
-        ShortcutScope::Page => focus == ShortcutScope::Page,
-        ShortcutScope::Ribbon => focus == ShortcutScope::Ribbon,
-        ShortcutScope::Text => text_edit,
-        ShortcutScope::Selection => !app.selection.is_empty(),
+/// The binding that fires for a completed sequence (ADR 0036): the
+/// one of the most specific active scope.
+fn pick_entry(entries: &[Entry], active: &ActiveScopes) -> Option<Entry> {
+    entries
+        .iter()
+        .filter(|entry| active.contains(entry.scope))
+        .min_by_key(|entry| scope_rank(entry.scope))
+        .cloned()
+}
+
+/// Scope specificity, lower wins: `Text`, `Selection`, `Page`,
+/// `Ribbon`, `Window`, `Global` (ADR 0036).
+fn scope_rank(scope: ShortcutScope) -> u8 {
+    match scope {
+        ShortcutScope::Text => 0,
+        ShortcutScope::Selection => 1,
+        ShortcutScope::Page => 2,
+        ShortcutScope::Ribbon => 3,
+        ShortcutScope::Window => 4,
+        ShortcutScope::Global => 5,
     }
 }
 
-/// Whether egui's text edit owns this chord while it has focus: plain
-/// typing and caret keys, and the Ctrl editing keys of
-/// [`EGUI_CTRL_TEXT_TOKENS`] (ADR 0036 "egui's own shortcuts apply
-/// only inside text edits").
+/// Whether egui's text edit owns this chord while it has focus: the
+/// chords without `Ctrl` or `Alt` — plain typing, shift-typing and the
+/// caret keys (ADR 0036 "egui's own shortcuts apply only inside text
+/// edits"). A chord with `Ctrl` or `Alt` is ours: P4-14 dispatches
+/// `Ctrl+C` and `Ctrl+Shift+C` inside a text edit, where the most
+/// specific active scope decides.
 fn defers_to_egui(chord: &KeyChord) -> bool {
-    let has_ctrl = chord.modifiers.iter().any(|m| m == "Ctrl");
-    let has_alt = chord.modifiers.iter().any(|m| m == "Alt");
-    if has_alt {
-        return false;
-    }
-    if !has_ctrl {
-        // Plain typing (letters, digits, symbols) and the caret keys.
-        return true;
-    }
-    chord.modifiers.iter().all(|m| m == "Ctrl" || m == "Shift")
-        && EGUI_CTRL_TEXT_TOKENS.contains(&chord.key.as_str())
+    !chord
+        .modifiers
+        .iter()
+        .any(|modifier| modifier == "Ctrl" || modifier == "Alt")
 }
 
 /// True when `token` is a key or modifier token the egui mapping table
@@ -920,7 +989,7 @@ mod tests {
         assert!(!map.is_empty());
         assert!(map.conflicts().is_empty());
         let intent = map
-            .resolve(&[chord("Z", &["Ctrl"])])
+            .resolve(&[chord("Z", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "edit.undo");
@@ -929,20 +998,143 @@ mod tests {
     }
 
     #[test]
-    fn a_duplicate_sequence_first_wins_with_one_conflict() {
+    fn a_leaf_holds_one_binding_per_scope() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Global),
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Window),
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Page),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert_eq!(map.len(), 3, "one binding per (sequence, scope) pair");
+        assert!(map.conflicts().is_empty());
+        // All three scopes name the same command: it fires anywhere.
+        for active in [
+            ActiveScopes::default(),
+            ActiveScopes::new(ShortcutScope::Page, false, false),
+            ActiveScopes::new(ShortcutScope::Global, true, false),
+        ] {
+            let intent = map
+                .resolve(&[chord("C", &["Ctrl"])], &active)
+                .expect("resolve")
+                .expect("intent");
+            assert_eq!(intent.command.as_str(), "edit.copy");
+        }
+    }
+
+    #[test]
+    fn the_most_specific_active_scope_wins() {
         let map_source = shortcuts(vec![
             shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
-            shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Selection),
-            shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Page),
+            shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Page),
+            shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Text),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert_eq!(map.len(), 3);
+        assert!(map.conflicts().is_empty(), "different scopes are legal");
+
+        // Only Global active: the global binding.
+        let global = map
+            .resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(global.command.as_str(), "arrange.group");
+
+        // Page beats Global (ADR 0036 order).
+        let page = map
+            .resolve(
+                &[chord("G", &["Ctrl"])],
+                &ActiveScopes::new(ShortcutScope::Page, false, false),
+            )
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(page.command.as_str(), "arrange.ungroup");
+
+        // Text beats Page and Global.
+        let text = map
+            .resolve(
+                &[chord("G", &["Ctrl"])],
+                &ActiveScopes::new(ShortcutScope::Page, true, false),
+            )
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(text.command.as_str(), "edit.copy");
+    }
+
+    #[test]
+    fn an_exact_repeat_is_dropped_without_a_warning() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Global),
+            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Global),
+            shortcut(&["Ctrl", "H"], "arrange.flip_horizontal", ShortcutScope::Page),
+        ]);
+        let map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert_eq!(map.len(), 2, "the exact repeat is dropped");
+        assert!(map.conflicts().is_empty(), "an exact repeat is silent");
+    }
+
+    #[test]
+    fn a_real_conflict_is_recorded_once_and_first_wins() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+            shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Global),
+            shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Global),
         ]);
         let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
         assert_eq!(map.len(), 1);
         assert_eq!(map.conflicts().len(), 2);
+        assert!(map.conflicts()[0].contains("arrange.group"));
+        assert!(map.conflicts()[0].contains("arrange.ungroup"));
         let intent = map
-            .resolve(&[chord("G", &["Ctrl"])])
+            .resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "arrange.group");
+    }
+
+    #[test]
+    fn a_completed_sequence_with_no_active_binding_resolves_to_nothing() {
+        let map_source = shortcuts(vec![shortcut(
+            &["Ctrl", "G"],
+            "arrange.group",
+            ShortcutScope::Selection,
+        )]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert!(
+            map.resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
+                .expect("resolve")
+                .is_none()
+        );
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn len_counts_bindings_not_source_entries() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Global),
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Window),
+            shortcut(&["Ctrl", "C"], "edit.copy", ShortcutScope::Window),
+            shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+            shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Global),
+        ]);
+        let map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        // Three bindings: Ctrl+C global, Ctrl+C window (the repeat is
+        // dropped) and Ctrl+G global (the conflict is dropped).
+        assert_eq!(map.len(), 3);
+    }
+
+    #[test]
+    fn pending_chords_show_as_a_status_line() {
+        let two_chords = multi_shortcut(
+            &[&["Alt", "H"], &["F"]],
+            "arrange.group",
+            ShortcutScope::Global,
+        );
+        let mut map = ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords])).expect("map");
+        assert_eq!(map.pending_display(), "");
+        map.step(chord("H", &["Alt"]), Some(1.0));
+        assert!(map.pending());
+        assert_eq!(map.pending_chords(), &[chord("H", &["Alt"])]);
+        assert_eq!(map.pending_display(), "Alt+H");
     }
 
     #[test]
@@ -954,13 +1146,13 @@ mod tests {
         );
         let mut map = ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords])).expect("map");
         assert!(
-            map.resolve(&[chord("H", &["Alt"])])
+            map.resolve(&[chord("H", &["Alt"])], &ActiveScopes::default())
                 .expect("resolve")
                 .is_none()
         );
         assert!(map.pending());
         let intent = map
-            .resolve(&[chord("F", &[])])
+            .resolve(&[chord("F", &[])], &ActiveScopes::default())
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "arrange.group");
@@ -978,13 +1170,13 @@ mod tests {
         let mut map =
             ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords, single])).expect("map");
         assert!(
-            map.resolve(&[chord("H", &["Alt"])])
+            map.resolve(&[chord("H", &["Alt"])], &ActiveScopes::default())
                 .expect("resolve")
                 .is_none()
         );
         // Ctrl+Z does not continue the sequence: it starts a new one.
         let intent = map
-            .resolve(&[chord("Z", &["Ctrl"])])
+            .resolve(&[chord("Z", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "edit.undo");
@@ -998,15 +1190,42 @@ mod tests {
             multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
         ]);
         let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
-        assert!(map.resolve(&[chord("F6", &[])]).expect("resolve").is_none());
+        assert!(
+            map.resolve(&[chord("F6", &[])], &ActiveScopes::default())
+                .expect("resolve")
+                .is_none()
+        );
         assert!(map.pending());
         // F5 does not continue the longer sequence: the shorter one fires.
         let intent = map
-            .resolve(&[chord("F5", &[])])
+            .resolve(&[chord("F5", &[])], &ActiveScopes::default())
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "view.zoom.in");
         assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_deferred_completion_fires_the_most_specific_active_binding() {
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            shortcut(&["F6"], "arrange.nudge", ShortcutScope::Page),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert!(
+            map.resolve(&[chord("F6", &[])], &ActiveScopes::default())
+                .expect("resolve")
+                .is_none()
+        );
+        let intent = map
+            .resolve(
+                &[chord("F5", &[])],
+                &ActiveScopes::new(ShortcutScope::Page, false, false),
+            )
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "arrange.nudge");
     }
 
     #[test]
@@ -1018,9 +1237,10 @@ mod tests {
         let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
         map.step(chord("F6", &[]), Some(10.0));
         assert!(map.pending());
-        assert!(map.expire(11.0).is_none());
-        let entry = map.expire(12.5).expect("the deferred entry fires");
-        assert_eq!(entry.command.as_str(), "view.zoom.in");
+        assert!(map.expire(11.0).is_empty());
+        let entries = map.expire(12.5);
+        assert_eq!(entries.len(), 1, "the deferred binding fires");
+        assert_eq!(entries[0].command.as_str(), "view.zoom.in");
         assert!(!map.pending());
     }
 
@@ -1034,9 +1254,12 @@ mod tests {
         let mut map = ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords])).expect("map");
         map.step(chord("H", &["Alt"]), Some(10.0));
         assert!(map.pending());
-        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS / 2.0).is_none());
+        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS / 2.0).is_empty());
         assert!(map.pending());
-        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.1).is_none());
+        assert!(
+            map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.1)
+                .is_empty()
+        );
         assert!(!map.pending());
     }
 
@@ -1046,7 +1269,11 @@ mod tests {
         assert!(map.is_empty());
         assert_eq!(map.len(), 0);
         assert!(!map.pending());
-        assert!(map.resolve(&[]).expect("resolve").is_none());
+        assert!(
+            map.resolve(&[], &ActiveScopes::default())
+                .expect("resolve")
+                .is_none()
+        );
     }
 
     #[test]
@@ -1069,73 +1296,55 @@ mod tests {
     }
 
     #[test]
+    fn active_scopes_follow_the_focus() {
+        let page = ActiveScopes::new(ShortcutScope::Page, false, false);
+        assert!(page.page);
+        assert!(!page.ribbon);
+        assert!(!page.text);
+        assert!(!page.selection);
+        let ribbon = ActiveScopes::new(ShortcutScope::Ribbon, true, true);
+        assert!(ribbon.ribbon);
+        assert!(ribbon.text);
+        assert!(ribbon.selection);
+        assert!(!ribbon.page);
+    }
+
+    #[test]
     fn global_and_window_scopes_always_match() {
-        let app = app();
         for want in [ShortcutScope::Global, ShortcutScope::Window] {
-            for focus in [
-                ShortcutScope::Global,
-                ShortcutScope::Page,
-                ShortcutScope::Ribbon,
-                ShortcutScope::Text,
+            for active in [
+                ActiveScopes::default(),
+                ActiveScopes::new(ShortcutScope::Page, false, false),
+                ActiveScopes::new(ShortcutScope::Ribbon, true, false),
+                ActiveScopes::new(ShortcutScope::Global, false, true),
             ] {
-                assert!(scope_active(want, focus, &app, false));
+                assert!(active.contains(want));
             }
         }
     }
 
     #[test]
     fn page_and_ribbon_need_their_surface() {
-        let app = app();
-        assert!(scope_active(
-            ShortcutScope::Page,
-            ShortcutScope::Page,
-            &app,
-            false
-        ));
-        assert!(!scope_active(
-            ShortcutScope::Page,
-            ShortcutScope::Ribbon,
-            &app,
-            false
-        ));
-        assert!(scope_active(
-            ShortcutScope::Ribbon,
-            ShortcutScope::Ribbon,
-            &app,
-            false
-        ));
-        assert!(!scope_active(
-            ShortcutScope::Ribbon,
-            ShortcutScope::Page,
-            &app,
-            false
-        ));
+        let page = ActiveScopes::new(ShortcutScope::Page, false, false);
+        let ribbon = ActiveScopes::new(ShortcutScope::Ribbon, false, false);
+        assert!(page.contains(ShortcutScope::Page));
+        assert!(!page.contains(ShortcutScope::Ribbon));
+        assert!(ribbon.contains(ShortcutScope::Ribbon));
+        assert!(!ribbon.contains(ShortcutScope::Page));
     }
 
     #[test]
     fn text_needs_a_text_edit_and_selection_never_fires_in_phase_4() {
-        let app = app();
-        assert!(scope_active(
-            ShortcutScope::Text,
-            ShortcutScope::Global,
-            &app,
-            true
-        ));
-        assert!(!scope_active(
-            ShortcutScope::Text,
-            ShortcutScope::Global,
-            &app,
-            false
-        ));
-        for focus in [
-            ShortcutScope::Global,
-            ShortcutScope::Page,
-            ShortcutScope::Ribbon,
-            ShortcutScope::Text,
+        let with_text = ActiveScopes::new(ShortcutScope::Global, true, false);
+        let without_text = ActiveScopes::new(ShortcutScope::Global, false, false);
+        assert!(with_text.contains(ShortcutScope::Text));
+        assert!(!without_text.contains(ShortcutScope::Text));
+        for active in [
+            ActiveScopes::default(),
+            ActiveScopes::new(ShortcutScope::Page, true, false),
         ] {
-            assert!(!scope_active(ShortcutScope::Selection, focus, &app, true));
+            assert!(!active.contains(ShortcutScope::Selection));
         }
-        assert!(app.selection.is_empty());
     }
 
     #[test]
@@ -1144,14 +1353,15 @@ mod tests {
             assert!(defers_to_egui(&chord(key, &[])), "{key}");
         }
         assert!(defers_to_egui(&chord("A", &["Shift"])));
-        assert!(defers_to_egui(&chord("Z", &["Ctrl"])));
-        assert!(defers_to_egui(&chord("Z", &["Ctrl", "Shift"])));
-        assert!(defers_to_egui(&chord("Backspace", &["Ctrl"])));
     }
 
     #[test]
-    fn our_own_text_keys_do_not_defer() {
-        // format.text.italic, the file's own text shortcuts.
+    fn ctrl_and_alt_chords_do_not_defer() {
+        // Ctrl+C and Ctrl+Shift+C dispatch inside a text edit (P4-14).
+        assert!(!defers_to_egui(&chord("C", &["Ctrl"])));
+        assert!(!defers_to_egui(&chord("C", &["Ctrl", "Shift"])));
+        assert!(!defers_to_egui(&chord("Z", &["Ctrl", "Shift"])));
+        assert!(!defers_to_egui(&chord("Backspace", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("I", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("<", &["Ctrl"])));
         assert!(!defers_to_egui(&chord("F4", &["Alt"])));
@@ -1191,7 +1401,10 @@ mod tests {
         ]);
         let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
         let intent = map
-            .resolve(&[chord("Z", &["Ctrl"]), chord("Y", &["Ctrl"])])
+            .resolve(
+                &[chord("Z", &["Ctrl"]), chord("Y", &["Ctrl"])],
+                &ActiveScopes::default(),
+            )
             .expect("resolve")
             .expect("intent");
         assert_eq!(intent.command.as_str(), "edit.undo");
