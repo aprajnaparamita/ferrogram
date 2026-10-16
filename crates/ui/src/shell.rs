@@ -1215,15 +1215,11 @@ mod tests {
     }
 
     #[test]
-    fn a_real_frame_renders_and_warnings_reach_the_status_bar() {
+    fn a_real_frame_renders_every_widget_without_errors() {
         let mut shell = full_shell();
         shell
             .app
             .open_document(DocumentSession::new(Document::new(), None));
-        // P4-07: the last stub widget (the panels) is implemented, so the
-        // frame raises no stub error; a recorded warning stands in for a
-        // widget error and must reach the status bar source.
-        shell.app.record_warning("example: not implemented");
         let ctx = Context::default();
         for _ in 0..2 {
             let mut output = ctx.run_ui(Default::default(), |ui| {
@@ -1233,13 +1229,16 @@ mod tests {
             });
             output.textures_delta.clear();
         }
+        // Every widget is implemented (P4-07 filled the last stub), so a
+        // plain frame over an empty document records no widget error.
+        // `note_error` reaching the status bar is tested separately.
         assert!(
-            shell
+            !shell
                 .app
                 .warnings
                 .iter()
                 .any(|warning| warning.contains("not implemented")),
-            "warnings reach the status bar source: {:?}",
+            "no widget stub errors: {:?}",
             shell.app.warnings
         );
     }
