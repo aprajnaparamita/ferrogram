@@ -1,8 +1,10 @@
 //! Shortcut dispatch against a plain `egui::Context` (task P4-08,
-//! ADR 0036): every entry of the committed `ui-spec/shortcuts.yaml`
-//! loads, single-chord shortcuts resolve per scope, multi-chord
-//! sequences and their timeout work, scopes filter by focus, and
-//! egui's own text-editing keys are never stolen.
+//! amended by P4-14, ADR 0036): every entry of the committed
+//! `ui-spec/shortcuts.yaml` loads, one binding per (sequence, scope)
+//! pair with the most specific active scope winning, multi-chord
+//! sequences and their timeout work, scopes filter by focus, and the
+//! chords egui owns for text editing (typing and the caret keys) are
+//! never stolen.
 
 use egui::{Context, Event, Key, Modifiers, RawInput};
 use ferrogram_commands::{AppCtx, Settings};
@@ -138,9 +140,28 @@ fn the_committed_shortcut_table_loads() {
     assert!(!committed.entries.is_empty());
     let map = map_of(committed.entries.clone());
     assert!(!map.is_empty());
-    // First-wins: every entry either lands in the map or is recorded
-    // as a conflict.
-    assert_eq!(map.len() + map.conflicts().len(), committed.entries.len());
+    // One binding per (sequence, scope) pair: the 90 entries of the
+    // committed table collapse into 74 bindings and 16 exact repeats,
+    // all dropped silently (P4-14).
+    assert_eq!(map.len(), 74);
+    assert_eq!(map.len() + 16, committed.entries.len());
+}
+
+#[test]
+fn the_committed_table_has_no_sequence_scope_conflict() {
+    // The amended conflict key (ADR 0036): only a (sequence, scope)
+    // pair naming two different commands is a conflict. The committed
+    // table has none (P4-14 Result).
+    let map = map_of(committed_shortcuts().entries.clone());
+    assert!(map.conflicts().is_empty(), "{:?}", map.conflicts());
+}
+
+#[test]
+fn len_counts_the_bindings_of_the_committed_table() {
+    let map = map_of(committed_shortcuts().entries.clone());
+    // `len()` counts bindings, not source entries and not sequences:
+    // 61 distinct sequences, 74 (sequence, scope) pairs.
+    assert_eq!(map.len(), 74);
 }
 
 #[test]
@@ -416,15 +437,27 @@ fn a_half_typed_sequence_sets_pending_and_times_out() {
 }
 
 #[test]
-fn a_conflicting_sequence_first_wins_with_one_recorded_conflict() {
+fn one_real_conflict_warns_once_and_an_exact_repeat_is_silent() {
     let mut map = map_of(vec![
         shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
-        shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Selection),
-        shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Page),
+        shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Global),
+        shortcut(
+            &["Ctrl", "H"],
+            "arrange.flip_horizontal",
+            ShortcutScope::Selection,
+        ),
+        shortcut(
+            &["Ctrl", "H"],
+            "arrange.flip_horizontal",
+            ShortcutScope::Selection,
+        ),
     ]);
-    assert_eq!(map.len(), 1);
-    assert_eq!(map.conflicts().len(), 2);
+    // The (Ctrl+G, global) pair names two commands: one warning. The
+    // repeated (Ctrl+H, selection) pair names the same command: none.
+    assert_eq!(map.len(), 2);
+    assert_eq!(map.conflicts().len(), 1);
     assert!(map.conflicts()[0].contains("arrange.group"));
+    assert!(map.conflicts()[0].contains("arrange.ungroup"));
 
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
@@ -448,15 +481,179 @@ fn a_conflicting_sequence_first_wins_with_one_recorded_conflict() {
 }
 
 #[test]
-fn egui_text_editing_keys_are_never_stolen() {
+fn the_most_specific_active_scope_wins() {
     let mut map = map_of(vec![
-        shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
-        shortcut(&["Ctrl", "I"], "format.text.italic", ShortcutScope::Text),
+        shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+        shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Page),
+        shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Text),
     ]);
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
 
-    // Focus a text edit first (frame 1).
+    // No page, no text edit: the global binding.
+    let global = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::G, ctrl())],
+        0.0,
+        false,
+    );
+    assert_eq!(
+        global.intent.expect("global binding").command.as_str(),
+        "arrange.group"
+    );
+
+    // The canvas focused: the page binding.
+    let page = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Page,
+        vec![key_event(Key::G, ctrl())],
+        0.1,
+        false,
+    );
+    assert_eq!(
+        page.intent.expect("page binding").command.as_str(),
+        "arrange.ungroup"
+    );
+
+    // A text edit focused: the text binding, the most specific.
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.2,
+        true,
+    );
+    let text = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::G, ctrl())],
+        0.3,
+        true,
+    );
+    assert_eq!(
+        text.intent.expect("text binding").command.as_str(),
+        "edit.copy"
+    );
+}
+
+#[test]
+fn ctrl_c_resolves_on_the_canvas_and_inside_a_text_edit() {
+    // `Ctrl+C` is `edit.copy` in `global` and `window` (the committed
+    // table): it resolves to its command with the canvas focused and
+    // inside a text edit (P4-14 acceptance).
+    let mut map = map_of(committed_shortcuts().entries.clone());
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    let page = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Page,
+        vec![key_event(Key::C, ctrl())],
+        0.0,
+        false,
+    );
+    assert_eq!(
+        page.intent.expect("Ctrl+C on the page").command.as_str(),
+        "edit.copy"
+    );
+
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.1,
+        true,
+    );
+    let text = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::C, ctrl())],
+        0.2,
+        true,
+    );
+    assert_eq!(
+        text.intent.expect("Ctrl+C in text").command.as_str(),
+        "edit.copy"
+    );
+}
+
+#[test]
+fn ctrl_shift_c_is_the_format_painter_outside_text_and_align_center_inside() {
+    let mut map = map_of(committed_shortcuts().entries.clone());
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    // No text edit: the `global` binding fires.
+    let global = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::C, ctrl_shift())],
+        0.0,
+        false,
+    );
+    assert_eq!(
+        global
+            .intent
+            .expect("the format painter")
+            .command
+            .as_str(),
+        "tools.format_painter"
+    );
+
+    // Inside a text edit the `text` binding is more specific.
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.1,
+        true,
+    );
+    let text = frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        vec![key_event(Key::C, ctrl_shift())],
+        0.2,
+        true,
+    );
+    assert_eq!(
+        text.intent.expect("the text binding").command.as_str(),
+        "format.text.align_center"
+    );
+}
+
+#[test]
+fn typing_and_caret_chords_reach_the_text_edit_untouched() {
+    // Chords without Ctrl or Alt are egui's inside a text edit, even
+    // when the map binds them (P4-14): the arrows move the caret and
+    // Delete deletes text instead of running a command.
+    let mut map = map_of(vec![
+        shortcut(&["Arrow Keys"], "arrange.nudge", ShortcutScope::Page),
+        shortcut(&["Delete"], "edit.clear", ShortcutScope::Window),
+    ]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
     frame(
         &ctx,
         &mut map,
@@ -466,8 +663,47 @@ fn egui_text_editing_keys_are_never_stolen() {
         0.0,
         true,
     );
+    for (key, modifiers) in [
+        (Key::ArrowLeft, Modifiers::default()),
+        (Key::Delete, Modifiers::default()),
+        (Key::F, Modifiers::default()),
+    ] {
+        let typed = frame(
+            &ctx,
+            &mut map,
+            &app,
+            ShortcutScope::Global,
+            vec![key_event(key, modifiers)],
+            0.1,
+            true,
+        );
+        assert!(typed.intent.is_none());
+        assert_eq!(typed.events_left, 1, "the chord stays with egui");
+    }
+}
 
-    // Ctrl+Z is egui's text undo: no dispatch, no consumption.
+#[test]
+fn a_bound_ctrl_chord_dispatches_inside_a_text_edit() {
+    // Ctrl+Z is `edit.undo` (global). A bound Ctrl chord dispatches
+    // even in a text edit (P4-14: that is what makes Ctrl+C resolve
+    // there); an unbound one is left alone.
+    let mut map = map_of(vec![shortcut(
+        &["Ctrl", "Z"],
+        "edit.undo",
+        ShortcutScope::Global,
+    )]);
+    let app = AppCtx::new(Settings::default());
+    let ctx = Context::default();
+
+    frame(
+        &ctx,
+        &mut map,
+        &app,
+        ShortcutScope::Global,
+        Vec::new(),
+        0.0,
+        true,
+    );
     let undo = frame(
         &ctx,
         &mut map,
@@ -477,36 +713,11 @@ fn egui_text_editing_keys_are_never_stolen() {
         0.1,
         true,
     );
-    assert!(undo.intent.is_none());
-    assert_eq!(undo.events_left, 1, "the chord stays with egui");
-
-    // Plain typing also stays with the text edit.
-    let typing = frame(
-        &ctx,
-        &mut map,
-        &app,
-        ShortcutScope::Global,
-        vec![key_event(Key::F, Modifiers::default())],
-        0.2,
-        true,
-    );
-    assert!(typing.intent.is_none());
-    assert_eq!(typing.events_left, 1);
-
-    // Without a text edit the same Ctrl+Z dispatches edit.undo.
-    let outside = frame(
-        &Context::default(),
-        &mut map,
-        &app,
-        ShortcutScope::Global,
-        vec![key_event(Key::Z, ctrl())],
-        0.3,
-        false,
-    );
     assert_eq!(
-        outside.intent.expect("Ctrl+Z fires").command.as_str(),
+        undo.intent.expect("Ctrl+Z fires").command.as_str(),
         "edit.undo"
     );
+    assert_eq!(undo.events_left, 0, "the chord is consumed");
 }
 
 #[test]
