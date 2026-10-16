@@ -37,8 +37,8 @@ pub struct StencilPick {
 enum Preview {
     /// A rasterized preview.
     Ready(TextureHandle),
-    /// The raster could not be built (task P4-05 implements
-    /// `render_raster`); the window draws a placeholder.
+    /// The scene or the raster could not be built; the window draws a
+    /// placeholder.
     Failed,
 }
 
@@ -179,7 +179,7 @@ fn preview_document(master: &MasterDef) -> Document {
 }
 
 /// The preview of one master as raw RGBA pixels, or `None` when the
-/// scene or the raster cannot be built (`render_raster` is task P4-05).
+/// scene or the raster cannot be built.
 fn preview_image(master: &MasterDef) -> Option<ColorImage> {
     let document = preview_document(master);
     let page = ferrogram_model::PageId { index: 0 };
@@ -334,17 +334,17 @@ mod tests {
 
     #[test]
     fn a_preview_raster_fits_the_master_box() {
-        // `render_raster` returns `Error::NotImplemented` until task
-        // P4-05, so the preview is `None` and the window draws its
-        // placeholder today; when the raster lands, it must fit the
-        // master box. Both paths list and select.
-        let master = stencils::basic_shapes().masters[0].clone();
-        if let Some(image) = preview_image(&master) {
-            assert!(image.size[0] > 0 && image.size[1] > 0);
-            assert!(
-                image.size[0] <= 41 && image.size[1] <= 41,
-                "one preview box"
-            );
+        // Every master of both stencils rasterizes into one preview box.
+        for stencil in stencils::catalog() {
+            for master in &stencil.masters {
+                let image = preview_image(master).expect("a preview raster");
+                assert!(image.size[0] > 0 && image.size[1] > 0, "{}", master.name);
+                assert!(
+                    image.size[0] <= 41 && image.size[1] <= 41,
+                    "one preview box: {}",
+                    master.name
+                );
+            }
         }
     }
 }
