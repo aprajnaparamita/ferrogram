@@ -236,3 +236,29 @@ because:
   grep, ugly in the JSON control channel.
 - **A single flat namespace** (no scopes). Rejected: hard to filter, hard
   to bind to feature areas, and the human-facing UI groups by area.
+
+## Amendments
+
+### Amended 2026-10-16, P4-01: registry ids beyond the extractor, and id storage
+
+Two clarifications from the Phase 4 command registry (ADR 0028).
+
+**Ferrogram-only ids live in `commands.yaml` too.** Ids with no Microsoft
+counterpart (the ADR 0026 CLI triad `file.inspect`, `file.render`,
+`file.export`, plus `app.quit`, `page.next`, `page.previous`,
+`view.ui_layout.visio_2016`, `view.ui_layout.visio_365`,
+`view.zoom.fit`, `help.about` and later Phase 5 edit ids) are emitted by
+the extractor from a static "our own commands" list in
+`xtask/src/extract/commands.rs`, with `fluent_ids: []` (or the Fluent ids
+of controls we bind ourselves) and `mapping_confidence: unknown`. The
+"implementers never edit `commands.yaml`" rule stands: extractor rules are
+the only source. Every registry id is therefore in `commands.yaml`, and
+the parity matrix (ADR 0037) sees every id.
+
+**Id storage.** `crates/commands::CommandId` wraps `&'static str` as this
+ADR states. Ids loaded from YAML are interned once per process by
+`CommandId::intern`, a bounded `Box::leak` interner (cap: 4096 ids;
+over the cap is an error), the same pattern as the model's table defaults
+(P2-04). The registry may also hold commands with no `commands.yaml`
+entry (a test double, say); the YAML remains the mapping table for
+everything with a Microsoft counterpart.

@@ -8,6 +8,20 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# GUI stack (ADR 0030): eframe web runner over the L6 UI crate. The wasm
+# binding crates in this tree are MPL-2.0 and allowed per-crate in
+# deny.toml (ADR 0030, ADR 0003 amendment).
+# The glow backend only (ADR 0030): no wgpu tree. `persistence` backs the
+# settings store (ADR 0032).
+eframe = { version = "0.37", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "persistence",
+    "web_screen_reader",
+] }
+ferrogram-commands = { path = "../../crates/commands" }
+ferrogram-ui = { path = "../../crates/ui" }
+ferrogram-ui-spec = { path = "../../crates/ui-spec" }
 
 [lints]
 workspace = true
