@@ -22,3 +22,16 @@ Ferrogram is MIT. Binary .vsd import uses libvisio (expected MPL-2.0, to be veri
 ## Alternatives considered
 
 - Whole project MPL-2.0: rejected by the kickoff.
+
+## Amendments
+
+### Amended 2026-10-16, P4-01: the GUI stack adds no MPL crate (verified)
+
+ADR 0030 (GUI stack) checked the whole egui/eframe/rfd tree for
+MPL-2.0: the wasm binding crates (`wasm-bindgen`, `js-sys`, `web-sys`)
+are `MIT OR Apache-2.0` and no MPL crate is in the tree. No exception to
+this ADR is needed; the rule that `ferrogram-vsd-binary` is the only MPL
+crate stands and stays enforced by `cargo deny`
+(`[licenses.private] ignore = false`). If a future GUI dependency is
+MPL-licensed, this ADR's own rule applies: it takes a new ADR naming the
+crate, as ADR 0030 documents for its other allowances.
