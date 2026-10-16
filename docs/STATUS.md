@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **4 in progress** (planning)
+- Current phase: **4 in progress** (group A)
 - Phase 4 goal: app shell and switchable ribbon (KICKOFF.md). Exit: both layouts load and switch without a restart, and opening corpus files shows them on the canvas.
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
@@ -11,9 +11,21 @@ Task board. Only the master agent edits this file, on `main`.
 
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
-| [P4-01](tasks/P4-01.md) | architect | Phase 3 | — | ready | — |
+| [P4-01](tasks/P4-01.md) | architect | Phase 3 | — | merged (ADRs 0028–0037, stubs) | agent/P4-01 |
+| [P4-02](tasks/P4-02.md) | implementer | P4-01 | A | ready | — |
+| [P4-04](tasks/P4-04.md) | implementer | P4-01 | A | ready | — |
+| [P4-05](tasks/P4-05.md) | implementer | P4-01 | A | ready | — |
+| [P4-06](tasks/P4-06.md) | implementer | P4-01 | A | ready | — |
+| [P4-03](tasks/P4-03.md) | implementer | P4-02 | B | waits for P4-02 | — |
+| [P4-07](tasks/P4-07.md) | implementer | P4-03 | C | waits for B | — |
+| [P4-08](tasks/P4-08.md) | implementer | P4-03 | C | waits for B | — |
+| [P4-09](tasks/P4-09.md) | implementer | P4-03..P4-08 | D | waits for C | — |
+| [P4-10](tasks/P4-10.md) | test-engineer | P4-09 | E | waits for D | — |
+| [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | waits | — |
+| [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | waits | — |
+| [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | waits | — |
 
-The architect proposes the rest of the board in its Result.
+Tasks in the same group run in parallel on disjoint files. Shared files: `crates/ui/src/lib.rs` and `crates/ui/Cargo.toml` belong to P4-03 (others request additions under Open issues); `xtask/src/extract/*` mapping rules to P4-02; `xtask/src/{main,gate}.rs` and `xtask/Cargo.toml` to P4-09; `ATTRIBUTION.md` rows come from P4-03 and P4-06; the master resolves `Cargo.lock`. Fix tasks follow the audits.
 
 ## Phase 3 task board
 
