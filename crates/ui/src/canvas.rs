@@ -51,11 +51,12 @@ const TICK_IN: f64 = 0.125;
 /// A major grid line and a labelled ruler tick every 8 ticks (1 inch).
 const MAJOR_EVERY: i64 = 8;
 
-/// The smallest zoom (10%); our own range choice.
-const MIN_ZOOM: f64 = 0.1;
+/// The zoom range is the view commands' range, so a wheel zoom and a
+/// `view.zoom.*` command clamp alike.
+const MIN_ZOOM: f64 = ferrogram_commands::builtins::ZOOM_MIN;
 
-/// The largest zoom (6400%); our own range choice.
-const MAX_ZOOM: f64 = 64.0;
+/// The largest zoom (see [`MIN_ZOOM`]).
+const MAX_ZOOM: f64 = ferrogram_commands::builtins::ZOOM_MAX;
 
 /// Re-rasterize when the zoom moved more than this fraction from the
 /// rasterized zoom (ADR 0033).

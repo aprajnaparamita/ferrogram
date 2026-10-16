@@ -17,11 +17,12 @@ use super::{no_document, outcome};
 /// The zoom change of one `view.zoom.in` / `view.zoom.out` step.
 const ZOOM_STEP: f64 = 1.25;
 
-/// The lowest zoom the view commands set (ADR 0029: `zoom > 0`).
-const ZOOM_MIN: f64 = 0.05;
+/// The lowest zoom (5%) the view commands and the canvas allow (ADR
+/// 0029: `zoom > 0`); our own range choice.
+pub const ZOOM_MIN: f64 = 0.05;
 
-/// The highest zoom the view commands set.
-const ZOOM_MAX: f64 = 40.0;
+/// The highest zoom (4000%) the view commands and the canvas allow.
+pub const ZOOM_MAX: f64 = 40.0;
 
 /// The page size of a sheet with no positive `PageWidth` or
 /// `PageHeight`: US Letter portrait, per axis (the same fallback the

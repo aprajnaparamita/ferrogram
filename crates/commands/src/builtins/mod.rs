@@ -14,6 +14,8 @@
 mod file;
 mod view;
 
+pub use view::{ZOOM_MAX, ZOOM_MIN};
+
 use ferrogram_ui_spec::Commands;
 
 use crate::app::AppCtx;
