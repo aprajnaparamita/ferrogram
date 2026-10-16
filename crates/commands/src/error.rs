@@ -38,10 +38,11 @@ pub enum RegistryError {
         /// Why it was rejected.
         reason: &'static str,
     },
-    /// The registry machinery is a task P4-01 stub (ADR 0028).
-    NotImplemented {
-        /// The stubbed operation, e.g. `Registry::register`.
-        what: &'static str,
+    /// A mapping table failed to parse (a build bug: the embedded
+    /// `ui-spec/commands.yaml` is generated and validated).
+    BadMapping {
+        /// The formatted cause.
+        message: String,
     },
 }
 
@@ -50,8 +51,8 @@ impl fmt::Display for RegistryError {
         match self {
             RegistryError::Duplicate { id } => write!(f, "command id {id} is already registered"),
             RegistryError::BadId { id, reason } => write!(f, "bad command id {id:?}: {reason}"),
-            RegistryError::NotImplemented { what } => {
-                write!(f, "{what} is not implemented yet")
+            RegistryError::BadMapping { message } => {
+                write!(f, "command mapping table: {message}")
             }
         }
     }
@@ -136,13 +137,11 @@ pub enum CommandError {
         /// The stub command's id.
         id: String,
     },
-    /// The operation is a task P4-01 stub (ADR 0028).
-    NotImplemented {
-        /// The stubbed operation, e.g. `UndoStack::push`.
-        what: &'static str,
-    },
     /// A domain failure (read, render, io), already formatted as one
-    /// line by the domain crate's error.
+    /// line by the domain crate's error. The file commands (ADR 0026)
+    /// prefix the line with `cannot read input: `, `cannot write
+    /// output: ` or `render failed: `; the CLI maps those prefixes to
+    /// its exit codes.
     Failed {
         /// The formatted cause.
         message: String,
@@ -200,7 +199,6 @@ impl fmt::Display for CommandError {
             },
             CommandError::InvalidArgs { message } => write!(f, "bad arguments: {message}"),
             CommandError::Unsupported { id } => write!(f, "command {id} is not implemented yet"),
-            CommandError::NotImplemented { what } => write!(f, "{what} is not implemented yet"),
             CommandError::Failed { message } => f.write_str(message),
         }
     }
@@ -263,13 +261,10 @@ mod tests {
             reason: "empty part",
         };
         assert_eq!(bad.to_string(), "bad command id \"x\": empty part");
-        let stub = RegistryError::NotImplemented {
-            what: "Registry::register",
+        let stub = RegistryError::BadMapping {
+            message: "truncated".into(),
         };
-        assert_eq!(
-            stub.to_string(),
-            "Registry::register is not implemented yet"
-        );
+        assert_eq!(stub.to_string(), "command mapping table: truncated");
     }
 
     #[test]
@@ -353,12 +348,6 @@ mod tests {
                     id: "file.new".into(),
                 },
                 "command file.new is not implemented yet",
-            ),
-            (
-                CommandError::NotImplemented {
-                    what: "UndoStack::push",
-                },
-                "UndoStack::push is not implemented yet",
             ),
             (CommandError::failed("read failed"), "read failed"),
         ];

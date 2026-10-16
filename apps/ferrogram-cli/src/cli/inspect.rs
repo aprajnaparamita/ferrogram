@@ -1,129 +1,15 @@
-//! The `inspect` summary and its text and JSON forms (ADR 0026).
+//! The `inspect` summary types (ADR 0026).
 //!
-//! The summary reports the document kind, each page (name, size in inches,
-//! shape count, rendering warning count) and the counts of masters, styles
-//! and themes. `--json` prints the same data as one JSON object with a
-//! stable key order; the text form is compact.
+//! The summary and its text and JSON forms moved to
+//! `ferrogram_commands::builtins` with the ADR 0026 seam (task P4-02),
+//! so the CLI, the control channel (Phase 8) and MCP share one
+//! implementation. This module keeps the names in scope for the
+//! unchanged tests below, which build a `Summary` and pin its output.
 
+#[cfg(test)]
+use ferrogram_commands::builtins::{PageSummary, Summary, kind_text, shape_count};
+#[cfg(test)]
 use ferrogram_model::{Document, DocumentKind, Page};
-
-/// One page row of the inspect summary (ADR 0026).
-pub(crate) struct PageSummary {
-    /// The page number, counted from 1 in document order.
-    pub index: usize,
-    /// The page name, as written in the file.
-    pub name: String,
-    /// The page width in inches.
-    pub width: f64,
-    /// The page height in inches.
-    pub height: f64,
-    /// The number of shapes on the page, groups included.
-    pub shapes: usize,
-    /// The number of rendering warnings of the page (ADR 0021).
-    pub warnings: usize,
-}
-
-/// The inspect summary of a document (ADR 0026).
-pub(crate) struct Summary {
-    /// The document kind: `drawing`, `stencil` or `template`.
-    pub kind: &'static str,
-    /// The pages, in document order.
-    pub pages: Vec<PageSummary>,
-    /// The number of masters.
-    pub masters: usize,
-    /// The number of stylesheet rows.
-    pub styles: usize,
-    /// The number of theme parts.
-    pub themes: usize,
-}
-
-impl Summary {
-    /// The total rendering warning count of the summarised pages.
-    pub(crate) fn warnings(&self) -> usize {
-        self.pages.iter().map(|page| page.warnings).sum()
-    }
-
-    /// The compact text form (ADR 0026).
-    pub(crate) fn text(&self) -> String {
-        let mut text = String::new();
-        text.push_str(&format!("kind: {}\n", self.kind));
-        text.push_str(&format!("pages: {}\n", self.pages.len()));
-        for page in &self.pages {
-            let name = if page.name.is_empty() {
-                "(unnamed)"
-            } else {
-                page.name.as_str()
-            };
-            text.push_str(&format!(
-                "  {}: {} {} x {} in, {} shapes, {} warnings\n",
-                page.index, name, page.width, page.height, page.shapes, page.warnings
-            ));
-        }
-        text.push_str(&format!("masters: {}\n", self.masters));
-        text.push_str(&format!("styles: {}\n", self.styles));
-        text.push_str(&format!("themes: {}\n", self.themes));
-        text.push_str(&format!("warnings: {}\n", self.warnings()));
-        text
-    }
-
-    /// The JSON form: one object, stable key order (ADR 0026).
-    pub(crate) fn json(&self) -> String {
-        let value = serde_json::json!({
-            "kind": self.kind,
-            "pages": self.pages.iter().map(|page| serde_json::json!({
-                "index": page.index,
-                "name": page.name,
-                "width": finite(page.width),
-                "height": finite(page.height),
-                "shapes": page.shapes,
-                "warnings": page.warnings,
-            })).collect::<Vec<_>>(),
-            "masters": self.masters,
-            "styles": self.styles,
-            "themes": self.themes,
-            "warnings": self.warnings(),
-        });
-        serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string())
-    }
-}
-
-/// The document kind as a word (ADR 0026).
-pub(crate) fn kind_text(kind: DocumentKind) -> &'static str {
-    match kind {
-        DocumentKind::Drawing => "drawing",
-        DocumentKind::Stencil => "stencil",
-        DocumentKind::Template => "template",
-        _ => "unknown",
-    }
-}
-
-/// The number of shapes on a page, group sub-shapes included.
-///
-/// A broken or cyclic `children` list is walked once, never looped on.
-pub(crate) fn shape_count(doc: &Document, page: &Page) -> usize {
-    let mut seen = vec![false; doc.shapes.len()];
-    let mut count = 0usize;
-    let mut stack: Vec<ferrogram_model::ShapeId> = page.shapes.to_vec();
-    while let Some(id) = stack.pop() {
-        let Some(slot) = seen.get_mut(id.index as usize) else {
-            continue;
-        };
-        if *slot {
-            continue;
-        }
-        *slot = true;
-        count = count.saturating_add(1);
-        if let Some(shape) = doc.shape(id) {
-            stack.extend(shape.children.iter().copied());
-        }
-    }
-    count
-}
-
-/// A finite JSON number, or 0 (serde_json rejects NaN and infinity).
-fn finite(value: f64) -> f64 {
-    if value.is_finite() { value } else { 0.0 }
-}
 
 #[cfg(test)]
 mod tests {

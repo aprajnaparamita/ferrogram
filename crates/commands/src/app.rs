@@ -4,9 +4,6 @@
 //! Everything a command mutates lives here, in L4 (ADR 0002), so headless
 //! callers (the CLI today, the JSON control channel and MCP in Phase 8)
 //! share one state type with the UI. The egui crates never appear.
-//!
-//! Alpha status (task P4-01): the types and their trivial constructors
-//! and accessors are defined; commands mutate the state in P4-02.
 
 use std::path::PathBuf;
 
@@ -106,6 +103,12 @@ pub struct DocumentSession {
     pub view: ViewState,
     /// The per-document undo stack (ADR 0028).
     pub undo: UndoStack,
+    /// The package the document was read from, kept for the lossless
+    /// patch-based writer (ADR 0018: `write_document` patches the
+    /// source parts so unmapped content survives a save). `None` for a
+    /// document that was never read from a file (task P4-02 extension
+    /// of the ADR 0029 field list).
+    pub preserve: Option<ferrogram_vsdx::Package>,
 }
 
 impl DocumentSession {
@@ -119,7 +122,14 @@ impl DocumentSession {
             active_page,
             view: ViewState::new(),
             undo: UndoStack::new(UndoStack::DEFAULT_CAPACITY),
+            preserve: None,
         }
+    }
+
+    /// Keeps the package the document was read from (ADR 0018).
+    pub fn with_preserve(mut self, preserve: ferrogram_vsdx::Package) -> Self {
+        self.preserve = Some(preserve);
+        self
     }
 
     /// The display name: the file name, or "Untitled" when never saved.
@@ -295,6 +305,18 @@ mod tests {
             .push(ferrogram_model::Page::new(PageId { index: 0 }, 0));
         let session = DocumentSession::new(document, Some(PathBuf::from("/tmp/a.vsdx")));
         assert_eq!(session.display_name(), "a.vsdx");
+    }
+
+    #[test]
+    fn document_session_keeps_the_source_package() {
+        let mut document = Document::new();
+        document
+            .pages
+            .push(ferrogram_model::Page::new(PageId { index: 0 }, 0));
+        let session = DocumentSession::new(document, None);
+        assert!(session.preserve.is_none());
+        let session = session.with_preserve(ferrogram_vsdx::Package::new());
+        assert!(session.preserve.is_some());
     }
 
     #[test]
