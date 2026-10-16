@@ -26,6 +26,10 @@ quick-xml = "0.41" # parses the SVG output in tests (P3-07)
 # property tests (tests/scene_properties.rs), task P3-10 (ADR 0027).
 insta = "1"
 proptest = "1"
+# Decodes `render_png` output to compare it with `render_raster` bytes
+# (tests/raster.rs, task P4-05). Already in the tree through
+# tiny-skia's `png-format` feature; no new crate in the supply chain.
+png = "0.18"
 
 [lints]
 workspace = true

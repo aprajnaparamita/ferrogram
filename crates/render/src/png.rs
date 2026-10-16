@@ -114,7 +114,16 @@ impl Default for PngOptions {
 /// of AGENTS.md section 6 (or cannot form a raster at all) and
 /// [`Error::Encode`] when the PNG encoder fails.
 pub fn render_png(scene: &Scene, options: &PngOptions) -> Result<Vec<u8>, Error> {
-    let scale = crate::checked_scale(options.scale)?;
+    rasterize(scene, options.scale, options.antialias)?
+        .encode_png()
+        .map_err(|_| Error::Encode)
+}
+
+/// The rasterizer both backends share (ADR 0033): `render_png` encodes
+/// this pixmap and [`crate::render_raster`] returns the same pixels as
+/// demultiplied RGBA bytes, so the PNG goldens cover the canvas.
+pub(crate) fn rasterize(scene: &Scene, scale: f64, antialias: bool) -> Result<Pixmap, Error> {
+    let scale = crate::checked_scale(scale)?;
     let (width, height) = raster_size(scene, scale)?;
     let mut pixmap = Pixmap::new(width, height).ok_or(Error::TooLarge)?;
     if let Some(background) = scene.background {
@@ -122,7 +131,7 @@ pub fn render_png(scene: &Scene, options: &PngOptions) -> Result<Vec<u8>, Error>
     }
     let ctx = Ctx {
         scale,
-        antialias: options.antialias,
+        antialias,
         width,
         height,
     };
@@ -137,7 +146,7 @@ pub fn render_png(scene: &Scene, options: &PngOptions) -> Result<Vec<u8>, Error>
     };
     let mut clips = Vec::new();
     draw_nodes(&mut pixmap, &ctx, &scene.nodes, device, &mut clips, 0);
-    pixmap.encode_png().map_err(|_| Error::Encode)
+    Ok(pixmap)
 }
 
 /// What every draw call needs besides the pixmap.

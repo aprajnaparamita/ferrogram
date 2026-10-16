@@ -1416,6 +1416,7 @@ dependencies = [
  "ferrogram-text",
  "ferrogram-vsdx",
  "insta",
+ "png",
  "proptest",
  "quick-xml",
  "serde",
