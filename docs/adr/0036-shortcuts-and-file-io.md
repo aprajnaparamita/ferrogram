@@ -62,7 +62,11 @@ impl ShortcutMap {
 - **Precedence over egui:** the shell consumes matched chords before
   passing input to widgets (`egui::Context::input_mut` +
   `Event::consume`); egui's own shortcuts apply only inside text edits
-  (scope `Text` defers). A matched chord that the registry reports
+  (scope `Text` defers). Inside a text edit egui keeps plain typing,
+  the caret keys and its editing chords (`Ctrl` + `A`, `C`, `V`, `X`,
+  `Z`, `Y`, `Backspace`, `Delete`; `Ctrl+Shift` + `Z` or an arrow);
+  every other bound `Ctrl` or `Alt` chord dispatches (amended at the
+  P4-14 merge). A matched chord that the registry reports
   `NotEnabled` for is consumed and shown as a disabled status-bar hint,
   never passed on to a widget.
 
