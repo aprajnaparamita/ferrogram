@@ -1,72 +1,223 @@
 //! Keyboard shortcut dispatch (ADR 0036): chord sequences from
 //! `ui-spec/shortcuts.yaml`, scoped by focus, dispatched as [`Intent`]s.
 //!
-//! Owned by task P4-08. Alpha status (task P4-01): the interface is
-//! defined as stubs.
+//! Owned by task P4-08.
+//!
+//! A **chord** is one key plus its modifier tokens. Both sides are
+//! normalized before matching: modifiers are deduplicated and sorted
+//! `Ctrl`, `Shift`, `Alt`, and a shifted symbol key (`+`, `<`, `>`)
+//! absorbs the `Shift` modifier (on most layouts those symbols are
+//! typed with Shift, and `shortcuts.yaml` lists them inconsistently:
+//! `Ctrl+Shift+<` but `Ctrl++`).
+//!
+//! Multi-chord sequences are stateful: [`ShortcutMap`] buffers the
+//! chords typed so far and drops the buffer on a mismatch or after
+//! [`SEQUENCE_TIMEOUT_SECONDS`] (the timeout is applied by
+//! [`dispatch`], which runs once per frame with the egui frame time;
+//! [`ShortcutMap::resolve`] alone is timeless).
+//!
+//! Focus rules ([`dispatch`]): `Global` and `Window` always match,
+//! `Page` and `Ribbon` match when the shell reports that surface as
+//! focused, `Text` matches only while an egui text edit has focus, and
+//! `Selection` matches only with a non-empty selection (never in
+//! Phase 4). While a text edit has focus, the chords egui owns for
+//! text editing (typing, caret moves, its Ctrl editing keys) are never
+//! matched or consumed: they pass straight through to egui.
 
-use egui::Context;
-use ferrogram_commands::AppCtx;
-use ferrogram_ui_spec::{ShortcutScope, Shortcuts};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use egui::{Context, Event, Key, Modifiers};
+use ferrogram_commands::{AppCtx, CommandId, Invocation, Source};
+use ferrogram_ui_spec::{LoadError, ShortcutScope, Shortcuts};
 
 use crate::{Intent, UiError};
 
+/// A multi-chord sequence expires this many seconds after the last
+/// typed chord (ADR 0036).
+pub const SEQUENCE_TIMEOUT_SECONDS: f64 = 2.0;
+
+/// Pseudo-token for the arrow keys: `shortcuts.yaml` records the
+/// held-key note "Arrow Keys" (P1-04), not a direction, so one token
+/// covers all four arrow keys.
+const ARROWS_TOKEN: &str = "Arrow Keys";
+
+/// Modifier tokens, in canonical order.
+const MODIFIER_TOKENS: [&str; 3] = ["Ctrl", "Shift", "Alt"];
+
+/// Key tokens that produce their character with Shift on most
+/// layouts. A chord whose key is one of these drops its `Shift`
+/// modifier on both sides of the match.
+const SHIFTED_SYMBOL_TOKENS: [&str; 3] = ["+", "<", ">"];
+
+/// Key tokens egui's text edit binds with Ctrl (select, clipboard,
+/// undo/redo, delete word/line). They defer to egui inside a text
+/// edit, even when `shortcuts.yaml` binds them.
+const EGUI_CTRL_TEXT_TOKENS: [&str; 17] = [
+    "A",
+    "B",
+    "C",
+    "E",
+    "F",
+    "H",
+    "K",
+    "N",
+    "P",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "Backspace",
+    "Delete",
+];
+
 /// One chord: modifiers plus one key, as `shortcuts.yaml` token strings
 /// (`Ctrl`, `Shift`, `Alt`, `A`, `F1`, ...; ADR 0036).
+///
+/// The fields are normalized: `modifiers` holds no duplicates and is
+/// sorted `Ctrl`, `Shift`, `Alt`, and a shifted symbol key (`+`, `<`,
+/// `>`) carries no `Shift` modifier.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KeyChord {
-    /// The key token (last token of the chord).
+    /// The key token (the only non-modifier token of the chord).
     pub key: String,
-    /// The modifier tokens, in `shortcuts.yaml` order.
+    /// The modifier tokens, in canonical order (`Ctrl`, `Shift`, `Alt`).
     pub modifiers: Vec<String>,
 }
 
 impl KeyChord {
-    /// A chord from its key and modifiers.
+    /// A chord from its key and modifiers, normalized.
     pub fn new(key: impl Into<String>, modifiers: Vec<String>) -> Self {
-        Self {
-            key: key.into(),
-            modifiers,
-        }
+        normalize_chord(key.into(), modifiers)
     }
+}
+
+/// A shortcut entry: what a completed sequence dispatches and where it
+/// applies (ADR 0036).
+#[derive(Debug, Clone)]
+struct Entry {
+    /// The command to dispatch.
+    command: CommandId,
+    /// The scope the shortcut applies in.
+    scope: ShortcutScope,
+}
+
+impl Entry {
+    /// The intent for this entry (ADR 0028 `Source::Shortcut`).
+    fn into_intent(self) -> Intent {
+        Intent::new(self.command, Invocation::empty(Source::Shortcut))
+    }
+}
+
+/// One node of the chord-sequence trie.
+#[derive(Debug, Default)]
+struct Node {
+    /// The entry whose sequence ends here, if any.
+    end: Option<Entry>,
+    /// Longer sequences continuing from here.
+    children: BTreeMap<KeyChord, Node>,
 }
 
 /// The shortcut map: typed chords to command intents (ADR 0036).
 ///
-/// Multi-chord sequences are stateful: `resolve` records the chords
-/// typed so far in `pending` and resets on a mismatch (P4-08).
+/// Multi-chord sequences are stateful: [`ShortcutMap::resolve`] records
+/// the chords typed so far and resets on a mismatch or a timeout.
+#[derive(Debug)]
 pub struct ShortcutMap {
+    /// The chord-sequence trie.
+    root: Node,
+    /// Number of sequences inserted (conflicts are not counted).
     entries: usize,
+    /// The chords typed so far of a half-typed sequence.
     pending: Vec<KeyChord>,
+    /// A completed entry held back because its sequence is a prefix of
+    /// longer ones: the trie waits for the next chord (ADR 0036).
+    deferred: Option<Entry>,
+    /// The egui frame time of the last typed chord, for the timeout.
+    last_chord_time: Option<f64>,
+    /// One line per duplicate sequence dropped at load (first wins).
+    conflicts: Vec<String>,
 }
 
 impl ShortcutMap {
     /// Builds the map from `ui-spec/shortcuts.yaml` (ADR 0007).
     ///
-    /// Not implemented yet (P4-08).
+    /// Entries are inserted in file order. When two entries share an
+    /// identical chord sequence, the first wins and one line is added
+    /// to [`ShortcutMap::conflicts`] (ADR 0036). An unknown key token,
+    /// a chord with no key or with more than one key, and a shortcut
+    /// with no chord are load-time errors.
     pub fn from_shortcuts(shortcuts: &Shortcuts) -> Result<ShortcutMap, UiError> {
-        let _ = shortcuts;
-        Err(UiError::NotImplemented {
-            what: "ShortcutMap::from_shortcuts",
-        })
+        let mut map = ShortcutMap {
+            root: Node::default(),
+            entries: 0,
+            pending: Vec::new(),
+            deferred: None,
+            last_chord_time: None,
+            conflicts: Vec::new(),
+        };
+        for shortcut in &shortcuts.entries {
+            if shortcut.sequence.is_empty() {
+                return Err(load_error("a shortcut needs at least one chord"));
+            }
+            let mut chords = Vec::with_capacity(shortcut.sequence.len());
+            for tokens in &shortcut.sequence {
+                chords.push(chord_from_tokens(tokens)?);
+            }
+            let command = CommandId::intern(shortcut.command.as_str())
+                .map_err(|error| load_error(format!("bad command id: {error}")))?;
+            let entry = Entry {
+                command,
+                scope: shortcut.scope,
+            };
+            let mut node = &mut map.root;
+            for chord in &chords {
+                node = node.children.entry(chord.clone()).or_default();
+            }
+            if let Some(kept) = &node.end {
+                map.conflicts.push(format!(
+                    "conflicting shortcut [{}]: {} (scope {}) wins over {} (scope {})",
+                    sequence_display(&chords),
+                    kept.command,
+                    kept.scope.as_str(),
+                    entry.command,
+                    entry.scope.as_str(),
+                ));
+                continue;
+            }
+            node.end = Some(entry);
+            map.entries += 1;
+        }
+        Ok(map)
     }
 
     /// Matches typed chords against the map; `Some` when a sequence
-    /// completes (ADR 0036).
+    /// completes (ADR 0036). Scope filtering happens in [`dispatch`].
     ///
-    /// Not implemented yet (P4-08).
+    /// The chords are processed in order and the first completed
+    /// sequence wins; the remaining chords are dropped. Each call
+    /// extends the half-typed sequence recorded by earlier calls.
     pub fn resolve(&mut self, chords: &[KeyChord]) -> Result<Option<Intent>, UiError> {
-        let _ = chords;
-        Err(UiError::NotImplemented {
-            what: "ShortcutMap::resolve",
-        })
+        Ok(self.resolve_entry(chords).map(Entry::into_intent))
+    }
+
+    /// The conflict warnings recorded at load (ADR 0036): one line per
+    /// duplicate sequence that lost to the first entry.
+    pub fn conflicts(&self) -> &[String] {
+        &self.conflicts
     }
 
     /// Whether a multi-chord sequence is half-typed (status bar hint).
+    ///
+    /// The 2 second timeout is applied by [`dispatch`], which runs
+    /// every frame; a stale buffer is reported here until then.
     pub fn pending(&self) -> bool {
         !self.pending.is_empty()
     }
 
-    /// Number of shortcut sequences in the map.
+    /// Number of shortcut sequences in the map (first-wins count).
     pub fn len(&self) -> usize {
         self.entries
     }
@@ -75,27 +226,547 @@ impl ShortcutMap {
     pub fn is_empty(&self) -> bool {
         self.entries == 0
     }
+
+    /// Feeds the chords to the trie in order; the first completed
+    /// entry wins and later chords are dropped.
+    fn resolve_entry(&mut self, chords: &[KeyChord]) -> Option<Entry> {
+        let mut fired = None;
+        for chord in chords {
+            let chord = normalize_chord(chord.key.clone(), chord.modifiers.clone());
+            if let Some(entry) = self.step(chord, None) {
+                fired = Some(entry);
+                break;
+            }
+        }
+        fired
+    }
+
+    /// Feeds one typed chord to the trie and returns the entry it
+    /// completed, if any. `now` is the egui frame time of the chord
+    /// (when called from [`dispatch`]).
+    fn step(&mut self, chord: KeyChord, now: Option<f64>) -> Option<Entry> {
+        if let Some(now) = now {
+            self.last_chord_time = Some(now);
+        }
+        let mut candidate = self.pending.clone();
+        candidate.push(chord.clone());
+        match self.probe(&candidate) {
+            // Complete, but longer sequences share the prefix: wait.
+            Some((true, Some(entry))) => {
+                self.pending = candidate;
+                self.deferred = Some(entry);
+                None
+            }
+            // Complete and no longer sequence to wait for: fire.
+            Some((_, Some(entry))) => {
+                self.reset();
+                Some(entry)
+            }
+            // A prefix of longer sequences: keep typing.
+            Some((true, None)) => {
+                self.pending = candidate;
+                None
+            }
+            // Mismatch: fire the held-back completion, else retry the
+            // chord as the start of a fresh sequence.
+            _ => {
+                if let Some(entry) = self.deferred.take() {
+                    self.reset();
+                    return Some(entry);
+                }
+                let had_progress = !self.pending.is_empty();
+                self.reset();
+                if had_progress {
+                    return self.step(chord, now);
+                }
+                None
+            }
+        }
+    }
+
+    /// Drops a half-typed sequence after its timeout and returns the
+    /// completion that was waiting on a longer sequence (ADR 0036: a
+    /// sequence that is a prefix of another fires when the longer one
+    /// times out).
+    fn expire(&mut self, now: f64) -> Option<Entry> {
+        if self.pending.is_empty() && self.deferred.is_none() {
+            self.last_chord_time = None;
+            return None;
+        }
+        let expired = self
+            .last_chord_time
+            .is_some_and(|last| now - last > SEQUENCE_TIMEOUT_SECONDS);
+        if expired {
+            self.reset();
+            self.deferred.take()
+        } else {
+            None
+        }
+    }
+
+    /// The trie node at `chords`: `(has_children, entry)`, or `None`
+    /// when the chords are not a path in the trie.
+    fn probe(&self, chords: &[KeyChord]) -> Option<(bool, Option<Entry>)> {
+        let mut node = &self.root;
+        for chord in chords {
+            node = node.children.get(chord)?;
+        }
+        Some((!node.children.is_empty(), node.end.clone()))
+    }
+
+    /// Clears the typed-chord buffer and its clock.
+    fn reset(&mut self) {
+        self.pending.clear();
+        self.last_chord_time = None;
+    }
 }
 
 /// Reads egui input, resolves it through `map` and returns the intent
 /// for the given scope (ADR 0036).
 ///
-/// Not implemented yet (P4-08).
+/// `scope` is the surface the shell reports as focused (`Global` when
+/// none of `Page`, `Ribbon`, `Text` or `Selection` has focus). A
+/// matched chord is consumed before the widgets see it, even when its
+/// scope does not match; a chord that matches nothing is left alone.
+/// While an egui text edit has focus, the chords egui owns for text
+/// editing are never matched or consumed.
 pub fn dispatch(
     egui_ctx: &Context,
     map: &mut ShortcutMap,
     app: &AppCtx,
     scope: ShortcutScope,
 ) -> Result<Option<Intent>, UiError> {
-    let _ = (egui_ctx, map, app, scope);
-    Err(UiError::NotImplemented {
-        what: "shortcuts::dispatch",
+    let now = egui_ctx.input(|input| input.time);
+    // A sequence that is only a prefix of longer ones fires when the
+    // longer ones time out (no key event on that frame).
+    if let Some(entry) = map.expire(now) {
+        return Ok(Some(entry.into_intent()));
+    }
+    let text_edit = egui_ctx.text_edit_focused();
+    let mut fired: Option<Entry> = None;
+    let mut consumed: Vec<usize> = Vec::new();
+
+    egui_ctx.input_mut(|input| {
+        for (index, event) in input.events.iter().enumerate() {
+            if fired.is_some() {
+                break;
+            }
+            let Event::Key {
+                key,
+                modifiers,
+                pressed: true,
+                ..
+            } = event
+            else {
+                continue;
+            };
+            let Some(chord) = chord_from_event(*key, *modifiers) else {
+                continue;
+            };
+            if text_edit && defers_to_egui(&chord) {
+                continue;
+            }
+            let matched = map.step(chord, Some(now));
+            if matched.is_some() || map.pending() {
+                consumed.push(index);
+            }
+            if let Some(entry) = matched
+                && scope_active(entry.scope, scope, app, text_edit)
+            {
+                fired = Some(entry);
+            }
+        }
+        if !consumed.is_empty() {
+            let mut index = 0usize;
+            input.events.retain(|_event| {
+                let keep = !consumed.contains(&index);
+                index += 1;
+                keep
+            });
+        }
+    });
+
+    Ok(fired.map(Entry::into_intent))
+}
+
+/// Whether a shortcut of scope `want` dispatches: `Global` and
+/// `Window` always, `Page` and `Ribbon` when the shell reports that
+/// surface focused, `Text` only inside an egui text edit, and
+/// `Selection` only with a selection (none in Phase 4).
+fn scope_active(want: ShortcutScope, focus: ShortcutScope, app: &AppCtx, text_edit: bool) -> bool {
+    match want {
+        ShortcutScope::Global | ShortcutScope::Window => true,
+        ShortcutScope::Page => focus == ShortcutScope::Page,
+        ShortcutScope::Ribbon => focus == ShortcutScope::Ribbon,
+        ShortcutScope::Text => text_edit,
+        ShortcutScope::Selection => !app.selection.is_empty(),
+    }
+}
+
+/// Whether egui's text edit owns this chord while it has focus: plain
+/// typing and caret keys, and the Ctrl editing keys of
+/// [`EGUI_CTRL_TEXT_TOKENS`] (ADR 0036 "egui's own shortcuts apply
+/// only inside text edits").
+fn defers_to_egui(chord: &KeyChord) -> bool {
+    let has_ctrl = chord.modifiers.iter().any(|m| m == "Ctrl");
+    let has_alt = chord.modifiers.iter().any(|m| m == "Alt");
+    if has_alt {
+        return false;
+    }
+    if !has_ctrl {
+        // Plain typing (letters, digits, symbols) and the caret keys.
+        return true;
+    }
+    chord.modifiers.iter().all(|m| m == "Ctrl" || m == "Shift")
+        && EGUI_CTRL_TEXT_TOKENS.contains(&chord.key.as_str())
+}
+
+/// True when `token` is a key or modifier token the egui mapping table
+/// covers (the token-coverage check of ADR 0036).
+pub fn token_is_known(token: &str) -> bool {
+    MODIFIER_TOKENS.contains(&token) || token == ARROWS_TOKEN || key_for_token(token).is_some()
+}
+
+/// The `shortcuts.yaml` key token of an egui key press, or `None` for
+/// keys the table does not cover (their chords never match).
+///
+/// The token of the shifted symbol keys depends on Shift being held:
+/// `Comma` is `,` and (with Shift) `<`; `Period` is `.` and `>`;
+/// `Equals` is `=` and (with Shift, on most layouts) `+`.
+fn key_token(key: Key, modifiers: Modifiers) -> Option<&'static str> {
+    let token = match key {
+        Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp => ARROWS_TOKEN,
+        Key::Escape => "Esc",
+        Key::Tab => "Tab",
+        Key::Backspace => "Backspace",
+        Key::Enter => "Enter",
+        Key::Space => "Space",
+        Key::Insert => "Insert",
+        Key::Delete => "Delete",
+        Key::Home => "Home",
+        Key::End => "End",
+        Key::PageUp => "PageUp",
+        Key::PageDown => "PageDown",
+        Key::A => "A",
+        Key::B => "B",
+        Key::C => "C",
+        Key::D => "D",
+        Key::E => "E",
+        Key::F => "F",
+        Key::G => "G",
+        Key::H => "H",
+        Key::I => "I",
+        Key::J => "J",
+        Key::K => "K",
+        Key::L => "L",
+        Key::M => "M",
+        Key::N => "N",
+        Key::O => "O",
+        Key::P => "P",
+        Key::Q => "Q",
+        Key::R => "R",
+        Key::S => "S",
+        Key::T => "T",
+        Key::U => "U",
+        Key::V => "V",
+        Key::W => "W",
+        Key::X => "X",
+        Key::Y => "Y",
+        Key::Z => "Z",
+        Key::Num0 => "0",
+        Key::Num1 => "1",
+        Key::Num2 => "2",
+        Key::Num3 => "3",
+        Key::Num4 => "4",
+        Key::Num5 => "5",
+        Key::Num6 => "6",
+        Key::Num7 => "7",
+        Key::Num8 => "8",
+        Key::Num9 => "9",
+        Key::F1 => "F1",
+        Key::F2 => "F2",
+        Key::F3 => "F3",
+        Key::F4 => "F4",
+        Key::F5 => "F5",
+        Key::F6 => "F6",
+        Key::F7 => "F7",
+        Key::F8 => "F8",
+        Key::F9 => "F9",
+        Key::F10 => "F10",
+        Key::F11 => "F11",
+        Key::F12 => "F12",
+        Key::Comma => {
+            if modifiers.shift {
+                "<"
+            } else {
+                ","
+            }
+        }
+        Key::Period => {
+            if modifiers.shift {
+                ">"
+            } else {
+                "."
+            }
+        }
+        Key::Equals => {
+            if modifiers.shift {
+                "+"
+            } else {
+                "="
+            }
+        }
+        Key::Plus => "+",
+        Key::Minus => "-",
+        Key::Colon => ":",
+        Key::Backslash => "\\",
+        Key::Slash => "/",
+        Key::Pipe => "|",
+        Key::Questionmark => "?",
+        Key::Exclamationmark => "!",
+        Key::OpenBracket => "[",
+        Key::CloseBracket => "]",
+        Key::OpenCurlyBracket => "{",
+        Key::CloseCurlyBracket => "}",
+        Key::Backtick => "`",
+        Key::Semicolon => ";",
+        Key::Quote => "'",
+        _ => return None,
+    };
+    Some(token)
+}
+
+/// The egui key a key token maps to, or `None` for tokens the table
+/// does not cover (a load-time error in
+/// [`ShortcutMap::from_shortcuts`]).
+///
+/// `ARROWS_TOKEN` is not a single key; [`token_is_known`] answers for
+/// it. `<` and `>` are typed on the comma and period keys (with
+/// Shift), so they map there.
+fn key_for_token(token: &str) -> Option<Key> {
+    let key = match token {
+        "Esc" => Key::Escape,
+        "Tab" => Key::Tab,
+        "Backspace" => Key::Backspace,
+        "Enter" => Key::Enter,
+        "Space" => Key::Space,
+        "Insert" => Key::Insert,
+        "Delete" => Key::Delete,
+        "Home" => Key::Home,
+        "End" => Key::End,
+        "PageUp" => Key::PageUp,
+        "PageDown" => Key::PageDown,
+        "A" => Key::A,
+        "B" => Key::B,
+        "C" => Key::C,
+        "D" => Key::D,
+        "E" => Key::E,
+        "F" => Key::F,
+        "G" => Key::G,
+        "H" => Key::H,
+        "I" => Key::I,
+        "J" => Key::J,
+        "K" => Key::K,
+        "L" => Key::L,
+        "M" => Key::M,
+        "N" => Key::N,
+        "O" => Key::O,
+        "P" => Key::P,
+        "Q" => Key::Q,
+        "R" => Key::R,
+        "S" => Key::S,
+        "T" => Key::T,
+        "U" => Key::U,
+        "V" => Key::V,
+        "W" => Key::W,
+        "X" => Key::X,
+        "Y" => Key::Y,
+        "Z" => Key::Z,
+        "0" => Key::Num0,
+        "1" => Key::Num1,
+        "2" => Key::Num2,
+        "3" => Key::Num3,
+        "4" => Key::Num4,
+        "5" => Key::Num5,
+        "6" => Key::Num6,
+        "7" => Key::Num7,
+        "8" => Key::Num8,
+        "9" => Key::Num9,
+        "F1" => Key::F1,
+        "F2" => Key::F2,
+        "F3" => Key::F3,
+        "F4" => Key::F4,
+        "F5" => Key::F5,
+        "F6" => Key::F6,
+        "F7" => Key::F7,
+        "F8" => Key::F8,
+        "F9" => Key::F9,
+        "F10" => Key::F10,
+        "F11" => Key::F11,
+        "F12" => Key::F12,
+        "<" | "," => Key::Comma,
+        ">" | "." => Key::Period,
+        "+" => Key::Plus,
+        "=" => Key::Equals,
+        "-" => Key::Minus,
+        ":" => Key::Colon,
+        "\\" => Key::Backslash,
+        "/" => Key::Slash,
+        "|" => Key::Pipe,
+        "?" => Key::Questionmark,
+        "!" => Key::Exclamationmark,
+        "[" => Key::OpenBracket,
+        "]" => Key::CloseBracket,
+        "{" => Key::OpenCurlyBracket,
+        "}" => Key::CloseCurlyBracket,
+        "`" => Key::Backtick,
+        ";" => Key::Semicolon,
+        "'" => Key::Quote,
+        _ => return None,
+    };
+    Some(key)
+}
+
+/// Normalizes one egui key press to a chord: the key token plus the
+/// `Ctrl`, `Shift`, `Alt` modifier tokens (`Ctrl` covers the macOS
+/// command key; `shortcuts.yaml` is a Windows table). `None` for keys
+/// the token table does not cover.
+fn chord_from_event(key: Key, modifiers: Modifiers) -> Option<KeyChord> {
+    let key_token = key_token(key, modifiers)?;
+    let mut mods = Vec::new();
+    if modifiers.ctrl || modifiers.command {
+        mods.push("Ctrl".to_owned());
+    }
+    if modifiers.shift {
+        mods.push("Shift".to_owned());
+    }
+    if modifiers.alt {
+        mods.push("Alt".to_owned());
+    }
+    Some(normalize_chord(key_token.to_owned(), mods))
+}
+
+/// Parses one chord of `shortcuts.yaml` (an unordered set of key
+/// tokens) into a normalized [`KeyChord`].
+fn chord_from_tokens(tokens: &[String]) -> Result<KeyChord, UiError> {
+    let mut keys: Vec<&String> = Vec::new();
+    let mut modifiers: Vec<String> = Vec::new();
+    for token in tokens {
+        if MODIFIER_TOKENS.contains(&token.as_str()) {
+            modifiers.push(token.clone());
+        } else {
+            keys.push(token);
+        }
+    }
+    let mut keys = keys.into_iter();
+    let Some(key) = keys.next() else {
+        return Err(load_error(format!(
+            "chord [{}] has no key token",
+            tokens.join(", ")
+        )));
+    };
+    if keys.next().is_some() {
+        return Err(load_error(format!(
+            "chord [{}] has more than one key token",
+            tokens.join(", ")
+        )));
+    }
+    if !token_is_known(key) {
+        return Err(load_error(format!("unknown key token {key:?}")));
+    }
+    Ok(normalize_chord(key.clone(), modifiers))
+}
+
+/// Normalizes a chord: deduplicated modifiers in canonical order, and
+/// no `Shift` on a shifted symbol key.
+fn normalize_chord(key: String, mut modifiers: Vec<String>) -> KeyChord {
+    modifiers.sort_by_key(|token| modifier_rank(token));
+    modifiers.dedup();
+    if SHIFTED_SYMBOL_TOKENS.contains(&key.as_str()) {
+        modifiers.retain(|token| token != "Shift");
+    }
+    KeyChord { key, modifiers }
+}
+
+/// The canonical order of the modifier tokens.
+fn modifier_rank(token: &str) -> u8 {
+    match token {
+        "Ctrl" => 0,
+        "Shift" => 1,
+        "Alt" => 2,
+        _ => 3,
+    }
+}
+
+/// The chords of one sequence as `Ctrl+Shift+F, F` for warnings.
+fn sequence_display(chords: &[KeyChord]) -> String {
+    chords
+        .iter()
+        .map(|chord| {
+            let mut parts: Vec<&str> = chord.modifiers.iter().map(String::as_str).collect();
+            parts.push(chord.key.as_str());
+            parts.join("+")
+        })
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+/// A load-time error for the shortcut table (ADR 0007 data errors are
+/// [`LoadError::Parse`]).
+fn load_error(message: impl Into<String>) -> UiError {
+    UiError::Layout(LoadError::Parse {
+        path: PathBuf::from("shortcuts.yaml"),
+        message: message.into(),
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use ferrogram_commands::Settings;
+    use ferrogram_ui_spec::CommandId as SpecCommandId;
+
     use super::*;
+
+    fn shortcut(
+        tokens: &[&str],
+        command: &str,
+        scope: ShortcutScope,
+    ) -> ferrogram_ui_spec::Shortcut {
+        ferrogram_ui_spec::Shortcut {
+            sequence: vec![tokens.iter().map(|t| (*t).to_owned()).collect()],
+            command: SpecCommandId::parse(command).expect("id"),
+            scope,
+            section: None,
+        }
+    }
+
+    fn multi_shortcut(
+        chords: &[&[&str]],
+        command: &str,
+        scope: ShortcutScope,
+    ) -> ferrogram_ui_spec::Shortcut {
+        ferrogram_ui_spec::Shortcut {
+            sequence: chords
+                .iter()
+                .map(|chord| chord.iter().map(|t| (*t).to_owned()).collect())
+                .collect(),
+            command: SpecCommandId::parse(command).expect("id"),
+            scope,
+            section: None,
+        }
+    }
+
+    fn shortcuts(entries: Vec<ferrogram_ui_spec::Shortcut>) -> Shortcuts {
+        Shortcuts { entries }
+    }
+
+    fn chord(key: &str, modifiers: &[&str]) -> KeyChord {
+        KeyChord::new(key, modifiers.iter().map(|m| (*m).to_owned()).collect())
+    }
+
+    fn app() -> AppCtx {
+        AppCtx::new(Settings::default())
+    }
 
     #[test]
     fn a_chord_holds_key_and_modifiers() {
@@ -105,32 +776,441 @@ mod tests {
     }
 
     #[test]
-    fn the_map_is_a_stub() {
-        let mut map = match ShortcutMap::from_shortcuts(&Shortcuts::default()) {
-            Ok(map) => map,
-            Err(error) => {
-                assert!(error.to_string().contains("not implemented"));
-                ShortcutMap {
-                    entries: 0,
-                    pending: Vec::new(),
-                }
-            }
-        };
-        assert!(!map.pending());
-        assert!(map.is_empty());
-        assert_eq!(map.len(), 0);
-        assert!(map.resolve(&[]).is_err());
+    fn modifiers_are_sorted_and_deduplicated() {
+        let chord = KeyChord::new("F", vec!["Shift".into(), "Ctrl".into(), "Ctrl".into()]);
+        assert_eq!(chord.modifiers, vec!["Ctrl".to_owned(), "Shift".to_owned()]);
     }
 
     #[test]
-    fn dispatch_is_a_stub() {
-        let mut map = ShortcutMap {
-            entries: 0,
-            pending: Vec::new(),
+    fn a_shifted_symbol_drops_shift_on_both_sides() {
+        let from_file = chord_from_tokens(&["Ctrl".to_owned(), "Shift".to_owned(), "<".to_owned()])
+            .expect("chord");
+        let typed = chord_from_event(
+            Key::Comma,
+            Modifiers {
+                ctrl: true,
+                shift: true,
+                ..Default::default()
+            },
+        )
+        .expect("chord");
+        assert_eq!(from_file, typed);
+        assert_eq!(from_file, chord("<", &["Ctrl"]));
+    }
+
+    #[test]
+    fn the_plus_key_matches_shift_equals_and_numpad_plus() {
+        let from_file = chord_from_tokens(&["Ctrl".to_owned(), "+".to_owned()]).expect("chord");
+        let shift_equals = chord_from_event(
+            Key::Equals,
+            Modifiers {
+                ctrl: true,
+                shift: true,
+                ..Default::default()
+            },
+        )
+        .expect("chord");
+        let numpad_plus = chord_from_event(
+            Key::Plus,
+            Modifiers {
+                ctrl: true,
+                ..Default::default()
+            },
+        )
+        .expect("chord");
+        assert_eq!(from_file, shift_equals);
+        assert_eq!(from_file, numpad_plus);
+    }
+
+    #[test]
+    fn the_arrow_keys_share_one_token() {
+        for key in [
+            Key::ArrowUp,
+            Key::ArrowDown,
+            Key::ArrowLeft,
+            Key::ArrowRight,
+        ] {
+            let chord = chord_from_event(key, Modifiers::default()).expect("chord");
+            assert_eq!(chord.key, ARROWS_TOKEN);
+        }
+        let from_file = chord_from_tokens(&[ARROWS_TOKEN.to_owned()]).expect("chord");
+        assert_eq!(from_file.key, ARROWS_TOKEN);
+    }
+
+    #[test]
+    fn an_unknown_key_token_is_a_load_error() {
+        let error = chord_from_tokens(&["Hyper".to_owned()]).expect_err("error");
+        assert!(error.to_string().contains("unknown key token"));
+    }
+
+    #[test]
+    fn a_chord_without_a_key_or_with_two_keys_is_a_load_error() {
+        let empty = chord_from_tokens(&["Ctrl".to_owned()]).expect_err("error");
+        assert!(empty.to_string().contains("no key token"));
+        let two = chord_from_tokens(&["A".to_owned(), "B".to_owned()]).expect_err("error");
+        assert!(two.to_string().contains("more than one key token"));
+    }
+
+    #[test]
+    fn every_token_of_the_table_is_known() {
+        for token in MODIFIER_TOKENS {
+            assert!(token_is_known(token));
+        }
+        assert!(token_is_known(ARROWS_TOKEN));
+        for token in [
+            "A",
+            "Z",
+            "0",
+            "9",
+            "F1",
+            "F12",
+            "Esc",
+            "Tab",
+            "Backspace",
+            "Delete",
+            "Enter",
+            "Space",
+            "Insert",
+            "Home",
+            "End",
+            "PageUp",
+            "PageDown",
+            "+",
+            "-",
+            "=",
+            "<",
+            ">",
+            ",",
+            ".",
+            ":",
+            ";",
+            "'",
+            "?",
+            "!",
+            "[",
+            "]",
+            "{",
+            "}",
+            "\\",
+            "/",
+            "|",
+            "`",
+        ] {
+            assert!(key_for_token(token).is_some(), "{token} missing");
+            assert!(token_is_known(token), "{token} unknown");
+        }
+        assert!(!token_is_known("Hyper"));
+        assert!(!token_is_known("F13"));
+    }
+
+    #[test]
+    fn an_uncovered_key_has_no_token() {
+        assert_eq!(key_token(Key::F13, Modifiers::default()), None);
+        assert!(chord_from_event(Key::F13, Modifiers::default()).is_none());
+    }
+
+    #[test]
+    fn the_map_loads_and_resolves_single_chords() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
+            shortcut(&["Ctrl", "I"], "format.text.italic", ShortcutScope::Text),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert_eq!(map.len(), 2);
+        assert!(!map.is_empty());
+        assert!(map.conflicts().is_empty());
+        let intent = map
+            .resolve(&[chord("Z", &["Ctrl"])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "edit.undo");
+        assert_eq!(intent.invocation.source, Source::Shortcut);
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_duplicate_sequence_first_wins_with_one_conflict() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "G"], "arrange.group", ShortcutScope::Global),
+            shortcut(&["Ctrl", "G"], "arrange.ungroup", ShortcutScope::Selection),
+            shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Page),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.conflicts().len(), 2);
+        let intent = map
+            .resolve(&[chord("G", &["Ctrl"])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "arrange.group");
+    }
+
+    #[test]
+    fn a_multi_chord_sequence_resolves_after_its_chords() {
+        let two_chords = multi_shortcut(
+            &[&["Alt", "H"], &["F"]],
+            "arrange.group",
+            ShortcutScope::Global,
+        );
+        let mut map = ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords])).expect("map");
+        assert!(
+            map.resolve(&[chord("H", &["Alt"])])
+                .expect("resolve")
+                .is_none()
+        );
+        assert!(map.pending());
+        let intent = map
+            .resolve(&[chord("F", &[])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "arrange.group");
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_mismatch_resets_the_buffer_and_retries_the_chord() {
+        let two_chords = multi_shortcut(
+            &[&["Alt", "H"], &["F"]],
+            "arrange.group",
+            ShortcutScope::Global,
+        );
+        let single = shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global);
+        let mut map =
+            ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords, single])).expect("map");
+        assert!(
+            map.resolve(&[chord("H", &["Alt"])])
+                .expect("resolve")
+                .is_none()
+        );
+        // Ctrl+Z does not continue the sequence: it starts a new one.
+        let intent = map
+            .resolve(&[chord("Z", &["Ctrl"])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "edit.undo");
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_prefix_entry_waits_then_fires_on_mismatch() {
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert!(map.resolve(&[chord("F6", &[])]).expect("resolve").is_none());
+        assert!(map.pending());
+        // F5 does not continue the longer sequence: the shorter one fires.
+        let intent = map
+            .resolve(&[chord("F5", &[])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "view.zoom.in");
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn an_expired_sequence_drops_the_buffer_and_fires_the_deferred_entry() {
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        map.step(chord("F6", &[]), Some(10.0));
+        assert!(map.pending());
+        assert!(map.expire(11.0).is_none());
+        let entry = map.expire(12.5).expect("the deferred entry fires");
+        assert_eq!(entry.command.as_str(), "view.zoom.in");
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_half_typed_sequence_times_out() {
+        let two_chords = multi_shortcut(
+            &[&["Alt", "H"], &["F"]],
+            "arrange.group",
+            ShortcutScope::Global,
+        );
+        let mut map = ShortcutMap::from_shortcuts(&shortcuts(vec![two_chords])).expect("map");
+        map.step(chord("H", &["Alt"]), Some(10.0));
+        assert!(map.pending());
+        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS / 2.0).is_none());
+        assert!(map.pending());
+        assert!(map.expire(10.0 + SEQUENCE_TIMEOUT_SECONDS + 0.1).is_none());
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn an_empty_table_loads_as_an_empty_map() {
+        let mut map = ShortcutMap::from_shortcuts(&Shortcuts::default()).expect("map");
+        assert!(map.is_empty());
+        assert_eq!(map.len(), 0);
+        assert!(!map.pending());
+        assert!(map.resolve(&[]).expect("resolve").is_none());
+    }
+
+    #[test]
+    fn a_shortcut_without_a_chord_is_a_load_error() {
+        let empty = ferrogram_ui_spec::Shortcut {
+            sequence: Vec::new(),
+            command: SpecCommandId::parse("edit.undo").expect("id"),
+            scope: ShortcutScope::Global,
+            section: None,
         };
+        let error = ShortcutMap::from_shortcuts(&shortcuts(vec![empty])).expect_err("error");
+        assert!(error.to_string().contains("at least one chord"));
+    }
+
+    #[test]
+    fn a_bad_token_is_a_load_error() {
+        let bad = shortcut(&["Ctrl", "Warp"], "edit.undo", ShortcutScope::Global);
+        let error = ShortcutMap::from_shortcuts(&shortcuts(vec![bad])).expect_err("error");
+        assert!(error.to_string().contains("unknown key token"));
+    }
+
+    #[test]
+    fn global_and_window_scopes_always_match() {
+        let app = app();
+        for want in [ShortcutScope::Global, ShortcutScope::Window] {
+            for focus in [
+                ShortcutScope::Global,
+                ShortcutScope::Page,
+                ShortcutScope::Ribbon,
+                ShortcutScope::Text,
+            ] {
+                assert!(scope_active(want, focus, &app, false));
+            }
+        }
+    }
+
+    #[test]
+    fn page_and_ribbon_need_their_surface() {
+        let app = app();
+        assert!(scope_active(
+            ShortcutScope::Page,
+            ShortcutScope::Page,
+            &app,
+            false
+        ));
+        assert!(!scope_active(
+            ShortcutScope::Page,
+            ShortcutScope::Ribbon,
+            &app,
+            false
+        ));
+        assert!(scope_active(
+            ShortcutScope::Ribbon,
+            ShortcutScope::Ribbon,
+            &app,
+            false
+        ));
+        assert!(!scope_active(
+            ShortcutScope::Ribbon,
+            ShortcutScope::Page,
+            &app,
+            false
+        ));
+    }
+
+    #[test]
+    fn text_needs_a_text_edit_and_selection_never_fires_in_phase_4() {
+        let app = app();
+        assert!(scope_active(
+            ShortcutScope::Text,
+            ShortcutScope::Global,
+            &app,
+            true
+        ));
+        assert!(!scope_active(
+            ShortcutScope::Text,
+            ShortcutScope::Global,
+            &app,
+            false
+        ));
+        for focus in [
+            ShortcutScope::Global,
+            ShortcutScope::Page,
+            ShortcutScope::Ribbon,
+            ShortcutScope::Text,
+        ] {
+            assert!(!scope_active(ShortcutScope::Selection, focus, &app, true));
+        }
+        assert!(app.selection.is_empty());
+    }
+
+    #[test]
+    fn plain_typing_and_caret_keys_defer_to_egui() {
+        for key in ["A", "1", "-", ARROWS_TOKEN, "Delete", "Esc", "Home"] {
+            assert!(defers_to_egui(&chord(key, &[])), "{key}");
+        }
+        assert!(defers_to_egui(&chord("A", &["Shift"])));
+        assert!(defers_to_egui(&chord("Z", &["Ctrl"])));
+        assert!(defers_to_egui(&chord("Z", &["Ctrl", "Shift"])));
+        assert!(defers_to_egui(&chord("Backspace", &["Ctrl"])));
+    }
+
+    #[test]
+    fn our_own_text_keys_do_not_defer() {
+        // format.text.italic, the file's own text shortcuts.
+        assert!(!defers_to_egui(&chord("I", &["Ctrl"])));
+        assert!(!defers_to_egui(&chord("<", &["Ctrl"])));
+        assert!(!defers_to_egui(&chord("F4", &["Alt"])));
+    }
+
+    #[test]
+    fn chord_from_event_maps_modifiers() {
+        let typed = chord_from_event(
+            Key::F,
+            Modifiers {
+                ctrl: true,
+                shift: true,
+                alt: true,
+                ..Default::default()
+            },
+        )
+        .expect("chord");
+        assert_eq!(typed, chord("F", &["Ctrl", "Shift", "Alt"]));
+        // The macOS command key reads as Ctrl (a Windows table).
+        let command_key = chord_from_event(
+            Key::S,
+            Modifiers {
+                mac_cmd: true,
+                command: true,
+                ..Default::default()
+            },
+        )
+        .expect("chord");
+        assert_eq!(command_key, chord("S", &["Ctrl"]));
+    }
+
+    #[test]
+    fn resolve_processes_one_chord_per_call_and_drops_the_rest() {
+        let map_source = shortcuts(vec![
+            shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
+            shortcut(&["Ctrl", "Y"], "edit.redo", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        let intent = map
+            .resolve(&[chord("Z", &["Ctrl"]), chord("Y", &["Ctrl"])])
+            .expect("resolve")
+            .expect("intent");
+        assert_eq!(intent.command.as_str(), "edit.undo");
+    }
+
+    #[test]
+    fn the_context_dispatch_sees_no_keys() {
+        let map_source = shortcuts(vec![shortcut(
+            &["Ctrl", "Z"],
+            "edit.undo",
+            ShortcutScope::Global,
+        )]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
         let ctx = Context::default();
-        let app = AppCtx::new(ferrogram_commands::Settings::default());
-        let outcome = dispatch(&ctx, &mut map, &app, ShortcutScope::Global);
-        assert!(outcome.is_err());
+        let mut outcome = None;
+        let mut output = ctx.run_ui(Default::default(), |ctx| {
+            outcome = dispatch(ctx, &mut map, &app(), ShortcutScope::Global).ok();
+        });
+        output.textures_delta.clear();
+        assert_eq!(outcome, Some(None));
     }
 }
