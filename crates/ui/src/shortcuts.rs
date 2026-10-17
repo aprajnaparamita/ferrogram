@@ -225,24 +225,31 @@ impl ShortcutMap {
         Ok(map)
     }
 
-    /// Matches typed chords against the map; `Some` when a sequence
-    /// completes and one of its bindings fires (ADR 0036): the
-    /// binding of the most specific active scope.
+    /// Matches typed chords against the map; one [`Intent`] per
+    /// completed sequence whose binding fires (ADR 0036): the binding
+    /// of the most specific active scope.
     ///
     /// The chords are processed in order and the first completed
     /// sequence wins; the remaining chords are dropped. Each call
-    /// extends the half-typed sequence recorded by earlier calls. A
-    /// completed sequence whose bindings are all inactive resolves to
-    /// `None` (the sequence is still consumed).
+    /// extends the half-typed sequence recorded by earlier calls. One
+    /// chord can complete two sequences: the held-back completion of a
+    /// half-typed sequence fires first and the chord is then tried as
+    /// the start of a new sequence (P4-16, the P4-10 finding 2), so
+    /// this returns both intents in order. (The ADR 0036 sketch shows
+    /// `Option<Intent>`; the signature grew with that rule.) A
+    /// completed sequence whose bindings are all inactive dispatches
+    /// nothing (the sequence is still consumed).
     pub fn resolve(
         &mut self,
         chords: &[KeyChord],
         active: &ActiveScopes,
-    ) -> Result<Option<Intent>, UiError> {
+    ) -> Result<Vec<Intent>, UiError> {
         Ok(self
             .resolve_entries(chords)
-            .and_then(|entries| pick_entry(&entries, active))
-            .map(Entry::into_intent))
+            .iter()
+            .filter_map(|entries| pick_entry(entries, active))
+            .map(Entry::into_intent)
+            .collect())
     }
 
     /// The conflict warnings recorded at load (ADR 0036 amended): one
@@ -285,24 +292,32 @@ impl ShortcutMap {
         self.bindings == 0
     }
 
-    /// Feeds the chords to the trie in order; the first completed
-    /// sequence wins and later chords are dropped.
-    fn resolve_entries(&mut self, chords: &[KeyChord]) -> Option<Vec<Entry>> {
-        let mut fired = None;
+    /// Feeds the chords to the trie in order; the first chord that
+    /// completes a sequence wins and later chords are dropped. One
+    /// chord can complete two sequences (the held-back completion of a
+    /// half-typed sequence, then its own fresh start); both are
+    /// returned, in order.
+    fn resolve_entries(&mut self, chords: &[KeyChord]) -> Vec<Vec<Entry>> {
         for chord in chords {
             let chord = normalize_chord(chord.key.clone(), chord.modifiers.clone());
-            if let Some(entries) = self.step(chord, None) {
-                fired = Some(entries);
-                break;
+            let fired = self.step(chord, None);
+            if !fired.is_empty() {
+                return fired;
             }
         }
-        fired
+        Vec::new()
     }
 
     /// Feeds one typed chord to the trie and returns the bindings it
-    /// completed, if any. `now` is the egui frame time of the chord
-    /// (when called from [`dispatch`]).
-    fn step(&mut self, chord: KeyChord, now: Option<f64>) -> Option<Vec<Entry>> {
+    /// completed, in order (one group per completed sequence). `now`
+    /// is the egui frame time of the chord (when called from
+    /// [`dispatch`]).
+    ///
+    /// A chord that mismatches a half-typed sequence fires the
+    /// held-back shorter completion and is then tried as the start of
+    /// a fresh sequence (P4-16): it is never dropped without being
+    /// tried.
+    fn step(&mut self, chord: KeyChord, now: Option<f64>) -> Vec<Vec<Entry>> {
         if let Some(now) = now {
             self.last_chord_time = Some(now);
         }
@@ -313,31 +328,34 @@ impl ShortcutMap {
             Some((true, Some(entries))) => {
                 self.pending = candidate;
                 self.deferred = entries;
-                None
+                Vec::new()
             }
-            // Complete and no longer sequence to wait for: fire.
+            // Complete and no longer sequence to wait for: fire. Any
+            // held-back shorter completion is superseded (`reset`
+            // drops it).
             Some((_, Some(entries))) => {
                 self.reset();
-                Some(entries)
+                vec![entries]
             }
             // A prefix of longer sequences: keep typing.
             Some((true, None)) => {
                 self.pending = candidate;
-                None
+                Vec::new()
             }
-            // Mismatch: fire the held-back completion, else retry the
-            // chord as the start of a fresh sequence.
+            // Mismatch: fire the held-back completion (when one is
+            // waiting) and retry the chord as the start of a fresh
+            // sequence.
             _ => {
+                let mut fired = Vec::new();
                 if !self.deferred.is_empty() {
-                    self.reset();
-                    return Some(std::mem::take(&mut self.deferred));
+                    fired.push(std::mem::take(&mut self.deferred));
                 }
                 let had_progress = !self.pending.is_empty();
                 self.reset();
-                if had_progress {
-                    return self.step(chord, now);
+                if had_progress || !fired.is_empty() {
+                    fired.extend(self.step(chord, now));
                 }
-                None
+                fired
             }
         }
     }
@@ -355,8 +373,9 @@ impl ShortcutMap {
             .last_chord_time
             .is_some_and(|last| now - last > SEQUENCE_TIMEOUT_SECONDS);
         if expired {
+            let fired = std::mem::take(&mut self.deferred);
             self.reset();
-            std::mem::take(&mut self.deferred)
+            fired
         } else {
             Vec::new()
         }
@@ -377,15 +396,19 @@ impl ShortcutMap {
         Some((!node.children.is_empty(), ends))
     }
 
-    /// Clears the typed-chord buffer and its clock.
+    /// Clears the typed-chord buffer, its held-back completion and its
+    /// clock. The callers that fire the held-back completion take it
+    /// first (a completion superseded by a longer sequence that
+    /// completed is dropped here).
     fn reset(&mut self) {
         self.pending.clear();
+        self.deferred.clear();
         self.last_chord_time = None;
     }
 }
 
-/// Reads egui input, resolves it through `map` and returns the intent
-/// for the given scope (ADR 0036).
+/// Reads egui input, resolves it through `map` and returns the intents
+/// of the completed sequences for the given scope (ADR 0036).
 ///
 /// `scope` is the surface the shell reports as focused (`Global` when
 /// none of `Page` or `Ribbon` has focus). The bindings of the most
@@ -394,13 +417,16 @@ impl ShortcutMap {
 /// binding of its sequence is active; a chord that matches nothing is
 /// left alone. While an egui text edit has focus, the chords without
 /// `Ctrl` or `Alt` (typing and the caret keys) are never matched or
-/// consumed; a chord with `Ctrl` or `Alt` is matched even there.
+/// consumed; a chord with `Ctrl` or `Alt` is matched even there. One
+/// chord can complete two sequences (the held-back completion of a
+/// half-typed sequence, then its own fresh start, P4-16): one intent
+/// per fired binding, in order.
 pub fn dispatch(
     egui_ctx: &Context,
     map: &mut ShortcutMap,
     app: &AppCtx,
     scope: ShortcutScope,
-) -> Result<Option<Intent>, UiError> {
+) -> Result<Vec<Intent>, UiError> {
     let now = egui_ctx.input(|input| input.time);
     let active = ActiveScopes::new(
         scope,
@@ -409,53 +435,52 @@ pub fn dispatch(
     );
     // A sequence that is only a prefix of longer ones fires when the
     // longer ones time out (no key event on that frame).
-    if let Some(entry) = pick_entry(&map.expire(now), &active) {
-        return Ok(Some(entry.into_intent()));
+    let mut fired: Vec<Entry> = pick_entry(&map.expire(now), &active).into_iter().collect();
+    if fired.is_empty() {
+        let mut consumed: Vec<usize> = Vec::new();
+
+        egui_ctx.input_mut(|input| {
+            for (index, event) in input.events.iter().enumerate() {
+                if !fired.is_empty() {
+                    break;
+                }
+                let Event::Key {
+                    key,
+                    modifiers,
+                    pressed: true,
+                    ..
+                } = event
+                else {
+                    continue;
+                };
+                let Some(chord) = chord_from_event(*key, *modifiers) else {
+                    continue;
+                };
+                if active.text && defers_to_egui(&chord) {
+                    continue;
+                }
+                let matched = map.step(chord, Some(now));
+                if !matched.is_empty() || map.pending() {
+                    consumed.push(index);
+                }
+                for entries in &matched {
+                    if let Some(entry) = pick_entry(entries, &active) {
+                        fired.push(entry);
+                    }
+                }
+            }
+            if !consumed.is_empty() {
+                let mut index = 0usize;
+                input.events.retain(|_event| {
+                    let keep = !consumed.contains(&index);
+                    index += 1;
+                    keep
+                });
+            }
+        });
     }
-    let mut fired: Option<Entry> = None;
-    let mut consumed: Vec<usize> = Vec::new();
 
-    egui_ctx.input_mut(|input| {
-        for (index, event) in input.events.iter().enumerate() {
-            if fired.is_some() {
-                break;
-            }
-            let Event::Key {
-                key,
-                modifiers,
-                pressed: true,
-                ..
-            } = event
-            else {
-                continue;
-            };
-            let Some(chord) = chord_from_event(*key, *modifiers) else {
-                continue;
-            };
-            if active.text && defers_to_egui(&chord) {
-                continue;
-            }
-            let matched = map.step(chord, Some(now));
-            if matched.is_some() || map.pending() {
-                consumed.push(index);
-            }
-            if let Some(entries) = matched
-                && let Some(entry) = pick_entry(&entries, &active)
-            {
-                fired = Some(entry);
-            }
-        }
-        if !consumed.is_empty() {
-            let mut index = 0usize;
-            input.events.retain(|_event| {
-                let keep = !consumed.contains(&index);
-                index += 1;
-                keep
-            });
-        }
-    });
-
-    Ok(fired.map(Entry::into_intent))
+    Ok(fired.into_iter().map(Entry::into_intent).collect())
 }
 
 /// The binding that fires for a completed sequence (ADR 0036): the
@@ -995,6 +1020,198 @@ mod tests {
     }
 
     #[test]
+    fn every_key_of_the_token_table_maps_to_its_token_and_back() {
+        // Table-driven over every arm of the `key_token` and
+        // `key_for_token` tables (P4-12 coverage major 3): one row per
+        // arm, forward and back. The shifted symbol keys read Shift;
+        // the arrow keys share one token with no single key back.
+        let none = Modifiers::default();
+        let shift = Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        let forward: &[(Key, Modifiers, &str)] = &[
+            (Key::ArrowDown, none, ARROWS_TOKEN),
+            (Key::ArrowLeft, none, ARROWS_TOKEN),
+            (Key::ArrowRight, none, ARROWS_TOKEN),
+            (Key::ArrowUp, none, ARROWS_TOKEN),
+            (Key::Escape, none, "Esc"),
+            (Key::Tab, none, "Tab"),
+            (Key::Backspace, none, "Backspace"),
+            (Key::Enter, none, "Enter"),
+            (Key::Space, none, "Space"),
+            (Key::Insert, none, "Insert"),
+            (Key::Delete, none, "Delete"),
+            (Key::Home, none, "Home"),
+            (Key::End, none, "End"),
+            (Key::PageUp, none, "PageUp"),
+            (Key::PageDown, none, "PageDown"),
+            (Key::A, none, "A"),
+            (Key::B, none, "B"),
+            (Key::C, none, "C"),
+            (Key::D, none, "D"),
+            (Key::E, none, "E"),
+            (Key::F, none, "F"),
+            (Key::G, none, "G"),
+            (Key::H, none, "H"),
+            (Key::I, none, "I"),
+            (Key::J, none, "J"),
+            (Key::K, none, "K"),
+            (Key::L, none, "L"),
+            (Key::M, none, "M"),
+            (Key::N, none, "N"),
+            (Key::O, none, "O"),
+            (Key::P, none, "P"),
+            (Key::Q, none, "Q"),
+            (Key::R, none, "R"),
+            (Key::S, none, "S"),
+            (Key::T, none, "T"),
+            (Key::U, none, "U"),
+            (Key::V, none, "V"),
+            (Key::W, none, "W"),
+            (Key::X, none, "X"),
+            (Key::Y, none, "Y"),
+            (Key::Z, none, "Z"),
+            (Key::Num0, none, "0"),
+            (Key::Num1, none, "1"),
+            (Key::Num2, none, "2"),
+            (Key::Num3, none, "3"),
+            (Key::Num4, none, "4"),
+            (Key::Num5, none, "5"),
+            (Key::Num6, none, "6"),
+            (Key::Num7, none, "7"),
+            (Key::Num8, none, "8"),
+            (Key::Num9, none, "9"),
+            (Key::F1, none, "F1"),
+            (Key::F2, none, "F2"),
+            (Key::F3, none, "F3"),
+            (Key::F4, none, "F4"),
+            (Key::F5, none, "F5"),
+            (Key::F6, none, "F6"),
+            (Key::F7, none, "F7"),
+            (Key::F8, none, "F8"),
+            (Key::F9, none, "F9"),
+            (Key::F10, none, "F10"),
+            (Key::F11, none, "F11"),
+            (Key::F12, none, "F12"),
+            (Key::Comma, none, ","),
+            (Key::Comma, shift, "<"),
+            (Key::Period, none, "."),
+            (Key::Period, shift, ">"),
+            (Key::Equals, none, "="),
+            (Key::Equals, shift, "+"),
+            (Key::Plus, none, "+"),
+            (Key::Minus, none, "-"),
+            (Key::Colon, none, ":"),
+            (Key::Backslash, none, "\\"),
+            (Key::Slash, none, "/"),
+            (Key::Pipe, none, "|"),
+            (Key::Questionmark, none, "?"),
+            (Key::Exclamationmark, none, "!"),
+            (Key::OpenBracket, none, "["),
+            (Key::CloseBracket, none, "]"),
+            (Key::OpenCurlyBracket, none, "{"),
+            (Key::CloseCurlyBracket, none, "}"),
+            (Key::Backtick, none, "`"),
+            (Key::Semicolon, none, ";"),
+            (Key::Quote, none, "'"),
+        ];
+        for (key, modifiers, token) in forward {
+            assert_eq!(key_token(*key, *modifiers), Some(*token), "{key:?}");
+        }
+        let backward: &[(&str, Key)] = &[
+            ("Esc", Key::Escape),
+            ("Tab", Key::Tab),
+            ("Backspace", Key::Backspace),
+            ("Enter", Key::Enter),
+            ("Space", Key::Space),
+            ("Insert", Key::Insert),
+            ("Delete", Key::Delete),
+            ("Home", Key::Home),
+            ("End", Key::End),
+            ("PageUp", Key::PageUp),
+            ("PageDown", Key::PageDown),
+            ("A", Key::A),
+            ("B", Key::B),
+            ("C", Key::C),
+            ("D", Key::D),
+            ("E", Key::E),
+            ("F", Key::F),
+            ("G", Key::G),
+            ("H", Key::H),
+            ("I", Key::I),
+            ("J", Key::J),
+            ("K", Key::K),
+            ("L", Key::L),
+            ("M", Key::M),
+            ("N", Key::N),
+            ("O", Key::O),
+            ("P", Key::P),
+            ("Q", Key::Q),
+            ("R", Key::R),
+            ("S", Key::S),
+            ("T", Key::T),
+            ("U", Key::U),
+            ("V", Key::V),
+            ("W", Key::W),
+            ("X", Key::X),
+            ("Y", Key::Y),
+            ("Z", Key::Z),
+            ("0", Key::Num0),
+            ("1", Key::Num1),
+            ("2", Key::Num2),
+            ("3", Key::Num3),
+            ("4", Key::Num4),
+            ("5", Key::Num5),
+            ("6", Key::Num6),
+            ("7", Key::Num7),
+            ("8", Key::Num8),
+            ("9", Key::Num9),
+            ("F1", Key::F1),
+            ("F2", Key::F2),
+            ("F3", Key::F3),
+            ("F4", Key::F4),
+            ("F5", Key::F5),
+            ("F6", Key::F6),
+            ("F7", Key::F7),
+            ("F8", Key::F8),
+            ("F9", Key::F9),
+            ("F10", Key::F10),
+            ("F11", Key::F11),
+            ("F12", Key::F12),
+            (",", Key::Comma),
+            ("<", Key::Comma),
+            (">", Key::Period),
+            (".", Key::Period),
+            ("+", Key::Plus),
+            ("=", Key::Equals),
+            ("-", Key::Minus),
+            (":", Key::Colon),
+            ("\\", Key::Backslash),
+            ("/", Key::Slash),
+            ("|", Key::Pipe),
+            ("?", Key::Questionmark),
+            ("!", Key::Exclamationmark),
+            ("[", Key::OpenBracket),
+            ("]", Key::CloseBracket),
+            ("{", Key::OpenCurlyBracket),
+            ("}", Key::CloseCurlyBracket),
+            ("`", Key::Backtick),
+            (";", Key::Semicolon),
+            ("'", Key::Quote),
+        ];
+        for (token, key) in backward {
+            assert_eq!(key_for_token(token), Some(*key), "{token}");
+        }
+        // The arrows round-trip through their shared token (no single
+        // key back), and the uncovered keys have neither.
+        assert!(token_is_known(ARROWS_TOKEN));
+        assert_eq!(key_for_token(ARROWS_TOKEN), None);
+        assert_eq!(key_token(Key::F13, none), None);
+        assert_eq!(key_for_token("Hyper"), None);
+    }
+
+    #[test]
     fn the_map_loads_and_resolves_single_chords() {
         let map_source = shortcuts(vec![
             shortcut(&["Ctrl", "Z"], "edit.undo", ShortcutScope::Global),
@@ -1007,7 +1224,7 @@ mod tests {
         let intent = map
             .resolve(&[chord("Z", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "edit.undo");
         assert_eq!(intent.invocation.source, Source::Shortcut);
         assert!(!map.pending());
@@ -1032,7 +1249,7 @@ mod tests {
             let intent = map
                 .resolve(&[chord("C", &["Ctrl"])], &active)
                 .expect("resolve")
-                .expect("intent");
+                .remove(0);
             assert_eq!(intent.command.as_str(), "edit.copy");
         }
     }
@@ -1052,7 +1269,7 @@ mod tests {
         let global = map
             .resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(global.command.as_str(), "arrange.group");
 
         // Page beats Global (ADR 0036 order).
@@ -1062,7 +1279,7 @@ mod tests {
                 &ActiveScopes::new(ShortcutScope::Page, false, false),
             )
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(page.command.as_str(), "arrange.ungroup");
 
         // Text beats Page and Global.
@@ -1072,7 +1289,7 @@ mod tests {
                 &ActiveScopes::new(ShortcutScope::Page, true, false),
             )
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(text.command.as_str(), "edit.copy");
     }
 
@@ -1115,7 +1332,7 @@ mod tests {
         let intent = map
             .resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "arrange.group");
     }
 
@@ -1130,7 +1347,7 @@ mod tests {
         assert!(
             map.resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
         assert!(!map.pending());
     }
@@ -1176,13 +1393,13 @@ mod tests {
         assert!(
             map.resolve(&[chord("H", &["Alt"])], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
         assert!(map.pending());
         let intent = map
             .resolve(&[chord("F", &[])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "arrange.group");
         assert!(!map.pending());
     }
@@ -1200,13 +1417,13 @@ mod tests {
         assert!(
             map.resolve(&[chord("H", &["Alt"])], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
         // Ctrl+Z does not continue the sequence: it starts a new one.
         let intent = map
             .resolve(&[chord("Z", &["Ctrl"])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "edit.undo");
         assert!(!map.pending());
     }
@@ -1221,14 +1438,14 @@ mod tests {
         assert!(
             map.resolve(&[chord("F6", &[])], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
         assert!(map.pending());
         // F5 does not continue the longer sequence: the shorter one fires.
         let intent = map
             .resolve(&[chord("F5", &[])], &ActiveScopes::default())
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "view.zoom.in");
         assert!(!map.pending());
     }
@@ -1244,7 +1461,7 @@ mod tests {
         assert!(
             map.resolve(&[chord("F6", &[])], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
         let intent = map
             .resolve(
@@ -1252,7 +1469,7 @@ mod tests {
                 &ActiveScopes::new(ShortcutScope::Page, false, false),
             )
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "arrange.nudge");
     }
 
@@ -1297,7 +1514,7 @@ mod tests {
         assert!(
             map.resolve(&[], &ActiveScopes::default())
                 .expect("resolve")
-                .is_none()
+                .is_empty()
         );
     }
 
@@ -1438,7 +1655,7 @@ mod tests {
                 &ActiveScopes::default(),
             )
             .expect("resolve")
-            .expect("intent");
+            .remove(0);
         assert_eq!(intent.command.as_str(), "edit.undo");
     }
 
@@ -1456,6 +1673,85 @@ mod tests {
             outcome = dispatch(ctx, &mut map, &app(), ShortcutScope::Global).ok();
         });
         output.textures_delta.clear();
-        assert_eq!(outcome, Some(None));
+        assert_eq!(outcome, Some(Vec::new()));
+    }
+
+    #[test]
+    fn a_mismatch_that_fires_a_held_back_completion_retries_the_chord() {
+        // P4-16 Goal 5 (the P4-10 finding 2): the chord that
+        // mismatches a half-typed sequence is not dropped when it
+        // fires the held-back completion; it is tried as the start of
+        // a new sequence and its own binding fires too.
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+            shortcut(&["F5"], "view.zoom.out", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        assert!(
+            map.resolve(&[chord("F6", &[])], &ActiveScopes::default())
+                .expect("resolve")
+                .is_empty()
+        );
+        assert!(map.pending());
+        // F5 does not continue the longer sequence: the held-back
+        // `view.zoom.in` fires and F5 starts (and completes) its own
+        // sequence.
+        let intents = map
+            .resolve(&[chord("F5", &[])], &ActiveScopes::default())
+            .expect("resolve");
+        let ids: Vec<&str> = intents
+            .iter()
+            .map(|intent| intent.command.as_str())
+            .collect();
+        assert_eq!(ids, vec!["view.zoom.in", "view.zoom.out"]);
+        assert!(!map.pending());
+    }
+
+    #[test]
+    fn a_mismatching_chord_can_start_a_new_sequence() {
+        // The same rule where the chord begins a multi-chord sequence:
+        // the held-back completion fires and the chord becomes the
+        // start of the new pending sequence.
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+            multi_shortcut(
+                &[&["Ctrl", "G"], &["X"]],
+                "arrange.group",
+                ShortcutScope::Global,
+            ),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        map.step(chord("F6", &[]), Some(1.0));
+        assert!(map.pending());
+        let intents = map
+            .resolve(&[chord("G", &["Ctrl"])], &ActiveScopes::default())
+            .expect("resolve");
+        assert_eq!(intents.len(), 1, "the held-back completion fires");
+        assert_eq!(intents[0].command.as_str(), "view.zoom.in");
+        assert!(map.pending(), "the chord starts the new sequence");
+        assert_eq!(map.pending_display(), "Ctrl+G");
+        let intents = map
+            .resolve(&[chord("X", &[])], &ActiveScopes::default())
+            .expect("resolve");
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].command.as_str(), "arrange.group");
+    }
+
+    #[test]
+    fn a_completed_longer_sequence_drops_the_held_back_completion() {
+        // The held-back completion is superseded when the longer
+        // sequence completes: it must not fire on a later mismatch.
+        let map_source = shortcuts(vec![
+            shortcut(&["F6"], "view.zoom.in", ShortcutScope::Global),
+            multi_shortcut(&[&["F6"], &["F6"]], "view.zoom.fit", ShortcutScope::Global),
+        ]);
+        let mut map = ShortcutMap::from_shortcuts(&map_source).expect("map");
+        map.step(chord("F6", &[]), Some(1.0));
+        map.step(chord("F6", &[]), Some(1.5));
+        assert!(!map.pending());
+        let fired = map.step(chord("W", &[]), Some(2.0));
+        assert!(fired.is_empty(), "no stale completion: {fired:?}");
     }
 }

@@ -291,8 +291,7 @@ impl Shell {
         // (`Source::Shortcut`).
         self.note_pointer_focus(ui.ctx());
         match shortcuts::dispatch(ui.ctx(), &mut self.shortcuts, &self.app, self.focus) {
-            Ok(Some(intent)) => intents.push(intent),
-            Ok(None) => {}
+            Ok(produced) => intents.extend(produced),
             Err(error) => self.note_error(error.to_string()),
         }
 
