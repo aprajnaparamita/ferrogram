@@ -32,6 +32,41 @@ pub enum DisplayUnits {
     Feet,
 }
 
+impl DisplayUnits {
+    /// Every accepted name, in menu order. The `view.units` argument
+    /// and the Options dialog use these spellings (P4-15).
+    pub const NAMES: [&'static str; 5] = ["Inches", "Millimeters", "Centimeters", "Meters", "Feet"];
+
+    /// The name as [`Self::NAMES`] spells it.
+    pub fn name(self) -> &'static str {
+        match self {
+            DisplayUnits::Inches => "Inches",
+            DisplayUnits::Millimeters => "Millimeters",
+            DisplayUnits::Centimeters => "Centimeters",
+            DisplayUnits::Meters => "Meters",
+            DisplayUnits::Feet => "Feet",
+        }
+    }
+
+    /// Parses a [`Self::NAMES`] spelling, ignoring ASCII case.
+    ///
+    /// ```
+    /// use ferrogram_commands::DisplayUnits;
+    /// assert_eq!(DisplayUnits::parse("millimeters"), Some(DisplayUnits::Millimeters));
+    /// assert_eq!(DisplayUnits::parse("furlongs"), None);
+    /// ```
+    pub fn parse(text: &str) -> Option<Self> {
+        match text.to_ascii_lowercase().as_str() {
+            "inches" => Some(DisplayUnits::Inches),
+            "millimeters" => Some(DisplayUnits::Millimeters),
+            "centimeters" => Some(DisplayUnits::Centimeters),
+            "meters" => Some(DisplayUnits::Meters),
+            "feet" => Some(DisplayUnits::Feet),
+            _ => None,
+        }
+    }
+}
+
 /// The view state of one open document (ADR 0029).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewState {
@@ -53,6 +88,18 @@ impl ViewState {
             zoom: 1.0,
             show_grid: true,
             show_rulers: true,
+        }
+    }
+
+    /// The default view for a new document session: [`Self::new`],
+    /// with the grid and rulers toggles seeded from the persisted
+    /// settings (ADR 0032 amendment: `Settings::show_grid` and
+    /// `Settings::show_rulers` are the defaults for new sessions).
+    pub fn from_settings(settings: &Settings) -> Self {
+        Self {
+            show_grid: settings.show_grid,
+            show_rulers: settings.show_rulers,
+            ..Self::new()
         }
     }
 }
@@ -88,9 +135,29 @@ impl Selection {
     }
 }
 
+/// The identity of one [`DocumentSession`] (P4-15).
+///
+/// The key is assigned once per session and never reused within the
+/// process, so an [`Edit`](crate::Edit) whose `apply`/`revert` opens or
+/// closes documents can still find the session it belongs to: the
+/// document index moves, the identity does not. The wrapped number is
+/// opaque; compare ids, do not order by them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SessionId(u64);
+
+/// The next session identity (a process-local counter; wrapping is
+/// harmless in practice at 2^64 sessions).
+fn next_session_id() -> SessionId {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    SessionId(NEXT.fetch_add(1, Ordering::Relaxed))
+}
+
 /// One open document with its per-document state (ADR 0029).
 #[derive(Debug)]
 pub struct DocumentSession {
+    /// Stable identity of this session (P4-15; see [`SessionId`]).
+    pub id: SessionId,
     /// The document (model, L1).
     pub document: Document,
     /// Where it was loaded from or last saved to; `None` when never saved.
@@ -116,6 +183,7 @@ impl DocumentSession {
     pub fn new(document: Document, path: Option<PathBuf>) -> Self {
         let active_page = document.pages.first().map(|page| page.id);
         Self {
+            id: next_session_id(),
             document,
             path,
             dirty: false,
@@ -234,16 +302,30 @@ impl AppCtx {
     }
 
     /// Closes the document at `index`, keeping the active index valid.
+    ///
+    /// The active document is kept when a *different* document closes:
+    /// `active` only shifts down when it sat after `index` (P4-15
+    /// review minor 5), and only moves when the active document itself
+    /// closes (then the next document takes over, or the previous one
+    /// when the last one closed).
+    ///
     /// Returns the closed session, or `None` when `index` is stale.
     pub fn close_document(&mut self, index: usize) -> Option<DocumentSession> {
         if index >= self.documents.len() {
             return None;
         }
         let closed = self.documents.remove(index);
-        self.active = match self.documents.len() {
-            0 => None,
-            len if index < len => Some(index),
-            len => Some(len - 1),
+        self.active = match self.active {
+            None => None,
+            Some(active) if active > index => Some(active - 1),
+            Some(active) if active == index => {
+                if self.documents.is_empty() {
+                    None
+                } else {
+                    Some(index.min(self.documents.len() - 1))
+                }
+            }
+            Some(active) => Some(active),
         };
         Some(closed)
     }
@@ -270,6 +352,34 @@ mod tests {
         assert!(view.show_grid);
         assert!(view.show_rulers);
         assert_eq!(view, ViewState::default());
+    }
+
+    /// The ADR 0032 amendment: a new session's toggles come from the
+    /// settings defaults (P4-15 review major 1).
+    #[test]
+    fn view_state_seeds_the_toggles_from_the_settings() {
+        let settings = Settings {
+            show_grid: false,
+            show_rulers: true,
+            ..Settings::default()
+        };
+        let view = ViewState::from_settings(&settings);
+        assert!(!view.show_grid);
+        assert!(view.show_rulers);
+        assert_eq!(view.zoom, 1.0);
+        assert_eq!(view.pan, ferrogram_geom::Point::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn display_units_names_round_trip() {
+        for name in DisplayUnits::NAMES {
+            let units = DisplayUnits::parse(name).unwrap_or_else(|| panic!("{name} parses"));
+            assert_eq!(units.name(), name);
+            let lower = name.to_ascii_lowercase();
+            assert_eq!(DisplayUnits::parse(&lower), Some(units), "{lower}");
+        }
+        assert_eq!(DisplayUnits::parse("furlongs"), None);
+        assert_eq!(DisplayUnits::parse(""), None);
     }
 
     #[test]
@@ -337,6 +447,43 @@ mod tests {
         assert_eq!(ctx.active, Some(0));
         assert!(ctx.close_document(0).is_some());
         assert_eq!(ctx.active, None);
+    }
+
+    /// P4-15 review minor 5: closing a *different* document keeps the
+    /// user where they are; `active` only shifts when it sat after the
+    /// closed index and only moves when the active document closes.
+    #[test]
+    fn closing_another_document_keeps_the_active_one() {
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        let third = ctx.active_document().expect("active").id;
+
+        // Close the first while the third is active: the third stays
+        // active and shifts down to index 1.
+        assert!(ctx.close_document(0).is_some());
+        assert_eq!(ctx.active, Some(1));
+        assert_eq!(ctx.active_document().map(|s| s.id), Some(third));
+
+        // Close the active one: the next document takes over.
+        assert!(ctx.close_document(1).is_some());
+        assert_eq!(ctx.active, Some(0));
+
+        // A close before the active index shifts it down.
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        assert_eq!(ctx.active, Some(1));
+        assert!(ctx.close_document(0).is_some());
+        assert_eq!(ctx.active, Some(0));
+    }
+
+    /// P4-15 review minor 3: sessions carry their own identity.
+    #[test]
+    fn session_ids_identify_sessions_not_indices() {
+        let one = DocumentSession::new(Document::new(), None);
+        let two = DocumentSession::new(Document::new(), None);
+        assert_ne!(one.id, two.id, "ids are unique per session");
+        assert_eq!(one.id, one.id, "ids are stable");
     }
 
     #[test]

@@ -210,8 +210,7 @@ fn every_command_in_the_table_executes_with_source_test() {
     ctx.active_document_mut()
         .expect("session")
         .undo
-        .push(Box::new(NamedEdit("move shape")))
-        .expect("push");
+        .push(Box::new(NamedEdit("move shape")));
     let outcome = run(&mut ctx, "edit.undo", Args::new()).expect("edit.undo");
     assert_eq!(outcome.message.as_deref(), Some("Undo move shape"));
     let outcome = run(&mut ctx, "edit.redo", Args::new()).expect("edit.redo");
@@ -815,10 +814,13 @@ fn view_toggles_and_the_layout_switch_mutate_the_state() {
 
     let outcome = run(&mut ctx, "view.toggle_grid", Args::new()).expect("grid");
     assert_eq!(outcome.message.as_deref(), Some("Grid off"));
+    assert!(!ctx.settings.show_grid, "the settings default follows");
     let outcome = run(&mut ctx, "view.toggle_grid", Args::new()).expect("grid");
     assert_eq!(outcome.message.as_deref(), Some("Grid on"));
+    assert!(ctx.settings.show_grid);
     let outcome = run(&mut ctx, "view.rulers", Args::new()).expect("rulers");
     assert_eq!(outcome.message.as_deref(), Some("Rulers off"));
+    assert!(!ctx.settings.show_rulers);
     let session = ctx.active_document().expect("session");
     assert!(session.view.show_grid);
     assert!(!session.view.show_rulers);
@@ -839,17 +841,66 @@ fn view_toggles_and_the_layout_switch_mutate_the_state() {
         ferrogram_ui_spec::LayoutKind::Visio2016
     );
 
-    // Without a document the view commands are disabled with a reason.
+    // Without a document the two toggles still flip the settings
+    // default and say so (ADR 0032 amendment, P4-15 review major 1);
+    // the per-document view commands stay disabled with a reason.
     let mut ctx = AppCtx::new(Settings::default());
-    for id in ["view.toggle_grid", "view.rulers", "view.zoom.in"] {
-        let error = run(&mut ctx, id, Args::new()).expect_err(id);
-        match error {
-            CommandError::NotEnabled { reason, .. } => {
-                assert_eq!(reason.as_deref(), Some("no open document"))
-            }
-            other => panic!("{id}: expected NotEnabled, got {other:?}"),
+    let outcome = run(&mut ctx, "view.toggle_grid", Args::new()).expect("grid");
+    assert_eq!(
+        outcome.message.as_deref(),
+        Some("Grid off (default for new drawings)")
+    );
+    assert!(!ctx.settings.show_grid);
+    assert!(ctx.active_document().is_none(), "no document was opened");
+    let outcome = run(&mut ctx, "view.rulers", Args::new()).expect("rulers");
+    assert_eq!(
+        outcome.message.as_deref(),
+        Some("Rulers off (default for new drawings)")
+    );
+    assert!(!ctx.settings.show_rulers);
+    let error = run(&mut ctx, "view.zoom.in", Args::new()).expect_err("zoom needs a document");
+    match error {
+        CommandError::NotEnabled { reason, .. } => {
+            assert_eq!(reason.as_deref(), Some("no open document"))
         }
+        other => panic!("expected NotEnabled, got {other:?}"),
     }
+}
+
+/// Settings with the two view toggles set. `Settings` is
+/// `non_exhaustive`, so a struct literal is not available outside the
+/// crate and the field-assignment lint is allowed here.
+#[allow(clippy::field_reassign_with_default)]
+fn settings_with_toggles(show_grid: bool, show_rulers: bool) -> Settings {
+    let mut settings = Settings::default();
+    settings.show_grid = show_grid;
+    settings.show_rulers = show_rulers;
+    settings
+}
+
+/// P4-15 review major 1: `file.new` and `file.open` seed the new
+/// session's view toggles from the settings defaults.
+#[test]
+fn new_sessions_seed_their_view_toggles_from_the_settings() {
+    let mut ctx = AppCtx::new(settings_with_toggles(false, false));
+
+    run(&mut ctx, "file.new", Args::new()).expect("new");
+    let session = ctx.active_document().expect("session");
+    assert!(!session.view.show_grid);
+    assert!(!session.view.show_rulers);
+
+    let mut ctx = AppCtx::new(settings_with_toggles(false, true));
+    run(
+        &mut ctx,
+        "file.open",
+        Args::new()
+            .with("name", ArgValue::Text("sample.vsdx".into()))
+            .with("data", ArgValue::Bytes(package_bytes(&sample_document()))),
+    )
+    .expect("open");
+    let session = ctx.active_document().expect("session");
+    assert!(!session.view.show_grid);
+    assert!(session.view.show_rulers);
 }
 
 #[test]
@@ -930,8 +981,7 @@ fn undo_and_redo_dispatch_through_the_registry() {
     ctx.active_document_mut()
         .expect("session")
         .undo
-        .push(Box::new(NamedEdit("rename page")))
-        .expect("push");
+        .push(Box::new(NamedEdit("rename page")));
     let outcome = run(&mut ctx, "edit.undo", Args::new()).expect("undo");
     assert_eq!(outcome.message.as_deref(), Some("Undo rename page"));
     let outcome = run(&mut ctx, "edit.redo", Args::new()).expect("redo");
@@ -988,4 +1038,174 @@ fn saving_keeps_the_source_package() {
     let saved = std::fs::read(&out).expect("saved");
     let package = read_package(&saved, &ferrogram_vsdx::Limits::DEFAULT).expect("package");
     assert!(package.parts.len() > 1, "the package keeps its parts");
+}
+
+// ---------------------------------------------------------------------------
+// P4-15: settings, view state and the Options/quit commands
+// ---------------------------------------------------------------------------
+
+/// P4-15 Goal 2: `view.units` sets the display units from a
+/// `DisplayUnits` name (ASCII case-insensitive); a missing or unknown
+/// value is `InvalidArgs` naming the accepted values.
+#[test]
+fn view_units_sets_the_display_units() {
+    let mut ctx = AppCtx::new(Settings::default());
+    for (input, expected) in [
+        ("Millimeters", "Millimeters"),
+        ("centimeters", "Centimeters"),
+        ("METERS", "Meters"),
+        ("Feet", "Feet"),
+        ("Inches", "Inches"),
+    ] {
+        let outcome = run(
+            &mut ctx,
+            "view.units",
+            Args::new().with("units", ArgValue::Text(input.to_owned())),
+        )
+        .expect(input);
+        assert_eq!(outcome.message, Some(format!("Units: {expected}")));
+        assert_eq!(
+            ctx.settings.units,
+            ferrogram_commands::DisplayUnits::parse(expected).expect("name")
+        );
+    }
+
+    let bad = [
+        Args::new(),
+        Args::new().with("units", ArgValue::Text("furlongs".to_owned())),
+        Args::new().with("units", ArgValue::Integer(3)),
+    ];
+    for args in bad {
+        let error = run(&mut ctx, "view.units", args).expect_err("bad units");
+        assert!(
+            matches!(error, CommandError::InvalidArgs { .. }),
+            "expected InvalidArgs, got {error:?}"
+        );
+        let message = error.to_string();
+        for name in ferrogram_commands::DisplayUnits::NAMES {
+            assert!(message.contains(name), "{message} must name {name}");
+        }
+    }
+    assert_eq!(
+        ctx.settings.units,
+        ferrogram_commands::DisplayUnits::Inches,
+        "the failed runs changed nothing (the last good run set Inches)"
+    );
+}
+
+/// An edit whose `revert` closes the first document, so the document
+/// indices move while the undo step runs (P4-15 review minor 3).
+struct CloseFirstEdit;
+
+impl Edit for CloseFirstEdit {
+    fn label(&self) -> &str {
+        "close first"
+    }
+
+    fn apply(&mut self, _ctx: &mut AppCtx) -> Result<(), CommandError> {
+        Ok(())
+    }
+
+    fn revert(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+        ctx.close_document(0);
+        Ok(())
+    }
+}
+
+/// P4-15 review minor 3: the undo stack goes back to the session it
+/// came from (by identity), even when the step's `revert` closes
+/// another document and the index moves. The old put-back-by-index
+/// dropped the stack on the floor here.
+#[test]
+fn undo_returns_the_stack_to_the_session_it_came_from() {
+    let mut ctx = AppCtx::new(Settings::default());
+    run(&mut ctx, "file.new", Args::new()).expect("new 1");
+    run(&mut ctx, "file.new", Args::new()).expect("new 2");
+    run(&mut ctx, "file.new", Args::new()).expect("new 3");
+    assert_eq!(ctx.active, Some(2));
+    let third = ctx.active_document().expect("third").id;
+
+    ctx.active_document_mut()
+        .expect("third")
+        .undo
+        .push(Box::new(CloseFirstEdit));
+    let outcome = run(&mut ctx, "edit.undo", Args::new()).expect("undo");
+    assert_eq!(outcome.message.as_deref(), Some("Undo close first"));
+
+    assert_eq!(ctx.documents.len(), 2, "the revert closed the first");
+    assert_eq!(ctx.active, Some(1), "the active document did not move");
+    let session = ctx.active_document().expect("third");
+    assert_eq!(session.id, third, "the same session is active");
+    assert!(
+        session.undo.can_redo(),
+        "the stack came back to the same session"
+    );
+}
+
+/// P4-15 Goal 2 (ADR 0032 amendment): the window commands are real
+/// handlers that only return requests (AGENTS.md section 6: never a
+/// dialog, never a side effect from the command itself).
+#[test]
+fn the_window_commands_only_request_their_windows() {
+    let registry = registry().expect("registry");
+    let mut ctx = AppCtx::new(Settings::default());
+
+    let outcome = run(&mut ctx, "app.office.center.options", Args::new()).expect("options");
+    assert_eq!(outcome.ui_request, Some(UiRequest::ShowOptions));
+    assert!(outcome.payload.is_none());
+    assert!(ctx.active_document().is_none(), "no side effect");
+
+    for id in ["app.quit", "file.exit"] {
+        let outcome = run(&mut ctx, id, Args::new()).expect(id);
+        assert_eq!(outcome.message.as_deref(), Some("Quit"));
+        assert_eq!(outcome.ui_request, Some(UiRequest::Quit));
+        assert!(ctx.active_document().is_none(), "nothing was closed");
+
+        // Always enabled, whatever the state (P4-15 Goal 2).
+        let command = CommandId::parse(id).expect("id");
+        assert!(registry.enabled(&command, &ctx).is_enabled(), "{id}");
+    }
+}
+
+/// P4-15 review minor 6: `page: 0` is an argument error, and every
+/// page error carries the caller's number (the old code silently
+/// saturated to `u32::MAX`).
+#[test]
+fn page_arguments_are_validated_with_the_callers_number() {
+    let (_dir, file) = sample_file();
+    let mut ctx = AppCtx::new(Settings::default());
+    let open = Args::new().with("path", ArgValue::Path(file));
+
+    for (number, expected) in [
+        (0, "got 0"),
+        (-3, "got -3"),
+        (5_000_000_000, "got 5000000000"),
+    ] {
+        let error = run(
+            &mut ctx,
+            "file.inspect",
+            open.clone().with("page", ArgValue::Integer(number)),
+        )
+        .expect_err("bad page");
+        match &error {
+            CommandError::InvalidArgs { message } => {
+                assert!(message.contains("counted from 1"), "{message}");
+                assert!(message.contains(expected), "{message}");
+            }
+            other => panic!("expected InvalidArgs, got {other:?}"),
+        }
+    }
+
+    // An in-range page that does not exist reports the caller's own
+    // number (the sample file has two pages).
+    let error = run(
+        &mut ctx,
+        "file.inspect",
+        open.with("page", ArgValue::Integer(9)),
+    )
+    .expect_err("page 9");
+    assert!(
+        error.to_string().contains("page 9 does not exist"),
+        "{error}"
+    );
 }

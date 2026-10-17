@@ -16,6 +16,8 @@ mod view;
 
 pub use view::{ZOOM_MAX, ZOOM_MIN};
 
+use std::sync::OnceLock;
+
 use ferrogram_ui_spec::Commands;
 
 use crate::app::AppCtx;
@@ -26,11 +28,6 @@ use crate::{Command, CommandId, Enabled, Invocation, Outcome};
 pub use file::{
     PageSummary, Summary, kind_text, shape_count, sheet_text, value_text, warning_line,
 };
-
-/// The `ui-spec/commands.yaml` mapping table, compiled in (ADR 0007
-/// pattern: the loader embeds its schema the same way). The CLI and
-/// the parity generator need the stub rows without a data directory.
-const COMMANDS_YAML: &str = include_str!("../../../../ui-spec/commands.yaml");
 
 /// Whether a command can run: its enabled-state predicate (ADR 0028).
 type EnabledFn = fn(&AppCtx) -> Enabled;
@@ -71,9 +68,17 @@ impl Command for Builtin {
 /// `page`, `format`, `scale`, `background` and `strict`, `file.export`
 /// takes `path`, `out`, `format`, `scale` and `strict`, `file.inspect`
 /// takes `path`, `page` and `json`, `view.zoom.fit` takes `width` and
-/// `height` (points), and `file.close` takes an optional `confirm`
-/// flag (the answer to its `ConfirmClose` request).
+/// `height` (points), `view.units` takes `units` (a `DisplayUnits`
+/// name, P4-15), and `file.close` takes an optional `confirm` flag
+/// (the answer to its `ConfirmClose` request).
 const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
+    (
+        "app.office.center.options",
+        "Options",
+        always,
+        view::run_options,
+    ),
+    ("app.quit", "Exit", always, file::run_quit),
     ("file.new", "New", always, file::run_new),
     ("file.open", "Open", always, file::run_open),
     ("file.save", "Save", has_document, file::run_save),
@@ -82,6 +87,7 @@ const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
     ("file.inspect", "Inspect", always, file::run_inspect),
     ("file.render", "Render", always, file::run_render),
     ("file.export", "Export", always, file::run_export),
+    ("file.exit", "Exit", always, file::run_quit),
     ("edit.undo", "Undo", can_undo, view::run_undo),
     ("edit.redo", "Redo", can_redo, view::run_redo),
     ("view.zoom.in", "Zoom In", has_document, view::run_zoom_in),
@@ -100,15 +106,11 @@ const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
     (
         "view.toggle_grid",
         "Toggle Grid",
-        has_document,
+        always,
         view::run_toggle_grid,
     ),
-    (
-        "view.rulers",
-        "Rulers",
-        has_document,
-        view::run_toggle_rulers,
-    ),
+    ("view.rulers", "Rulers", always, view::run_toggle_rulers),
+    ("view.units", "Units", always, view::run_units),
     (
         "view.ui_layout.visio_2016",
         "Visio 2016 Ribbon",
@@ -137,10 +139,10 @@ const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
 /// Returns [`RegistryError::Duplicate`] when two handlers claim one id;
 /// that is a build bug, not input-dependent behaviour.
 pub fn registry() -> Result<Registry, RegistryError> {
-    let mappings = parse_mappings(COMMANDS_YAML)?;
-    let mut registry = Registry::from_mappings(&mappings)?;
+    let mappings = embedded_commands()?;
+    let mut registry = Registry::from_mappings(mappings)?;
     for (id, label, enabled_fn, run) in BUILTINS {
-        let meta = meta_for(&mappings, id, label)?;
+        let meta = meta_for(mappings, id, label)?;
         registry.register(Box::new(Builtin {
             meta,
             enabled_fn: *enabled_fn,
@@ -150,18 +152,28 @@ pub fn registry() -> Result<Registry, RegistryError> {
     Ok(registry)
 }
 
-/// Parses a `commands.yaml` document into its typed form.
+/// The committed `ui-spec/commands.yaml`, parsed once per process.
 ///
-/// The real table is the embedded [`COMMANDS_YAML`]; the tests parse
-/// broken text through the same path.
-fn parse_mappings(text: &str) -> Result<Commands, RegistryError> {
-    let value: serde_json::Value =
-        serde_saphyr::from_str(text).map_err(|error| RegistryError::BadMapping {
-            message: error.to_string(),
-        })?;
-    serde_json::from_value(value).map_err(|error| RegistryError::BadMapping {
-        message: error.to_string(),
-    })
+/// One parse path (P4-15 review minor 8): the rows come from
+/// [`Loader::from_embedded`](ferrogram_ui_spec::Loader::from_embedded),
+/// the same staged load (parse, schema validation, decode) the ribbon
+/// and the loader tests run, instead of a second `include_str!` +
+/// YAML-to-JSON round trip that never saw the schema. The commands
+/// document is shared by both layouts; the 2016 set carries it. A load
+/// failure is a [`RegistryError::BadMapping`]: the committed data is
+/// generated and validated (ADR 0006), so this cannot fail on input.
+fn embedded_commands() -> Result<&'static Commands, RegistryError> {
+    static COMMANDS: OnceLock<Result<Commands, String>> = OnceLock::new();
+    let cached = COMMANDS.get_or_init(|| {
+        let sets = ferrogram_ui_spec::Loader::from_embedded().map_err(|error| error.to_string())?;
+        Ok(sets.visio_2016.commands)
+    });
+    match cached {
+        Ok(commands) => Ok(commands),
+        Err(message) => Err(RegistryError::BadMapping {
+            message: message.clone(),
+        }),
+    }
 }
 
 /// The metadata of one builtin: the `commands.yaml` row (label, Fluent
@@ -276,7 +288,7 @@ mod tests {
     #[test]
     fn the_builtin_registry_has_the_stubs_of_the_data_file() {
         let registry = registry().expect("registry");
-        let mappings = parse_mappings(COMMANDS_YAML).expect("mappings");
+        let mappings = embedded_commands().expect("mappings");
         assert_eq!(registry.len(), mappings.entries.len());
         // A row nothing implements is a stub with the tooltip.
         let id = CommandId::parse("file.print").expect("id");
@@ -285,19 +297,21 @@ mod tests {
 
     #[test]
     fn the_embedded_table_parses_and_every_row_is_valid() {
-        let mappings = parse_mappings(COMMANDS_YAML).expect("mappings");
+        let mappings = embedded_commands().expect("mappings");
         assert!(!mappings.entries.is_empty());
         for entry in &mappings.entries {
             CommandId::try_from(&entry.id).expect("row id");
         }
     }
 
+    /// P4-12 coverage minor 3: `meta_for` maps an unparseable builtin
+    /// id to `RegistryError::BadId` (a build bug in the `BUILTINS`
+    /// table, never input).
     #[test]
-    fn a_broken_mapping_table_is_a_bad_mapping() {
-        let error = parse_mappings("{oops").expect_err("broken yaml");
-        assert!(matches!(error, RegistryError::BadMapping { .. }), "{error}");
-        let error = parse_mappings("a: 1").expect_err("not a list");
-        assert!(matches!(error, RegistryError::BadMapping { .. }), "{error}");
+    fn meta_for_rejects_a_malformed_builtin_id() {
+        let mappings = Commands::default();
+        let error = meta_for(&mappings, "file.", "Broken").expect_err("bad id");
+        assert!(matches!(error, RegistryError::BadId { .. }), "{error}");
     }
 
     #[test]
@@ -308,11 +322,52 @@ mod tests {
         assert_eq!(meta.label, "Save");
         assert_eq!(meta.status, CommandStatus::Implemented);
 
-        let mappings = parse_mappings(COMMANDS_YAML).expect("mappings");
-        let meta = meta_for(&mappings, "file.save", "Fallback").expect("meta");
+        let mappings = embedded_commands().expect("mappings");
+        let meta = meta_for(mappings, "file.save", "Fallback").expect("meta");
         assert_eq!(meta.label, "Save", "the table row wins");
         assert_eq!(meta.status, CommandStatus::Implemented);
         assert!(meta.visuicmd.is_some());
+    }
+
+    /// P4-12 coverage minors 3 and 4: the `no_document` failure and
+    /// `with_undo`'s no-document branches, reached only by direct
+    /// calls (the enabled-state predicates block these paths in
+    /// `Registry::execute`).
+    #[test]
+    fn direct_calls_without_a_document_report_no_open_document() {
+        use crate::{ArgValue, Args, Source};
+
+        let inv = Invocation::empty(Source::Test);
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let mut failures: Vec<(&str, Result<Outcome, CommandError>)> =
+            vec![("edit.undo", view::run_undo(&mut ctx, &inv))];
+        failures.push(("edit.redo", view::run_redo(&mut ctx, &inv)));
+        failures.push(("view.zoom.in", view::run_zoom_in(&mut ctx, &inv)));
+        failures.push(("page.next", view::run_page_next(&mut ctx, &inv)));
+        failures.push(("file.close", file::run_close(&mut ctx, &inv)));
+        let mut args = Args::new();
+        args.set("path", ArgValue::Path(std::path::PathBuf::from("x.vsdx")));
+        failures.push((
+            "file.save",
+            file::run_save(&mut ctx, &Invocation::new(args, Source::Test)),
+        ));
+        for (id, result) in failures {
+            let error = result.expect_err(id);
+            assert_eq!(error.to_string(), "no open document", "{id}");
+        }
+
+        // A stale `active` index is the same failure (P4-12 minor 4).
+        ctx.active = Some(3);
+        let error = view::run_undo(&mut ctx, &inv).expect_err("stale index");
+        assert_eq!(error.to_string(), "no open document");
+
+        // A document with no pages says so (P4-12 coverage minor 4).
+        ctx.open_document(crate::DocumentSession::new(
+            ferrogram_model::Document::new(),
+            None,
+        ));
+        let error = view::run_page_next(&mut ctx, &inv).expect_err("no pages");
+        assert_eq!(error.to_string(), "the document has no pages");
     }
 
     #[test]

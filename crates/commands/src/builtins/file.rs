@@ -1,5 +1,5 @@
 //! The `file.*` commands (ADR 0026, ADR 0036): new, open, save, close,
-//! inspect, render and export.
+//! quit, inspect, render and export.
 //!
 //! The `inspect`, `render` and `export` bodies are the ADR 0026 CLI
 //! seam: the CLI's `Command` enum dispatches here, so the CLI, the
@@ -16,7 +16,7 @@ use ferrogram_render::{
 };
 use ferrogram_vsdx::{Limits, Package, read_package, to_model, write_document};
 
-use crate::app::{AppCtx, DocumentSession};
+use crate::app::{AppCtx, DocumentSession, ViewState};
 use crate::error::{CommandError, NeededInput, PathPurpose};
 use crate::{Invocation, Outcome, UiRequest};
 
@@ -75,12 +75,22 @@ pub(crate) fn need_path(
 }
 
 /// The `page` argument (1-based), or `None` when the caller left it out.
+///
+/// A number outside `1..=u32::MAX` is an argument error, and every
+/// error carries the caller's number (P4-15 review minor 6: `page: 0`
+/// is rejected instead of silently selecting the first page, and no
+/// saturated value is ever reported back).
 fn optional_page(args: &crate::Args) -> Result<Option<u32>, CommandError> {
     match args.integer("page") {
-        Some(number) if number < 0 => {
-            Err(CommandError::invalid_args("page must be counted from 1"))
-        }
-        Some(number) => Ok(Some(u32::try_from(number).unwrap_or(u32::MAX))),
+        Some(number) if number < 1 => Err(CommandError::invalid_args(format!(
+            "page must be counted from 1, got {number}"
+        ))),
+        Some(number) => u32::try_from(number).map(Some).map_err(|_| {
+            CommandError::invalid_args(format!(
+                "page must be counted from 1 and at most {}, got {number}",
+                u32::MAX
+            ))
+        }),
         None => Ok(None),
     }
 }
@@ -159,9 +169,15 @@ fn read_error_text(message: impl Into<String>) -> CommandError {
     CommandError::failed(format!("cannot read input: {}", message.into()))
 }
 
+/// A write failure without a file name (`cannot write output: <cause>`,
+/// the ADR 0026 prefix the CLI maps to exit code 3).
+fn write_error_text(cause: impl std::fmt::Display) -> CommandError {
+    CommandError::failed(format!("cannot write output: {cause}"))
+}
+
 /// A write failure (`cannot write output: <label>: <cause>`).
 fn io_error(label: &Path, cause: impl std::fmt::Display) -> CommandError {
-    CommandError::failed(format!("cannot write output: {}: {cause}", label.display()))
+    write_error_text(format!("{}: {cause}", label.display()))
 }
 
 /// A render failure (`render failed: <cause>`).
@@ -237,13 +253,19 @@ fn encode(scene: &Scene, format: Format, scale: f64) -> Result<Vec<u8>, CommandE
 // ---------------------------------------------------------------------------
 
 /// `file.new`: an empty document session, which becomes active.
+///
+/// The session's view toggles are seeded from the settings defaults
+/// (ADR 0032 amendment, P4-15 review major 1).
 pub(super) fn run_new(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
-    ctx.open_document(DocumentSession::new(Document::new(), None));
+    let mut session = DocumentSession::new(Document::new(), None);
+    session.view = ViewState::from_settings(&ctx.settings);
+    ctx.open_document(session);
     Ok(outcome("New drawing", Vec::new()))
 }
 
 /// `file.open`: reads `path` (or `name` + `data` on wasm, ADR 0036)
-/// into a new session, which becomes active.
+/// into a new session, which becomes active. The session's view
+/// toggles are seeded from the settings defaults (ADR 0032 amendment).
 pub(super) fn run_open(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
     let (document, package, path, label) = match inv.args.path("path") {
         Some(path) => {
@@ -269,7 +291,8 @@ pub(super) fn run_open(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
             }
         },
     };
-    let session = DocumentSession::new(document, path).with_preserve(package);
+    let mut session = DocumentSession::new(document, path).with_preserve(package);
+    session.view = ViewState::from_settings(&ctx.settings);
     ctx.open_document(session);
     Ok(outcome(format!("Opened {label}"), Vec::new()))
 }
@@ -331,10 +354,19 @@ fn save_without_path(_ctx: &mut AppCtx) -> Result<Outcome, CommandError> {
 /// app downloads it (ADR 0036).
 #[cfg(target_arch = "wasm32")]
 fn save_without_path(ctx: &mut AppCtx) -> Result<Outcome, CommandError> {
+    payload_save(ctx)
+}
+
+/// The body of the no-target save, kept on every target so the host
+/// tests cover the wasm download path (P4-15 review minor 7): a
+/// `write_document` failure is a write failure with the ADR 0026
+/// `cannot write output:` prefix, not a `render failed:` one.
+#[cfg(any(test, target_arch = "wasm32"))]
+fn payload_save(ctx: &mut AppCtx) -> Result<Outcome, CommandError> {
     let session = ctx.active_document_mut().ok_or_else(no_document)?;
     let empty = Package::new();
     let preserve = session.preserve.as_ref().unwrap_or(&empty);
-    let bytes = write_document(&session.document, preserve).map_err(|error| render_error(error))?;
+    let bytes = write_document(&session.document, preserve).map_err(write_error_text)?;
     let name = download_name(&session.display_name());
     session.dirty = false;
     Ok(Outcome {
@@ -345,7 +377,7 @@ fn save_without_path(ctx: &mut AppCtx) -> Result<Outcome, CommandError> {
 }
 
 /// The suggested download name of a never-saved document.
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(test, target_arch = "wasm32"))]
 fn download_name(display_name: &str) -> String {
     if display_name.contains('.') {
         display_name.to_owned()
@@ -379,6 +411,21 @@ pub(super) fn run_close(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, C
     }
     ctx.close_document(index);
     Ok(outcome(format!("Closed {name}"), Vec::new()))
+}
+
+/// `app.quit` and `file.exit`: asks the dispatcher to quit (P4-15; one
+/// handler for both ids, so "one quit id" is answered by binding both).
+///
+/// The command closes nothing itself and never exits a process: an
+/// interactive dispatcher turns [`UiRequest::Quit`] into a viewport
+/// close, a programmatic caller records it and keeps running
+/// (AGENTS.md section 6).
+pub(super) fn run_quit(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
+    Ok(Outcome {
+        message: Some("Quit".to_owned()),
+        ui_request: Some(UiRequest::Quit),
+        ..Outcome::default()
+    })
 }
 
 /// `file.inspect`: the ADR 0026 document summary in
@@ -682,5 +729,62 @@ pub fn value_text(value: &CellValue) -> String {
         CellValue::List(text) => text.clone(),
         CellValue::Error(text) => text.clone(),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferrogram_vsdx::{ContentType, Part, PartData, PartName};
+
+    /// P4-15 review minor 7: the no-target save (the wasm download
+    /// path, kept compiled on every target) returns a payload and
+    /// reports a write failure with the ADR 0026 `cannot write
+    /// output:` prefix, never a `render failed:` one.
+    #[test]
+    fn payload_save_returns_a_download_payload() {
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        let outcome = payload_save(&mut ctx).expect("payload");
+        assert_eq!(outcome.message.as_deref(), Some("Saved Untitled.vsdx"));
+        match outcome.payload {
+            Some(crate::Payload::Bytes { name, data }) => {
+                assert_eq!(name, "Untitled.vsdx");
+                assert!(!data.is_empty(), "a package was written");
+            }
+            other => panic!("expected a payload, got {other:?}"),
+        }
+        let session = ctx.active_document().expect("session");
+        assert!(!session.dirty);
+    }
+
+    #[test]
+    fn payload_save_without_a_document_reports_no_open_document() {
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let error = payload_save(&mut ctx).expect_err("no document");
+        assert_eq!(error.to_string(), "no open document");
+    }
+
+    #[test]
+    fn payload_save_reports_a_write_failure_as_a_write_failure() {
+        let mut preserve = Package::new();
+        preserve.parts.push(Part {
+            name: PartName::new("/not-a-visio-main.bin"),
+            content_type: ContentType::new("application/octet-stream"),
+            data: PartData::Binary(vec![1, 2, 3]),
+        });
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let session = DocumentSession::new(Document::new(), None).with_preserve(preserve);
+        ctx.open_document(session);
+        let error = payload_save(&mut ctx).expect_err("the write fails");
+        let message = error.to_string();
+        assert!(message.starts_with("cannot write output:"), "{message}");
+        assert!(!message.starts_with("render failed:"), "{message}");
+    }
+
+    #[test]
+    fn download_name_keeps_real_names_and_extends_bare_ones() {
+        assert_eq!(download_name("drawing.vsdx"), "drawing.vsdx");
+        assert_eq!(download_name("Untitled"), "Untitled.vsdx");
     }
 }
