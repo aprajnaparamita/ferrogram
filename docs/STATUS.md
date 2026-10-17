@@ -22,7 +22,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-14](tasks/P4-14.md) | implementer | P4-08 | C2 | merged (scope-aware bindings, shell shortcut pass) | agent/P4-14 |
 | [P4-09](tasks/P4-09.md) | implementer | P4-03..P4-08, P4-14 | D | merged (parity generator and gate step, Phase 4 harness) | agent/P4-09 |
 | [P4-10](tasks/P4-10.md) | test-engineer | P4-09 | E | merged (54 tests, ui fuzz crate, one interner fix) | agent/P4-10 |
-| [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | ready | — |
+| [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | merged (approve with fixes: 0 blocker, 4 major, 12 minor) | agent/P4-11 |
 | [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | ready | — |
 | [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | ready | — |
 
