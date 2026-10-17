@@ -40,12 +40,14 @@ losslessly and the parser is its own later task.
   but the dep tree stays clean anyway), and it lets us preserve attribute
   order and prefix spelling, which serde-based DOM crates normalize away.
 
-### Zip crate: `zip` 8.6 with only deflate
+### Zip crate: `zip` with only deflate (8.6, now 9)
 
 ```toml
-zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 ```
+
+_Update (Phase 4, 2026-10-17): moved from 8.6 to 9 for RUSTSEC-2026-0367..0369 (extract() bugs; we never call extract). zip 9 makes entry names fallible and refuses to inflate past the declared size. zip 8.6 stays only through calamine in xtask, ignored in `deny.toml` with that reason._
 
 - `zip` is MIT (passes `deny.toml`); 8.6 is already in `Cargo.lock` (xtask's
   fixture builder uses it with stored entries).
