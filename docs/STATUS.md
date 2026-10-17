@@ -21,10 +21,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-08](tasks/P4-08.md) | implementer | P4-03 | C | merged (shortcut map and dispatch; shell pass in P4-14) | agent/P4-08 |
 | [P4-14](tasks/P4-14.md) | implementer | P4-08 | C2 | merged (scope-aware bindings, shell shortcut pass) | agent/P4-14 |
 | [P4-09](tasks/P4-09.md) | implementer | P4-03..P4-08, P4-14 | D | merged (parity generator and gate step, Phase 4 harness) | agent/P4-09 |
-| [P4-10](tasks/P4-10.md) | test-engineer | P4-09 | E | ready | — |
-| [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | waits | — |
-| [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | waits | — |
-| [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | waits | — |
+| [P4-10](tasks/P4-10.md) | test-engineer | P4-09 | E | merged (54 tests, ui fuzz crate, one interner fix) | agent/P4-10 |
+| [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | ready | — |
+| [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | ready | — |
+| [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | ready | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `crates/ui/src/lib.rs` and `crates/ui/Cargo.toml` belong to P4-03 (others request additions under Open issues); `xtask/src/extract/*` mapping rules to P4-02; `xtask/src/{main,gate}.rs` and `xtask/Cargo.toml` to P4-09; `ATTRIBUTION.md` rows come from P4-03 and P4-06; the master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -163,3 +163,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P4-14 (open): focus tracking is pointer-press based (the previous frame's canvas and ribbon rects), so a keyboard-only focus move does not change the scope; `ShortcutMap::resolve` gained an `&ActiveScopes` argument; the committed table has 74 bindings, 16 exact repeats and no real conflicts. Master fix at merge: P4-14 let every bound `Ctrl` chord dispatch inside a text edit (so `Ctrl+C`/`Ctrl+V`/`Ctrl+Z` ran registry commands instead of egui's copy, paste and undo in dialog fields); egui's own editing chords defer to egui again (ADR 0036 amended), and other bound chords such as `Ctrl+Shift+C` still dispatch.
 - P4-09 (open): parity is now derived (7 implemented, 685 stub, 14 out-of-scope) and checked by the `parity` gate step. 5 of 15 corpus files rasterize blank: their shape or page cells have no cached values and the builder substitutes 0 (`FillPattern`/`LinePattern`/`LineWeight` on `dwg`, `fdo86664`, `testfile5`; `Width`/`Height`/`PinX`/`PinY` on `tab-short-prefix`), and `recursion-cycle.vsdx` has no page part; `SKIP_RASTER`/`KNOWN_BLANK` in `apps/ferrogram/tests/open_corpus.rs` go when the value pipeline (P3-15/P3-16, Phase 6 formula engine) closes this. `Shell` exposes no canvas raster, so the exit test reads it through a `canvas::show` frame. The 365 backstage has 205 placements but 127 unique ids (same as the P4-04 `TabSave` item). P4-09 also added `crates/commands/tests/headless.rs` (outside its listed files; test-only, kept). ADR 0037 now says out-of-scope beats implemented.
 - Master fix (2026-10-17): RUSTSEC-2026-0367..0369 (zip `extract()` bugs) turned `cargo deny` red on main. `crates/vsdx` and `xtask` now use zip 9; zip 8.6 remains only through calamine in xtask, which never calls `extract()`, and `deny.toml` ignores the three ids with that reason (ADR 0014 updated).
+- P4-10 (open): fixed `CommandId::intern` leaking every rejected id. Open for the fix pass: a chord that mismatches a half-typed sequence is dropped when the mismatch fires the held-back completion (retry it as a fresh start?); `builtins::with_undo` puts the undo stack back by document index (Phase 5 risk); `UndoStack::default()` has capacity 0; the 4096-id intern pool is a test hazard; `crates/ui` has no `proptest` dev-dependency; `crates/ui-spec/fuzz/.gitignore` lacks `!corpus/` and the new `crates/ui/fuzz` targets have no seeds. Report: `docs/reviews/phase-4-tests.md`.
