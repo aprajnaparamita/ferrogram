@@ -23,7 +23,7 @@ pub mod registry;
 pub mod undo;
 
 pub use app::{
-    AppCtx, DisplayUnits, DocumentSession, Selection, Settings, SettingsStore, ViewState,
+    AppCtx, DisplayUnits, DocumentSession, Selection, SessionId, Settings, SettingsStore, ViewState,
 };
 pub use error::{
     CommandError, CommandIdError, NeededInput, PathPurpose, RegistryError, SettingsError,
@@ -95,22 +95,7 @@ impl CommandId {
                 });
             }
         };
-        if let Some(found) = guard.iter().find(|known| **known == s) {
-            return Ok(CommandId(found));
-        }
-        if guard.len() >= INTERN_CAP {
-            return Err(CommandIdError {
-                value: s.to_owned(),
-                reason: "id pool is full",
-            });
-        }
-        // Validate before leaking: a rejected id must not leak its
-        // string (P4-10: an invalid id is hostile input, and leaking
-        // one per call would grow memory without bound).
-        validate_id(s)?;
-        let leaked: &'static str = Box::leak(s.to_owned().into_boxed_str());
-        guard.push(leaked);
-        Ok(CommandId(leaked))
+        intern_into(&mut guard, INTERN_CAP, s)
     }
 
     /// The id as a string slice.
@@ -139,7 +124,40 @@ impl TryFrom<&ferrogram_ui_spec::CommandId> for CommandId {
     }
 }
 
+/// The pool half of [`CommandId::intern`]: reuse the pool's copy of `s`,
+/// else leak `s` into `pool` while it holds fewer than `cap` entries.
+///
+/// The id is validated before the pool cap is consulted, so a full
+/// pool never masks a malformed id (P4-15 review minor 12) and a
+/// rejected id never leaks its string (P4-10). Split out from `intern`
+/// so tests can exercise the cap without filling the process-global
+/// pool (P4-10 finding 5: the global pool is shared by every test in
+/// one binary).
+fn intern_into(
+    pool: &mut Vec<&'static str>,
+    cap: usize,
+    s: &str,
+) -> Result<CommandId, CommandIdError> {
+    validate_id(s)?;
+    if let Some(found) = pool.iter().find(|known| **known == s) {
+        return Ok(CommandId(found));
+    }
+    if pool.len() >= cap {
+        return Err(CommandIdError {
+            value: s.to_owned(),
+            reason: "id pool is full",
+        });
+    }
+    let leaked: &'static str = Box::leak(s.to_owned().into_boxed_str());
+    pool.push(leaked);
+    Ok(CommandId(leaked))
+}
+
 /// Checks the ADR 0006 grammar (parts, characters, scope).
+///
+/// Every reject arm is reachable (`split` always yields a first part
+/// and an empty part is rejected before its characters are read), so
+/// each one has a test.
 fn validate_id(s: &str) -> Result<(), CommandIdError> {
     fn reject(s: &str, reason: &'static str) -> Result<(), CommandIdError> {
         Err(CommandIdError {
@@ -149,11 +167,9 @@ fn validate_id(s: &str) -> Result<(), CommandIdError> {
     }
 
     let mut parts = s.split('.');
-    let first = parts.next();
     let mut count = 1;
-    let Some(scope) = first else {
-        return reject(s, "empty id");
-    };
+    // `str::split` always yields at least one part.
+    let scope = parts.next().unwrap_or("");
     if scope.is_empty() {
         return reject(s, "empty first part");
     }
@@ -165,14 +181,13 @@ fn validate_id(s: &str) -> Result<(), CommandIdError> {
         if part.is_empty() {
             return reject(s, "empty part");
         }
-        let mut chars = part.chars();
-        let Some(head) = chars.next() else {
-            return reject(s, "empty part");
-        };
-        if !head.is_ascii_lowercase() {
+        if !part.starts_with(|c: char| c.is_ascii_lowercase()) {
             return reject(s, "part must start with a lowercase letter");
         }
-        if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+        if !part
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        {
             return reject(s, "bad character in part");
         }
     }
@@ -398,6 +413,10 @@ pub enum UiRequest {
         /// The document's display name.
         name: String,
     },
+    /// Quit the application (the `app.quit` / `file.exit` handler,
+    /// P4-15). The shell turns this into a viewport close; a
+    /// programmatic caller just records it and keeps running.
+    Quit,
 }
 
 /// A binary payload a command hands back instead of writing a file
@@ -514,6 +533,54 @@ mod tests {
             let err = CommandId::parse(bad).expect_err(bad);
             assert!(!err.value.is_empty() || bad.is_empty());
         }
+    }
+
+    /// Every `validate_id` reject arm fires with its own reason (P4-12
+    /// coverage minor 2: the two unreachable arms are gone).
+    #[test]
+    fn every_reject_arm_names_its_reason() {
+        let cases: &[(&str, &str)] = &[
+            ("", "empty first part"),
+            (".save", "empty first part"),
+            ("mystery.save", "unknown scope (ADR 0006)"),
+            ("file.", "empty part"),
+            ("file..save", "empty part"),
+            ("file.Save", "part must start with a lowercase letter"),
+            ("file.2save", "part must start with a lowercase letter"),
+            ("file.save!", "bad character in part"),
+            ("file", "id needs scope and verb"),
+        ];
+        for (bad, reason) in cases {
+            let error = CommandId::parse(bad).expect_err(bad);
+            assert_eq!(error.reason, *reason, "{bad:?}");
+            assert_eq!(error.value, *bad);
+        }
+    }
+
+    /// The pool seam (P4-15 review minors 12 and 2): the id is
+    /// validated before the pool cap is consulted, so a full pool
+    /// never masks a malformed id, and a full pool rejects a
+    /// well-formed one without leaking it.
+    #[test]
+    fn intern_validates_before_the_pool_cap() {
+        let mut pool: Vec<&'static str> = Vec::new();
+        let error = intern_into(&mut pool, 0, "file..save").expect_err("malformed id");
+        assert_eq!(error.reason, "empty part", "validation runs first");
+        assert!(pool.is_empty(), "a rejected id leaks nothing");
+
+        let error = intern_into(&mut pool, 0, "file.save").expect_err("full pool");
+        assert_eq!(error.reason, "id pool is full");
+        assert!(pool.is_empty());
+
+        // Room for one id: the second distinct id hits the cap, a
+        // repeat reuses the pooled copy.
+        let first = intern_into(&mut pool, 1, "file.save").expect("intern");
+        let again = intern_into(&mut pool, 1, "file.save").expect("reuse");
+        assert_eq!(first, again);
+        assert_eq!(pool.len(), 1);
+        let error = intern_into(&mut pool, 1, "file.open").expect_err("cap");
+        assert_eq!(error.reason, "id pool is full");
+        assert_eq!(error.value, "file.open");
     }
 
     #[test]
