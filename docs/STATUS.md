@@ -26,7 +26,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | merged (pass: 0 blocker, 6 major, 10 minor) | agent/P4-12 |
 | [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | merged (pass: 0 blocker, 0 major, 1 minor, fixed on main) | agent/P4-13 |
 | [P4-15](tasks/P4-15.md) | implementer | P4-11, P4-12 | G | ready (commands fixes, `view.units`, options/quit commands) | — |
-| [P4-17](tasks/P4-17.md) | test-engineer | P4-12 | G | ready (xtask gate/parity tests, fuzz seeds) | — |
+| [P4-17](tasks/P4-17.md) | test-engineer | P4-12 | G | merged (gate.rs 90.6%, parity 99.1%, ui fuzz seeds) | agent/P4-17 |
 | [P4-16](tasks/P4-16.md) | implementer | P4-15 | H | waits for P4-15 (shell/UI fixes, Options through the registry) | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `crates/ui/src/lib.rs` and `crates/ui/Cargo.toml` belong to P4-03 (others request additions under Open issues); `xtask/src/extract/*` mapping rules to P4-02; `xtask/src/{main,gate}.rs` and `xtask/Cargo.toml` to P4-09; `ATTRIBUTION.md` rows come from P4-03 and P4-06; the master resolves `Cargo.lock`. Fix tasks follow the audits.
@@ -168,3 +168,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - Master fix (2026-10-17): RUSTSEC-2026-0367..0369 (zip `extract()` bugs) turned `cargo deny` red on main. `crates/vsdx` and `xtask` now use zip 9; zip 8.6 remains only through calamine in xtask, which never calls `extract()`, and `deny.toml` ignores the three ids with that reason (ADR 0014 updated).
 - P4-10 (open): fixed `CommandId::intern` leaking every rejected id. Open for the fix pass: a chord that mismatches a half-typed sequence is dropped when the mismatch fires the held-back completion (retry it as a fresh start?); `builtins::with_undo` puts the undo stack back by document index (Phase 5 risk); `UndoStack::default()` has capacity 0; the 4096-id intern pool is a test hazard; `crates/ui` has no `proptest` dev-dependency; `crates/ui-spec/fuzz/.gitignore` lacks `!corpus/` and the new `crates/ui/fuzz` targets have no seeds. Report: `docs/reviews/phase-4-tests.md`.
 - P4-13 (fixed on main): the two ui `insta` snapshots and the `proptest-regressions` seed files had no `ATTRIBUTION.md` rows; rows added. Report: `docs/reviews/phase-4-cleanroom.md`.
+- P4-17 (open): the `render` and `vsdx` fuzz seed corpora are flat, but cargo-fuzz auto-loads only `corpus/<target>/`; move them to per-target directories in a later fuzz pass. Master fix (2026-10-18): RUSTSEC-2026-0370..0372 (zvariant, zbus_names, zvariant_derive unmaintained, no fix) under eframe's Linux accessibility bridge turned `cargo deny` red on main; ignored in `deny.toml` with that reason.
