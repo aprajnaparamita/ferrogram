@@ -412,7 +412,6 @@ dependencies = [
  "ferrogram-ui-spec",
  "ferrogram-vsdx",
  "serde",
- "serde-saphyr",
  "serde_json",
 ]
 
