@@ -78,8 +78,9 @@ const PIN_365: LayoutCounts = LayoutCounts {
     controls: 670,
 };
 // 935 before P4-02; the "our own commands" list (ADR 0006 amendment)
-// adds 10 rows and two Fluent-only rows merge into them.
-const COMMANDS: usize = 943;
+// adds 11 rows (P4-15 adds `view.units`) and two Fluent-only rows merge
+// into them.
+const COMMANDS: usize = 944;
 const SHORTCUTS: usize = 90;
 
 #[test]
