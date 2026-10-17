@@ -55,11 +55,6 @@ impl Intent {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum UiError {
-    /// The widget or seam is a task P4-01 stub.
-    NotImplemented {
-        /// The stubbed widget or function.
-        what: &'static str,
-    },
     /// A dispatched command failed.
     Command(CommandError),
     /// The ui-spec layout data failed to load (ADR 0007).
@@ -80,7 +75,6 @@ pub enum UiError {
 impl fmt::Display for UiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UiError::NotImplemented { what } => write!(f, "{what} is not implemented yet"),
             UiError::Command(error) => write!(f, "command error: {error}"),
             UiError::Layout(error) => write!(f, "ui-spec error: {error}"),
             UiError::Io { message } => write!(f, "io error: {message}"),
@@ -137,8 +131,6 @@ mod tests {
 
     #[test]
     fn ui_error_displays_every_variant() {
-        let stub = UiError::NotImplemented { what: "ribbon" };
-        assert_eq!(stub.to_string(), "ribbon is not implemented yet");
         let command = UiError::Command(CommandError::failed("nope"));
         assert_eq!(command.to_string(), "command error: nope");
         let io = UiError::Io {
