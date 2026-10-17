@@ -24,7 +24,8 @@ fn archive(bytes: &[u8]) -> ZipArchive<Cursor<&[u8]>> {
     ZipArchive::new(Cursor::new(bytes)).expect("fixture must open as a zip archive")
 }
 
-/// The zip entry names of a fixture.
+/// The zip entry names of a fixture (`expect`: see [`archive`]).
+#[allow(clippy::expect_used)]
 fn names(bytes: &[u8]) -> Vec<String> {
     archive(bytes)
         .file_names()
