@@ -1,0 +1,38 @@
+---
+source: crates/ui/tests/phase4/ribbon.rs
+expression: report
+---
+layout: Visio2016
+ribbon tabs: 16
+ribbon groups: 77
+ribbon controls (raw roots): 262
+ribbon controls (raw nested): 154
+ribbon controls (unique ids): 375
+backstage tabs: 8
+backstage controls (raw roots): 46
+backstage controls (raw nested): 26
+backstage controls (unique ids): 67
+context menus: 43
+context menu controls (raw roots): 0
+context menu controls (raw nested): 0
+context menu controls (unique ids): 0
+quick access controls (raw roots): 9
+quick access controls (raw nested): 0
+quick access controls (unique ids): 9
+layout: Visio365
+ribbon tabs: 19
+ribbon groups: 91
+ribbon controls (raw roots): 296
+ribbon controls (raw nested): 160
+ribbon controls (unique ids): 406
+backstage tabs: 10
+backstage controls (raw roots): 109
+backstage controls (raw nested): 96
+backstage controls (unique ids): 127
+context menus: 43
+context menu controls (raw roots): 0
+context menu controls (raw nested): 0
+context menu controls (unique ids): 0
+quick access controls (raw roots): 9
+quick access controls (raw nested): 0
+quick access controls (unique ids): 9
