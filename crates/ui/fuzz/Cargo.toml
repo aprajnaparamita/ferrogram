@@ -1,0 +1,38 @@
+[package]
+name = "ferrogram-ui-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.ferrogram-ui]
+path = ".."
+
+[dependencies.ferrogram-ui-spec]
+path = "../../ui-spec"
+
+[dependencies.ferrogram-commands]
+path = "../../commands"
+
+# Prevent this from interfering with workspaces (the cargo-fuzz way).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "settings_json"
+path = "fuzz_targets/settings_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shortcuts_map"
+path = "fuzz_targets/shortcuts_map.rs"
+test = false
+doc = false
+bench = false
