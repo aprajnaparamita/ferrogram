@@ -88,8 +88,14 @@ pub fn parse_args(args: &[String]) -> Result<Vec<String>> {
 
 /// Runs the gate. Fails if any step fails; skipped steps are reported.
 pub fn run(args: &[String]) -> Result<()> {
+    run_to(args, &mut std::io::stdout())
+}
+
+/// [`run`] with the summary written to `out` (the tests capture it:
+/// `std::io::stdout()` bypasses the test harness's output capture).
+fn run_to(args: &[String], out: &mut dyn std::io::Write) -> Result<()> {
     let skip = parse_args(args)?;
-    drive(&skip, &mut run_step, &mut std::io::stdout())
+    drive(&skip, &mut run_step, out)
 }
 
 /// Drives the gate over [`STEPS`]: runs every step that is not
@@ -575,11 +581,16 @@ mod tests {
     }
 
     /// The gate entry point with every step skipped runs no step and
-    /// is GREEN (nothing but the summary is printed).
+    /// is GREEN (nothing but the summary is printed). The summary goes
+    /// to a buffer: written to the real stdout, it would leak a fake
+    /// `gate: GREEN` into the real gate's test output.
     #[test]
     fn the_real_entry_point_with_all_steps_skipped_is_green() {
         let args = s(&["--skip", &STEPS.join(",")]);
-        assert_eq!(run(&args), Ok(()));
+        let mut out = Vec::new();
+        assert_eq!(run_to(&args, &mut out), Ok(()));
+        let text = String::from_utf8(out).expect("utf-8 summary");
+        assert!(text.ends_with("gate: GREEN\n"), "{text}");
     }
 
     // ---- step plans (P4-17: "step selection") ---------------------
