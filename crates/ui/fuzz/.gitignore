@@ -1,7 +1,8 @@
-# cargo-fuzz output; never committed. There is no seed corpus for
-# these targets yet; if one is added, it IS committed (ADR 0027
+# cargo-fuzz output; never committed. The seed corpus IS committed (ADR 0027
 # section 6 convention), so it is re-included here over the root
-# `**/fuzz/corpus/` rule.
+# `**/fuzz/corpus/` rule: the seeds are hand-written bytes of our own
+# (task P4-17, one row in `ATTRIBUTION.md`), per target in
+# `corpus/settings_json/` and `corpus/shortcuts_map/`.
 corpus
 !corpus/
 artifacts

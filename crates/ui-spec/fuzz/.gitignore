@@ -1,5 +1,8 @@
-# cargo-fuzz output; never committed.
+# cargo-fuzz output; never committed. A seed corpus would be committed
+# (ADR 0027 section 6 convention), so it is re-included here over the root
+# `**/fuzz/corpus/` rule (P4-17: aligned with the other fuzz crates).
 corpus
+!corpus/
 artifacts
 coverage
 target

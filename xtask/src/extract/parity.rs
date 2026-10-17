@@ -90,15 +90,7 @@ pub fn generate(out_dir: &Path) -> ExtractResult<String> {
     all_ids.sort();
     all_ids.dedup();
     for id in &all_ids {
-        let entry = entries_365.get(id).or_else(|| entries_2016.get(id));
-        let (control_type, path) = match entry {
-            Some(e) => (e.control_type.clone(), e.path.clone()),
-            // all_ids is the union; either 2016 or 365 must
-            // contain it. If neither does, the upstream data is
-            // inconsistent; report it as out of scope so the
-            // parity row is still emitted.
-            None => (String::new(), String::new()),
-        };
+        let (control_type, path) = row_shape(&entries_365, &entries_2016, id);
         // The control's `command` link, 365 first (the row data
         // prefers the 365 placement the same way).
         let linked = links_365
@@ -159,6 +151,23 @@ pub fn generate(out_dir: &Path) -> ExtractResult<String> {
     Ok(text)
 }
 
+/// The row's `(control_type, path)`: the entry from either layout
+/// (365 first, the same preference as the row data), or empty strings
+/// when the id is in neither map. [`generate`]'s id list is the union
+/// of the two maps, so the empty case cannot happen through it; the
+/// function keeps the parity row emitted anyway (defensive, never a
+/// panic) and exists so the branch is testable (P4-17).
+fn row_shape(
+    entries_365: &BTreeMap<String, Entry>,
+    entries_2016: &BTreeMap<String, Entry>,
+    id: &str,
+) -> (String, String) {
+    match entries_365.get(id).or_else(|| entries_2016.get(id)) {
+        Some(e) => (e.control_type.clone(), e.path.clone()),
+        None => (String::new(), String::new()),
+    }
+}
+
 /// The rules that derive one row's status (ADR 0037).
 pub struct StatusRules {
     /// Command ids the builtin registry reports as
@@ -207,11 +216,20 @@ impl StatusRules {
 /// as implemented: the one source of truth for `implemented` rows
 /// (ADR 0037).
 fn implemented_ids() -> ExtractResult<BTreeSet<String>> {
-    let registry =
-        ferrogram_commands::builtins::registry().map_err(|error| ExtractError::Parse {
-            path: PathBuf::from("crates/commands"),
-            message: format!("builtin registry does not build: {error}"),
-        })?;
+    implemented_ids_from(ferrogram_commands::builtins::registry())
+}
+
+/// [`implemented_ids`] over an injected registry build. The error arm
+/// ("the builtin registry does not build") is reachable only when the
+/// embedded registry is broken, so the seam exists for the tests
+/// (P4-17).
+fn implemented_ids_from<E: std::fmt::Display>(
+    registry: std::result::Result<ferrogram_commands::Registry, E>,
+) -> ExtractResult<BTreeSet<String>> {
+    let registry = registry.map_err(|error| ExtractError::Parse {
+        path: PathBuf::from("crates/commands"),
+        message: format!("builtin registry does not build: {error}"),
+    })?;
     Ok(registry
         .ids()
         .filter(|id| registry.status(id) == ferrogram_commands::CommandStatus::Implemented)
@@ -431,6 +449,24 @@ mod tests {
         }
     }
 
+    /// A scratch `out_dir` with the committed `ui-spec/` inputs
+    /// copied in (the generator reads `ui-spec/` under `out_dir`).
+    fn scratch_inputs(label: &str) -> crate::util::test_support::TempDir {
+        let tmp = crate::util::test_support::TempDir::new(label);
+        let src = ws().join("ui-spec");
+        let dst = tmp.join("ui-spec");
+        std::fs::create_dir_all(&dst).unwrap();
+        for name in [
+            "panel-2016.yaml",
+            "panel-365.yaml",
+            "commands.yaml",
+            "out-of-scope.txt",
+        ] {
+            std::fs::copy(src.join(name), dst.join(name)).unwrap();
+        }
+        tmp
+    }
+
     #[test]
     fn loads_out_of_scope_strips_comments() {
         let tmp = crate::util::test_support::TempDir::new("parity-oos");
@@ -464,17 +500,20 @@ mod tests {
             eprintln!("layout files missing; skipping parity test");
             return;
         }
-        // Run the extractor pointing at the workspace as `out_dir`
-        // so the input layout files exist. Re-run, and compare the
-        // produced file content to a captured copy in a tmp dir.
-        let tmp = crate::util::test_support::TempDir::new("parity");
-        let _ = std::fs::remove_file(ws().join("docs").join("parity").join("controls.md"));
-        let out_a = run(Path::new("."), &ws()).unwrap();
+        // Run the extractor over a scratch copy of the committed
+        // layout files twice and compare the produced file content
+        // (determinism, ADR 0009). The scratch tree keeps the test
+        // from rewriting the committed matrix (P4-17); the committed
+        // matrix stays fresh by the gate's `parity` step.
+        let tmp = scratch_inputs("parity");
+        let out_a = run(Path::new("."), tmp.path()).unwrap();
+        assert_eq!(
+            out_a,
+            vec![tmp.join("docs").join("parity").join("controls.md")]
+        );
         let first = out_a[0].clone();
-        let tmp_parity = tmp.join("controls.md");
-        std::fs::copy(&first, &tmp_parity).unwrap();
-        let _ = run(Path::new("."), &ws()).unwrap();
-        let ta = std::fs::read_to_string(&tmp_parity).unwrap();
+        let ta = std::fs::read_to_string(&first).unwrap();
+        let _ = run(Path::new("."), tmp.path()).unwrap();
         let tb = std::fs::read_to_string(&first).unwrap();
         assert_eq!(ta, tb);
         assert!(ta.contains("| status |"));
@@ -644,6 +683,171 @@ tabs:
         assert!(glob_match(&glob_to_pattern("*"), "a\nb"));
         assert!(glob_match(&glob_to_pattern("*"), ""));
         assert!(glob_match(&glob_to_pattern("*Macro*"), "My\nMacro"));
+    }
+
+    // ---- failure branches (P4-17, P4-12 major 6 and minor 9) ------
+
+    /// `run`: a `docs/` that is a file blocks the directory create.
+    #[test]
+    fn run_fails_when_the_parity_directory_cannot_be_created() {
+        let tmp = scratch_inputs("parity-nodir");
+        std::fs::write(tmp.join("docs"), "not a directory").unwrap();
+        let error = run(Path::new("."), tmp.path()).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("io error on"), "{message}");
+        assert!(message.contains("create parent"), "{message}");
+    }
+
+    /// `run`: a `controls.md` that is a non-empty directory cannot be
+    /// atomically replaced (the temp-file rename fails).
+    #[test]
+    fn run_fails_when_the_committed_file_cannot_be_replaced() {
+        let tmp = scratch_inputs("parity-noreplace");
+        let blocked = tmp.join("docs").join("parity").join("controls.md");
+        std::fs::create_dir_all(blocked.join("inner")).unwrap();
+        std::fs::write(blocked.join("inner").join("x"), "x").unwrap();
+        let error = run(Path::new("."), tmp.path()).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("controls.md"), "{message}");
+        assert!(message.contains("cannot move"), "{message}");
+    }
+
+    /// `generate`: a missing or unparsable input names the file.
+    #[test]
+    fn generate_fails_when_an_input_is_missing_or_broken() {
+        let tmp = scratch_inputs("parity-nocommands");
+        std::fs::remove_file(tmp.join("ui-spec").join("commands.yaml")).unwrap();
+        let message = generate(tmp.path()).unwrap_err().to_string();
+        assert!(message.contains("commands.yaml"), "{message}");
+
+        let tmp = scratch_inputs("parity-nolayout");
+        std::fs::remove_file(tmp.join("ui-spec").join("panel-2016.yaml")).unwrap();
+        let message = generate(tmp.path()).unwrap_err().to_string();
+        assert!(message.contains("panel-2016.yaml"), "{message}");
+
+        let tmp = scratch_inputs("parity-badlayout");
+        std::fs::write(tmp.join("ui-spec").join("panel-2016.yaml"), "{oops").unwrap();
+        let message = generate(tmp.path()).unwrap_err().to_string();
+        assert!(message.contains("panel-2016.yaml"), "{message}");
+        assert!(message.contains("YAML parse"), "{message}");
+    }
+
+    /// `load_command_table`: a document that is not a list names the
+    /// file and the reason.
+    #[test]
+    fn a_non_list_command_table_names_the_reason() {
+        let tmp = crate::util::test_support::TempDir::new("parity-nonlist");
+        let p = tmp.join("commands.yaml");
+        std::fs::write(&p, "a plain scalar").unwrap();
+        let message = load_command_table(&p).unwrap_err().to_string();
+        assert!(message.contains("is not a list of entries"), "{message}");
+        assert!(message.contains("commands.yaml"), "{message}");
+    }
+
+    /// `load_command_table`: an entry without an `id`, and an entry
+    /// without a usable `fluent_ids`, are skipped (the fallbacks are
+    /// never a panic).
+    #[test]
+    fn command_table_skips_unusable_entries() {
+        let tmp = crate::util::test_support::TempDir::new("parity-skiptable");
+        let p = tmp.join("commands.yaml");
+        std::fs::write(
+            &p,
+            "- fluent_ids: [Orphan]\n\
+             - id: file.save\n  fluent_ids: [FileSave]\n\
+             - id: bare\n\
+             - id: nonlist\n  fluent_ids: 7\n",
+        )
+        .unwrap();
+        let table = load_command_table(&p).unwrap();
+        assert_eq!(table.len(), 1, "{table:?}");
+        assert_eq!(table.get("FileSave").map(String::as_str), Some("file.save"));
+    }
+
+    /// `load_out_of_scope`: an unreadable (non-UTF-8) file is an
+    /// error naming the file, never a silent empty list.
+    #[test]
+    fn an_unreadable_out_of_scope_file_is_an_error() {
+        let tmp = crate::util::test_support::TempDir::new("parity-badoos");
+        let p = tmp.join("out-of-scope.txt");
+        std::fs::write(&p, b"\xff\xfe not utf-8").unwrap();
+        let error = match load_out_of_scope(&p) {
+            Err(e) => e,
+            Ok(_) => panic!("a non-UTF-8 out-of-scope file must not load"),
+        };
+        assert!(error.to_string().contains("out-of-scope.txt"), "{error}");
+    }
+
+    /// `glob_match`: a pattern the regex engine rejects matches
+    /// nothing (only a hand-built pattern can be malformed).
+    #[test]
+    fn a_bad_glob_pattern_matches_nothing() {
+        assert!(!glob_match("(unclosed", "anything"));
+        assert!(!glob_match("\\", "anything"));
+        assert!(glob_match(&glob_to_pattern("Coauthor*"), "CoauthorMenu"));
+    }
+
+    /// `md_escape`: `|` is escaped, newlines and carriage returns
+    /// become spaces, every other control character is dropped (and
+    /// DEL is not one here).
+    #[test]
+    fn md_escape_tames_control_characters() {
+        assert_eq!(md_escape("a|b"), r"a\|b");
+        assert_eq!(md_escape("a\nb\rc"), "a b c");
+        assert_eq!(md_escape("a\u{0}b\u{1}c\u{1f}d"), "abcd");
+        assert_eq!(md_escape("\u{7f}"), "\u{7f}");
+        assert_eq!(md_escape("plain text"), "plain text");
+    }
+
+    /// `row_shape`: the 365 entry wins over 2016, an id in neither
+    /// map gets empty columns (the defensive arm).
+    #[test]
+    fn row_shape_falls_back_to_2016_and_then_to_empty() {
+        let entry = |control_type: &str, path: &str| Entry {
+            control_type: control_type.to_owned(),
+            path: path.to_owned(),
+        };
+        let mut e365: BTreeMap<String, Entry> = BTreeMap::new();
+        e365.insert("Both".to_owned(), entry("button", "365/path"));
+        let mut e2016: BTreeMap<String, Entry> = BTreeMap::new();
+        e2016.insert("Both".to_owned(), entry("legacy", "2016/path"));
+        e2016.insert("Only2016".to_owned(), entry("menu", "old/path"));
+
+        assert_eq!(
+            row_shape(&e365, &e2016, "Both"),
+            ("button".to_owned(), "365/path".to_owned())
+        );
+        assert_eq!(
+            row_shape(&e365, &e2016, "Only2016"),
+            ("menu".to_owned(), "old/path".to_owned())
+        );
+        assert_eq!(
+            row_shape(&e365, &e2016, "Missing"),
+            (String::new(), String::new())
+        );
+    }
+
+    /// `implemented_ids`: a registry that does not build is an error
+    /// naming the crate (ADR 0037's source of truth).
+    #[test]
+    fn a_registry_that_does_not_build_is_an_error() {
+        let error =
+            implemented_ids_from(Err::<ferrogram_commands::Registry, _>("boom")).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("builtin registry does not build"),
+            "{message}"
+        );
+        assert!(message.contains("boom"), "{message}");
+    }
+
+    /// The real builtin registry builds and contributes the
+    /// `implemented` set.
+    #[test]
+    fn the_real_registry_contributes_implemented_ids() {
+        let ids = implemented_ids().unwrap();
+        assert!(!ids.is_empty());
+        assert!(implemented_ids_from(ferrogram_commands::builtins::registry()).is_ok());
     }
     // ---- P1-08 goal 4: property tests -------------------------------
 
