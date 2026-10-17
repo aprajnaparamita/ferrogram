@@ -26,7 +26,10 @@ fn archive(bytes: &[u8]) -> ZipArchive<Cursor<&[u8]>> {
 
 /// The zip entry names of a fixture.
 fn names(bytes: &[u8]) -> Vec<String> {
-    archive(bytes).file_names().map(str::to_owned).collect()
+    archive(bytes)
+        .file_names()
+        .map(|name| name.expect("fixture entry name").into_owned())
+        .collect()
 }
 
 /// The raw bytes of one zip entry.

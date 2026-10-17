@@ -15,14 +15,14 @@ ferrogram-model = { path = "../model" }
 quick-xml = "0.41"
 # Zip container (task P2-05). MIT; only the deflate codec is enabled, through
 # flate2's pure-Rust miniz_oxide backend (ADR 0014).
-zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 
 [dev-dependencies]
 # The fixture builder (task P2-08) writes test packages byte by byte. Same
 # crate and features as the runtime dependency, so `cargo deny` sees one zip
 # (ADR 0014).
-zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # Property tests (task P2-10, ADR 0017 section 2). MIT/Apache-2.0, already in
 # `Cargo.lock` via `ferrogram-geom` and `ferrogram-model`.
 proptest = "1"

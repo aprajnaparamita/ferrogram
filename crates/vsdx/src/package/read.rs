@@ -64,7 +64,10 @@ pub fn read_package(bytes: &[u8], limits: &Limits) -> Result<Package, Error> {
         if file.is_dir() {
             continue;
         }
-        let name = normalize_name(file.name());
+        let raw_name = file
+            .name()
+            .map_err(|_| invalid("zip entry name is malformed"))?;
+        let name = normalize_name(&raw_name);
         let declared = file.size();
         if declared > limits.max_part_uncompressed {
             return Err(Error::LimitExceeded {
