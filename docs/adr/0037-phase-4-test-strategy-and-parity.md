@@ -84,6 +84,10 @@ phase; the ratchet is updated at the phase end by the master.
 - `out-of-scope` when the Fluent id is listed in `ui-spec/out-of-scope.txt`;
 - `stub` otherwise.
 
+When a control is both listed out of scope and backed by an implemented
+command, `out-of-scope` wins: the list records a product decision, and
+an implemented command does not reverse it (added at the P4-09 merge).
+
 The generator stays in `xtask/src/extract/parity.rs` but gains the
 implemented set from `ferrogram_commands::builtins::registry()` (xtask is
 L9 and may depend on it). A new gate step **`parity`** runs
