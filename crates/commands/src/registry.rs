@@ -6,6 +6,8 @@
 //! control renders enabled, greyed with a reason, or disabled with the
 //! "Not yet implemented" tooltip (ADR 0031).
 
+use std::collections::BTreeMap;
+
 use ferrogram_ui_spec::{CommandMapping, FluentId, MappingConfidence};
 
 use crate::app::AppCtx;
@@ -110,10 +112,12 @@ impl Command for StubCommand {
 /// The command registry (ADR 0028): `CommandId` to [`Command`].
 ///
 /// One dispatch table for the menus, the ribbon, shortcuts, the CLI, the
-/// JSON control channel and MCP (AGENTS.md section 6).
+/// JSON control channel and MCP (AGENTS.md section 6). Backed by a
+/// `BTreeMap`, as ADR 0028 specifies: lookups are O(log n) and the id
+/// iteration is sorted.
 #[derive(Default)]
 pub struct Registry {
-    commands: Vec<Box<dyn Command>>,
+    commands: BTreeMap<CommandId, Box<dyn Command>>,
 }
 
 impl Registry {
@@ -134,10 +138,7 @@ impl Registry {
 
     /// The command under `id`, if one is registered.
     pub fn get(&self, id: &CommandId) -> Option<&dyn Command> {
-        self.commands
-            .iter()
-            .find(|command| command.meta().id == *id)
-            .map(|command| command.as_ref())
+        self.commands.get(id).map(|command| command.as_ref())
     }
 
     /// The metadata under `id`, if one is registered.
@@ -152,9 +153,9 @@ impl Registry {
             .unwrap_or(CommandStatus::Stub)
     }
 
-    /// Iterates the registered ids in registration order.
+    /// Iterates the registered ids in id order.
     pub fn ids(&self) -> impl Iterator<Item = CommandId> + '_ {
-        self.commands.iter().map(|command| command.meta().id)
+        self.commands.keys().copied()
     }
 
     /// Registers a command.
@@ -166,24 +167,24 @@ impl Registry {
     /// commands with one id (and a stub over anything) are a build bug
     /// and return [`RegistryError::Duplicate`].
     pub fn register(&mut self, command: Box<dyn Command>) -> Result<(), RegistryError> {
+        use std::collections::btree_map::Entry;
+
         let id = command.meta().id;
         let new_real = command.meta().status == CommandStatus::Implemented;
-        if let Some(position) = self.commands.iter().position(|c| c.meta().id == id) {
-            let existing_real = self
-                .commands
-                .get(position)
-                .map(|c| c.meta().status == CommandStatus::Implemented)
-                .unwrap_or(false);
-            if !new_real || existing_real {
-                return Err(RegistryError::Duplicate { id: id.to_string() });
+        match self.commands.entry(id) {
+            Entry::Occupied(mut entry) => {
+                let existing_real = entry.get().meta().status == CommandStatus::Implemented;
+                if !new_real || existing_real {
+                    return Err(RegistryError::Duplicate { id: id.to_string() });
+                }
+                entry.insert(command);
+                Ok(())
             }
-            if let Some(slot) = self.commands.get_mut(position) {
-                *slot = command;
+            Entry::Vacant(entry) => {
+                entry.insert(command);
+                Ok(())
             }
-            return Ok(());
         }
-        self.commands.push(command);
-        Ok(())
     }
 
     /// Builds a registry of stubs from `ui-spec/commands.yaml` (ADR 0006).
@@ -381,6 +382,24 @@ mod tests {
         assert!(matches!(dup, Err(RegistryError::Duplicate { .. })));
     }
 
+    /// P4-15 review minor 1: the registry is `BTreeMap`-backed (ADR
+    /// 0028), so the id iteration is sorted, not insertion order.
+    #[test]
+    fn ids_iterate_in_id_order() {
+        let mut registry = Registry::new();
+        registry
+            .register(RealCommand::new("view.zoom.in", true))
+            .expect("register");
+        registry
+            .register(RealCommand::new("file.save", true))
+            .expect("register");
+        registry
+            .register(RealCommand::new("app.quit", true))
+            .expect("register");
+        let ids: Vec<&str> = registry.ids().map(|id| id.as_str()).collect();
+        assert_eq!(ids, vec!["app.quit", "file.save", "view.zoom.in"]);
+    }
+
     fn mapping(id: &str) -> ferrogram_ui_spec::CommandMapping {
         ferrogram_ui_spec::CommandMapping {
             id: ferrogram_ui_spec::CommandId::new(id),
@@ -390,7 +409,6 @@ mod tests {
             mapping_confidence: MappingConfidence::Unknown,
         }
     }
-
     #[test]
     fn from_mappings_builds_one_stub_per_entry() {
         let mappings = ferrogram_ui_spec::Commands {

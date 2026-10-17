@@ -1,10 +1,13 @@
 //! The `edit`, `view`, `page` and `help` commands (ADR 0028): undo,
-//! zoom, the grid and rulers toggles, the ribbon layout switch (ADR
-//! 0032), page navigation and the About request.
+//! zoom, the grid and rulers toggles, the display units, the ribbon
+//! layout switch (ADR 0032), page navigation, the Options request and
+//! the About request.
 //!
-//! Every view command works on the active document's [`ViewState`]
-//! (ADR 0029); without an open document they are disabled with a
-//! reason instead of doing nothing.
+//! Every per-document view command works on the active document's
+//! [`ViewState`] (ADR 0029). The grid and rulers toggles always run:
+//! without an open document they flip the [`Settings`](crate::Settings)
+//! default and say so (ADR 0032 amendment), the other view commands
+//! are disabled with a reason instead of doing nothing.
 
 use ferrogram_model::{CellValue, Page};
 
@@ -49,7 +52,13 @@ pub(super) fn run_redo(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, C
 ///
 /// The stack lives inside [`AppCtx`] (ADR 0029) but the step needs
 /// `&mut AppCtx` for its [`Edit`](crate::Edit)s, so it is taken out
-/// for the call and put back afterwards.
+/// for the call and put back afterwards. The placeholder is an
+/// explicit zero-capacity stack (P4-15 review minor 2).
+///
+/// The stack goes back onto the session it came from, found by its
+/// [`SessionId`](crate::SessionId), even when the step opens or closes
+/// documents and the index moves (P4-15 review minor 3). When the step
+/// closed its own session, the stack dies with it.
 fn with_undo(
     ctx: &mut AppCtx,
     step: fn(&mut crate::undo::UndoStack, &mut AppCtx) -> Result<Option<String>, CommandError>,
@@ -60,9 +69,10 @@ fn with_undo(
     let Some(session) = ctx.documents.get_mut(index) else {
         return Err(no_document());
     };
-    let mut stack = std::mem::take(&mut session.undo);
+    let id = session.id;
+    let mut stack = std::mem::replace(&mut session.undo, crate::undo::UndoStack::new(0));
     let result = step(&mut stack, ctx);
-    if let Some(session) = ctx.documents.get_mut(index) {
+    if let Some(session) = ctx.documents.iter_mut().find(|session| session.id == id) {
         session.undo = stack;
     }
     result
@@ -145,32 +155,113 @@ fn positive_cell(page: &Page, name: &str, fallback: f64) -> f64 {
         .unwrap_or(fallback)
 }
 
-/// `view.toggle_grid`: flips the grid of the active document.
+/// `view.toggle_grid`: flips the grid of the active document and
+/// writes the new value to the settings default (ADR 0032 amendment).
 pub(super) fn run_toggle_grid(
     ctx: &mut AppCtx,
     _inv: &Invocation,
 ) -> Result<Outcome, CommandError> {
-    let session = ctx.active_document_mut().ok_or_else(no_document)?;
-    session.view.show_grid = !session.view.show_grid;
-    Ok(outcome(on_off("Grid", session.view.show_grid), Vec::new()))
+    toggle(ctx, "Grid", Which::Grid)
 }
 
-/// `view.rulers`: flips the rulers of the active document.
+/// `view.rulers`: flips the rulers of the active document and writes
+/// the new value to the settings default (ADR 0032 amendment).
 pub(super) fn run_toggle_rulers(
     ctx: &mut AppCtx,
     _inv: &Invocation,
 ) -> Result<Outcome, CommandError> {
-    let session = ctx.active_document_mut().ok_or_else(no_document)?;
-    session.view.show_rulers = !session.view.show_rulers;
-    Ok(outcome(
-        on_off("Rulers", session.view.show_rulers),
-        Vec::new(),
-    ))
+    toggle(ctx, "Rulers", Which::Rulers)
 }
 
-/// The status line of a boolean view toggle.
-fn on_off(what: &str, on: bool) -> String {
-    format!("{what} {}", if on { "on" } else { "off" })
+/// Which of the two view toggles a `view.toggle_grid` / `view.rulers`
+/// run flips.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Which {
+    /// The grid.
+    Grid,
+    /// The rulers.
+    Rulers,
+}
+
+/// Flips one toggle of the active [`ViewState`] and copies the new
+/// value into the settings default, so new sessions inherit it (P4-15
+/// review major 1). Without an open document only the settings default
+/// flips, and the outcome says so.
+fn toggle(ctx: &mut AppCtx, what: &str, which: Which) -> Result<Outcome, CommandError> {
+    let mut flipped = None;
+    if let Some(session) = ctx.active_document_mut() {
+        let slot = match which {
+            Which::Grid => &mut session.view.show_grid,
+            Which::Rulers => &mut session.view.show_rulers,
+        };
+        *slot = !*slot;
+        flipped = Some(*slot);
+    }
+    let default = match which {
+        Which::Grid => &mut ctx.settings.show_grid,
+        Which::Rulers => &mut ctx.settings.show_rulers,
+    };
+    let on = match flipped {
+        Some(on) => {
+            *default = on;
+            on
+        }
+        None => {
+            *default = !*default;
+            *default
+        }
+    };
+    let message = match flipped {
+        Some(_) => format!("{what} {}", on_off_word(on)),
+        None => format!("{what} {} (default for new drawings)", on_off_word(on)),
+    };
+    Ok(outcome(message, Vec::new()))
+}
+
+/// `on` or `off` for a boolean view toggle.
+fn on_off_word(on: bool) -> &'static str {
+    if on { "on" } else { "off" }
+}
+
+/// `view.units`: sets the display units from the `units` argument, a
+/// `DisplayUnits` name (P4-15, the ADR 0032 Options dialog).
+///
+/// A missing or unknown value is [`CommandError::InvalidArgs`] naming
+/// the accepted values; the command itself is always enabled (units
+/// are a setting, not document state).
+pub(super) fn run_units(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
+    let names = crate::DisplayUnits::NAMES.join(", ");
+    let text = match inv.args.get("units") {
+        None => {
+            return Err(CommandError::invalid_args(format!(
+                "units is required; expected one of {names}"
+            )));
+        }
+        Some(crate::ArgValue::Text(text)) => text.as_str(),
+        Some(_) => {
+            return Err(CommandError::invalid_args(format!(
+                "units must be text; expected one of {names}"
+            )));
+        }
+    };
+    let Some(units) = crate::DisplayUnits::parse(text) else {
+        return Err(CommandError::invalid_args(format!(
+            "unknown units {text:?}; expected one of {names}"
+        )));
+    };
+    ctx.settings.units = units;
+    Ok(outcome(format!("Units: {}", units.name()), Vec::new()))
+}
+
+/// `app.office.center.options`: asks the dispatcher to open the
+/// View/Options dialog (ADR 0032 amendment: the dialog body dispatches
+/// commands; this handler just requests the dialog, never opens one).
+pub(super) fn run_options(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
+    Ok(Outcome {
+        message: Some("Options".to_owned()),
+        ui_request: Some(UiRequest::ShowOptions),
+        ..Outcome::default()
+    })
 }
 
 /// `view.ui_layout.visio_2016`: switches the ribbon to the 2016 layout

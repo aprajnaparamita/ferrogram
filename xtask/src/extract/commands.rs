@@ -563,6 +563,9 @@ pub fn cross_check_fluent_ids(
 /// the ADR 0006 amendment): affordances with no Microsoft counterpart.
 /// Each becomes its own `commands.yaml` row with `fluent_ids: []` and
 /// `mapping_confidence: unknown`. Keyed as (id, label); sorted by id.
+///
+/// `view.units` (P4-15) is the display-units command of the ADR 0032
+/// Options dialog.
 pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("app.quit", "Exit"),
     ("file.export", "Export"),
@@ -573,6 +576,7 @@ pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("page.previous", "Previous Page"),
     ("view.ui_layout.visio_2016", "Visio 2016 Ribbon"),
     ("view.ui_layout.visio_365", "Microsoft 365 Ribbon"),
+    ("view.units", "Units"),
     ("view.zoom.fit", "Fit to Window"),
 ];
 

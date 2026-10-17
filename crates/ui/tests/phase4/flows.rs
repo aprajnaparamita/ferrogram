@@ -6,10 +6,10 @@
 //! - an asynchronous pick (the wasm upload) completing across frames
 //!   through [`Shell::show_in`]'s `finish_pick`;
 //! - a cancelled asynchronous pick clearing the pending command;
-//! - the window-command intercepts (`app.quit`,
-//!   `app.office.center.options`) from the programmatic side:
-//!   [`dispatch_one`] must still report `Unsupported` while
-//!   [`Shell::dispatch`] runs them itself (P4-03 deviation 4);
+//! - the window commands (`app.quit`, `app.office.center.options`)
+//!   from the programmatic side: [`dispatch_one`] returns their
+//!   [`UiRequest`](ferrogram_commands::UiRequest) with no side effect
+//!   (P4-15 implements them; the shell intercepts are P4-16's);
 //! - quitting: the flag the shell resets when it hands the close to
 //!   the viewport.
 //!
@@ -23,7 +23,7 @@ use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
 use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{CommandError, CommandId, Invocation, Source};
+use ferrogram_commands::{CommandId, Invocation, Source, UiRequest};
 use ferrogram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
 use ferrogram_ui::shell::dispatch_one;
 
@@ -147,30 +147,32 @@ fn a_cancelled_asynchronous_pick_forgets_the_pending_command() {
 }
 
 #[test]
-fn the_window_commands_are_stubs_for_programmatic_callers() {
-    // P4-03 deviation 4: the shell intercepts `app.quit` and
-    // `app.office.center.options` because their registry rows are
-    // stubs; a programmatic caller through `dispatch_one` must see the
-    // stub (`Unsupported`), never a silent quit.
+fn the_window_commands_only_request_their_windows() {
+    // P4-15 implements `app.quit` and `app.office.center.options`, so
+    // a programmatic caller through `dispatch_one` gets the request
+    // (`UiRequest::Quit` / `UiRequest::ShowOptions`) and no side
+    // effect: never a silent quit, never a dialog (AGENTS.md
+    // section 6). The shell's own intercepts go in P4-16.
     let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
     let mut app = AppCtx::new(Settings::default());
-    for id in ["app.quit", "app.office.center.options"] {
+    for (id, request) in [
+        ("app.quit", UiRequest::Quit),
+        ("app.office.center.options", UiRequest::ShowOptions),
+    ] {
         let command = CommandId::parse(id).expect("id");
-        let error = dispatch_one(
+        let outcome = dispatch_one(
             &registry,
             &mut app,
             &command,
             Invocation::empty(Source::Mcp),
         )
-        .expect_err("a stub is Unsupported for a programmatic caller");
-        assert!(
-            matches!(
-                error,
-                ferrogram_ui::UiError::Command(CommandError::Unsupported { .. })
-            ),
-            "{id}: {error}"
-        );
+        .unwrap_or_else(|error| panic!("{id}: {error}"));
+        assert_eq!(outcome.ui_request, Some(request), "{id}");
     }
+    assert!(
+        app.documents.is_empty() && app.active.is_none(),
+        "nothing was opened or closed"
+    );
 }
 
 #[test]

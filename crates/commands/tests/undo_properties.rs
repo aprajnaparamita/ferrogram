@@ -243,7 +243,7 @@ proptest! {
                         label: label.clone(),
                         fail_apply: false,
                         fail_revert: false,
-                    })).unwrap();
+                    }));
                 }
                 Op::PushStuck => {
                     counter.add(1);
@@ -253,7 +253,7 @@ proptest! {
                         label: label.clone(),
                         fail_apply: false,
                         fail_revert: true,
-                    })).unwrap();
+                    }));
                 }
                 Op::PushNoRedo => {
                     counter.add(-1);
@@ -263,7 +263,7 @@ proptest! {
                         label: label.clone(),
                         fail_apply: true,
                         fail_revert: false,
-                    })).unwrap();
+                    }));
                 }
                 Op::Undo | Op::Redo | Op::Clear => {}
             }
@@ -295,27 +295,36 @@ proptest! {
 }
 
 #[test]
-fn a_default_stack_keeps_no_entries() {
-    // `Default` is `UndoStack::new(0)`: the capacity-0 stack is a
-    // black hole. `DocumentSession` uses `new(DEFAULT_CAPACITY)`; this
-    // pins the `Default` semantics so a caller that relies on it
-    // notices (documented rule, not a silent surprise).
+fn a_default_stack_keeps_its_entries() {
+    // P4-15 review minor 2: `Default` is `UndoStack::new(DEFAULT_CAPACITY)`,
+    // so a defaulted stack keeps its edits (the old capacity-0 default
+    // silently dropped every push). The black hole is the explicit
+    // `UndoStack::new(0)`; both halves are pinned here.
     let mut stack = UndoStack::default();
     let counter = Counter::default();
     let mut ctx = AppCtx::new(Settings::default());
     counter.add(5);
-    stack
-        .push(Box::new(DeltaEdit {
-            delta: 5,
-            state: counter.clone(),
-            label: "edit".to_owned(),
-            fail_apply: false,
-            fail_revert: false,
-        }))
-        .unwrap();
-    assert!(stack.is_empty());
-    assert_eq!(stack.undo(&mut ctx).unwrap(), None);
-    assert_eq!(counter.get(), 5, "the edit ran once and stays applied");
+    stack.push(Box::new(DeltaEdit {
+        delta: 5,
+        state: counter.clone(),
+        label: "edit".to_owned(),
+        fail_apply: false,
+        fail_revert: false,
+    }));
+    assert_eq!(stack.len(), 1);
+    assert_eq!(stack.undo(&mut ctx).unwrap().as_deref(), Some("edit"));
+    assert_eq!(counter.get(), 0, "the default stack can undo");
+
+    let mut black_hole = UndoStack::new(0);
+    black_hole.push(Box::new(DeltaEdit {
+        delta: 5,
+        state: counter.clone(),
+        label: "dropped".to_owned(),
+        fail_apply: false,
+        fail_revert: false,
+    }));
+    assert!(black_hole.is_empty());
+    assert_eq!(black_hole.undo(&mut ctx).unwrap(), None);
 }
 
 #[test]
@@ -348,15 +357,14 @@ fn a_failing_redo_leaves_the_cursor_where_it_was() {
     let mut ctx = AppCtx::new(Settings::default());
     let mut stack = UndoStack::new(4);
     counter.add(1); // the command already applied the edit (ADR 0028)
-    stack
-        .push(Box::new(DeltaEdit {
-            delta: 1,
-            state: counter.clone(),
-            label: "bad".to_owned(),
-            fail_apply: true,
-            fail_revert: false,
-        }))
-        .unwrap();
+    stack.push(Box::new(DeltaEdit {
+        delta: 1,
+        state: counter.clone(),
+        label: "bad".to_owned(),
+        fail_apply: true,
+        fail_revert: false,
+    }));
+
     stack.undo(&mut ctx).unwrap();
     let error = stack.redo(&mut ctx).unwrap_err();
     assert_eq!(error.to_string(), "apply failed");

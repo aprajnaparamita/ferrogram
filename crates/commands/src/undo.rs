@@ -30,11 +30,22 @@ pub trait Edit: Send {
 ///
 /// The cursor splits the stack: entries before it are undoable, entries
 /// after it are redoable. Pushing truncates the redo tail.
-#[derive(Default)]
+///
+/// [`UndoStack::default`] builds a stack with
+/// [`UndoStack::DEFAULT_CAPACITY`]: a defaulted stack keeps its edits
+/// (P4-15 review minor 2). A deliberately silent stack is
+/// `UndoStack::new(0)`, which is what `builtins::with_undo` uses as
+/// its short-lived placeholder.
 pub struct UndoStack {
     entries: Vec<Box<dyn Edit>>,
     cursor: usize,
     capacity: usize,
+}
+
+impl Default for UndoStack {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_CAPACITY)
+    }
 }
 
 impl std::fmt::Debug for UndoStack {
@@ -108,8 +119,8 @@ impl UndoStack {
     ///
     /// The redo tail after the cursor is dropped first (the new edit
     /// supersedes it) and the stack is clamped to its capacity by
-    /// dropping the oldest entries. Never fails.
-    pub fn push(&mut self, edit: Box<dyn Edit>) -> Result<(), CommandError> {
+    /// dropping the oldest entries.
+    pub fn push(&mut self, edit: Box<dyn Edit>) {
         self.entries.truncate(self.cursor);
         self.entries.push(edit);
         if self.entries.len() > self.capacity {
@@ -117,7 +128,6 @@ impl UndoStack {
             self.entries.drain(..drop);
         }
         self.cursor = self.entries.len();
-        Ok(())
     }
 
     /// Reverses the newest undoable edit and returns its label.
@@ -228,8 +238,8 @@ mod tests {
     fn push_undo_and_redo_round_trip() {
         let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
         let mut ctx = AppCtx::new(Settings::default());
-        stack.push(Box::new(NamedEdit("one"))).expect("push");
-        stack.push(Box::new(NamedEdit("two"))).expect("push");
+        stack.push(Box::new(NamedEdit("one")));
+        stack.push(Box::new(NamedEdit("two")));
         assert!(stack.can_undo());
         assert!(!stack.can_redo());
         assert_eq!(stack.len(), 2);
@@ -259,11 +269,11 @@ mod tests {
     fn push_truncates_the_redo_tail() {
         let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
         let mut ctx = AppCtx::new(Settings::default());
-        stack.push(Box::new(NamedEdit("one"))).expect("push");
-        stack.push(Box::new(NamedEdit("two"))).expect("push");
+        stack.push(Box::new(NamedEdit("one")));
+        stack.push(Box::new(NamedEdit("two")));
         stack.undo(&mut ctx).expect("undo");
         assert!(stack.can_redo());
-        stack.push(Box::new(NamedEdit("three"))).expect("push");
+        stack.push(Box::new(NamedEdit("three")));
         assert!(!stack.can_redo());
         assert_eq!(stack.len(), 2);
         assert_eq!(stack.undo_labels(), vec!["one", "three"]);
@@ -273,16 +283,16 @@ mod tests {
     fn push_clamps_to_the_capacity() {
         let mut stack = UndoStack::new(2);
         for label in ["one", "two", "three"] {
-            stack.push(Box::new(NamedEdit(label))).expect("push");
+            stack.push(Box::new(NamedEdit(label)));
         }
         assert_eq!(stack.len(), 2);
         assert_eq!(stack.undo_labels(), vec!["two", "three"]);
-        stack.push(Box::new(NamedEdit("four"))).expect("push");
+        stack.push(Box::new(NamedEdit("four")));
         assert_eq!(stack.undo_labels(), vec!["three", "four"]);
 
         // A zero-capacity stack keeps nothing undoable.
         let mut stack = UndoStack::new(0);
-        stack.push(Box::new(NamedEdit("one"))).expect("push");
+        stack.push(Box::new(NamedEdit("one")));
         assert!(stack.is_empty());
         assert!(!stack.can_undo());
     }
@@ -291,15 +301,15 @@ mod tests {
     fn a_failing_edit_leaves_the_cursor_where_it_was() {
         let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
         let mut ctx = AppCtx::new(Settings::default());
-        stack.push(Box::new(BadEdit)).expect("push");
+        stack.push(Box::new(BadEdit));
         let error = stack.undo(&mut ctx).expect_err("revert fails");
         assert_eq!(error.to_string(), "revert failed");
         assert!(stack.can_undo(), "the cursor did not move");
 
         let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
-        stack.push(Box::new(BadEdit)).expect("push");
+        stack.push(Box::new(BadEdit));
         stack.undo(&mut ctx).expect_err("revert fails");
-        stack.push(Box::new(NamedEdit("good"))).expect("push");
+        stack.push(Box::new(NamedEdit("good")));
         assert_eq!(stack.undo_labels(), vec!["bad", "good"]);
     }
 
@@ -307,7 +317,7 @@ mod tests {
     fn clear_drops_everything() {
         let mut stack = UndoStack::default();
         let mut ctx = AppCtx::new(Settings::default());
-        stack.push(Box::new(NoopEdit)).expect("push");
+        stack.push(Box::new(NoopEdit));
         stack.undo(&mut ctx).expect("undo");
         stack.clear();
         assert!(stack.is_empty());
@@ -320,5 +330,34 @@ mod tests {
         let stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
         assert!(stack.undo_labels().is_empty());
         assert!(stack.redo_labels().is_empty());
+    }
+
+    /// P4-15 review minor 2: a defaulted stack keeps its edits (the
+    /// old capacity-0 default silently dropped every push). The silent
+    /// placeholder is the explicit `UndoStack::new(0)`.
+    #[test]
+    fn a_default_stack_keeps_its_entries() {
+        let mut stack = UndoStack::default();
+        let mut ctx = AppCtx::new(Settings::default());
+        stack.push(Box::new(NamedEdit("one")));
+        stack.push(Box::new(NamedEdit("two")));
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack.undo(&mut ctx).expect("undo").as_deref(), Some("two"));
+
+        let mut silent = UndoStack::new(0);
+        silent.push(Box::new(NamedEdit("dropped")));
+        assert!(silent.is_empty());
+        assert!(!silent.can_undo());
+    }
+
+    /// P4-12 coverage minor 5: the `Debug` impl reports the shape.
+    #[test]
+    fn debug_shows_len_cursor_and_capacity() {
+        let mut stack = UndoStack::new(2);
+        stack.push(Box::new(NamedEdit("one")));
+        let text = format!("{stack:?}");
+        assert!(text.contains("len: 1"), "{text}");
+        assert!(text.contains("cursor: 1"), "{text}");
+        assert!(text.contains("capacity: 2"), "{text}");
     }
 }
