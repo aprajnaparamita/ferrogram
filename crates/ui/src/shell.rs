@@ -858,7 +858,7 @@ pub fn dispatch_one(
     if let Some(edit) = outcome.edit.take() {
         match app.active_document_mut() {
             Some(session) => {
-                session.undo.push(edit).map_err(UiError::Command)?;
+                session.undo.push(edit);
             }
             None => app.record_warning("an undoable edit with no open document was dropped"),
         }
