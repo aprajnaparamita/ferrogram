@@ -25,6 +25,9 @@ Task board. Only the master agent edits this file, on `main`.
 | [P4-11](tasks/P4-11.md) | reviewer | P4-10 | F | merged (approve with fixes: 0 blocker, 4 major, 12 minor) | agent/P4-11 |
 | [P4-12](tasks/P4-12.md) | coverage-auditor | P4-10 | F | merged (pass: 0 blocker, 6 major, 10 minor) | agent/P4-12 |
 | [P4-13](tasks/P4-13.md) | cleanroom-auditor | P4-10 | F | merged (pass: 0 blocker, 0 major, 1 minor, fixed on main) | agent/P4-13 |
+| [P4-15](tasks/P4-15.md) | implementer | P4-11, P4-12 | G | ready (commands fixes, `view.units`, options/quit commands) | — |
+| [P4-17](tasks/P4-17.md) | test-engineer | P4-12 | G | ready (xtask gate/parity tests, fuzz seeds) | — |
+| [P4-16](tasks/P4-16.md) | implementer | P4-15 | H | waits for P4-15 (shell/UI fixes, Options through the registry) | — |
 
 Tasks in the same group run in parallel on disjoint files. Shared files: `crates/ui/src/lib.rs` and `crates/ui/Cargo.toml` belong to P4-03 (others request additions under Open issues); `xtask/src/extract/*` mapping rules to P4-02; `xtask/src/{main,gate}.rs` and `xtask/Cargo.toml` to P4-09; `ATTRIBUTION.md` rows come from P4-03 and P4-06; the master resolves `Cargo.lock`. Fix tasks follow the audits.
 

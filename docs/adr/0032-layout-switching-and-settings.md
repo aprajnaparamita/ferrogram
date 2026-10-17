@@ -43,6 +43,20 @@ first tab when the id set changes). The same two commands appear in the
 View/Options dialog (`ui::settings::show_options`) as a radio choice; the
 dialog edits `Settings` and marks the store dirty.
 
+**Amendment (P4-11 review, fix task P4-16).** The dialog does not
+mutate `Settings` itself. `show_options` returns the `Intent`s for the
+rows the user changed and the shell dispatches them through the
+registry like any other control: the layout radios dispatch
+`view.ui_layout.visio_2016` / `view.ui_layout.visio_365`, the grid and
+rulers checkboxes dispatch `view.toggle_grid` / `view.rulers`, and the
+units combo dispatches the Ferrogram-only `view.units` with a `units`
+argument. The dialog itself opens through `app.office.center.options`,
+whose handler returns `UiRequest::ShowOptions` (no shell intercept).
+`Settings::show_grid` and `Settings::show_rulers` are the defaults for
+new document sessions: `file.new`/`file.open` seed `ViewState` from
+them, and the two toggle commands update both the active `ViewState`
+and the `Settings` default.
+
 `--ui-layout 2016|365` on the CLI sets `Settings::ui_layout` before the
 first frame and overrides the persisted value (CLI wins over the store;
 the store wins only when the flag is absent).
