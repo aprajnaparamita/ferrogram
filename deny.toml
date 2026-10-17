@@ -13,6 +13,12 @@ yanked = "deny"
 # (ADR 0030).
 ignore = [
     { id = "RUSTSEC-2026-0192", reason = "transitive via winit (sctk-adwaita/ab_glyph); unmaintained, no fix available" },
+    # zbus/zvariant: eframe's Linux accessibility bridge (egui-winit ->
+    # accesskit_unix -> atspi/zbus). Unmaintained notices with no safe
+    # upgrade; revisit when egui moves to a maintained D-Bus stack.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant via eframe/accesskit_unix (Linux a11y); unmaintained, no fix available" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names via eframe/accesskit_unix (Linux a11y); unmaintained, no fix available" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via eframe/accesskit_unix (Linux a11y); unmaintained, no fix available" },
     # zip 8.6 remains only through calamine in xtask (a dev tool that reads
     # the downloaded .xlsx sources). The three advisories concern
     # ZipArchive::extract and ZipStreamReader::extract, which neither
