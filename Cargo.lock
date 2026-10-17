@@ -1455,6 +1455,7 @@ dependencies = [
  "ferrogram-ui-spec",
  "insta",
  "js-sys",
+ "proptest",
  "rfd",
  "serde_json",
  "wasm-bindgen",
