@@ -18,6 +18,10 @@ rustls-native-certs = "0.8"
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring"] }
 roxmltree = "0.21.1"
 
+# P4-09: the parity matrix derives `implemented` rows from the builtin
+# registry (ADR 0037). xtask is L9 and may depend on any lower layer.
+ferrogram-commands = { path = "../crates/commands" }
+
 # P1-03: Fluent UI ribbon extractor (ADR 0007, ADR 0009).
 calamine = "0.36"        # MIT; xlsx reader (>=0.36 pulls in quick-xml >=0.41
                          # which clears cargo-deny's RUSTSEC advisories

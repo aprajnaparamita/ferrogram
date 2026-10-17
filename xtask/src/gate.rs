@@ -9,7 +9,8 @@ use crate::{coverage, layers};
 
 /// Gate steps in execution order.
 pub const STEPS: &[&str] = &[
-    "codegen", "fmt", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm", "fuzz",
+    "codegen", "parity", "fmt", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm",
+    "fuzz",
 ];
 
 /// Steps skipped by `--quick`.
@@ -93,6 +94,7 @@ fn run_step(step: &str) -> Outcome {
     let result = match step {
         // ADR 0015: `--quick` does not skip this step (it is fast).
         "codegen" => crate::codegen::run(&crate::codegen::Options { check: true }),
+        "parity" => crate::parity::run(&crate::parity::Options { check: true }),
         "fmt" => util::run(cargo().args(["fmt", "--all", "--", "--check"])),
         "clippy" => util::run(cargo().args([
             "clippy",
