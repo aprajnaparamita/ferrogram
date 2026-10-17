@@ -1,0 +1,204 @@
+//! The Phase 4 UI test harness (task P4-09, ADR 0037).
+//!
+//! One test binary with one module per ADR 0037 item: `ribbon`
+//! (placement completeness), `layout_switch` (ADR 0032),
+//! `enabled_state` (ADR 0031) and `file_flow` (ADR 0036). The helpers
+//! below drive a real [`Shell`] through `egui_kittest` (ADR 0030) and
+//! walk the frame's AccessKit tree, the way assistive tech and the
+//! tests see the widgets.
+//!
+//! Placement exactness per ribbon tab, backstage entry and QAT is
+//! pinned inside `crates/ui` by P4-04's
+//! `both_layouts_render_one_widget_per_placement` and its
+//! `layout_counts` snapshot. These tests extend that to the committed
+//! context menus and to whole shell frames; they do not duplicate it.
+
+#![allow(dead_code)]
+// The never-crash lints apply to non-test code only (clippy.toml);
+// these helpers are test code and use `expect`/`panic` freely.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
+mod enabled_state;
+mod file_flow;
+mod layout_switch;
+mod ribbon;
+
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
+
+use egui::accesskit::Role;
+use egui_kittest::{Harness, kittest::NodeT};
+use ferrogram_commands::app::{AppCtx, Settings};
+use ferrogram_commands::{CommandError, CommandId, Invocation, Outcome, Registry, Source};
+use ferrogram_ui::Intent;
+use ferrogram_ui::shell::Shell;
+use ferrogram_ui_spec::{LayoutSets, Loader};
+
+/// The committed layouts, parsed once per test binary (the app loads
+/// the same embedded bytes).
+pub fn sets() -> &'static LayoutSets {
+    use std::sync::OnceLock;
+    static SETS: OnceLock<LayoutSets> = OnceLock::new();
+    SETS.get_or_init(|| Loader::from_embedded().expect("the embedded ui-spec loads"))
+}
+
+/// One rendered widget node (the AccessKit view of a widget).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Widget {
+    /// The AccessKit role.
+    pub role: Role,
+    /// The accessible name (label, else value).
+    pub name: String,
+    /// Whether the widget is disabled.
+    pub disabled: bool,
+    /// The tooltip text (the `description`), when one is shown.
+    pub description: Option<String>,
+}
+
+/// The roles that count as one rendered widget (ADR 0031).
+fn is_widget_role(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Button
+            | Role::CheckBox
+            | Role::ComboBox
+            | Role::Label
+            | Role::MenuItem
+            | Role::ListBoxOption
+    )
+}
+
+/// Every rendered widget of a harness frame, in tree order.
+pub fn widgets(harness: &Harness<'_>) -> Vec<Widget> {
+    let root = harness.root();
+    let mut out = Vec::new();
+    for node in root.children_recursive() {
+        let data = node.accesskit_node().data();
+        if !is_widget_role(data.role()) {
+            continue;
+        }
+        let label = data.label().unwrap_or_default();
+        let name = if label.is_empty() {
+            data.value().unwrap_or_default()
+        } else {
+            label
+        };
+        if name.is_empty() {
+            continue;
+        }
+        out.push(Widget {
+            role: data.role(),
+            name: name.to_owned(),
+            disabled: data.is_disabled(),
+            description: data.description().map(str::to_owned),
+        });
+    }
+    out
+}
+
+/// The widget names of a harness frame, as a multiset.
+pub fn names(harness: &Harness<'_>) -> BTreeMap<String, usize> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for widget in widgets(harness) {
+        *counts.entry(widget.name).or_default() += 1;
+    }
+    counts
+}
+
+/// A whole [`Shell`] driven headlessly.
+///
+/// The harness closure keeps running between the test's assertions,
+/// so the shell is shared through `Rc<RefCell<..>>` and the test
+/// drives it between frames (the P4-04 rig pattern).
+pub struct ShellRig {
+    /// The shell under test (the same instance across frames: a
+    /// "restart" would replace it).
+    pub shell: Rc<RefCell<Shell>>,
+    /// The egui context of the harness, captured at build time. A
+    /// restart would build a new one.
+    pub egui_ctx: Rc<RefCell<Option<egui::Context>>>,
+    harness: Harness<'static>,
+}
+
+impl ShellRig {
+    /// A shell over the builtin registry, the committed layouts and
+    /// default settings.
+    pub fn new() -> Self {
+        Self::with_app(AppCtx::new(Settings::default()))
+    }
+
+    /// A shell over the builtin registry and the committed layouts,
+    /// with caller-chosen state.
+    pub fn with_app(app: AppCtx) -> Self {
+        let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+        Self::build(Shell::new(registry, sets().clone(), app))
+    }
+
+    /// A shell over a caller-chosen registry (the file-flow tests
+    /// inject commands).
+    pub fn with_registry(registry: Registry, app: AppCtx) -> Self {
+        Self::build(Shell::new(registry, sets().clone(), app))
+    }
+
+    fn build(shell: Shell) -> Self {
+        let shell = Rc::new(RefCell::new(shell));
+        let egui_ctx: Rc<RefCell<Option<egui::Context>>> = Rc::new(RefCell::new(None));
+        let harness = Harness::builder()
+            .with_size(egui::vec2(1600.0, 900.0))
+            .with_context_setup({
+                let egui_ctx = Rc::clone(&egui_ctx);
+                move |ctx| {
+                    *egui_ctx.borrow_mut() = Some(ctx.clone());
+                }
+            })
+            .build_ui({
+                let shell = Rc::clone(&shell);
+                move |ui| {
+                    let mut shell = shell.borrow_mut();
+                    let intents = shell.show_in(ui).expect("the frame renders");
+                    let results = shell.dispatch(&intents).expect("the intents dispatch");
+                    // A command failure is a finding for the caller
+                    // to assert on, never a panic here.
+                    let _ = results;
+                }
+            });
+        let mut rig = Self {
+            shell,
+            egui_ctx,
+            harness,
+        };
+        rig.run();
+        rig
+    }
+
+    /// Runs one frame.
+    pub fn run(&mut self) {
+        self.harness.run();
+    }
+
+    /// Dispatches one command through the shell between frames.
+    pub fn dispatch(&self, id: &'static str, source: Source) -> Result<Outcome, CommandError> {
+        let command = CommandId::parse(id).expect("a valid command id");
+        let intent = Intent::new(command, Invocation::empty(source));
+        let mut shell = self.shell.borrow_mut();
+        let mut results = shell.dispatch(&[intent]).expect("the intent dispatches");
+        results.pop().expect("one result per intent")
+    }
+
+    /// The widgets of the current frame.
+    pub fn widgets(&self) -> Vec<Widget> {
+        widgets(&self.harness)
+    }
+
+    /// The widget names of the current frame, as a multiset.
+    pub fn names(&self) -> BTreeMap<String, usize> {
+        names(&self.harness)
+    }
+}
+
+impl Default for ShellRig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
