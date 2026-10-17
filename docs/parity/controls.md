@@ -2,10 +2,23 @@
 
 Every Fluent control id in `ui-spec/visio-2016.yaml` and `ui-spec/visio-365.yaml`, with a status of `implemented`, `stub`, or `out-of-scope`. Sorted by `(status, id)`; the status order is `implemented`, `stub`, `out-of-scope`.
 
-In Phase 1 every row is `stub` (no Ferrogram command is registered yet). Implementers in later phases mark a row `implemented` when the corresponding command lands in `crates/commands`. Rows in `ui-spec/out-of-scope.txt` (one Fluent id per line; matched exactly) become `out-of-scope` automatically.
+The status is derived, never hand-edited (ADR 0037):
+
+- `out-of-scope` when the id is listed in `ui-spec/out-of-scope.txt` (one Fluent id per line; matched exactly or by a `*` glob);
+- `implemented` when the control's command (its `command` link, else its `commands.yaml` entry) resolves in `ferrogram_commands::builtins::registry()` to `CommandStatus::Implemented`;
+- `stub` otherwise.
+
+A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a command resolves: the alpha does not implement that control. Regenerate with `cargo xtask parity`; the gate's `parity` step runs `cargo xtask parity --check` and fails when this file is stale.
 
 | id | type | label | path | status |
 |----|------|-------|------|--------|
+| FileNewDefault | button | FileNewDefault | qat | implemented |
+| FileOpenUsingBackstage | button | FileOpenUsingBackstage | qat | implemented |
+| FileSave | button | FileSave | qat | implemented |
+| ShowGrid | checkBox | ShowGrid | tab/TabView/GroupViewShowHide | implemented |
+| ShowRulerVisio | checkBox | ShowRulerVisio | tab/TabView/GroupViewShowHide | implemented |
+| Undo | gallery | Undo | qat | implemented |
+| ZoomFitToWindowVisio | button | ZoomFitToWindowVisio | tab/TabView/GroupZoom | implemented |
 | AccessibilityChecker | button | AccessibilityChecker | tab/TabReviewWord/GroupAccessibility | stub |
 | AddOnsMenu | menu | AddOnsMenu | tab/TabView/GroupMacros | stub |
 | AlignCenter | toggleButton | AlignCenter | tab/TabHome/GroupParagraph | stub |
@@ -163,10 +176,7 @@ In Phase 1 every row is `stub` (no Ferrogram command is registered yet). Impleme
 | EventMonitor | button | EventMonitor | tab/TabDeveloper/GroupSdkTools | stub |
 | ExternalDataWindow | checkBox | ExternalDataWindow | tab/TabData/GroupDataShowHide | stub |
 | FieldInsert | button | FieldInsert | tab/TabInsert/GroupTextBoxText | stub |
-| FileNewDefault | button | FileNewDefault | qat | stub |
-| FileOpenUsingBackstage | button | FileOpenUsingBackstage | qat | stub |
 | FilePrintQuick | button | FilePrintQuick | qat | stub |
-| FileSave | button | FileSave | qat | stub |
 | FileSaveAsPdfOrXps | task | FileSaveAsPdfOrXps | backstage/TabPublish | stub |
 | FileSendAsAttachment | button | FileSendAsAttachment | qat | stub |
 | FileTypes | category | FileTypes | backstage/TabPublish | stub |
@@ -577,11 +587,9 @@ In Phase 1 every row is `stub` (no Ferrogram command is registered yet). Impleme
 | ShareWithPeople | task | ShareWithPeople | backstage/TabShare | stub |
 | ShowCommentsMenu | splitButton | ShowCommentsMenu | tab/TabReviewWord/GroupComments | stub |
 | ShowFormulaTracingWindow | toggleButton | ShowFormulaTracingWindow | tab/TabShapeSheetDesign/GroupShapeSheetFormulaTracing | stub |
-| ShowGrid | checkBox | ShowGrid | tab/TabView/GroupViewShowHide | stub |
 | ShowGuides | checkBox | ShowGuides | tab/TabView/GroupViewShowHide | stub |
 | ShowIgnoredIssues | toggleButton | ShowIgnoredIssues | tab/TabProcess/GroupDiagramValidation | stub |
 | ShowPageBreaks | checkBox | ShowPageBreaks | tab/TabView/GroupViewShowHide | stub |
-| ShowRulerVisio | checkBox | ShowRulerVisio | tab/TabView/GroupViewShowHide | stub |
 | ShowShapeSheet | splitButton | ShowShapeSheet | tab/TabDeveloper/GroupShapeDesign | stub |
 | ShowShapeSheetDocument | toggleButton | ShowShapeSheetDocument | tab/TabDeveloper/GroupShapeDesign | stub |
 | ShowShapeSheetPage | toggleButton | ShowShapeSheetPage | tab/TabDeveloper/GroupShapeDesign | stub |
@@ -672,7 +680,6 @@ In Phase 1 every row is `stub` (no Ferrogram command is registered yet). Impleme
 | TracePrecedentCells | toggleButton | TracePrecedentCells | tab/TabShapeSheetDesign/GroupShapeSheetFormulaTracing | stub |
 | Translate | button | Translate | tab/TabReviewWord/GroupLanguage | stub |
 | Underline | toggleButton | Underline | tab/TabHome/GroupFont | stub |
-| Undo | gallery | Undo | qat | stub |
 | UpdateChannel | button | UpdateChannel | backstage/TabHelp | stub |
 | UpdateIcon | button | UpdateIcon | tab/TabStencil/GroupStencilMasterShape | stub |
 | UpgradeDocument | button | UpgradeDocument | backstage/TabInfo | stub |
@@ -693,7 +700,6 @@ In Phase 1 every row is `stub` (no Ferrogram command is registered yet). Impleme
 | WindowsCascade | button | WindowsCascade | tab/TabView/GroupWindow | stub |
 | WritebackVisioDiagramToExcelSource | button | WritebackVisioDiagramToExcelSource | tab/TabDVDesign/GroupRefreshUpdate | stub |
 | ZoomDialog | button | ZoomDialog | tab/TabView/GroupZoom | stub |
-| ZoomFitToWindowVisio | button | ZoomFitToWindowVisio | tab/TabView/GroupZoom | stub |
 | ZoomPageWidthVisio | button | ZoomPageWidthVisio | tab/TabView/GroupZoom | stub |
 | _3DBevelOptionsDialog | button | _3DBevelOptionsDialog | tab/TabHome/GroupShapeStyles | stub |
 | _3DRotationGallery | gallery | _3DRotationGallery | tab/TabHome/GroupShapeStyles | stub |
