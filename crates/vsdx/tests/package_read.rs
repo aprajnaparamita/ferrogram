@@ -359,14 +359,20 @@ fn the_streaming_size_cap_refuses_a_lying_declared_size() {
     let bytes = common::declare_huge_size(bytes, "big.bin", 8);
     let mut limits = Limits::DEFAULT;
     limits.max_part_uncompressed = 1024;
-    assert!(matches!(
-        read_package(&bytes, &limits),
-        Err(Error::LimitExceeded {
-            limit: "max_part_uncompressed",
-            max: 1024,
-            ..
-        })
-    ));
+    // Either the inflate loop's cap stops the entry, or zip (9.x and
+    // later) refuses to inflate past the declared size first.
+    let result = read_package(&bytes, &limits);
+    assert!(
+        matches!(
+            result,
+            Err(Error::LimitExceeded {
+                limit: "max_part_uncompressed",
+                max: 1024,
+                ..
+            }) | Err(Error::InvalidPackage(_))
+        ),
+        "{result:?}"
+    );
 }
 
 #[test]
