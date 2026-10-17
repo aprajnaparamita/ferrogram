@@ -20,6 +20,8 @@
 
 mod enabled_state;
 mod file_flow;
+mod flows;
+mod interactions;
 mod layout_switch;
 mod ribbon;
 
@@ -28,7 +30,10 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use egui::accesskit::Role;
-use egui_kittest::{Harness, kittest::NodeT};
+use egui_kittest::{
+    Harness,
+    kittest::{NodeT, Queryable},
+};
 use ferrogram_commands::app::{AppCtx, Settings};
 use ferrogram_commands::{CommandError, CommandId, Invocation, Outcome, Registry, Source};
 use ferrogram_ui::Intent;
@@ -142,10 +147,28 @@ impl ShellRig {
     }
 
     fn build(shell: Shell) -> Self {
+        Self::build_sized(shell, egui::vec2(1600.0, 900.0))
+    }
+
+    /// The same rig with a window the whole committed ribbon fits in
+    /// (the P4-04 note: the layouts are about 5000 points wide, and a
+    /// click outside the screen rect never reaches a widget).
+    pub fn large() -> Self {
+        Self::build_sized(
+            Shell::new(
+                ferrogram_commands::builtins::registry().expect("the registry builds"),
+                sets().clone(),
+                AppCtx::new(Settings::default()),
+            ),
+            egui::vec2(12000.0, 4000.0),
+        )
+    }
+
+    fn build_sized(shell: Shell, size: egui::Vec2) -> Self {
         let shell = Rc::new(RefCell::new(shell));
         let egui_ctx: Rc<RefCell<Option<egui::Context>>> = Rc::new(RefCell::new(None));
         let harness = Harness::builder()
-            .with_size(egui::vec2(1600.0, 900.0))
+            .with_size(size)
             .with_context_setup({
                 let egui_ctx = Rc::clone(&egui_ctx);
                 move |ctx| {
@@ -189,6 +212,42 @@ impl ShellRig {
     /// The widgets of the current frame.
     pub fn widgets(&self) -> Vec<Widget> {
         widgets(&self.harness)
+    }
+
+    /// Clicks the first widget with `role` and `name` and runs one
+    /// frame. Panics when no such widget exists (the test's finding).
+    pub fn click(&mut self, role: Role, name: &str) {
+        assert!(
+            self.try_click(role, name),
+            "no {role:?} named {name:?} in {:?}",
+            self.names().keys().collect::<Vec<_>>()
+        );
+    }
+
+    /// Clicks the first widget with `role` and `name` and runs one
+    /// frame; `false` (and no frame) when there is no such widget.
+    pub fn try_click(&mut self, role: Role, name: &str) -> bool {
+        self.try_click_nth(role, name, 0)
+    }
+
+    /// Like [`ShellRig::try_click`], but the `nth` matching widget
+    /// (the window has two "File" buttons: menu bar and ribbon).
+    pub fn try_click_nth(&mut self, role: Role, name: &str, nth: usize) -> bool {
+        let clicked = {
+            let root = self.harness.root();
+            let node = root.query_all_by_role_and_label(role, name).nth(nth);
+            match node {
+                Some(node) => {
+                    node.click();
+                    true
+                }
+                None => false,
+            }
+        };
+        if clicked {
+            self.harness.run();
+        }
+        clicked
     }
 
     /// The widget names of the current frame, as a multiset.
