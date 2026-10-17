@@ -1,17 +1,30 @@
-//! Parity matrix extractor (P1-03).
+//! Parity matrix extractor (P1-03, statuses derived per ADR 0037).
 //!
 //! Reads the two layout files and produces
 //! `docs/parity/controls.md`: every Fluent control id in both
 //! layouts, with a status of `implemented`, `stub`, or
 //! `out-of-scope`.
 //!
-//! Initial state (Phase 1) is `stub` for every control, with the
-//! `ui-spec/out-of-scope.txt` file (one Fluent id per line) marking
-//! known exclusions (P1-04 will refine the master agent's list).
+//! The status is **derived, never hand-edited** (ADR 0037):
+//!
+//! - `out-of-scope` when the id is listed in `ui-spec/out-of-scope.txt`;
+//! - `implemented` when the control's `CommandId` (its `command` link,
+//!   else its `commands.yaml` entry) resolves in
+//!   `ferrogram_commands::builtins::registry()` to
+//!   `CommandStatus::Implemented`;
+//! - `stub` otherwise.
+//!
+//! An id listed in `ui-spec/out-of-scope.txt` keeps its `out-of-scope`
+//! status even when a command resolves: the alpha does not implement
+//! that control (the pre-Phase 4 rule, kept so the extractor fixtures
+//! and the committed matrix agree).
+//!
+//! `cargo xtask parity` (P4-09, `xtask/src/parity.rs`) is the runner
+//! that regenerates the committed file or checks it for freshness.
 //!
 //! See ADR 0009 for the extractor contract.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -23,15 +36,41 @@ use super::{ExtractError, ExtractResult};
 /// Per-extractor entry point.
 pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
     let _ = in_dir;
+    let text = generate(out_dir)?;
+    let out_path = out_dir.join("docs").join("parity").join("controls.md");
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| ExtractError::Io {
+            path: out_path.clone(),
+            source: format!("create parent {}: {e}", parent.display()),
+        })?;
+    }
+    write_atomic(&out_path, &text).map_err(|msg| ExtractError::Io {
+        path: out_path.clone(),
+        source: msg,
+    })?;
+    Ok(vec![out_path])
+}
+
+/// Generates the parity matrix document from the `ui-spec/` data in
+/// `out_dir` and the builtin command registry (ADR 0037).
+///
+/// The document is deterministic: the same inputs always produce the
+/// same bytes (ADR 0009).
+pub fn generate(out_dir: &Path) -> ExtractResult<String> {
+    let rules = StatusRules::load(out_dir)?;
     let path_2016 = out_dir.join("ui-spec").join("panel-2016.yaml");
     let path_365 = out_dir.join("ui-spec").join("panel-365.yaml");
-    let oos_path = out_dir.join("ui-spec").join("out-of-scope.txt");
-    let out_path = out_dir.join("docs").join("parity").join("controls.md");
 
-    let entries_2016 = collect_entries(&path_2016)?;
-    let entries_365 = collect_entries(&path_365)?;
-    let oos = load_out_of_scope(&oos_path)?;
-    let oos = std::sync::Arc::new(oos);
+    let value_2016 = load_value(&path_2016)?;
+    let value_365 = load_value(&path_365)?;
+    let mut entries_2016: BTreeMap<String, Entry> = BTreeMap::new();
+    super::diff::visit_layout(&value_2016, &mut entries_2016);
+    let mut entries_365: BTreeMap<String, Entry> = BTreeMap::new();
+    super::diff::visit_layout(&value_365, &mut entries_365);
+    let mut links_2016 = BTreeMap::new();
+    collect_command_links(&value_2016, &mut links_2016);
+    let mut links_365 = BTreeMap::new();
+    collect_command_links(&value_365, &mut links_365);
 
     // Union of ids, in (status, id) order. Status order is
     // `implemented`, `stub`, `out-of-scope` per the task.
@@ -60,11 +99,13 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
             // parity row is still emitted.
             None => (String::new(), String::new()),
         };
-        let status = if oos.contains(id) {
-            Status::OutOfScope
-        } else {
-            Status::Stub
-        };
+        // The control's `command` link, 365 first (the row data
+        // prefers the 365 placement the same way).
+        let linked = links_365
+            .get(id)
+            .or_else(|| links_2016.get(id))
+            .map(String::as_str);
+        let status = rules.status(id, linked);
         rows.push(Row {
             id: id.clone(),
             control_type,
@@ -87,12 +128,21 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
          `ui-spec/panel-365.yaml`, with a status of `implemented`, \
          `stub`, or `out-of-scope`. Sorted by `(status, id)`; the \
          status order is `implemented`, `stub`, `out-of-scope`.\n\n\
-         In Phase 1 every row is `stub` (no Ferrogram command is \
-         registered yet). Implementers in later phases mark a row \
-         `implemented` when the corresponding command lands in \
-         `crates/commands`. Rows in `ui-spec/out-of-scope.txt` \
-         (one Fluent id per line; matched exactly) become \
-         `out-of-scope` automatically.\n\n",
+         The status is derived, never hand-edited (ADR 0037):\n\n\
+         - `out-of-scope` when the id is listed in \
+         `ui-spec/out-of-scope.txt` (one Fluent id per line; matched \
+         exactly or by a `*` glob);\n\
+         - `implemented` when the control's command (its `command` \
+         link, else its `commands.yaml` entry) resolves in \
+         `ferrogram_commands::builtins::registry()` to \
+         `CommandStatus::Implemented`;\n\
+         - `stub` otherwise.\n\n\
+         A row listed in `ui-spec/out-of-scope.txt` stays \
+         `out-of-scope` even when a command resolves: the alpha does \
+         not implement that control. Regenerate with \
+         `cargo xtask parity`; the gate's `parity` step runs \
+         `cargo xtask parity --check` and fails when this file is \
+         stale.\n\n",
     );
     text.push_str("| id | type | label | path | status |\n");
     text.push_str("|----|------|-------|------|--------|\n");
@@ -106,43 +156,139 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
             r.status.as_str(),
         ));
     }
-
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| ExtractError::Io {
-            path: out_path.clone(),
-            source: format!("create parent {}: {e}", parent.display()),
-        })?;
-    }
-    write_atomic(&out_path, &text).map_err(|msg| ExtractError::Io {
-        path: out_path.clone(),
-        source: msg,
-    })?;
-    Ok(vec![out_path])
+    Ok(text)
 }
 
-fn collect_entries(layout_path: &Path) -> ExtractResult<BTreeMap<String, Entry>> {
-    let text = std::fs::read_to_string(layout_path).map_err(|e| ExtractError::Io {
-        path: layout_path.to_path_buf(),
+/// The rules that derive one row's status (ADR 0037).
+pub struct StatusRules {
+    /// Command ids the builtin registry reports as
+    /// [`CommandStatus::Implemented`](ferrogram_commands::CommandStatus).
+    pub implemented: BTreeSet<String>,
+    /// Fluent id -> command id, from `commands.yaml` (the entry that
+    /// lists the id in `fluent_ids`; first entry wins).
+    pub by_fluent: BTreeMap<String, String>,
+    /// The `ui-spec/out-of-scope.txt` marker list.
+    pub out_of_scope: OutOfScope,
+}
+
+impl StatusRules {
+    /// Loads the rules from `out_dir`'s `ui-spec/` and the builtin
+    /// registry.
+    pub fn load(out_dir: &Path) -> ExtractResult<Self> {
+        let ui_spec = out_dir.join("ui-spec");
+        Ok(Self {
+            implemented: implemented_ids()?,
+            by_fluent: load_command_table(&ui_spec.join("commands.yaml"))?,
+            out_of_scope: load_out_of_scope(&ui_spec.join("out-of-scope.txt"))?,
+        })
+    }
+
+    /// One row's status.
+    ///
+    /// `linked` is the control's `command` link; when there is none,
+    /// the id's `commands.yaml` entry decides. An id in
+    /// `ui-spec/out-of-scope.txt` is `out-of-scope` first (see the
+    /// module docs).
+    pub fn status(&self, fluent_id: &str, linked: Option<&str>) -> Status {
+        if self.out_of_scope.contains(fluent_id) {
+            return Status::OutOfScope;
+        }
+        let command = linked
+            .map(str::to_owned)
+            .or_else(|| self.by_fluent.get(fluent_id).cloned());
+        match command {
+            Some(command) if self.implemented.contains(&command) => Status::Implemented,
+            _ => Status::Stub,
+        }
+    }
+}
+
+/// The command ids `ferrogram_commands::builtins::registry()` reports
+/// as implemented: the one source of truth for `implemented` rows
+/// (ADR 0037).
+fn implemented_ids() -> ExtractResult<BTreeSet<String>> {
+    let registry =
+        ferrogram_commands::builtins::registry().map_err(|error| ExtractError::Parse {
+            path: PathBuf::from("crates/commands"),
+            message: format!("builtin registry does not build: {error}"),
+        })?;
+    Ok(registry
+        .ids()
+        .filter(|id| registry.status(id) == ferrogram_commands::CommandStatus::Implemented)
+        .map(|id| id.as_str().to_owned())
+        .collect())
+}
+
+/// Parses one layout YAML file into a generic [`Value`].
+fn load_value(path: &Path) -> ExtractResult<Value> {
+    let text = std::fs::read_to_string(path).map_err(|e| ExtractError::Io {
+        path: path.to_path_buf(),
         source: e.to_string(),
     })?;
-    let value: Value = serde_saphyr::from_str::<Value>(&text).map_err(|e| ExtractError::Parse {
-        path: layout_path.to_path_buf(),
+    serde_saphyr::from_str::<Value>(&text).map_err(|e| ExtractError::Parse {
+        path: path.to_path_buf(),
         message: format!("YAML parse: {e}"),
+    })
+}
+
+/// Walks a layout [`Value`] and records every control's `command`
+/// link: Fluent id -> Ferrogram command id. First occurrence wins
+/// (a repeated id with two links is an extractor artefact).
+pub fn collect_command_links(value: &Value, out: &mut BTreeMap<String, String>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_command_links(item, out);
+            }
+        }
+        Value::Object(map) => {
+            if let (Some(Value::String(id)), Some(Value::String(command))) =
+                (map.get("id"), map.get("command"))
+                && !id.is_empty()
+                && !command.is_empty()
+            {
+                out.entry(id.clone()).or_insert_with(|| command.clone());
+            }
+            for child in map.values() {
+                collect_command_links(child, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Builds the Fluent id -> command id reverse map of a
+/// `commands.yaml` table (every `fluent_ids` entry of every row; the
+/// first row claiming an id wins).
+fn load_command_table(path: &Path) -> ExtractResult<BTreeMap<String, String>> {
+    let value = load_value(path)?;
+    let items = value.as_array().ok_or_else(|| ExtractError::Parse {
+        path: path.to_path_buf(),
+        message: "commands.yaml is not a list of entries".to_owned(),
     })?;
     let mut out = BTreeMap::new();
-    super::diff::visit_layout(&value, &mut out);
+    for item in items {
+        let Some(id) = item.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Some(fluent_ids) = item.get("fluent_ids").and_then(Value::as_array) {
+            for fluent in fluent_ids.iter().filter_map(Value::as_str) {
+                out.entry(fluent.to_owned())
+                    .or_insert_with(|| id.to_owned());
+            }
+        }
+    }
     Ok(out)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Status {
-    /// A Ferrogram command has been registered for this id.
-    /// Phase 1 has no commands crate, so this variant is never
-    /// constructed yet; later phases set it from the commands
-    /// registry.
-    #[allow(dead_code)]
+pub enum Status {
+    /// The control's command resolves to a real handler in
+    /// `ferrogram_commands::builtins::registry()`.
     Implemented,
+    /// No handler is registered for the control's command yet.
     Stub,
+    /// The Fluent id is listed in `ui-spec/out-of-scope.txt`.
     OutOfScope,
 }
 
@@ -172,6 +318,12 @@ fn load_out_of_scope(path: &Path) -> ExtractResult<OutOfScope> {
         path: path.to_path_buf(),
         source: e.to_string(),
     })?;
+    Ok(parse_out_of_scope(&text))
+}
+
+/// Parses an `out-of-scope.txt` document: one Fluent id per line,
+/// `#` comments and blank lines ignored, `*` globs allowed.
+fn parse_out_of_scope(text: &str) -> OutOfScope {
     let mut oos = OutOfScope::default();
     for line in text.lines() {
         let trimmed = line.trim();
@@ -184,20 +336,21 @@ fn load_out_of_scope(path: &Path) -> ExtractResult<OutOfScope> {
             oos.exact.insert(trimmed.to_string());
         }
     }
-    Ok(oos)
+    oos
 }
 
 /// Out-of-scope marker. Each entry is either an exact Fluent id or
 /// a glob pattern (only `*` is supported). Matched in O(ids *
 /// patterns) which is fine for the alpha (under 2 000 ids).
 #[derive(Default)]
-struct OutOfScope {
-    exact: std::collections::BTreeSet<String>,
+pub struct OutOfScope {
+    exact: BTreeSet<String>,
     globs: Vec<String>,
 }
 
 impl OutOfScope {
-    fn contains(&self, id: &str) -> bool {
+    /// Whether `id` is marked out of scope.
+    pub fn contains(&self, id: &str) -> bool {
         if self.exact.contains(id) {
             return true;
         }
@@ -265,6 +418,19 @@ mod tests {
         crate::util::root()
     }
 
+    /// Rules over synthetic data: the implemented set and the
+    /// `commands.yaml` map are what the tests flip.
+    fn rules(implemented: &[&str], by_fluent: &[(&str, &str)], oos: &[&str]) -> StatusRules {
+        StatusRules {
+            implemented: implemented.iter().map(|s| (*s).to_owned()).collect(),
+            by_fluent: by_fluent
+                .iter()
+                .map(|(f, c)| ((*f).to_owned(), (*c).to_owned()))
+                .collect(),
+            out_of_scope: parse_out_of_scope(&oos.join("\n")),
+        }
+    }
+
     #[test]
     fn loads_out_of_scope_strips_comments() {
         let tmp = crate::util::test_support::TempDir::new("parity-oos");
@@ -313,6 +479,162 @@ mod tests {
         assert_eq!(ta, tb);
         assert!(ta.contains("| status |"));
         assert!(ta.contains("| stub |"));
+    }
+
+    // ---- status derivation (ADR 0037) ------------------------------
+
+    /// The row's command link decides when there is one.
+    #[test]
+    fn the_command_link_decides_the_status() {
+        let r = rules(&["file.save"], &[], &[]);
+        assert_eq!(r.status("FileSave", Some("file.save")), Status::Implemented);
+        assert_eq!(r.status("FileSave", Some("file.print")), Status::Stub);
+    }
+
+    /// With no link, the id's `commands.yaml` entry decides.
+    #[test]
+    fn the_commands_yaml_entry_is_the_fallback() {
+        let r = rules(&["file.save"], &[("FileSave", "file.save")], &[]);
+        assert_eq!(r.status("FileSave", None), Status::Implemented);
+        assert_eq!(r.status("UnknownControl", None), Status::Stub);
+    }
+
+    /// The acceptance rule: flipping one handler to stub flips its
+    /// rows (nothing else moves).
+    #[test]
+    fn flipping_one_handler_to_stub_flips_its_rows() {
+        let before = rules(
+            &["file.save", "file.open"],
+            &[("FileSave", "file.save")],
+            &[],
+        );
+        assert_eq!(
+            before.status("FileSave", Some("file.save")),
+            Status::Implemented
+        );
+        assert_eq!(before.status("FileSave", None), Status::Implemented);
+        assert_eq!(
+            before.status("FileOpen", Some("file.open")),
+            Status::Implemented
+        );
+
+        // The `file.save` handler becomes a stub: only its rows flip.
+        let after = rules(&["file.open"], &[("FileSave", "file.save")], &[]);
+        assert_eq!(after.status("FileSave", Some("file.save")), Status::Stub);
+        assert_eq!(after.status("FileSave", None), Status::Stub);
+        assert_eq!(
+            after.status("FileOpen", Some("file.open")),
+            Status::Implemented
+        );
+    }
+
+    /// An id the alpha will not implement stays `out-of-scope`, even
+    /// when a command resolves.
+    #[test]
+    fn out_of_scope_beats_an_implemented_command() {
+        let r = rules(&["file.save"], &[("FileSave", "file.save")], &["FileSave"]);
+        assert_eq!(r.status("FileSave", Some("file.save")), Status::OutOfScope);
+    }
+
+    /// A control's `command` link wins over its `commands.yaml` entry.
+    #[test]
+    fn the_link_wins_over_the_table() {
+        let r = rules(&["file.save"], &[("FileSave", "file.print")], &[]);
+        assert_eq!(r.status("FileSave", Some("file.save")), Status::Implemented);
+        assert_eq!(r.status("FileSave", None), Status::Stub);
+    }
+
+    #[test]
+    fn command_links_are_collected_from_the_layout_value() {
+        let text = r#"
+tabs:
+  - id: TabHome
+    groups:
+      - id: GroupClipboard
+        controls:
+          - id: FileSave
+            command: file.save
+          - id: SaveLabel
+            command: null
+          - id: FileSave
+            command: file.print
+"#;
+        let value: Value = serde_saphyr::from_str(text).unwrap();
+        let mut links = BTreeMap::new();
+        collect_command_links(&value, &mut links);
+        assert_eq!(links.get("FileSave").map(String::as_str), Some("file.save"));
+        assert!(!links.contains_key("SaveLabel"));
+    }
+
+    #[test]
+    fn command_table_maps_fluent_ids_and_the_first_row_wins() {
+        let tmp = crate::util::test_support::TempDir::new("parity-table");
+        let p = tmp.join("commands.yaml");
+        std::fs::write(
+            &p,
+            "- id: file.save\n  fluent_ids: [FileSave, Save]\n\
+             - id: file.save_as\n  fluent_ids: [FileSave, SaveAs]\n",
+        )
+        .unwrap();
+        let table = load_command_table(&p).unwrap();
+        assert_eq!(table.get("FileSave").map(String::as_str), Some("file.save"));
+        assert_eq!(
+            table.get("SaveAs").map(String::as_str),
+            Some("file.save_as")
+        );
+        assert_eq!(table.len(), 3);
+    }
+
+    #[test]
+    fn a_missing_or_broken_command_table_is_an_error() {
+        let p = PathBuf::from("/nonexistent/never/there/commands.yaml");
+        assert!(load_command_table(&p).is_err());
+        let tmp = crate::util::test_support::TempDir::new("parity-bad-table");
+        let p = tmp.join("commands.yaml");
+        std::fs::write(&p, "a: 1").unwrap();
+        assert!(load_command_table(&p).is_err());
+        std::fs::write(&p, "{oops").unwrap();
+        assert!(load_command_table(&p).is_err());
+    }
+
+    /// The committed matrix marks the rows of the builtin registry
+    /// `implemented` and everything else `stub` or `out-of-scope`.
+    #[test]
+    fn the_generated_matrix_agrees_with_the_builtin_registry() {
+        let root = ws();
+        let text = generate(&root).unwrap();
+        let rules = StatusRules::load(&root).unwrap();
+        // The links as the generator merges them (365 first).
+        let mut links = BTreeMap::new();
+        collect_command_links(
+            &load_value(&root.join("ui-spec").join("panel-2016.yaml")).unwrap(),
+            &mut links,
+        );
+        let mut links_365 = BTreeMap::new();
+        collect_command_links(
+            &load_value(&root.join("ui-spec").join("panel-365.yaml")).unwrap(),
+            &mut links_365,
+        );
+        for (id, command) in &links_365 {
+            links.insert(id.clone(), command.clone());
+        }
+        let mut checked = 0usize;
+        for fluent in rules.by_fluent.keys() {
+            let Some(row) = text
+                .lines()
+                .find(|line| line.starts_with(&format!("| {fluent} |")))
+            else {
+                continue;
+            };
+            let linked = links.get(fluent).map(String::as_str);
+            let status = rules.status(fluent, linked);
+            assert!(
+                row.ends_with(&format!("| {} |", status.as_str())),
+                "{fluent} should be {status:?}: {row}"
+            );
+            checked += 1;
+        }
+        assert!(checked > 0, "no mapped row was checked");
     }
 
     #[test]

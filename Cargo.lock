@@ -1357,6 +1357,7 @@ dependencies = [
  "eframe",
  "egui_kittest",
  "ferrogram-commands",
+ "ferrogram-render",
  "ferrogram-ui",
  "ferrogram-ui-spec",
  "winit",
@@ -5034,6 +5035,7 @@ name = "xtask"
 version = "0.0.1"
 dependencies = [
  "calamine",
+ "ferrogram-commands",
  "ferrogram-ui-spec",
  "jsonschema",
  "proptest",

@@ -5,6 +5,9 @@
 //! - `gate [--quick] [--skip <step>[,<step>...]]`: the quality gate (see AGENTS.md).
 //! - `codegen [--check]`: regenerate `crates/model/src/generated/` from
 //!   `ui-spec/shapesheet.toml`, or verify it with `--check`. See ADR 0015.
+//! - `parity [--check]`: regenerate `docs/parity/controls.md` from the
+//!   builtin registry and the `ui-spec` data, or verify it with
+//!   `--check`. See ADR 0037.
 //! - `coverage [--update-ratchet]`: coverage only; optionally record the ratchet.
 //! - `layers`: check crate layering rules.
 //! - `corpus [--verify-only] [--offline <dir>]`: fetch and verify the test corpus.
@@ -26,6 +29,7 @@ mod extract;
 mod gate;
 mod layers;
 mod oracle;
+mod parity;
 mod util;
 
 use std::process::ExitCode;
@@ -34,10 +38,13 @@ const USAGE: &str = "usage: cargo xtask <task>
 
 tasks:
   gate [--quick] [--skip <step>,...]   run the quality gate
-                                       steps: codegen fmt clippy test doc coverage deny layers wasm fuzz
+                                       steps: codegen parity fmt clippy test doc coverage deny layers wasm fuzz
                                        --quick skips coverage, wasm and fuzz
   codegen [--check]                    regenerate crates/model/src/generated from
                                        ui-spec/shapesheet.toml (ADR 0015)
+                                       --check fails when the committed file is stale
+  parity [--check]                     regenerate docs/parity/controls.md from the
+                                       registry and the ui-spec data (ADR 0037)
                                        --check fails when the committed file is stale
   coverage [--update-ratchet]          run coverage and check thresholds
   layers                               check crate layering rules
@@ -63,6 +70,8 @@ enum Task {
     Gate(Vec<String>),
     /// `cargo xtask codegen`.
     Codegen(codegen::Options),
+    /// `cargo xtask parity`.
+    Parity(parity::Options),
     /// `cargo xtask coverage`.
     Coverage {
         /// Whether to rewrite the ratchet in `coverage.toml`.
@@ -93,6 +102,7 @@ fn parse_task(args: &[String]) -> Result<Task, String> {
             Ok(Task::Gate(rest.to_vec()))
         }
         "codegen" => Ok(Task::Codegen(codegen::parse_args(rest)?)),
+        "parity" => Ok(Task::Parity(parity::parse_args(rest)?)),
         "coverage" => Ok(Task::Coverage {
             update_ratchet: coverage::parse_args(rest)?,
         }),
@@ -137,6 +147,7 @@ fn run_task(task: Task) -> Result<(), String> {
     match task {
         Task::Gate(args) => gate::run(&args),
         Task::Codegen(options) => codegen::run(&options),
+        Task::Parity(options) => parity::run(&options),
         Task::Coverage { update_ratchet } => coverage::run(update_ratchet),
         Task::Layers => layers::run(),
         Task::Corpus(opts) => corpus::run_opts(&opts),
@@ -237,7 +248,7 @@ mod tests {
         ));
         // The usage lists every task the dispatcher accepts.
         for task in [
-            "gate", "codegen", "coverage", "layers", "corpus", "extract", "oracle",
+            "gate", "codegen", "parity", "coverage", "layers", "corpus", "extract", "oracle",
         ] {
             assert!(usage().contains(task), "usage is missing `{task}`");
         }
@@ -255,6 +266,9 @@ mod tests {
 
         let err = parse_task(&args(&["codegen", "--bogus"])).unwrap_err();
         assert!(err.contains("unknown codegen argument"), "{err}");
+
+        let err = parse_task(&args(&["parity", "--bogus"])).unwrap_err();
+        assert!(err.contains("unknown parity argument"), "{err}");
 
         let err = parse_task(&args(&["coverage", "--bogus"])).unwrap_err();
         assert!(err.contains("unknown coverage argument"), "{err}");
@@ -294,6 +308,14 @@ mod tests {
         assert!(matches!(
             parse_task(&args(&["codegen", "--check"])).unwrap(),
             Task::Codegen(codegen::Options { check: true })
+        ));
+        assert!(matches!(
+            parse_task(&args(&["parity"])).unwrap(),
+            Task::Parity(_)
+        ));
+        assert!(matches!(
+            parse_task(&args(&["parity", "--check"])).unwrap(),
+            Task::Parity(parity::Options { check: true })
         ));
         assert!(matches!(
             parse_task(&args(&["coverage", "--update-ratchet"])).unwrap(),
