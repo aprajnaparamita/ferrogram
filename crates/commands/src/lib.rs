@@ -104,8 +104,11 @@ impl CommandId {
                 reason: "id pool is full",
             });
         }
+        // Validate before leaking: a rejected id must not leak its
+        // string (P4-10: an invalid id is hostile input, and leaking
+        // one per call would grow memory without bound).
+        validate_id(s)?;
         let leaked: &'static str = Box::leak(s.to_owned().into_boxed_str());
-        validate_id(leaked)?;
         guard.push(leaked);
         Ok(CommandId(leaked))
     }
