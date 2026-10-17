@@ -1209,3 +1209,32 @@ fn page_arguments_are_validated_with_the_callers_number() {
         "{error}"
     );
 }
+
+/// P4-12 coverage minor 4: `view.zoom.fit` on a page whose sheet has
+/// no cached cells falls back to the renderer's 8.5 x 11 in page size
+/// (the same per-axis fallback `ferrogram_render::build` applies).
+#[test]
+fn zoom_fit_falls_back_to_letter_for_a_page_without_sheet_cells() {
+    let mut doc = Document::new();
+    doc.pages.push(Page::new(PageId { index: 0 }, 1));
+    let mut ctx = AppCtx::new(Settings::default());
+    run(
+        &mut ctx,
+        "file.open",
+        Args::new()
+            .with("name", ArgValue::Text("no-cells.vsdx".into()))
+            .with("data", ArgValue::Bytes(package_bytes(&doc))),
+    )
+    .expect("open");
+    let outcome = run(
+        &mut ctx,
+        "view.zoom.fit",
+        Args::new()
+            .with("width", ArgValue::Number(408.0))
+            .with("height", ArgValue::Number(528.0)),
+    )
+    .expect("fit");
+    assert_eq!(outcome.message.as_deref(), Some("Zoom 67%"));
+    let zoom = ctx.active_document().expect("session").view.zoom;
+    assert!((zoom - 408.0 / (8.5 * 72.0)).abs() < 1e-9, "{zoom}");
+}
