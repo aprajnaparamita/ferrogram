@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (P5-01 planning)
+- Current phase: **5 in progress** (group A: P5-02, P5-03)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -12,7 +12,22 @@ Task board. Only the master agent edits this file, on `main`.
 
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
-| [P5-01](tasks/P5-01.md) | architect | Phase 4 | — | ready to launch | — |
+| [P5-01](tasks/P5-01.md) | architect | Phase 4 | — | merged (ADRs 0038–0049, stubs, task files) | agent/P5-01 |
+| [P5-02](tasks/P5-02.md) | implementer | P5-01 | A | ready | — |
+| [P5-03](tasks/P5-03.md) | implementer | P5-01 | A | ready | — |
+| [P5-04](tasks/P5-04.md) | implementer | P5-02 | B | waiting (parallel-safe with P5-03) | — |
+| [P5-05](tasks/P5-05.md) | implementer | P5-03, P5-04 | C | waiting | — |
+| [P5-06](tasks/P5-06.md) | implementer | P5-05 | D | waiting | — |
+| [P5-07](tasks/P5-07.md) | implementer | P5-05 | D | waiting | — |
+| [P5-08](tasks/P5-08.md) | implementer | P5-05 | D | waiting | — |
+| [P5-09](tasks/P5-09.md) | implementer | P5-05 | D | waiting | — |
+| [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09 | E | waiting | — |
+| [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | waiting | — |
+| [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | waiting | — |
+| [P5-13](tasks/P5-13.md) | coverage-auditor | P5-11 | G | waiting | — |
+| [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | waiting | — |
+
+Tasks in one group run in parallel on disjoint files. Shared files: `crates/commands/src/builtins/mod.rs`, `crates/commands/src/app.rs` and `xtask/src/extract/commands.rs` belong to P5-04 (later tasks use their own `TABLE` modules); `crates/ui/src/{lib,shell,canvas}.rs` and `crates/ui/Cargo.toml` to P5-05 (later tasks request lines in their Results); `crates/model/src/mutate.rs` and the `vsdx` writer to P5-02. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
 ## Phase 4 task board
 
