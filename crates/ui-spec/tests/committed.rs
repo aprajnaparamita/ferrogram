@@ -79,8 +79,10 @@ const PIN_365: LayoutCounts = LayoutCounts {
 };
 // 935 before P4-02; the "our own commands" list (ADR 0006 amendment)
 // adds 11 rows (P4-15 adds `view.units`) and two Fluent-only rows merge
-// into them.
-const COMMANDS: usize = 944;
+// into them. P5-04 adds the 31 Phase 5 editing ids the mechanical
+// derivation does not produce (task P5-04, forced companion update to
+// the regenerated `commands.yaml`).
+const COMMANDS: usize = 975;
 const SHORTCUTS: usize = 90;
 
 #[test]

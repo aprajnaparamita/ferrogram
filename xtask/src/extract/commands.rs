@@ -560,20 +560,60 @@ pub fn cross_check_fluent_ids(
 }
 
 /// The Ferrogram-only command ids (ADR 0028 "Ids beyond `commands.yaml`",
-/// the ADR 0006 amendment): affordances with no Microsoft counterpart.
-/// Each becomes its own `commands.yaml` row with `fluent_ids: []` and
-/// `mapping_confidence: unknown`. Keyed as (id, label); sorted by id.
+/// the ADR 0006 amendment): affordances with no Microsoft counterpart,
+/// plus the Phase 5 editing ids the mechanical derivation does not
+/// produce (task P5-04). Each becomes its own `commands.yaml` row with
+/// `fluent_ids: []` and `mapping_confidence: unknown`. Keyed as (id,
+/// label); sorted by id.
+///
+/// An id the mechanical derivation already produced keeps its row (with
+/// its label, `visuicmd` and Fluent ids): [`add_our_commands`] only
+/// claims ids nothing else has.
 ///
 /// `view.units` (P4-15) is the display-units command of the ADR 0032
-/// Options dialog.
+/// Options dialog. The Phase 5 ids are the task P5-04 Interfaces list
+/// (editing, insertion, text, connector, arrangement and page commands);
+/// `arrange.align.center_x` is the horizontal centre alignment (the
+/// derived `arrange.align.center` row is the box-centre one).
 pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("app.quit", "Exit"),
+    ("arrange.align.center_x", "Align Center"),
+    ("arrange.distribute.horizontal", "Distribute Horizontally"),
+    ("arrange.distribute.vertical", "Distribute Vertically"),
+    ("connector.glue_begin", "Glue Begin"),
+    ("connector.glue_end", "Glue End"),
+    ("connector.reroute_all", "Reroute All"),
+    ("connector.style", "Connector Style"),
+    ("connector.unglue", "Unglue"),
+    ("edit.delete", "Delete"),
+    ("edit.deselect", "Deselect"),
     ("file.export", "Export"),
     ("file.inspect", "Inspect"),
     ("file.render", "Render"),
     ("help.about", "About"),
+    ("insert.drawing.ellipse", "Ellipse"),
+    ("insert.drawing.line", "Line"),
+    ("insert.drawing.rectangle", "Rectangle"),
+    ("insert.drawing.text_box", "Text Box"),
+    ("insert.shape", "Shape"),
+    ("page.move_left", "Move Page Left"),
+    ("page.move_right", "Move Page Right"),
     ("page.next", "Next Page"),
     ("page.previous", "Previous Page"),
+    ("page.rename", "Rename Page"),
+    ("shape.enter_group", "Enter Group"),
+    ("shape.exit_group", "Exit Group"),
+    ("shape.move", "Move"),
+    ("shape.resize", "Resize"),
+    ("shape.rotate", "Rotate"),
+    ("shape.set.angle", "Angle"),
+    ("shape.set.height", "Height"),
+    ("shape.set.pin", "Position"),
+    ("shape.set.text", "Shape Text"),
+    ("shape.set.width", "Width"),
+    ("text.begin", "Edit Text"),
+    ("text.cancel", "Cancel Text"),
+    ("text.commit", "Commit Text"),
     ("view.ui_layout.visio_2016", "Visio 2016 Ribbon"),
     ("view.ui_layout.visio_365", "Microsoft 365 Ribbon"),
     ("view.units", "Units"),
@@ -1302,6 +1342,44 @@ mod tests {
         for (id, label) in LABELS {
             assert!(!label.is_empty(), "{id}");
             assert!(label.len() <= 32, "{id}: {label}");
+        }
+    }
+
+    /// The "our own commands" table (task P5-04 adds the Phase 5 ids):
+    /// unique, sorted, short labels, ADR 0006 grammar.
+    #[test]
+    fn our_commands_are_well_formed() {
+        for (index, (id, label)) in OUR_COMMANDS.iter().enumerate() {
+            assert!(!label.is_empty(), "{id}");
+            assert!(label.len() <= 32, "{id}: {label}");
+            let mut parts = id.split('.');
+            let scope = parts.next().unwrap_or("");
+            assert!(SCOPES.contains(&scope), "{id}: unknown scope");
+            let mut count = 1;
+            for part in parts {
+                count += 1;
+                assert!(!part.is_empty(), "{id}: empty part");
+                assert!(
+                    part.starts_with(|c: char| c.is_ascii_lowercase()),
+                    "{id}: part must start with a lowercase letter"
+                );
+                assert!(
+                    part.chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                    "{id}: bad character in part"
+                );
+            }
+            assert!(count >= 2, "{id}: id needs scope and verb");
+            if let Some((previous, _)) = OUR_COMMANDS.get(index.wrapping_sub(1)) {
+                assert!(
+                    previous < id,
+                    "OUR_COMMANDS is sorted: {previous} before {id}"
+                );
+            }
+            assert!(
+                !OUR_COMMANDS[..index].iter().any(|(other, _)| other == id),
+                "{id} is listed twice"
+            );
         }
     }
 
