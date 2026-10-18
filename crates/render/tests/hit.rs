@@ -372,11 +372,11 @@ fn stale_node_paths_are_caller_errors() {
     let scene = Scene::new(8.5, 11.0);
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0)),
-        Err(ferrogram_render::Error::InvalidOptions)
+        Err(ferrogram_render::Error::InvalidNode)
     );
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0).child(2)),
-        Err(ferrogram_render::Error::InvalidOptions)
+        Err(ferrogram_render::Error::InvalidNode)
     );
 }
 
@@ -388,7 +388,7 @@ fn a_shape_node_has_no_children() {
         .push(filled(None, Transform::identity(), 1.0, 1.0));
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0).child(1)),
-        Err(ferrogram_render::Error::InvalidOptions)
+        Err(ferrogram_render::Error::InvalidNode)
     );
 }
 

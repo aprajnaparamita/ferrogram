@@ -82,7 +82,7 @@ impl Overlay {
 /// [`OverlayMark::SelectionOutline`] comes first per node, in the given
 /// order, then one [`OverlayMark::Handles`] mark for the whole selection.
 /// An empty `nodes` list yields an empty overlay. A node path that does
-/// not resolve is [`Error::InvalidOptions`] (the caller passes paths from
+/// not resolve is [`Error::InvalidNode`] (the caller passes paths from
 /// `hit_test`); a node that draws nothing contributes its zero bounds at
 /// the transformed origin.
 pub fn build_selection_overlay(scene: &Scene, nodes: &[NodePath]) -> Result<Overlay, Error> {
@@ -252,7 +252,7 @@ mod tests {
         let scene = Scene::new(8.5, 11.0);
         assert_eq!(
             build_selection_overlay(&scene, &[NodePath::new().child(2)]),
-            Err(Error::InvalidOptions)
+            Err(Error::InvalidNode)
         );
     }
 

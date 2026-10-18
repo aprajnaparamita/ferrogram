@@ -19,6 +19,10 @@ pub enum Error {
     /// The operation is not implemented yet (a Phase 5 interface stub,
     /// task P5-01).
     NotImplemented,
+    /// An argument is outside its documented domain: for example a snap
+    /// distance or a grid spacing that is negative, zero where a positive
+    /// value is required, or not finite.
+    InvalidArgument,
 }
 
 impl fmt::Display for Error {
@@ -27,6 +31,7 @@ impl fmt::Display for Error {
             Error::WrongUnit => write!(f, "unit does not measure the expected kind of quantity"),
             Error::Singular => write!(f, "transform is singular and cannot be inverted"),
             Error::NotImplemented => write!(f, "not implemented yet"),
+            Error::InvalidArgument => write!(f, "argument is outside its valid range"),
         }
     }
 }
@@ -48,6 +53,10 @@ mod tests {
             "transform is singular and cannot be inverted"
         );
         assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
+        assert_eq!(
+            Error::InvalidArgument.to_string(),
+            "argument is outside its valid range"
+        );
     }
 
     #[test]

@@ -6,14 +6,12 @@
 use core::f64::consts::FRAC_PI_4;
 
 use ferrogram_geom::{
-    Arc, Cubic, Curve, EllipticalArc, Nurbs, NurbsPoint, Path, Point, Polyline, Segment, Spline,
-    distance_point_path,
+    Arc, Cubic, Curve, EllipticalArc, FLATTEN_TOLERANCE, Nurbs, NurbsPoint, Path, Point, Polyline,
+    Segment, Spline, distance_point_path,
 };
 
-/// The flattening tolerance the tests build their paths with, in inches
-/// (`geom::hit::FLATTEN_TOLERANCE` is not exported yet; the P5-03
-/// Result asks for the export).
-const TOLERANCE: f64 = 0.001;
+/// The flattening tolerance the tests build their paths with, in inches.
+const TOLERANCE: f64 = FLATTEN_TOLERANCE;
 
 /// The path of the curve flattened to cubics (what `render::build` does
 /// with the row curves).

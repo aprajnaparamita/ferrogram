@@ -6,7 +6,7 @@
 //! pure geometry in inches (ADR 0011).
 //!
 //! A `max_distance` or `spacing` argument that is negative, zero where a
-//! positive value is required, or not finite is [`Error::WrongUnit`]:
+//! positive value is required, or not finite is [`Error::InvalidArgument`]:
 //! the closest variant of the crate error for "this value is not a valid
 //! distance" (the error type is fixed by task P5-01; the P5-03 Result
 //! asks for an `Error::InvalidArgument`). Non-finite coordinates never
@@ -74,7 +74,7 @@ impl SnapResult {
 /// unchanged and the kind `None`.
 ///
 /// `max_distance` must be finite and non-negative; anything else is an
-/// [`Error::WrongUnit`]. Candidates with non-finite coordinates are
+/// [`Error::InvalidArgument`]. Candidates with non-finite coordinates are
 /// skipped; a non-finite `point` never snaps.
 pub fn snap_point(
     point: Point,
@@ -128,7 +128,7 @@ pub fn snap_point(
 /// resize caller folds its candidates into one ordered list.
 ///
 /// `max_distance` must be finite and non-negative; anything else is an
-/// [`Error::WrongUnit`]. Candidates with non-finite values are skipped;
+/// [`Error::InvalidArgument`]. Candidates with non-finite values are skipped;
 /// a non-finite `value` never snaps.
 pub fn snap_axis(
     value: f64,
@@ -162,12 +162,12 @@ pub fn snap_axis(
 /// Quantizes `value` to the nearest multiple of `spacing` inches.
 ///
 /// `spacing` must be finite and positive; zero or a non-finite spacing is
-/// [`Error::WrongUnit`]. A value exactly between two multiples rounds
+/// [`Error::InvalidArgument`]. A value exactly between two multiples rounds
 /// away from zero (deterministic, no banker's rounding). A non-finite
 /// `value` stays unchanged.
 pub fn snap_grid(value: f64, spacing: f64) -> Result<f64, Error> {
     if !spacing.is_finite() || spacing <= 0.0 {
-        return Err(Error::WrongUnit);
+        return Err(Error::InvalidArgument);
     }
     if !value.is_finite() {
         return Ok(value);
@@ -187,7 +187,7 @@ pub fn snap_grid(value: f64, spacing: f64) -> Result<f64, Error> {
 /// Validates a snap distance (see the function contracts).
 fn checked_distance(max_distance: f64) -> Result<f64, Error> {
     if !max_distance.is_finite() || max_distance < 0.0 {
-        return Err(Error::WrongUnit);
+        return Err(Error::InvalidArgument);
     }
     Ok(max_distance)
 }
@@ -299,14 +299,17 @@ mod tests {
     fn snap_point_rejects_a_bad_distance() {
         let candidates = [candidate(SnapKind::Grid, 0.0, 0.0)];
         let point = Point::new(0.0, 0.0);
-        assert_eq!(snap_point(point, &candidates, -0.1), Err(Error::WrongUnit));
+        assert_eq!(
+            snap_point(point, &candidates, -0.1),
+            Err(Error::InvalidArgument)
+        );
         assert_eq!(
             snap_point(point, &candidates, f64::NAN),
-            Err(Error::WrongUnit)
+            Err(Error::InvalidArgument)
         );
         assert_eq!(
             snap_point(point, &candidates, f64::INFINITY),
-            Err(Error::WrongUnit)
+            Err(Error::InvalidArgument)
         );
     }
 
@@ -348,10 +351,13 @@ mod tests {
     #[test]
     fn snap_axis_rejects_a_bad_distance() {
         let candidates = [(SnapKind::Grid, 0.0)];
-        assert_eq!(snap_axis(0.0, &candidates, -1.0), Err(Error::WrongUnit));
+        assert_eq!(
+            snap_axis(0.0, &candidates, -1.0),
+            Err(Error::InvalidArgument)
+        );
         assert_eq!(
             snap_axis(0.0, &candidates, f64::INFINITY),
-            Err(Error::WrongUnit)
+            Err(Error::InvalidArgument)
         );
     }
 
@@ -373,10 +379,10 @@ mod tests {
 
     #[test]
     fn snap_grid_rejects_a_bad_spacing() {
-        assert_eq!(snap_grid(1.0, 0.0), Err(Error::WrongUnit));
-        assert_eq!(snap_grid(1.0, -0.125), Err(Error::WrongUnit));
-        assert_eq!(snap_grid(1.0, f64::NAN), Err(Error::WrongUnit));
-        assert_eq!(snap_grid(1.0, f64::INFINITY), Err(Error::WrongUnit));
+        assert_eq!(snap_grid(1.0, 0.0), Err(Error::InvalidArgument));
+        assert_eq!(snap_grid(1.0, -0.125), Err(Error::InvalidArgument));
+        assert_eq!(snap_grid(1.0, f64::NAN), Err(Error::InvalidArgument));
+        assert_eq!(snap_grid(1.0, f64::INFINITY), Err(Error::InvalidArgument));
     }
 
     #[test]

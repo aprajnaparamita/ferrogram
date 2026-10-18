@@ -25,7 +25,10 @@ mod units;
 pub use angle::Angle;
 pub use curve::{Arc, Cubic, Curve, EllipticalArc, Nurbs, NurbsPoint, Polyline, Spline};
 pub use error::Error;
-pub use hit::{distance_point_path, distance_point_rect, distance_point_segment, path_contains};
+pub use hit::{
+    FLATTEN_TOLERANCE, distance_point_path, distance_point_rect, distance_point_segment,
+    path_contains,
+};
 pub use path::{Path, Segment};
 pub use point::{Point, Size};
 pub use rect::Rect;

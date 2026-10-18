@@ -152,7 +152,7 @@ pub fn hit_marquee(scene: &Scene, rect: Rect) -> Result<Vec<Hit>, Error> {
 /// The empty [`NodePath`] names the scene root: its bounds are the union
 /// of the top-level nodes (the same as [`scene_bounds`]). A node that
 /// draws nothing measures the zero rectangle at its transformed origin.
-/// A node path that does not resolve is [`Error::InvalidOptions`]: the
+/// A node path that does not resolve is [`Error::InvalidNode`]: the
 /// caller passes paths it got from [`hit_test`] or [`hit_marquee`], so a
 /// stale path is a caller bug (the same standing as `Error::Model`).
 pub fn node_bounds(scene: &Scene, node: &NodePath) -> Result<Rect, Error> {
@@ -341,7 +341,7 @@ fn resolve(nodes: &[Node], indices: &[usize], parent: Transform) -> Result<Place
         });
     };
     let Some(node) = nodes.get(first) else {
-        return Err(Error::InvalidOptions);
+        return Err(Error::InvalidNode);
     };
     match node {
         Node::Group(group) => {
@@ -361,7 +361,7 @@ fn resolve(nodes: &[Node], indices: &[usize], parent: Transform) -> Result<Place
         Node::Shape(shape) => {
             if !rest.is_empty() {
                 // A shape node has no children (a caller bug, as above).
-                return Err(Error::InvalidOptions);
+                return Err(Error::InvalidNode);
             }
             Ok(Placement {
                 transform: shape.transform.then(parent),
@@ -634,7 +634,7 @@ mod tests {
         let scene = Scene::new(1.0, 1.0);
         assert_eq!(
             node_bounds(&scene, &NodePath::new().child(3)),
-            Err(Error::InvalidOptions)
+            Err(Error::InvalidNode)
         );
     }
 
