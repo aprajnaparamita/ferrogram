@@ -37,7 +37,7 @@ use crate::ribbon::Ribbon;
 use crate::settings;
 use crate::shapes_window::ShapesWindow;
 use crate::shortcuts::{self, ShortcutMap};
-use crate::tools::{SelectionUpdate, ToolMachine};
+use crate::tools::ToolMachine;
 use crate::{Intent, UiError};
 
 /// The File menu items (registry ids, in order).
@@ -443,9 +443,6 @@ impl Shell {
         for event in events {
             match self.tools.handle(event, &self.app) {
                 Ok(effect) => {
-                    if let Some(update) = effect.selection {
-                        self.apply_selection(update);
-                    }
                     self.overlay = effect.overlay;
                     produced.extend(effect.intents);
                 }
@@ -614,20 +611,6 @@ impl Shell {
             self.app.selection.clear();
         }
         self.last_page = current;
-    }
-
-    /// Applies a selection change the pointer tool reported (ADR 0041).
-    ///
-    /// Selection is not a document edit: no undo step and no change
-    /// counter bump (ADR 0040 rule 3). The entered group stays unless
-    /// the selection becomes empty.
-    fn apply_selection(&mut self, update: SelectionUpdate) {
-        self.app.selection.shapes = update.shapes;
-        self.app.selection.anchor = update.anchor;
-        self.app.selection.page = update.page;
-        if self.app.selection.shapes.is_empty() {
-            self.app.selection.entered = None;
-        }
     }
 
     /// The title strip's document text.

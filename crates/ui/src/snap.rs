@@ -12,7 +12,7 @@
 
 use ferrogram_commands::AppCtx;
 use ferrogram_geom::{Point, SnapKind, SnapResult, snap_axis, snap_grid};
-use ferrogram_model::{CellValue, ShapeId};
+use ferrogram_model::ShapeId;
 use ferrogram_render::node_bounds;
 
 use crate::UiError;
@@ -250,44 +250,19 @@ impl Snapper {
 
 /// The connection points of one scene node, in page inches.
 ///
-/// The shape's own `Connection` rows are in shape-local coordinates; the
-/// node transform maps them to the page. A malformed row or a
-/// non-finite coordinate is skipped.
+/// The model helper returns the shape's own `Connection` rows or the rows
+/// inherited from its master chain, scaled to the instance's size
+/// ([`ferrogram_model::Document::connection_points`]). The node transform
+/// maps the local points to the page.
 pub(crate) fn connection_points(
     doc: &ferrogram_model::Document,
     entry: &crate::handles::NodeEntry,
 ) -> Vec<Point> {
-    let Some(shape) = doc.shape(entry.shape) else {
-        return Vec::new();
-    };
-    let mut points = Vec::new();
-    for section in &shape.sheet.sections {
-        if section.name.as_str() != "Connection" {
-            continue;
-        }
-        for row in &section.rows {
-            let x = row_number(row, "X");
-            let y = row_number(row, "Y");
-            if let (Some(x), Some(y)) = (x, y) {
-                let point = entry.transform.apply(Point::new(x, y));
-                if point.x.is_finite() && point.y.is_finite() {
-                    points.push(point);
-                }
-            }
-        }
-    }
-    points
-}
-
-/// The cached number of one row cell, or `None`.
-fn row_number(row: &ferrogram_model::Row, name: &str) -> Option<f64> {
-    row.cells
-        .iter()
-        .find(|cell| cell.name.as_str() == name)
-        .and_then(|cell| match &cell.value {
-            Some(CellValue::Number(value)) if value.is_finite() => Some(*value),
-            _ => None,
-        })
+    doc.connection_points(entry.shape)
+        .into_iter()
+        .map(|point| entry.transform.apply(point))
+        .filter(|point| point.x.is_finite() && point.y.is_finite())
+        .collect()
 }
 
 /// The nearest candidate of the highest kind within `max_distance`
@@ -336,7 +311,7 @@ mod tests {
     use super::*;
     use ferrogram_commands::{DocumentSession, Settings};
     use ferrogram_model::{
-        Cell, CellName, Document, Page, PageId, Row, Section, SectionName, Shape,
+        Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape,
     };
 
     fn cell(name: &str, value: f64) -> Cell {

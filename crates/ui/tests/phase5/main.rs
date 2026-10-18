@@ -163,11 +163,6 @@ impl CanvasRig {
                     let had_events = !events.is_empty();
                     for event in events {
                         let effect = tools.handle(event, &app).expect("the tool handles it");
-                        if let Some(update) = effect.selection {
-                            app.selection.shapes = update.shapes;
-                            app.selection.anchor = update.anchor;
-                            app.selection.page = update.page;
-                        }
                         *overlay = effect.overlay;
                         for intent in effect.intents {
                             let _ = dispatch_one(

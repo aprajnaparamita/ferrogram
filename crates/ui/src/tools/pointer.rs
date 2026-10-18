@@ -16,7 +16,7 @@ use ferrogram_render::{
     HitOptions, Overlay, OverlayMark, Scene, build_selection_overlay, hit_marquee, hit_test,
 };
 
-use super::{Modifiers, SelectionUpdate, ToolEffect, ToolEvent};
+use super::{Modifiers, ToolEffect, ToolEvent};
 use crate::UiError;
 use crate::handles::{
     HandleKind, ResizeEdge, handle_at, paths_for_shapes, rect_center, render_error, scene_for,
@@ -244,17 +244,25 @@ fn down(
     };
     match hit {
         Some(shape) => {
-            let shapes = clicked_selection(ctx, shape, modifiers);
-            effect.selection = Some(selection_update(ctx, shapes));
+            let mode = if modifiers.ctrl {
+                "add"
+            } else if modifiers.shift {
+                "toggle"
+            } else {
+                "replace"
+            };
+            effect
+                .intents
+                .push(select_intent(&session.document, mode, &[shape])?);
             state.state.mode = Mode::Pressed { start: pos, shape };
         }
         None => {
             let add = modifiers.shift || modifiers.ctrl;
-            effect.selection = if add {
-                None
-            } else {
-                Some(selection_update(ctx, Vec::new()))
-            };
+            if !add {
+                effect
+                    .intents
+                    .push(select_intent(&session.document, "replace", &[])?);
+            }
             state.state.mode = Mode::Marquee {
                 start: pos,
                 current: pos,
@@ -369,15 +377,20 @@ fn up(
                 Point::new(start.x.max(pos.x), start.y.max(pos.y)),
             );
             let hits = hit_marquee(scene, rect).map_err(render_error)?;
-            let mut shapes: Vec<ShapeId> = Vec::new();
+            let mut found: Vec<ShapeId> = Vec::new();
             for hit in hits {
                 if let Some(shape) = hit.shape_id {
                     let shape = selectable_shape(&session.document, shape, ctx.selection.entered);
-                    if !shapes.contains(&shape) {
-                        shapes.push(shape);
+                    if !found.contains(&shape) {
+                        found.push(shape);
                     }
                 }
             }
+            let mode = if add { "add" } else { "replace" };
+            effect
+                .intents
+                .push(select_intent(&session.document, mode, &found)?);
+            let mut shapes = found;
             if add {
                 let mut merged = ctx.selection.shapes.clone();
                 for shape in shapes {
@@ -387,7 +400,6 @@ fn up(
                 }
                 shapes = merged;
             }
-            effect.selection = Some(selection_update(ctx, shapes.clone()));
             let overlay = overlay_for_shapes(ctx, scene, &shapes)?;
             effect.overlay = overlay;
         }
@@ -443,48 +455,14 @@ fn double_click(
         .shape(shape)
         .is_some_and(|entry| !entry.children.is_empty());
     if is_group {
-        effect.selection = Some(selection_update(ctx, vec![shape]));
+        effect
+            .intents
+            .push(select_intent(&session.document, "replace", &[shape])?);
         effect
             .intents
             .push(intent("shape.enter_group", Args::new())?);
     }
     Ok(effect)
-}
-
-/// The selection after a click: replace, shift-toggle or Ctrl-add
-/// (ADR 0041).
-fn clicked_selection(ctx: &AppCtx, shape: ShapeId, modifiers: Modifiers) -> Vec<ShapeId> {
-    if modifiers.ctrl {
-        let mut shapes = ctx.selection.shapes.clone();
-        if !shapes.contains(&shape) {
-            shapes.push(shape);
-        }
-        shapes
-    } else if modifiers.shift {
-        let mut shapes = ctx.selection.shapes.clone();
-        if let Some(index) = shapes.iter().position(|candidate| *candidate == shape) {
-            shapes.remove(index);
-        } else {
-            shapes.push(shape);
-        }
-        shapes
-    } else {
-        vec![shape]
-    }
-}
-
-/// The selection update for `shapes`, with the active page.
-fn selection_update(ctx: &AppCtx, shapes: Vec<ShapeId>) -> SelectionUpdate {
-    let anchor = shapes.last().copied();
-    let page = ctx
-        .active_document()
-        .and_then(|session| session.active_page)
-        .filter(|_| !shapes.is_empty());
-    SelectionUpdate {
-        shapes,
-        anchor,
-        page,
-    }
 }
 
 /// Maps a scene hit to the shape the user selects: the top-level ancestor
@@ -702,6 +680,20 @@ fn drag_intent(
     }
 }
 
+/// The `edit.select` intent for `shapes`, with Visio ids as strings.
+fn select_intent(doc: &Document, mode: &str, shapes: &[ShapeId]) -> Result<crate::Intent, UiError> {
+    let ids = shapes
+        .iter()
+        .filter_map(|shape| doc.shape(*shape).map(|entry| entry.visio_id.to_string()))
+        .collect();
+    intent(
+        "edit.select",
+        Args::new()
+            .with("shapes", ArgValue::List(ids))
+            .with("mode", ArgValue::Text(mode.to_owned())),
+    )
+}
+
 /// One dispatch request for a command id and arguments.
 fn intent(id: &'static str, args: Args) -> Result<crate::Intent, UiError> {
     let command = CommandId::parse(id).map_err(|error| UiError::Io {
@@ -779,6 +771,20 @@ mod tests {
         ToolEvent::PointerUp { pos, modifiers }
     }
 
+    /// The `edit.select` intent of an effect: its mode and Visio ids.
+    fn select_command(effect: &ToolEffect) -> Option<(&str, Vec<String>)> {
+        let intent = effect
+            .intents
+            .iter()
+            .find(|intent| intent.command.as_str() == "edit.select")?;
+        let mode = intent.invocation.args.text("mode")?;
+        let ids = match intent.invocation.args.get("shapes")? {
+            ArgValue::List(ids) => ids.clone(),
+            _ => return None,
+        };
+        Some((mode, ids))
+    }
+
     #[test]
     fn a_click_selects_and_shift_toggles() {
         let (mut app, id) = fixture();
@@ -787,11 +793,8 @@ mod tests {
             .handle(down(Point::new(3.0, 3.0), Modifiers::none()), &app)
             .expect("down");
         assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(vec![id])
+            select_command(&effect),
+            Some(("replace", vec!["1".to_owned()]))
         );
         let _ = machine
             .handle(up(Point::new(3.0, 3.0), Modifiers::none()), &app)
@@ -811,27 +814,22 @@ mod tests {
             )
             .expect("shift down");
         assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(Vec::new())
+            select_command(&effect),
+            Some(("toggle", vec!["1".to_owned()]))
         );
     }
 
     #[test]
     fn a_marquee_selects_intersecting_shapes() {
-        let (app, id) = fixture();
+        let (app, _id) = fixture();
         let mut machine = ToolMachine::new();
         let effect = machine
             .handle(down(Point::new(1.5, 1.5), Modifiers::none()), &app)
             .expect("down");
         assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(Vec::new())
+            select_command(&effect),
+            Some(("replace", Vec::new())),
+            "a plain press on empty space clears the selection"
         );
         let effect = machine
             .handle(moved(Point::new(5.0, 5.0), Modifiers::none()), &app)
@@ -844,11 +842,8 @@ mod tests {
             .handle(up(Point::new(5.0, 5.0), Modifiers::none()), &app)
             .expect("up");
         assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(vec![id])
+            select_command(&effect),
+            Some(("replace", vec!["1".to_owned()]))
         );
     }
 
@@ -964,7 +959,7 @@ mod tests {
 
     #[test]
     fn ctrl_click_adds_to_the_selection() {
-        let (app, id) = fixture();
+        let (app, _id) = fixture();
         let mut machine = ToolMachine::new();
         let effect = machine
             .handle(
@@ -978,13 +973,7 @@ mod tests {
                 &app,
             )
             .expect("ctrl down");
-        assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(vec![id])
-        );
+        assert_eq!(select_command(&effect), Some(("add", vec!["1".to_owned()])));
     }
 
     #[test]
@@ -1064,14 +1053,12 @@ mod tests {
             )
             .expect("double click");
         assert_eq!(
-            effect
-                .selection
-                .as_ref()
-                .map(|update| update.shapes.clone()),
-            Some(vec![group])
+            select_command(&effect),
+            Some(("replace", vec!["1".to_owned()]))
         );
-        assert_eq!(effect.intents.len(), 1);
-        assert_eq!(effect.intents[0].command.as_str(), "shape.enter_group");
+        assert_eq!(effect.intents.len(), 2);
+        assert_eq!(effect.intents[0].command.as_str(), "edit.select");
+        assert_eq!(effect.intents[1].command.as_str(), "shape.enter_group");
 
         // A double click on empty space and on a plain shape are no-ops.
         let effect = machine
@@ -1082,12 +1069,12 @@ mod tests {
                 &app,
             )
             .expect("empty double click");
-        assert!(effect.intents.is_empty() && effect.selection.is_none());
+        assert!(effect.intents.is_empty());
     }
 
     #[test]
     fn a_shift_marquee_adds_to_the_selection() {
-        let (mut app, id) = fixture();
+        let (mut app, _id) = fixture();
         app.selection.shapes = vec![ShapeId { index: 9 }];
         app.selection.anchor = Some(ShapeId { index: 9 });
         let mut machine = ToolMachine::new();
@@ -1127,12 +1114,11 @@ mod tests {
                 &app,
             )
             .expect("up");
-        let shapes = effect
-            .selection
-            .as_ref()
-            .map(|update| update.shapes.clone())
-            .expect("selection");
-        assert_eq!(shapes, vec![ShapeId { index: 9 }, id]);
+        assert_eq!(
+            select_command(&effect),
+            Some(("add", vec!["1".to_owned()])),
+            "the command adds the marquee hits; the registry merges them"
+        );
     }
 
     #[test]

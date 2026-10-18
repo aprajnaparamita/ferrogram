@@ -25,7 +25,6 @@ pub mod text;
 
 use ferrogram_commands::AppCtx;
 use ferrogram_geom::Point;
-use ferrogram_model::{PageId, ShapeId};
 use ferrogram_render::Overlay;
 
 use crate::{Intent, UiError};
@@ -106,22 +105,6 @@ pub enum ToolEvent {
     Cancel,
 }
 
-/// A selection change requested by a tool (ADR 0041).
-///
-/// Selection is not a document edit and P5-04's command set has no
-/// "select this shape" command, so the pointer tool reports the new
-/// selection here and the shell applies it (the tool itself stays
-/// read-only over `AppCtx`, ADR 0042).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct SelectionUpdate {
-    /// The selected shapes, in click order.
-    pub shapes: Vec<ShapeId>,
-    /// The anchor shape (the panels' subject).
-    pub anchor: Option<ShapeId>,
-    /// The page the shapes are on.
-    pub page: Option<PageId>,
-}
-
 /// What one event produced (ADR 0042).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ToolEffect {
@@ -129,8 +112,6 @@ pub struct ToolEffect {
     pub intents: Vec<Intent>,
     /// The overlay marks to draw this frame (ADR 0042).
     pub overlay: Overlay,
-    /// The selection change this event asks the shell to apply.
-    pub selection: Option<SelectionUpdate>,
 }
 
 impl ToolEffect {
@@ -201,7 +182,6 @@ mod tests {
         // No document: the pointer reports an empty effect, not an error.
         let effect = machine.handle(event.clone(), &ctx).expect("pointer");
         assert!(effect.intents.is_empty());
-        assert!(effect.selection.is_none());
 
         let tools: [(Handler, Anchor); 4] = [
             (draw::handle, draw::anchor),
@@ -218,6 +198,5 @@ mod tests {
         }
         assert_eq!(ToolEffect::new(), ToolEffect::default());
         assert_eq!(Modifiers::none(), Modifiers::default());
-        assert_eq!(SelectionUpdate::default(), SelectionUpdate::default());
     }
 }
