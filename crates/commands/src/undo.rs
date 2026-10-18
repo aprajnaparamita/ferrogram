@@ -10,11 +10,32 @@
 use crate::app::AppCtx;
 use crate::error::CommandError;
 
+/// Runs `step` with the undo-recording gate closed (ADR 0040 rule 2).
+///
+/// Every [`Edit`]'s `apply`/`revert` runs inside this: while it is
+/// open, [`AppCtx::push_edit`] drops any edit a nested command or edit
+/// tries to record and warns once. The gate is a saved-and-restored
+/// flag, so nested runs keep it closed until the outermost step ends.
+pub(crate) fn run_suspended<T>(ctx: &mut AppCtx, step: impl FnOnce(&mut AppCtx) -> T) -> T {
+    let previous = ctx.set_undo_suspended(true);
+    let out = step(ctx);
+    ctx.set_undo_suspended(previous);
+    out
+}
+
 /// One undoable step (ADR 0028).
 ///
 /// Implementations hold whatever they need to replay the step; state
 /// lives in [`AppCtx`]. `apply` and `revert` must not panic on any
 /// state the stack can produce (AGENTS.md section 6).
+///
+/// Two rules every implementation keeps (ADR 0040, task P5-04):
+///
+/// - `apply`/`revert` never record an edit:
+///   [`AppCtx::push_edit`] drops it and warns while the recording gate
+///   is closed (which is whenever this trait's methods run).
+/// - Both bump the change counter of the document they changed, with
+///   [`AppCtx::touch_session`], after a successful mutation.
 pub trait Edit: Send {
     /// Short label for the undo menu ("Move shape").
     fn label(&self) -> &str;
@@ -134,6 +155,7 @@ impl UndoStack {
     ///
     /// `Ok(None)` when nothing is undoable. A failing `revert` is
     /// returned as [`CommandError`] and leaves the cursor where it was.
+    /// The call runs with the recording gate closed (ADR 0040).
     pub fn undo(&mut self, ctx: &mut AppCtx) -> Result<Option<String>, CommandError> {
         let Some(index) = self.cursor.checked_sub(1) else {
             return Ok(None);
@@ -141,7 +163,7 @@ impl UndoStack {
         let Some(edit) = self.entries.get_mut(index) else {
             return Ok(None);
         };
-        edit.revert(ctx)?;
+        run_suspended(ctx, |ctx| edit.revert(ctx))?;
         self.cursor = index;
         Ok(Some(edit.label().to_owned()))
     }
@@ -150,11 +172,12 @@ impl UndoStack {
     ///
     /// `Ok(None)` when nothing is redoable. A failing `apply` is
     /// returned as [`CommandError`] and leaves the cursor where it was.
+    /// The call runs with the recording gate closed (ADR 0040).
     pub fn redo(&mut self, ctx: &mut AppCtx) -> Result<Option<String>, CommandError> {
         let Some(edit) = self.entries.get_mut(self.cursor) else {
             return Ok(None);
         };
-        edit.apply(ctx)?;
+        run_suspended(ctx, |ctx| edit.apply(ctx))?;
         self.cursor = self.cursor.saturating_add(1);
         Ok(Some(edit.label().to_owned()))
     }
@@ -313,6 +336,20 @@ mod tests {
         assert_eq!(stack.undo_labels(), vec!["bad", "good"]);
     }
 
+    /// The failing `apply` of `BadEdit` and the "nothing to redo"
+    /// answer of a stack whose cursor sits at the end.
+    #[test]
+    fn a_failing_apply_and_an_empty_redo_answer_cleanly() {
+        let mut edit = BadEdit;
+        let mut ctx = AppCtx::new(Settings::default());
+        let error = edit.apply(&mut ctx).expect_err("apply fails");
+        assert_eq!(error.to_string(), "apply failed");
+
+        let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
+        assert!(stack.redo(&mut ctx).expect("redo").is_none());
+        assert!(stack.undo(&mut ctx).expect("undo").is_none());
+    }
+
     #[test]
     fn clear_drops_everything() {
         let mut stack = UndoStack::default();
@@ -359,5 +396,65 @@ mod tests {
         assert!(text.contains("len: 1"), "{text}");
         assert!(text.contains("cursor: 1"), "{text}");
         assert!(text.contains("capacity: 2"), "{text}");
+    }
+
+    /// An edit that runs while `revert`/`apply` records a nested edit
+    /// and notes whether the gate was closed (ADR 0040 rule 2).
+    struct NestedEdit {
+        session: crate::SessionId,
+        gate_was_closed: std::sync::Arc<std::sync::Mutex<Vec<bool>>>,
+    }
+
+    impl Edit for NestedEdit {
+        fn label(&self) -> &str {
+            "nested"
+        }
+
+        fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+            self.push(ctx)
+        }
+
+        fn revert(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+            self.push(ctx)
+        }
+    }
+
+    impl NestedEdit {
+        fn push(&self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+            if let Ok(mut seen) = self.gate_was_closed.lock() {
+                seen.push(ctx.undo_recording_suspended());
+            }
+            ctx.push_edit(self.session, Box::new(NamedEdit("dropped")))
+        }
+    }
+
+    /// ADR 0040 rule 2: undo and redo run the edit with the recording
+    /// gate closed, so a nested push is dropped with one warning.
+    #[test]
+    fn undo_and_redo_run_with_the_recording_gate_closed() {
+        let mut ctx = AppCtx::new(Settings::default());
+        let index = ctx.open_document(crate::DocumentSession::new(
+            ferrogram_model::Document::new(),
+            None,
+        ));
+        let session = ctx.documents.get(index).expect("session").id;
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut stack = UndoStack::new(UndoStack::DEFAULT_CAPACITY);
+        stack.push(Box::new(NestedEdit {
+            session,
+            gate_was_closed: seen.clone(),
+        }));
+
+        stack.undo(&mut ctx).expect("undo");
+        assert_eq!(&seen.lock().expect("seen")[..], [true], "gate closed");
+        assert_eq!(ctx.warnings.len(), 1, "one dropped-edit warning");
+        stack.redo(&mut ctx).expect("redo");
+        assert_eq!(&seen.lock().expect("seen")[..], [true, true]);
+        assert_eq!(ctx.warnings.len(), 2);
+        let entry = ctx.documents.get(index).expect("session");
+        assert!(
+            entry.undo.is_empty(),
+            "the nested edit never landed on the session's stack"
+        );
     }
 }

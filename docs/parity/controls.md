@@ -15,6 +15,7 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | FileNewDefault | button | FileNewDefault | qat | implemented |
 | FileOpenUsingBackstage | button | FileOpenUsingBackstage | qat | implemented |
 | FileSave | button | FileSave | qat | implemented |
+| SelectAll | button | SelectAll | tab/TabIconEditor/GroupIconEditSelect | implemented |
 | ShowGrid | checkBox | ShowGrid | tab/TabView/GroupViewShowHide | implemented |
 | ShowRulerVisio | checkBox | ShowRulerVisio | tab/TabView/GroupViewShowHide | implemented |
 | Undo | gallery | Undo | qat | implemented |
@@ -545,7 +546,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | SaveDrawing | group | SaveDrawing | backstage/TabPublish | stub |
 | SaveGroup | taskFormGroup | SaveGroup | backstage/TabSave | stub |
 | ScreenTip | button | ScreenTip | tab/TabInsert/GroupTextBoxText | stub |
-| SelectAll | button | SelectAll | tab/TabIconEditor/GroupIconEditSelect | stub |
 | SelectByTypeDialog | button | SelectByTypeDialog | tab/TabHome/GroupEditing | stub |
 | SelectContents | button | SelectContents | tab/TabFormat/GroupMembership | stub |
 | SelectMenu | menu | SelectMenu | tab/TabHome/GroupEditing | stub |

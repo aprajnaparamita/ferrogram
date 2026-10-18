@@ -885,6 +885,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdAlignObjectBottom
 - fluent_ids: []
+  id: arrange.align.center_x
+  label: Align Center
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: arrange.align.middle
   label: Middle
   mapping_confidence: unknown
@@ -963,6 +968,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdDistributeHSpace
 - fluent_ids: []
+  id: arrange.distribute.horizontal
+  label: Distribute Horizontally
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: arrange.distribute.left
   label: Left
   mapping_confidence: unknown
@@ -987,6 +997,11 @@
   label: Space
   mapping_confidence: unknown
   visuicmd: visCmdDistributeVSpace
+- fluent_ids: []
+  id: arrange.distribute.vertical
+  label: Distribute Vertically
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids: []
   id: arrange.flip_horizontal
   label: Flip Horizontal
@@ -1214,6 +1229,21 @@
   label: Reroute
   mapping_confidence: unknown
   visuicmd: visCmdDynConnReroute
+- fluent_ids: []
+  id: connector.glue_begin
+  label: Glue Begin
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: connector.glue_end
+  label: Glue End
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: connector.reroute_all
+  label: Reroute All
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - ConnectorShowLineJumps
   id: connector.show.line.jumps
@@ -1229,6 +1259,16 @@
     - ConnectorStraightLines
   id: connector.straight.lines
   label: Straight Lines
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: connector.style
+  label: Connector Style
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: connector.unglue
+  label: Unglue
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
@@ -1440,6 +1480,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdDelConnectPt
 - fluent_ids: []
+  id: edit.delete
+  label: Delete
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: edit.delete.comment
   label: Comment
   mapping_confidence: unknown
@@ -1469,6 +1514,11 @@
   label: Delete Forward Word
   mapping_confidence: unknown
   visuicmd: visCmdDeleteForwardWord
+- fluent_ids: []
+  id: edit.deselect
+  label: Deselect
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids: []
   id: edit.deselect.all
   label: All
@@ -2570,6 +2620,26 @@
   mapping_confidence: unknown
   visuicmd: visCmdInsertDataMap
 - fluent_ids: []
+  id: insert.drawing.ellipse
+  label: Ellipse
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: insert.drawing.line
+  label: Line
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: insert.drawing.rectangle
+  label: Rectangle
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: insert.drawing.text_box
+  label: Text Box
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: insert.drop.and.contain
   label: Contain
   mapping_confidence: unknown
@@ -2686,6 +2756,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdInsertScrollBarControl
 - fluent_ids: []
+  id: insert.shape
+  label: Shape
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: insert.spin.control
   label: Control
   mapping_confidence: unknown
@@ -2748,6 +2823,16 @@
   mapping_confidence: unknown
   visuicmd: visCmdPageMeasureUnitsDlg
 - fluent_ids: []
+  id: page.move_left
+  label: Move Page Left
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: page.move_right
+  label: Move Page Right
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: page.multiple.file.import
   label: Import
   mapping_confidence: unknown
@@ -2771,6 +2856,11 @@
     - PageRelayoutGallery
   id: page.relayout
   label: Relayout
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: page.rename
+  label: Rename Page
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
@@ -3012,6 +3102,16 @@
   mapping_confidence: unknown
   visuicmd: visCmdDROvalTool
 - fluent_ids: []
+  id: shape.enter_group
+  label: Enter Group
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.exit_group
+  label: Exit Group
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: shape.explorer
   label: Explorer
   mapping_confidence: unknown
@@ -3096,6 +3196,11 @@
   label: Setup
   mapping_confidence: unknown
   visuicmd: visCmdMasterSetup
+- fluent_ids: []
+  id: shape.move
+  label: Move
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - ShapeName
   id: shape.name
@@ -3120,10 +3225,45 @@
   mapping_confidence: unknown
   visuicmd: null
 - fluent_ids: []
+  id: shape.resize
+  label: Resize
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.rotate
+  label: Rotate
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: shape.search.window.toggle
   label: Toggle
   mapping_confidence: unknown
   visuicmd: visCmdShapeSearchWindowToggle
+- fluent_ids: []
+  id: shape.set.angle
+  label: Angle
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.set.height
+  label: Height
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.set.pin
+  label: Position
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.set.text
+  label: Shape Text
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: shape.set.width
+  label: Width
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - ShapesObjectOffset
   id: shape.shapes.object.offset
@@ -3299,6 +3439,21 @@
   label: Vert
   mapping_confidence: unknown
   visuicmd: visCmdShapeVert
+- fluent_ids: []
+  id: text.begin
+  label: Edit Text
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: text.cancel
+  label: Cancel Text
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
+  id: text.commit
+  label: Commit Text
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - TextDirectionLeftToRight
   id: text.direction.left.to.right

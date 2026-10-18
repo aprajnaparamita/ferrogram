@@ -289,6 +289,78 @@ pub(crate) fn outcome(message: impl Into<String>, warnings: Vec<String>) -> Outc
     }
 }
 
+/// An outcome for a command that produced one undoable edit (ADR 0040
+/// rule 1). The dispatcher pushes the edit with
+/// [`AppCtx::push_edit`](crate::AppCtx::push_edit) after `execute`
+/// returns `Ok`.
+pub(crate) fn edit_outcome(
+    message: impl Into<String>,
+    warnings: Vec<String>,
+    edit: Box<dyn crate::Edit>,
+) -> Outcome {
+    Outcome {
+        message: Some(message.into()),
+        edit: Some(edit),
+        warnings,
+        ..Outcome::default()
+    }
+}
+
+/// Enabled when the selection is not empty (ADR 0041).
+pub(crate) fn has_selection(ctx: &AppCtx) -> Enabled {
+    if ctx.selection.is_empty() {
+        Enabled::no("no selection")
+    } else {
+        Enabled::yes()
+    }
+}
+
+/// Wraps a model failure as [`CommandError::Failed`] (ADR 0028: the
+/// domain crates keep their typed errors, `commands` maps them).
+pub(crate) fn model_error(error: ferrogram_model::Error) -> CommandError {
+    CommandError::failed(error.to_string())
+}
+
+/// One required number argument (task P5-04 argument contract).
+///
+/// A missing argument is [`crate::NeededInput::Number`] (the dispatcher
+/// supplies it and dispatches again, ADR 0028); a non-finite value or a
+/// value of the wrong kind is [`CommandError::InvalidArgs`]. A whole
+/// number is accepted and converted.
+pub(crate) fn need_finite(
+    args: &crate::Args,
+    name: &str,
+    prompt: &str,
+) -> Result<f64, CommandError> {
+    match args.get(name) {
+        None => Err(CommandError::NeedsInput(crate::NeededInput::Number {
+            prompt: prompt.to_owned(),
+            default: None,
+        })),
+        Some(crate::ArgValue::Number(value)) if value.is_finite() => Ok(*value),
+        Some(crate::ArgValue::Number(_)) => {
+            Err(CommandError::invalid_args(format!("{name} must be finite")))
+        }
+        Some(crate::ArgValue::Integer(value)) => Ok(*value as f64),
+        Some(_) => Err(CommandError::invalid_args(format!(
+            "{name} must be a number"
+        ))),
+    }
+}
+
+/// One required non-negative size argument (task P5-04): [`need_finite`]
+/// plus "not negative" (a size of zero collapses the shape, which the
+/// model allows).
+pub(crate) fn need_size(args: &crate::Args, name: &str, prompt: &str) -> Result<f64, CommandError> {
+    let value = need_finite(args, name, prompt)?;
+    if value < 0.0 {
+        return Err(CommandError::invalid_args(format!(
+            "{name} must not be negative"
+        )));
+    }
+    Ok(value)
+}
+
 /// Records warning lines on the state (the status-bar ring, ADR 0021).
 pub(crate) fn record_warnings(ctx: &mut AppCtx, warnings: &[String]) {
     for line in warnings {
