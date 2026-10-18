@@ -188,6 +188,10 @@ fn patch_root(package: &mut Package, name: &PartName, patch: impl FnOnce(&mut Xm
 }
 
 /// Patches (or creates) the page and master lists and their contents parts.
+///
+/// A page or master whose entity is gone from the model also loses its
+/// contents part: the part, its relationships and its content-type
+/// override are dropped (ADR 0048 deletes, `Package::remove_part`).
 fn patch_lists(package: &mut Package, ctx: &Ctx, main: &PartName) -> Result<(), Error> {
     let pages_index = related(package, main, "pages").unwrap_or_else(|| PartName::new(PAGES_PART));
     let pages_exist = package.part(&pages_index).is_some();
@@ -206,6 +210,7 @@ fn patch_lists(package: &mut Package, ctx: &Ctx, main: &PartName) -> Result<(), 
         patch_root(package, &pages_index, |root| {
             patch::patch_pages_root(root, ctx, &rel_ids)
         });
+        let mut keep: Vec<PartName> = Vec::new();
         for (index, page) in ctx.document.pages.iter().enumerate() {
             let Some(rel_id) = rel_ids.get(index).and_then(Option::as_deref) else {
                 continue;
@@ -224,7 +229,9 @@ fn patch_lists(package: &mut Package, ctx: &Ctx, main: &PartName) -> Result<(), 
                 |root| patch::patch_page_contents(root, ctx, page),
                 || emit::page_contents(ctx.document, &ctx.style, page),
             )?;
+            keep.push(contents);
         }
+        prune_orphan_parts(package, &pages_index, "page", &keep);
     }
 
     let masters_index =
@@ -245,6 +252,7 @@ fn patch_lists(package: &mut Package, ctx: &Ctx, main: &PartName) -> Result<(), 
         patch_root(package, &masters_index, |root| {
             patch::patch_masters_root(root, ctx, &rel_ids)
         });
+        let mut keep: Vec<PartName> = Vec::new();
         for (index, master) in ctx.document.masters.iter().enumerate() {
             let Some(rel_id) = rel_ids.get(index).and_then(Option::as_deref) else {
                 continue;
@@ -263,9 +271,31 @@ fn patch_lists(package: &mut Package, ctx: &Ctx, main: &PartName) -> Result<(), 
                 |root| patch::patch_master_contents(root, ctx, master),
                 || emit::master_contents(ctx.document, &ctx.style, master),
             )?;
+            keep.push(contents);
         }
+        prune_orphan_parts(package, &masters_index, "master", &keep);
     }
     Ok(())
+}
+
+/// Removes every contents part a relationship of type `rel_local` from
+/// `index` points at that `keep` does not name: the part of a deleted
+/// page or master, with its relationships and content-type entry (ADR
+/// 0048 deletes).
+fn prune_orphan_parts(package: &mut Package, index: &PartName, rel_local: &str, keep: &[PartName]) {
+    let orphans: Vec<PartName> = package
+        .relationships_from(index)
+        .filter(|relationship| {
+            relationship.target_mode == TargetMode::Internal
+                && rel_type_local(&relationship.rel_type) == rel_local
+        })
+        .map(|relationship| resolve_target(index.as_str(), &relationship.target))
+        .filter(|name| !keep.contains(name))
+        .collect();
+    for name in orphans {
+        // A failure (never the root part) leaves the part in place.
+        let _ = package.remove_part(&name);
+    }
 }
 
 /// The shared view of a page or a master: the two lists share one pipeline.

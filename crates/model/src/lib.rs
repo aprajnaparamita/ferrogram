@@ -23,7 +23,7 @@ mod id;
 mod layer;
 mod lookup;
 mod master;
-mod mutate;
+pub mod mutate;
 mod name;
 mod page;
 mod raw;
