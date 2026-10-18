@@ -22,8 +22,10 @@
 use egui::{Context, PointerButton, Ui};
 use ferrogram_commands::{
     AppCtx, ArgValue, CommandError, CommandId, Invocation, NeededInput, Outcome, PathPurpose,
-    Payload, Registry, Source, UiRequest,
+    Payload, Registry, SessionId, Source, UiRequest,
 };
+use ferrogram_model::PageId;
+use ferrogram_render::Overlay;
 use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
 
 use crate::canvas::{self, CanvasCache};
@@ -35,6 +37,7 @@ use crate::ribbon::Ribbon;
 use crate::settings;
 use crate::shapes_window::ShapesWindow;
 use crate::shortcuts::{self, ShortcutMap};
+use crate::tools::{SelectionUpdate, ToolMachine};
 use crate::{Intent, UiError};
 
 /// The File menu items (registry ids, in order).
@@ -93,6 +96,15 @@ pub struct Shell {
     focus: ShortcutScope,
     /// The canvas area of the previous frame (focus tracking).
     canvas_rect: Option<egui::Rect>,
+    /// The canvas widget id of the previous frame (keyboard focus).
+    canvas_id: Option<egui::Id>,
+    /// The session and page of the previous frame (page-switch selection
+    /// clearing, ADR 0041).
+    last_page: Option<(SessionId, Option<PageId>)>,
+    /// The pointer tool state machine (ADR 0042).
+    tools: ToolMachine,
+    /// The transient overlay marks drawn over the cached raster.
+    overlay: Overlay,
     /// The ribbon strip of the previous frame (focus tracking).
     ribbon_rect: Option<egui::Rect>,
     /// A command waiting for an asynchronous pick (the wasm upload,
@@ -141,7 +153,11 @@ impl Shell {
             shortcuts,
             focus: ShortcutScope::Global,
             canvas_rect: None,
+            canvas_id: None,
+            last_page: None,
             ribbon_rect: None,
+            tools: ToolMachine::new(),
+            overlay: Overlay::new(),
             pending: None,
             status: String::new(),
             options_open: false,
@@ -149,6 +165,11 @@ impl Shell {
             confirm_close: None,
             quit_requested: false,
         }
+    }
+
+    /// The active shortcut scope (the keyboard focus, ADR 0036/0041).
+    pub fn focus_scope(&self) -> ShortcutScope {
+        self.focus
     }
 
     /// The active ribbon layout (ADR 0032).
@@ -226,15 +247,23 @@ impl Shell {
                 None
             }
         });
-        let Some(pos) = pressed else {
+        if let Some(pos) = pressed {
+            if self.canvas_rect.is_some_and(|rect| rect.contains(pos)) {
+                self.focus = ShortcutScope::Page;
+            } else if self.ribbon_rect.is_some_and(|rect| rect.contains(pos)) {
+                self.focus = ShortcutScope::Ribbon;
+            } else {
+                self.focus = ShortcutScope::Global;
+            }
             return;
-        };
-        if self.canvas_rect.is_some_and(|rect| rect.contains(pos)) {
+        }
+        // P4-14 fix (ADR 0041 rule 4): a keyboard-only focus move (Tab)
+        // changes the scope too. The canvas widget reports its id from
+        // the previous frame.
+        if let Some(focused) = egui_ctx.memory(|memory| memory.focused())
+            && self.canvas_id == Some(focused)
+        {
             self.focus = ShortcutScope::Page;
-        } else if self.ribbon_rect.is_some_and(|rect| rect.contains(pos)) {
-            self.focus = ShortcutScope::Ribbon;
-        } else {
-            self.focus = ShortcutScope::Global;
         }
     }
 
@@ -251,6 +280,7 @@ impl Shell {
     /// failure goes to the status bar and the frame still renders.
     pub fn show_in(&mut self, ui: &mut Ui) -> Result<Vec<Intent>, UiError> {
         let mut intents = Vec::new();
+        self.clear_selection_on_page_switch();
         self.finish_pick();
         if self.quit_requested {
             self.quit_requested = false;
@@ -321,10 +351,14 @@ impl Shell {
             .resizable(true)
             .default_size(220.0)
             .show(ui, |ui| {
-                let shape_data = panels::show_shape_data(ui, &self.app);
-                let _ = self.keep(shape_data);
-                let size_position = panels::show_size_position(ui, &self.app);
-                let _ = self.keep(size_position);
+                let shape_data = panels::show_shape_data(ui, &mut self.app);
+                if let Some(mut more) = self.keep(shape_data) {
+                    intents.append(&mut more);
+                }
+                let size_position = panels::show_size_position(ui, &mut self.app);
+                if let Some(mut more) = self.keep(size_position) {
+                    intents.append(&mut more);
+                }
             });
 
         // Canvas area: page tabs and status bar below it.
@@ -386,16 +420,47 @@ impl Shell {
         // are recorded after the document borrow ends.
         let mut produced = Vec::new();
         let mut errors = Vec::new();
+        let mut events = Vec::new();
+        let overlay = self.overlay.clone();
         {
             let session = self.app.active_document_mut();
             if let Some(session) = session {
-                ui.scope_builder(
-                    egui::UiBuilder::new().max_rect(rect),
-                    |ui| match canvas::show(ui, session, &mut self.cache) {
-                        Ok(output) => produced.extend(output.intents),
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    match canvas::show_with_overlay(ui, session, &mut self.cache, &overlay) {
+                        Ok(output) => {
+                            produced.extend(output.intents);
+                            events = output.events;
+                            if let Some(id) = output.focus_id {
+                                self.canvas_id = Some(id);
+                            }
+                        }
                         Err(error) => errors.push(error.to_string()),
-                    },
-                );
+                    }
+                });
+            }
+        }
+        let had_events = !events.is_empty();
+        for event in events {
+            match self.tools.handle(event, &self.app) {
+                Ok(effect) => {
+                    if let Some(update) = effect.selection {
+                        self.apply_selection(update);
+                    }
+                    self.overlay = effect.overlay;
+                    produced.extend(effect.intents);
+                }
+                // A tool module that has not landed yet (P5-06..P5-08)
+                // reports its stub; the pointer tool's events never
+                // reach it while the pointer tool is active.
+                Err(UiError::NotImplemented) => {}
+                Err(error) => errors.push(error.to_string()),
+            }
+        }
+        if !had_events {
+            match self.tools.idle_overlay(&self.app) {
+                Ok(Some(overlay)) => self.overlay = overlay,
+                Ok(None) => {}
+                Err(error) => errors.push(error.to_string()),
             }
         }
         {
@@ -534,6 +599,34 @@ impl Shell {
             Some(Intent::new(command, Invocation::empty(Source::Menu)))
         } else {
             None
+        }
+    }
+
+    /// Clears the selection when the active document or page changed
+    /// since the previous frame (ADR 0041: the page-switch commands and
+    /// the page tabs clear it).
+    fn clear_selection_on_page_switch(&mut self) {
+        let current = self
+            .app
+            .active_document()
+            .map(|session| (session.id, session.active_page));
+        if self.last_page.is_some() && self.last_page != current && !self.app.selection.is_empty() {
+            self.app.selection.clear();
+        }
+        self.last_page = current;
+    }
+
+    /// Applies a selection change the pointer tool reported (ADR 0041).
+    ///
+    /// Selection is not a document edit: no undo step and no change
+    /// counter bump (ADR 0040 rule 3). The entered group stays unless
+    /// the selection becomes empty.
+    fn apply_selection(&mut self, update: SelectionUpdate) {
+        self.app.selection.shapes = update.shapes;
+        self.app.selection.anchor = update.anchor;
+        self.app.selection.page = update.page;
+        if self.app.selection.shapes.is_empty() {
+            self.app.selection.entered = None;
         }
     }
 
@@ -826,14 +919,12 @@ pub fn dispatch_one(
         .execute(command, app, invocation)
         .map_err(UiError::Command)?;
     if let Some(edit) = outcome.edit.take() {
-        let target = match ran_against {
-            Some(id) => app.documents.iter_mut().find(|session| session.id == id),
-            None => app.active_document_mut(),
-        };
+        // ADR 0040 rule 2: `push_edit` is the only push path. It finds
+        // the session by id (never by index) and applies the
+        // recording gate.
+        let target = ran_against.or_else(|| app.active_document().map(|session| session.id));
         match target {
-            Some(session) => {
-                session.undo.push(edit);
-            }
+            Some(id) => app.push_edit(id, edit).map_err(UiError::Command)?,
             None => app.record_warning("an undoable edit with no open document was dropped"),
         }
     }
@@ -1033,6 +1124,30 @@ mod tests {
         shell.set_layout_kind(LayoutKind::Visio365);
         assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
         assert_eq!(shell.layout_set(), &shell.layouts.visio_365);
+    }
+
+    #[test]
+    fn switching_pages_clears_the_selection() {
+        let mut shell = full_shell();
+        shell
+            .dispatch(&[intent("file.new", Source::Test)])
+            .expect("dispatch");
+        let session = shell.app.active_document_mut().expect("a document");
+        session.document.pages.push(ferrogram_model::Page::new(
+            ferrogram_model::PageId { index: 1 },
+            2,
+        ));
+        shell.app.selection.shapes = vec![ferrogram_model::ShapeId { index: 0 }];
+        shell.app.selection.anchor = Some(ferrogram_model::ShapeId { index: 0 });
+        shell.clear_selection_on_page_switch();
+        assert!(!shell.app.selection.is_empty());
+        shell
+            .app
+            .active_document_mut()
+            .expect("a document")
+            .active_page = Some(ferrogram_model::PageId { index: 1 });
+        shell.clear_selection_on_page_switch();
+        assert!(shell.app.selection.is_empty(), "the page switch cleared it");
     }
 
     #[test]

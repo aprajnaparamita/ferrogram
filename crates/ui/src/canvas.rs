@@ -29,13 +29,18 @@ use egui::{
     Align2, Color32, ColorImage, Context, FontId, PointerButton, Pos2, Rect, Sense, Stroke,
     TextureHandle, TextureId, TextureOptions, Ui,
 };
-use ferrogram_commands::{AppCtx, CommandId, DisplayUnits, DocumentSession, Invocation, Source};
-use ferrogram_geom::Point;
+use ferrogram_commands::{
+    AppCtx, CommandId, DisplayUnits, DocumentSession, Invocation, SessionId, Source,
+};
+use ferrogram_geom::{Point, Rect as PageRect};
 use ferrogram_model::{CellName, CellReader, Document, Page, PageId, SheetRef};
 use ferrogram_render::{
-    BuildOptions, MAX_DEVICE_EXTENT, RasterImage, RasterOptions, build_scene, render_raster,
+    BuildOptions, MAX_DEVICE_EXTENT, Overlay, OverlayMark, RasterImage, RasterOptions, build_scene,
+    render_raster,
 };
 
+use crate::handles::rotated_corners;
+use crate::tools::{Modifiers, ToolEvent};
 use crate::{Intent, UiError};
 
 /// Points per inch at zoom 1.0 (ADR 0025: 96 pixels per inch, 1:1).
@@ -91,21 +96,26 @@ const RULER_TEXT: Color32 = Color32::from_rgb(80, 80, 80);
 /// The raster texture cache of the canvas (ADR 0033).
 ///
 /// Holds the uploaded texture, the last [`RasterImage`] and the key it
-/// was rasterized for: the document snapshot, the page, the page size
-/// and the raster zoom. The texture handle is dropped normally (its
+/// was rasterized for: the session identity, the document change counter,
+/// the page, the page size and the raster zoom (ADR 0040 rule 3, the
+/// P4-05 deferred item). The texture handle is dropped normally (its
 /// free joins the next [`egui::TexturesDelta`], which the frame applies;
 /// `epaint` only panics on deltas nobody applies).
 #[derive(Clone)]
 pub struct CanvasCache {
     texture: Option<TextureHandle>,
     raster: Option<RasterImage>,
-    document: Option<Document>,
+    session: Option<SessionId>,
+    changes: u64,
     page: Option<PageId>,
     page_size: (f64, f64),
     raster_zoom: f64,
     generation: u64,
     last_warning: Option<String>,
     failed: Option<FailedKey>,
+    /// Whether the primary button went down on the canvas (the tool
+    /// event stream's own state, not part of the raster key).
+    pointer_down: bool,
 }
 
 /// The cache key of a raster attempt that failed (P4-16 review minor
@@ -113,15 +123,22 @@ pub struct CanvasCache {
 /// page that cannot raster does not rebuild and re-report every frame.
 #[derive(Clone, PartialEq)]
 struct FailedKey {
-    document: Document,
+    session: Option<SessionId>,
+    changes: u64,
     page: Option<PageId>,
     zoom: f64,
 }
 
 impl FailedKey {
     /// Whether this is the key of the given raster request.
-    fn matches(&self, document: &Document, page: Option<PageId>, zoom: f64) -> bool {
-        self.document == *document && self.page == page && self.zoom == zoom
+    fn matches(
+        &self,
+        session: Option<SessionId>,
+        changes: u64,
+        page: Option<PageId>,
+        zoom: f64,
+    ) -> bool {
+        self.session == session && self.changes == changes && self.page == page && self.zoom == zoom
     }
 }
 
@@ -131,13 +148,15 @@ impl CanvasCache {
         Self {
             texture: None,
             raster: None,
-            document: None,
+            session: None,
+            changes: 0,
             page: None,
             page_size: (0.0, 0.0),
             raster_zoom: 0.0,
             generation: 0,
             last_warning: None,
             failed: None,
+            pointer_down: false,
         }
     }
 
@@ -145,13 +164,15 @@ impl CanvasCache {
     pub fn clear(&mut self) {
         self.texture = None;
         self.raster = None;
-        self.document = None;
+        self.session = None;
+        self.changes = 0;
         self.page = None;
         self.page_size = (0.0, 0.0);
         self.raster_zoom = 0.0;
         self.generation = 0;
         self.last_warning = None;
         self.failed = None;
+        self.pointer_down = false;
     }
 
     /// Whether no raster is cached.
@@ -185,20 +206,14 @@ impl CanvasCache {
         self.page_size
     }
 
-    /// Whether the key changed under the cache: the document snapshot
-    /// or the page (ADR 0033: re-rasterize on document change or page
-    /// switch). A `DocumentSession` has no generation counter in
-    /// `crates/commands` (see the P4-05 Result), so the snapshot
-    /// comparison is the change detection.
+    /// Whether the key changed under the cache: the session, the
+    /// document change counter or the page (ADR 0040 rule 3: the
+    /// snapshot comparison is gone).
     fn is_stale(&self, session: &DocumentSession) -> bool {
-        match &self.document {
-            None => true,
-            Some(document) => {
-                document != &session.document
-                    || self.page != session.active_page
-                    || self.raster.is_none()
-            }
-        }
+        self.session != Some(session.id)
+            || self.changes != session.changes
+            || self.page != session.active_page
+            || self.raster.is_none()
     }
 
     /// Whether the settled zoom moved more than 10% from the rasterized
@@ -221,13 +236,15 @@ impl PartialEq for CanvasCache {
     fn eq(&self, other: &Self) -> bool {
         self.texture_id() == other.texture_id()
             && self.raster == other.raster
-            && self.document == other.document
+            && self.session == other.session
+            && self.changes == other.changes
             && self.page == other.page
             && self.page_size == other.page_size
             && self.raster_zoom == other.raster_zoom
             && self.generation == other.generation
             && self.last_warning == other.last_warning
             && self.failed == other.failed
+            && self.pointer_down == other.pointer_down
     }
 }
 
@@ -246,7 +263,8 @@ impl std::fmt::Debug for CanvasCache {
                     .map(|image| (image.width, image.height)),
             )
             .field("texture", &self.texture_id())
-            .field("document", &self.document.is_some())
+            .field("session", &self.session)
+            .field("changes", &self.changes)
             .field("last_warning", &self.last_warning)
             .field("failed", &self.failed.is_some())
             .finish()
@@ -260,10 +278,25 @@ pub struct CanvasOutput {
     pub intents: Vec<Intent>,
     /// Status bar text from this frame (page name, zoom, warnings).
     pub status: String,
+    /// Pointer events in page inches for the active tool (ADR 0042).
+    pub events: Vec<ToolEvent>,
+    /// The id of the canvas widget (the shortcut focus scope reads it).
+    pub focus_id: Option<egui::Id>,
 }
 
+/// The selection outline colour (our own choice).
+const SELECTION: Color32 = Color32::from_rgb(31, 111, 235);
+/// The handle fill colour (our own choice).
+const HANDLE_FILL: Color32 = Color32::WHITE;
+/// The snap guide colour (our own choice).
+const SNAP_GUIDE: Color32 = Color32::from_rgb(220, 80, 60);
+/// The marquee fill and stroke (our own choice).
+const MARQUEE_FILL: Color32 = Color32::from_rgba_premultiplied(31, 111, 235, 24);
+/// The handle square's half side, in screen points.
+const HANDLE_HALF: f32 = 3.0;
+
 /// Draws the canvas area: grid, page raster, pan and zoom input (ADR
-/// 0033).
+/// 0033), and pointer events for the active tool (ADR 0042).
 ///
 /// Middle-drag or space-drag pans; Ctrl + wheel (the platform zoom
 /// modifier) zooms at the pointer; the canvas keys Ctrl + `+`, Ctrl + `-`
@@ -275,9 +308,21 @@ pub fn show(
     session: &mut DocumentSession,
     cache: &mut CanvasCache,
 ) -> Result<CanvasOutput, UiError> {
+    show_with_overlay(ui, session, cache, &Overlay::new())
+}
+
+/// [`show`] with the transient tool overlay drawn over the cached raster
+/// (ADR 0042: a drag never re-rasterizes the page).
+pub fn show_with_overlay(
+    ui: &mut Ui,
+    session: &mut DocumentSession,
+    cache: &mut CanvasCache,
+    overlay: &Overlay,
+) -> Result<CanvasOutput, UiError> {
     let mut output = CanvasOutput::default();
     let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
     let viewport = viewport_rect(rect, session.view.show_rulers);
+    output.focus_id = Some(response.id);
 
     // Pan: middle-drag or space-drag.
     let space_down = ui.input(|input| input.keys_down.contains(&egui::Key::Space));
@@ -310,8 +355,16 @@ pub fn show(
     if cache.is_stale(session) || cache.zoom_is_far(zoom) {
         rasterize(ui.ctx(), session, cache)?;
     }
+    let page_height = page_height(session, cache);
 
-    // Paint: backdrop, then the grid, then the texture.
+    // Pointer events for the active tool, in page inches (ADR 0042).
+    if !panning && !space_down {
+        output.events = tool_events(ui, &response, viewport, session, cache, page_height);
+    } else {
+        cache.pointer_down = false;
+    }
+
+    // Paint: backdrop, then the grid, then the texture, then the overlay.
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, CANVAS_BACKDROP);
     let k = points_per_inch(zoom);
@@ -333,9 +386,174 @@ pub fn show(
             painter.image(texture, dest, uv, Color32::WHITE);
         }
     }
+    draw_overlay(
+        &painter,
+        viewport,
+        session.view.pan,
+        k,
+        page_height,
+        overlay,
+    );
 
     output.status = canvas_status(session, cache);
     Ok(output)
+}
+
+/// The page height the pointer mapping needs: the rasterized page size,
+/// else the model page size.
+fn page_height(session: &DocumentSession, cache: &CanvasCache) -> f64 {
+    if cache.page_size.1 > 0.0 {
+        cache.page_size.1
+    } else {
+        page_size(&session.document, session.active_page).1
+    }
+}
+
+/// The pointer events of one frame, in page inches.
+fn tool_events(
+    ui: &Ui,
+    response: &egui::Response,
+    viewport: Rect,
+    session: &DocumentSession,
+    cache: &mut CanvasCache,
+    page_height: f64,
+) -> Vec<ToolEvent> {
+    let (pressed, released, down, pos, modifiers) = ui.input(|input| {
+        (
+            input.pointer.button_pressed(PointerButton::Primary),
+            input.pointer.button_released(PointerButton::Primary),
+            input.pointer.primary_down(),
+            input.pointer.interact_pos(),
+            input.modifiers,
+        )
+    });
+    // Outside the `input` closure: `double_clicked_by` reads the context
+    // again and would deadlock the input lock.
+    let double = response.double_clicked_by(PointerButton::Primary);
+    let modifiers = Modifiers {
+        shift: modifiers.shift,
+        ctrl: modifiers.ctrl || modifiers.command,
+        alt: modifiers.alt,
+    };
+    let zoom = safe_zoom(session.view.zoom);
+    let k = points_per_inch(zoom);
+    let mut events = Vec::new();
+    let to_page = |screen: Pos2| {
+        Point::new(
+            (f64::from(screen.x) - f64::from(viewport.min.x)) / k - session.view.pan.x,
+            page_height
+                - ((f64::from(screen.y) - f64::from(viewport.min.y)) / k - session.view.pan.y),
+        )
+    };
+    if pressed {
+        if let Some(screen) = pos
+            && viewport.contains(screen)
+        {
+            cache.pointer_down = true;
+            events.push(ToolEvent::PointerDown {
+                pos: to_page(screen),
+                modifiers,
+            });
+        }
+    } else if cache.pointer_down
+        && down
+        && let Some(screen) = pos
+        && viewport.contains(screen)
+    {
+        events.push(ToolEvent::PointerMove {
+            pos: to_page(screen),
+            modifiers,
+        });
+    }
+    if double
+        && let Some(screen) = pos
+        && viewport.contains(screen)
+    {
+        events.push(ToolEvent::DoubleClick {
+            pos: to_page(screen),
+        });
+    }
+    if released && cache.pointer_down {
+        cache.pointer_down = false;
+        if let Some(screen) = pos {
+            events.push(ToolEvent::PointerUp {
+                pos: to_page(screen),
+                modifiers,
+            });
+        }
+    }
+    events
+}
+
+/// Draws the transient overlay marks over the cached raster (ADR 0042).
+fn draw_overlay(
+    painter: &egui::Painter,
+    viewport: Rect,
+    pan: Point,
+    k: f64,
+    page_height: f64,
+    overlay: &Overlay,
+) {
+    let to_screen = |point: Point| {
+        egui::pos2(
+            viewport.min.x + ((pan.x + point.x) * k) as f32,
+            viewport.min.y + ((pan.y + (page_height - point.y)) * k) as f32,
+        )
+    };
+    for mark in &overlay.marks {
+        match mark {
+            OverlayMark::SelectionOutline { bounds, angle } => {
+                let corners = rotated_corners(*bounds, *angle);
+                let points: Vec<Pos2> = corners.iter().map(|point| to_screen(*point)).collect();
+                if points.len() == 4 {
+                    painter.add(egui::Shape::closed_line(
+                        points,
+                        Stroke::new(1.0, SELECTION),
+                    ));
+                }
+            }
+            OverlayMark::Handles { bounds, angle } => {
+                if let Ok(handles) = crate::handles::handles_for(*bounds, *angle) {
+                    for (_, point) in handles {
+                        let center = to_screen(point);
+                        let rect = Rect::from_center_size(
+                            center,
+                            egui::vec2(HANDLE_HALF * 2.0, HANDLE_HALF * 2.0),
+                        );
+                        painter.rect_filled(rect, 0.0, HANDLE_FILL);
+                        painter.rect_stroke(
+                            rect,
+                            0.0,
+                            Stroke::new(1.0, SELECTION),
+                            egui::StrokeKind::Middle,
+                        );
+                    }
+                }
+            }
+            OverlayMark::RubberBand(bounds) => {
+                let min = to_screen(bounds.min);
+                let max = to_screen(PageRect::new(bounds.min, bounds.max).max);
+                let rect = Rect::from_two_pos(min, max);
+                painter.rect_filled(rect, 0.0, MARQUEE_FILL);
+                painter.rect_stroke(
+                    rect,
+                    0.0,
+                    Stroke::new(1.0, SELECTION),
+                    egui::StrokeKind::Middle,
+                );
+            }
+            OverlayMark::SnapGuide { a, b } => {
+                painter.line_segment([to_screen(*a), to_screen(*b)], Stroke::new(1.0, SNAP_GUIDE));
+            }
+            OverlayMark::ConnectorPreview { points } => {
+                let points: Vec<Pos2> = points.iter().map(|point| to_screen(*point)).collect();
+                if points.len() >= 2 {
+                    painter.add(egui::Shape::line(points, Stroke::new(1.5, SELECTION)));
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Draws the ruler bands along the top and left edges of the canvas
@@ -722,7 +940,7 @@ fn rasterize(
     if cache
         .failed
         .as_ref()
-        .is_some_and(|failed| failed.matches(&session.document, Some(page), zoom))
+        .is_some_and(|failed| failed.matches(Some(session.id), session.changes, Some(page), zoom))
     {
         return Ok(());
     }
@@ -733,7 +951,8 @@ fn rasterize(
         }
         Err(error) => {
             cache.failed = Some(FailedKey {
-                document: session.document.clone(),
+                session: Some(session.id),
+                changes: session.changes,
                 page: Some(page),
                 zoom,
             });
@@ -780,7 +999,8 @@ fn rasterize_at(
         .last()
         .map(|warning| format!("{}: {:?}", warning.cell.as_str(), warning.kind));
     cache.raster = Some(raster);
-    cache.document = Some(session.document.clone());
+    cache.session = Some(session.id);
+    cache.changes = session.changes;
     cache.page = Some(page);
     cache.raster_zoom = safe_zoom(session.view.zoom);
     cache.generation = cache.generation.saturating_add(1);
@@ -1193,6 +1413,83 @@ mod tests {
     }
 
     #[test]
+    fn the_cache_debug_and_empty_zoom_key_are_covered() {
+        let cache = CanvasCache::new();
+        let text = format!("{cache:?}");
+        assert!(text.contains("generation"), "{text}");
+        assert!(cache.zoom_is_far(1.0), "an empty cache is always far");
+        assert_eq!(format_number(f64::MAX), f64::MAX.to_string());
+        assert_eq!(format_number(f64::NAN), "?");
+    }
+
+    #[test]
+    fn page_labels_fall_back_to_name_u_then_position() {
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        page.name = "Named".to_owned();
+        assert_eq!(page_label(&page, 0), "Named");
+        page.name.clear();
+        page.name_u = "NameU".to_owned();
+        assert_eq!(page_label(&page, 0), "NameU");
+        page.name_u.clear();
+        assert_eq!(page_label(&page, 4), "Page 5");
+        assert_eq!(
+            viewport_rect(
+                Rect::from_min_size(Pos2::ZERO, egui::vec2(10.0, 10.0)),
+                false
+            ),
+            Rect::from_min_size(Pos2::ZERO, egui::vec2(10.0, 10.0))
+        );
+        assert!(tick_positions(0.0, 100.0, f64::NAN, 96.0).is_empty());
+        assert!(tick_positions(0.0, 100.0, 0.0, f64::NAN).is_empty());
+    }
+
+    #[test]
+    fn an_invalid_command_id_is_a_ui_error() {
+        assert!(intent("").is_err());
+    }
+
+    #[test]
+    fn a_document_without_a_page_clears_the_cache() {
+        let ctx = Context::default();
+        let mut cache = CanvasCache::new();
+        let mut session = DocumentSession::new(filled_document(), None);
+        session.active_page = None;
+        rasterize(&ctx, &session, &mut cache).expect("no page is not an error");
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn every_overlay_mark_kind_draws() {
+        let ctx = Context::default();
+        let mut session = DocumentSession::new(filled_document(), None);
+        let mut cache = CanvasCache::new();
+        let mut overlay = Overlay::new();
+        overlay.marks.push(OverlayMark::SelectionOutline {
+            bounds: PageRect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
+            angle: ferrogram_geom::Angle::default(),
+        });
+        overlay.marks.push(OverlayMark::Handles {
+            bounds: PageRect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
+            angle: ferrogram_geom::Angle::default(),
+        });
+        overlay.marks.push(OverlayMark::RubberBand(PageRect::new(
+            Point::new(0.0, 0.0),
+            Point::new(2.0, 2.0),
+        )));
+        overlay.marks.push(OverlayMark::SnapGuide {
+            a: Point::new(0.0, 0.0),
+            b: Point::new(1.0, 1.0),
+        });
+        overlay.marks.push(OverlayMark::ConnectorPreview {
+            points: vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)],
+        });
+        frame(&ctx, egui::RawInput::default(), |ui| {
+            show_with_overlay(ui, &mut session, &mut cache, &overlay).expect("canvas");
+        });
+        assert_eq!(cache.generation(), 1);
+    }
+
+    #[test]
     fn render_errors_map_into_ui_errors() {
         // The `UiError::Render` mapping (P4-12 coverage major 4).
         let error = render_error(ferrogram_render::Error::TooLarge);
@@ -1228,9 +1525,10 @@ mod tests {
         // A different zoom is a different key too.
         session.view.zoom = 2.0;
         rasterize(&ctx, &session, &mut cache).expect_err("retried at a new zoom");
-        // And so is a different document.
+        // And so is a changed document (the change counter is the key).
         session.document = Document::new();
-        rasterize(&ctx, &session, &mut cache).expect_err("retried at a new document");
+        session.changes = session.changes.wrapping_add(1);
+        rasterize(&ctx, &session, &mut cache).expect_err("retried at a changed document");
     }
 
     #[test]
