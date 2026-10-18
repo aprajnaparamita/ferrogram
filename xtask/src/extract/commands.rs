@@ -587,6 +587,7 @@ pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("connector.unglue", "Unglue"),
     ("edit.delete", "Delete"),
     ("edit.deselect", "Deselect"),
+    ("edit.select", "Select"),
     ("file.export", "Export"),
     ("file.inspect", "Inspect"),
     ("file.render", "Render"),

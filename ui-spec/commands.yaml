@@ -1714,6 +1714,11 @@
   label: Move
   mapping_confidence: unknown
   visuicmd: visCmdRightDragMove
+- fluent_ids: []
+  id: edit.select
+  label: Select
+  mapping_confidence: unknown
+  visuicmd: null
 - fluent_ids:
     - SelectByTypeDialog
   id: edit.select.by.type.dialog
