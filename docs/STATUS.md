@@ -2,8 +2,9 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **4 in progress** (group A)
+- Current phase: **4 complete**, waiting for the go-ahead for Phase 5
 - Phase 4 goal: app shell and switchable ribbon (KICKOFF.md). Exit: both layouts load and switch without a restart, and opening corpus files shows them on the canvas.
+- Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
 
@@ -108,6 +109,7 @@ States: not written · outline · ready · in progress · in review · merged ·
 | 1 | [phase-1.md](progress/phase-1.md) | green (2026-10-13) |
 | 2 | [phase-2.md](progress/phase-2.md) | green (2026-10-14) |
 | 3 | [phase-3.md](progress/phase-3.md) | green (2026-10-16) |
+| 4 | [phase-4.md](progress/phase-4.md) | green (2026-10-18) |
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
