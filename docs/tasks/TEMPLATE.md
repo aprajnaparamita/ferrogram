@@ -10,7 +10,7 @@
 
 Paste into a fresh session (any harness), from `/Users/dara/ferrogram`:
 
-> You are working on Ferrogram. Read `AGENTS.md`, then `docs/tasks/<task-id>.md`, and do that task. Follow AGENTS.md section 2 for the worktree and branch. Stop when the Result section is filled and the gate is green.
+> You are working on Ferrogram. Read `AGENTS.md`, then `docs/tasks/<task-id>.md`, and do that task. Follow AGENTS.md section 2 for the worktree and branch. Stop when the Result section is filled and the hand-off gate is green.
 
 ## Owns
 
@@ -27,7 +27,7 @@ Types, functions, schemas this task provides or consumes.
 ## Acceptance criteria
 
 - [ ] ...
-- [ ] `cargo xtask gate` green in the worktree.
+- [ ] Hand-off gate green in the worktree (AGENTS.md section 7: `--quick` plus triggered slow steps: ...).
 
 ## Result
 

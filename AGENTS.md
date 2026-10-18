@@ -21,21 +21,22 @@ TASK=P1-03                                   # your task id
 WT=/Volumes/Dara/ferrogram/worktrees/$TASK
 git -C /Users/dara/ferrogram worktree add -b agent/$TASK "$WT" main
 cd "$WT"
-export CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/$TASK
 ```
+
+Builds go through a shared `sccache` cache (machine-wide `~/.cargo/config.toml` sets `rustc-wrapper = "sccache"`; the cache lives at `/Volumes/Dara/ferrogram/sccache`). A fresh worktree therefore reuses compiled dependencies from every other worktree. Build in the worktree's own `target/` (it is on the external drive and gitignored). **Do not set `CARGO_TARGET_DIR`** (or any other `CARGO_*` variable): sccache hashes them, so a per-task value makes every cache lookup miss. Do not set `RUSTC_WRAPPER` yourself and do not clear the cache. If `sccache` is missing in your harness, builds still work, only slower: say so in your Result.
 
 - Commit only on `agent/<task-id>`. Never commit to `main`, never rewrite `main`, never touch another agent's branch or worktree.
 - Before handing off, rebase on the latest `main`: `git rebase main` (worktrees share refs with the main repo, so `main` is always current).
 - Hand-off: fill in the `## Result` section of your task file (what changed, gate output summary, open issues) and commit it as the last commit on your branch. Then stop and tell the user the branch is ready.
 - The master agent reviews and merges into `main`. If review finds problems, you get a follow-up task.
-- Leave the worktree in place; the master removes it after merge. Delete your `CARGO_TARGET_DIR` when the task is merged or abandoned.
+- Leave the worktree in place; the master removes it (and its `target/`) after merge.
 
 ## 3. Disk usage
 
 The main drive is small. Put everything large on `/Volumes/Dara/ferrogram/`:
 
 - Worktrees: `/Volumes/Dara/ferrogram/worktrees/`
-- Cargo target dirs: `/Volumes/Dara/ferrogram/target/<task-id>` (always set `CARGO_TARGET_DIR`)
+- Cargo target dirs: each worktree's own `target/` (already on the external drive); the shared compile cache is `/Volumes/Dara/ferrogram/sccache`. The main checkout is on the small drive: the master builds there with `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/main`.
 - Raw downloads: `/Volumes/Dara/ferrogram/reference/`. The repo's `reference/` directory is a symlink to it (gitignored). In a worktree, create the same symlink: `ln -s /Volumes/Dara/ferrogram/reference reference`.
 - Corpus files: `corpus/vsdx/` and `corpus/vsd/` are gitignored and exist only in the main checkout. In a worktree, link them: `ln -s /Users/dara/ferrogram/corpus/vsdx corpus/vsdx` and the same for `vsd`. If git shows the links as untracked, add them to `.git/info/exclude`, not to `.gitignore`.
 - Large builds (libvisio, corpora): `/Volumes/Dara/ferrogram/`.
@@ -88,7 +89,10 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 
 ## 7. Quality gate
 
-`cargo xtask gate` is the single gate. It must be green before hand-off.
+`cargo xtask gate` is the single gate. It runs at two levels:
+
+- **Hand-off gate (workers).** `cargo xtask gate --quick` (codegen, parity, fmt, clippy, test, doc, deny, layers) plus every slow step your change triggers (table below). It must be green before hand-off.
+- **Merge gate (master).** The full `cargo xtask gate` on `main` after each merge. A slow step that goes red there becomes a master fix or a follow-up task.
 
 | Step | Command |
 |---|---|
@@ -103,7 +107,15 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 | wasm | `cargo build -p ferrogram-web --target wasm32-unknown-unknown` |
 | fuzz | `cargo +nightly fuzz build` in every `crates/*/fuzz` |
 
-While iterating, use `cargo xtask gate --quick` (skips coverage, wasm, fuzz). Run the full gate before hand-off.
+Slow steps a worker adds to the hand-off gate:
+
+| Step | Run it when your change |
+|---|---|
+| wasm | touches `crates/ui`, `apps/ferrogram-web`, `#[cfg(target_arch)]` code, or any `Cargo.toml` / `Cargo.lock` |
+| fuzz | touches a `crates/*/fuzz` directory, or changes the public API of a crate that has one (`ui-spec`, `vsdx`, `render`, `ui`) |
+| coverage | is a test or coverage task, or your task's acceptance criteria name a coverage number |
+
+Skip only the untriggered steps: for example `cargo xtask gate --skip coverage,fuzz` runs wasm. If unsure, run the step. Name the steps you ran in the Result's gate summary. Use `cargo xtask gate --quick` while iterating.
 
 Coverage thresholds: geom, model, vsdx, vsd-binary, shapesheet, commands, ui-spec ≥ 85%; render, text ≥ 75%; control, ui, apps ≥ 50% (UI via egui_kittest). No crate may drop below its previous-phase number (`[ratchet]` in `coverage.toml`; only the master updates it).
 
