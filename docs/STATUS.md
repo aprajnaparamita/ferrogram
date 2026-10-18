@@ -2,11 +2,17 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **4 complete**, waiting for the go-ahead for Phase 5
-- Phase 4 goal: app shell and switchable ribbon (KICKOFF.md). Exit: both layouts load and switch without a restart, and opening corpus files shows them on the canvas.
+- Current phase: **5 in progress** (P5-01 planning)
+- Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
+
+## Phase 5 task board
+
+| Task | Role | Depends on | Group | State | Branch |
+|---|---|---|---|---|---|
+| [P5-01](tasks/P5-01.md) | architect | Phase 4 | — | ready to launch | — |
 
 ## Phase 4 task board
 
