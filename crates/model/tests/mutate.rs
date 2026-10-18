@@ -1148,3 +1148,33 @@ fn master_size_reports_a_master_shape_the_arena_does_not_hold() {
         Err(Error::UnknownShape(ShapeId { index: 999 }))
     );
 }
+
+#[test]
+fn ungroup_drops_the_connects_of_the_dissolved_group() {
+    let (mut doc, page) = document();
+    let member = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("member");
+    let target = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("target");
+    let group = doc.group_shapes(page, &[member]).expect("group");
+    let group_vis = doc.shape(group).expect("group").visio_id;
+    let member_vis = doc.shape(member).expect("member").visio_id;
+    let target_vis = doc.shape(target).expect("target").visio_id;
+    let mut for_group = Connect::new();
+    for_group.from_sheet = group_vis;
+    for_group.from_cell = "BeginX".to_owned();
+    for_group.to_sheet = target_vis;
+    let mut for_member = Connect::new();
+    for_member.from_sheet = member_vis;
+    for_member.from_cell = "BeginX".to_owned();
+    for_member.to_sheet = target_vis;
+    doc.add_connect(page, for_group).expect("connect");
+    doc.add_connect(page, for_member.clone()).expect("connect");
+    let children = doc.ungroup_shape(group).expect("ungroup");
+    assert_eq!(children, vec![member]);
+    // The record naming the dissolved group goes with it; the member's
+    // record stays on the page (ADR 0039 invariant 5).
+    assert_eq!(doc.page(page).expect("page").connects, vec![for_member]);
+}
