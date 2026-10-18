@@ -11,7 +11,15 @@
 //! builtins over them, so [`CommandStatus`] is accurate for every id
 //! the data file knows.
 
+mod arrange;
+mod clipboard;
+mod connector;
+mod edit;
 mod file;
+mod insert;
+mod page;
+mod shape;
+mod text;
 mod view;
 
 pub use view::{ZOOM_MAX, ZOOM_MIN};
@@ -30,10 +38,29 @@ pub use file::{
 };
 
 /// Whether a command can run: its enabled-state predicate (ADR 0028).
-type EnabledFn = fn(&AppCtx) -> Enabled;
+pub(crate) type EnabledFn = fn(&AppCtx) -> Enabled;
 
 /// What a command does when dispatched (ADR 0028).
-type RunFn = fn(&mut AppCtx, &Invocation) -> Result<Outcome, CommandError>;
+pub(crate) type RunFn = fn(&mut AppCtx, &Invocation) -> Result<Outcome, CommandError>;
+
+/// One module's table of implemented commands (ADR 0040): each Phase 5
+/// command module owns one `TABLE`, so parallel tasks never edit the same
+/// list (task P5-01 wires the seams; see `docs/tasks/P5-01.md`).
+pub(crate) type CommandTable = &'static [(&'static str, &'static str, EnabledFn, RunFn)];
+
+/// The per-module tables of the Phase 5 command modules. Each is empty
+/// until its owner task fills it; `registry` chains them onto
+/// [`BUILTINS`] (ADR 0040).
+pub(crate) const STUB_TABLES: &[CommandTable] = &[
+    arrange::TABLE,
+    clipboard::TABLE,
+    connector::TABLE,
+    edit::TABLE,
+    insert::TABLE,
+    page::TABLE,
+    shape::TABLE,
+    text::TABLE,
+];
 
 /// One registered command: metadata plus its two function pointers.
 ///
@@ -141,12 +168,14 @@ const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
 pub fn registry() -> Result<Registry, RegistryError> {
     let mappings = embedded_commands()?;
     let mut registry = Registry::from_mappings(mappings)?;
-    for (id, label, enabled_fn, run) in BUILTINS {
+    for &(id, label, enabled_fn, run) in
+        BUILTINS.iter().chain(STUB_TABLES.iter().copied().flatten())
+    {
         let meta = meta_for(mappings, id, label)?;
         registry.register(Box::new(Builtin {
             meta,
-            enabled_fn: *enabled_fn,
-            run: *run,
+            enabled_fn,
+            run,
         }))?;
     }
     Ok(registry)
@@ -275,7 +304,7 @@ mod tests {
     fn the_builtin_registry_covers_every_builtins_row() {
         let registry = registry().expect("registry");
         assert!(registry.len() >= BUILTINS.len());
-        for (id, _, _, _) in BUILTINS {
+        for &(id, _, _, _) in BUILTINS.iter().chain(STUB_TABLES.iter().copied().flatten()) {
             let id = CommandId::parse(id).expect("builtin id");
             assert_eq!(
                 registry.status(&id),

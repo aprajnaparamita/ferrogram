@@ -242,6 +242,7 @@ fn an_open_tile_draws_the_same_marks_in_both_backends() {
     path.push(Segment::LineTo(Point::new(0.0, 1.0)));
     path.push(Segment::Close);
     let shape = SceneShape {
+        shape_id: None,
         transform: Transform::identity(),
         path,
         fill: Some(Paint::Pattern(PatternPaint {

@@ -18,6 +18,8 @@
 
 pub mod app;
 pub mod builtins;
+pub mod clipboard;
+pub mod edit;
 pub mod error;
 pub mod registry;
 pub mod undo;
@@ -25,6 +27,8 @@ pub mod undo;
 pub use app::{
     AppCtx, DisplayUnits, DocumentSession, Selection, SessionId, Settings, SettingsStore, ViewState,
 };
+pub use clipboard::{Clipboard, ClipboardContent, ClipboardKind};
+pub use edit::CompositeEdit;
 pub use error::{
     CommandError, CommandIdError, NeededInput, PathPurpose, RegistryError, SettingsError,
 };

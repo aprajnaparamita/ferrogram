@@ -12,6 +12,7 @@ use ferrogram_ui_spec::LayoutKind;
 use serde::{Deserialize, Serialize};
 
 use crate::SettingsError;
+use crate::clipboard::Clipboard;
 use crate::undo::UndoStack;
 
 /// How the UI formats lengths at the screen edge (AGENTS.md section 6:
@@ -110,28 +111,45 @@ impl Default for ViewState {
     }
 }
 
-/// The selected shapes (ADR 0029).
+/// The selected shapes (ADR 0029, extended by ADR 0041).
 ///
-/// Phase 4 has no selection: [`Selection::len`] is always 0. Phase 5
-/// adds the shape ids here without changing any signature that takes a
-/// `&Selection`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Selection;
+/// The selection is per application, not per document: the commands that
+/// switch document or page clear it. `shapes` is in click order and the
+/// last entry is the primary shape (the one the panels show).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Selection {
+    /// The selected shapes of the active page, in click order.
+    pub shapes: Vec<ferrogram_model::ShapeId>,
+    /// The primary shape, or `None` while the selection is empty.
+    pub anchor: Option<ferrogram_model::ShapeId>,
+    /// The page the selection belongs to.
+    pub page: Option<PageId>,
+}
 
 impl Selection {
     /// An empty selection.
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 
-    /// Number of selected shapes. Always 0 until Phase 5.
+    /// Number of selected shapes.
     pub fn len(&self) -> usize {
-        0
+        self.shapes.len()
     }
 
-    /// True while nothing is selected (always in Phase 4).
+    /// True while nothing is selected.
     pub fn is_empty(&self) -> bool {
-        true
+        self.shapes.is_empty()
+    }
+
+    /// Whether `shape` is selected.
+    pub fn contains(&self, shape: ferrogram_model::ShapeId) -> bool {
+        self.shapes.contains(&shape)
+    }
+
+    /// The primary shape (the panels' subject, ADR 0041).
+    pub fn primary(&self) -> Option<ferrogram_model::ShapeId> {
+        self.anchor
     }
 }
 
@@ -170,6 +188,11 @@ pub struct DocumentSession {
     pub view: ViewState,
     /// The per-document undo stack (ADR 0028).
     pub undo: UndoStack,
+    /// The document change counter (ADR 0040): every edit bumps it, and
+    /// the canvas cache keys on it instead of comparing a document
+    /// snapshot every frame (the P4-05 deferred item). It only moves
+    /// forward (`wrapping_add`).
+    pub changes: u64,
     /// The package the document was read from, kept for the lossless
     /// patch-based writer (ADR 0018: `write_document` patches the
     /// source parts so unmapped content survives a save). `None` for a
@@ -190,6 +213,7 @@ impl DocumentSession {
             active_page,
             view: ViewState::new(),
             undo: UndoStack::new(UndoStack::DEFAULT_CAPACITY),
+            changes: 0,
             preserve: None,
         }
     }
@@ -266,6 +290,8 @@ pub struct AppCtx {
     pub settings: Settings,
     /// Recent warnings, capped at 200 entries (ADR 0021 style).
     pub warnings: Vec<String>,
+    /// The internal clipboard (ADR 0047).
+    pub clipboard: crate::clipboard::Clipboard,
 }
 
 impl AppCtx {
@@ -280,6 +306,7 @@ impl AppCtx {
             selection: Selection::new(),
             settings,
             warnings: Vec::new(),
+            clipboard: Clipboard::new(),
         }
     }
 
@@ -328,6 +355,15 @@ impl AppCtx {
             Some(active) => Some(active),
         };
         Some(closed)
+    }
+
+    /// Bumps the active document's change counter (ADR 0040). Every
+    /// document mutation path calls this after editing, including undo
+    /// and redo.
+    pub fn touch(&mut self) {
+        if let Some(session) = self.active_document_mut() {
+            session.changes = session.changes.wrapping_add(1);
+        }
     }
 
     /// Records a warning for the status bar (capped ring, ADR 0029).

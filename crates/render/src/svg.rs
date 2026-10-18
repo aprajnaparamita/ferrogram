@@ -936,6 +936,7 @@ mod tests {
 
     fn line_node() -> Shape {
         Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0)], false),
             fill: None,
@@ -994,6 +995,7 @@ mod tests {
         let mut scene = Scene::new(2.0, 1.0);
         scene.background = Some(Rgba::opaque(255, 255, 255));
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::Solid(color(255, 0, 0, 128))),
@@ -1053,6 +1055,7 @@ mod tests {
             color: Some(Rgba::opaque(0, 128, 0)),
         });
         let shape = Shape {
+            shape_id: None,
             transform: Transform::translate(Point::new(1.0, 1.0)),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)], true),
             fill: Some(Paint::Pattern(PatternPaint {
@@ -1090,6 +1093,7 @@ mod tests {
     fn a_linear_gradient_is_defined_once_and_referenced() {
         let mut scene = Scene::new(1.0, 1.0);
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::LinearGradient {
@@ -1123,6 +1127,7 @@ mod tests {
     fn a_radial_gradient_is_defined_in_the_defs() {
         let mut scene = Scene::new(1.0, 1.0);
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::RadialGradient {
@@ -1152,6 +1157,7 @@ mod tests {
     fn a_closed_pattern_tile_fills_over_its_background_box() {
         let mut scene = Scene::new(1.0, 1.0);
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::Pattern(PatternPaint {
@@ -1191,6 +1197,7 @@ mod tests {
         // hairline of its own.
         let mut scene = Scene::new(1.0, 1.0);
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::Pattern(PatternPaint {
@@ -1223,6 +1230,7 @@ mod tests {
         stroke.join = LineJoin::Round;
         stroke.miter_limit = 8.0;
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0)], false),
             fill: None,
@@ -1472,6 +1480,7 @@ mod tests {
             origin: Point::new(1.0, 2.0),
         };
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: Path::new(),
             fill: None,
@@ -1531,6 +1540,7 @@ mod tests {
             origin: Point::new(1.0, 2.0),
         };
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: Path::new(),
             fill: None,
@@ -1598,6 +1608,7 @@ mod tests {
             origin: Point::new(0.0, 0.0),
         };
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: Path::new(),
             fill: None,
@@ -1773,6 +1784,7 @@ mod tests {
             color: None,
         });
         let shape = Shape {
+            shape_id: None,
             transform: Transform::translate(Point::new(1.0, 1.0)),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
             fill: Some(solid(200, 100, 50)),
@@ -1831,6 +1843,7 @@ mod tests {
         }
         let mut scene = Scene::new(1.0, 1.0);
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path,
             fill: Some(solid(0, 0, 0)),
@@ -1935,6 +1948,7 @@ mod tests {
         });
         let mut scene = Scene::new(2.0, 2.0);
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0)], false),
             fill: None,
@@ -1958,6 +1972,7 @@ mod tests {
         // translucent foreground writes a stroke opacity on the tile.
         let mut scene = Scene::new(1.0, 1.0);
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::Pattern(PatternPaint {
@@ -1983,6 +1998,7 @@ mod tests {
     fn a_gradient_stop_with_a_non_finite_offset_writes_zero() {
         let mut scene = Scene::new(1.0, 1.0);
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: unit_path(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], true),
             fill: Some(Paint::LinearGradient {
@@ -2046,6 +2062,7 @@ mod tests {
             origin: Point::new(1.0, 2.0),
         };
         scene.nodes.push(Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: Path::new(),
             fill: None,
