@@ -23,6 +23,7 @@ mod id;
 mod layer;
 mod lookup;
 mod master;
+mod mutate;
 mod name;
 mod page;
 mod raw;
@@ -46,6 +47,7 @@ pub use id::{MasterId, PageId, ShapeId, StyleId};
 pub use layer::Layer;
 pub use lookup::{CellLookup, Resolved, ValueSource};
 pub use master::Master;
+pub use mutate::{CellWrite, DetachedShapes};
 pub use name::{CellName, SectionName};
 pub use page::{Connect, Page};
 pub use raw::{
