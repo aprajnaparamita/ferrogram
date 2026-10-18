@@ -7,6 +7,7 @@
 //! Implemented ids (task P5-04):
 //!
 //! - `edit.delete` — detach the selection (one undo step per subtree);
+//! - `edit.select` — set the selection from Visio shape ids;
 //! - `edit.select_all`, `edit.deselect` — selection housekeeping.
 //!
 //! `edit.undo` and `edit.redo` stay in [`crate::builtins::view`]; the
@@ -518,6 +519,7 @@ impl Edit for GeometryEdit {
 /// The implemented `edit.*` commands (task P5-04).
 pub(crate) const TABLE: CommandTable = &[
     ("edit.delete", "Delete", has_selection, run_delete),
+    ("edit.select", "Select", has_pages, run_select),
     ("edit.select_all", "Select All", has_pages, run_select_all),
     ("edit.deselect", "Deselect", has_selection, run_deselect),
 ];
@@ -605,6 +607,101 @@ pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
         warnings,
         Box::new(edit),
     ))
+}
+
+/// `edit.select`: sets the selection from Visio shape ids on the active
+/// page.
+///
+/// Arguments: `shapes` is an [`ArgValue::List`](crate::ArgValue::List) of
+/// Visio `ID` strings (the form the control channel uses), and `mode` is
+/// `replace` (the default), `add` or `toggle`. An empty list with
+/// `replace` clears the selection.
+///
+/// Every id must name a shape on the active page: an unknown or malformed
+/// id fails the whole command and leaves the selection unchanged. The
+/// command is not an edit (ADR 0040 rule 3): it returns no undo step and
+/// does not bump `DocumentSession::changes`.
+pub(super) fn run_select(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
+    let mode = match inv.args.get("mode") {
+        None => "replace",
+        Some(crate::ArgValue::Text(text)) => text.as_str(),
+        Some(_) => {
+            return Err(CommandError::invalid_args(
+                "mode must be replace, add or toggle",
+            ));
+        }
+    };
+    if !matches!(mode, "replace" | "add" | "toggle") {
+        return Err(CommandError::invalid_args(
+            "mode must be replace, add or toggle",
+        ));
+    }
+    let requested = match inv.args.get("shapes") {
+        None => Vec::new(),
+        Some(crate::ArgValue::List(ids)) => ids.iter().map(String::as_str).collect::<Vec<_>>(),
+        Some(_) => {
+            return Err(CommandError::invalid_args(
+                "shapes must be a list of shape ids",
+            ));
+        }
+    };
+
+    let (page, resolved) = {
+        let session = ctx.active_document().ok_or_else(no_document)?;
+        let page = session
+            .active_page
+            .ok_or_else(|| CommandError::failed("no active page"))?;
+        let mut resolved: Vec<ShapeId> = Vec::new();
+        for text in requested {
+            let visio_id = text.trim().parse::<i32>().map_err(|_| {
+                CommandError::invalid_args(format!("shape id {text:?} is not an integer"))
+            })?;
+            let shape = session
+                .document
+                .shape_by_visio_id(page, visio_id)
+                .ok_or_else(|| {
+                    CommandError::invalid_args(format!(
+                        "unknown shape id {visio_id} on the active page"
+                    ))
+                })?;
+            if !resolved.contains(&shape) {
+                resolved.push(shape);
+            }
+        }
+        (page, resolved)
+    };
+
+    let mut shapes = match mode {
+        "replace" => Vec::new(),
+        _ => ctx.selection.shapes.clone(),
+    };
+    for shape in resolved {
+        match mode {
+            "add" => {
+                if !shapes.contains(&shape) {
+                    shapes.push(shape);
+                }
+            }
+            "toggle" => {
+                if let Some(index) = shapes.iter().position(|candidate| *candidate == shape) {
+                    shapes.remove(index);
+                } else {
+                    shapes.push(shape);
+                }
+            }
+            _ => shapes.push(shape),
+        }
+    }
+    let count = shapes.len();
+    let anchor = shapes.last().copied();
+    let empty = shapes.is_empty();
+    ctx.selection.shapes = shapes;
+    ctx.selection.anchor = anchor;
+    ctx.selection.page = if empty { None } else { Some(page) };
+    if empty {
+        ctx.selection.entered = None;
+    }
+    Ok(outcome(count_label("Selected", count), Vec::new()))
 }
 
 /// `edit.select_all`: selects every top-level shape of the active page,

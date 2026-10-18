@@ -4,9 +4,60 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
+use ferrogram_geom::{Point, SnapKind};
+use ferrogram_model::{CellName, CellValue, CellWrite, ShapeId, SheetRef, stencils};
 use ferrogram_render::OverlayMark;
+use ferrogram_ui::snap::{SnapSettings, Snapper};
 
 use crate::{CanvasRig, app_with_one_shape, screen, shape_number};
+
+/// A Basic Shapes rectangle instance resized to 3 x 2 in and pinned at
+/// (3, 3); its master's connection points must follow the new size.
+fn resized_master_instance() -> (AppCtx, ShapeId) {
+    let master = stencils::basic_shapes()
+        .masters
+        .into_iter()
+        .find(|master| master.name_u == "Rectangle")
+        .expect("the rectangle master");
+    let mut document = ferrogram_model::Document::new();
+    let shape = stencils::instantiate(&mut document, &master);
+    for (cell, value) in [
+        ("Width", 3.0),
+        ("Height", 2.0),
+        ("PinX", 3.0),
+        ("PinY", 3.0),
+    ] {
+        document
+            .write_cell(
+                SheetRef::Shape(shape),
+                &CellName::new(cell),
+                &CellWrite::new(format!("{value}"), CellValue::Number(value)),
+            )
+            .expect("resize the instance");
+    }
+    let mut app = AppCtx::new(Settings::default());
+    app.open_document(DocumentSession::new(document, None));
+    (app, shape)
+}
+
+#[test]
+fn a_resized_master_instance_snaps_to_its_scaled_connection_points() {
+    let (app, _shape) = resized_master_instance();
+    let snapper = Snapper::new(SnapSettings {
+        to_grid: false,
+        to_shapes: false,
+        to_connection_points: true,
+        ..SnapSettings::default()
+    });
+    // The instance's local (3, 1) point is page (4.5, 3.0) after the
+    // 3 x 2 resize and the pin at (3, 3).
+    let result = snapper
+        .snap_point(&app, Point::new(4.48, 2.98), 1.0, false)
+        .expect("no error");
+    assert_eq!(result.point, Point::new(4.5, 3.0));
+    assert_eq!(result.kind, Some(SnapKind::ConnectionPoint));
+}
 
 #[test]
 fn a_move_snaps_to_the_grid() {

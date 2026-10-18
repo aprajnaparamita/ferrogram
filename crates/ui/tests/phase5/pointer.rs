@@ -13,7 +13,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use egui_kittest::Harness;
 use ferrogram_commands::app::AppCtx;
 use ferrogram_commands::{
-    Command, CommandId, CommandMeta, CommandStatus, Enabled, Invocation, Outcome, Registry,
+    ArgValue, Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled, Invocation,
+    Outcome, Registry,
 };
 use ferrogram_ui::shell::Shell;
 use ferrogram_ui_spec::{LayoutSets, Loader, ShortcutScope};
@@ -40,6 +41,67 @@ fn a_click_selects_the_shape_under_the_pointer() {
         ferrogram_ui::panels::size_position_rows(&mut rig.app.borrow_mut()).expect("panel rows");
     assert_eq!(rows[0].label, "Width");
     assert_eq!(rows[0].numeric, Some(2.0));
+}
+
+/// An `edit.select` command that counts its runs, to prove the pointer
+/// reaches the registry (the real handler is covered in `commands`).
+struct CountingSelect(Arc<AtomicUsize>);
+
+impl Command for CountingSelect {
+    fn meta(&self) -> &CommandMeta {
+        use std::sync::OnceLock;
+        static META: OnceLock<CommandMeta> = OnceLock::new();
+        META.get_or_init(|| {
+            CommandMeta::new(
+                CommandId::parse("edit.select").expect("id"),
+                "Select",
+                CommandStatus::Implemented,
+            )
+        })
+    }
+    fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+        Enabled::yes()
+    }
+    fn execute(&self, ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        let ids = match inv.args.get("shapes") {
+            Some(ArgValue::List(ids)) => ids.clone(),
+            _ => Vec::new(),
+        };
+        let session = ctx
+            .active_document()
+            .ok_or_else(|| CommandError::failed("no document"))?;
+        let page = session
+            .active_page
+            .ok_or_else(|| CommandError::failed("no page"))?;
+        let mut shapes = Vec::new();
+        for id in ids {
+            let visio_id = id
+                .parse::<i32>()
+                .map_err(|_| CommandError::invalid_args("bad id"))?;
+            if let Some(shape) = session.document.shape_by_visio_id(page, visio_id) {
+                shapes.push(shape);
+            }
+        }
+        ctx.selection.anchor = shapes.last().copied();
+        ctx.selection.shapes = shapes;
+        ctx.selection.page = Some(page);
+        Ok(Outcome::message("selected"))
+    }
+}
+
+#[test]
+fn a_click_selection_goes_through_the_registry() {
+    let (app, id) = app_with_one_shape();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(CountingSelect(Arc::clone(&runs))))
+        .expect("register");
+    let mut rig = CanvasRig::with_registry(app, registry);
+    rig.click(screen(3.0, 3.0));
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "one edit.select dispatch");
+    assert_eq!(rig.app.borrow().selection.shapes, vec![id]);
 }
 
 #[test]

@@ -35,6 +35,7 @@ use ferrogram_model::{
 /// `builtins::shape`).
 const PHASE5_IDS: &[&str] = &[
     "edit.delete",
+    "edit.select",
     "edit.select_all",
     "edit.deselect",
     "shape.move",
@@ -55,6 +56,7 @@ const COVERED: &[(&str, &str)] = &[
         "edit.delete",
         "delete_is_one_undo_step_and_restores_the_shapes",
     ),
+    ("edit.select", "select_sets_the_selection_by_visio_id"),
     (
         "edit.select_all",
         "select_all_and_deselect_manage_the_selection",
@@ -165,6 +167,16 @@ fn args(pairs: &[(&str, f64)]) -> Args {
         args.set(*name, ArgValue::Number(*value));
     }
     args
+}
+
+/// An `edit.select` invocation: Visio ids as strings plus a mode.
+fn select_args(mode: &str, ids: &[&str]) -> Args {
+    Args::new()
+        .with(
+            "shapes",
+            ArgValue::List(ids.iter().map(|id| (*id).to_owned()).collect()),
+        )
+        .with("mode", ArgValue::Text(mode.to_owned()))
 }
 
 /// The cached number of one shape cell, straight from the model.
@@ -400,6 +412,135 @@ fn delete_is_one_undo_step_and_restores_the_shapes() {
     assert_eq!(document(&ctx), before);
     dispatch(&mut ctx, &registry, "edit.redo", Args::new()).expect("redo");
     assert_eq!(document(&ctx), after);
+}
+
+#[test]
+fn select_sets_the_selection_by_visio_id() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(3);
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &["1", "2"]),
+    )
+    .expect("replace");
+    assert_eq!(ctx.selection.shapes, vec![shapes[0], shapes[1]]);
+    assert_eq!(ctx.selection.anchor, Some(shapes[1]));
+    assert_eq!(ctx.selection.page, Some(page));
+
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("add", &["3", "1"]),
+    )
+    .expect("add");
+    assert_eq!(ctx.selection.shapes, shapes, "add keeps click order");
+
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("toggle", &["2"]),
+    )
+    .expect("toggle off");
+    assert_eq!(ctx.selection.shapes, vec![shapes[0], shapes[2]]);
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("toggle", &["2"]),
+    )
+    .expect("toggle on");
+    assert_eq!(ctx.selection.shapes, vec![shapes[0], shapes[2], shapes[1]]);
+
+    // Selection is not a document edit: no undo step, no change bump.
+    let session = ctx.active_document().expect("document");
+    assert!(session.undo.is_empty());
+    assert_eq!(changes(&ctx), 0);
+
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &[]),
+    )
+    .expect("clear");
+    assert!(ctx.selection.is_empty());
+    assert_eq!(ctx.selection.anchor, None);
+    assert_eq!(ctx.selection.page, None, "an empty selection has no page");
+    assert_eq!(changes(&ctx), 0);
+
+    // The default mode is replace, and a missing list is the empty list.
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        Args::new().with("shapes", ArgValue::List(vec!["3".to_owned()])),
+    )
+    .expect("default replace");
+    assert_eq!(ctx.selection.shapes, vec![shapes[2]]);
+    dispatch(&mut ctx, &registry, "edit.select", Args::new()).expect("missing list clears");
+    assert!(ctx.selection.is_empty());
+}
+
+#[test]
+fn select_rejects_bad_ids_without_changing_the_selection() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(3);
+    select(&mut ctx, page, &[shapes[0]]);
+    let before = ctx.selection.clone();
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &["2", "99"]),
+    )
+    .expect_err("unknown id");
+    match error {
+        CommandError::InvalidArgs { message } => {
+            assert_eq!(message, "unknown shape id 99 on the active page");
+        }
+        other => panic!("expected InvalidArgs, got {other:?}"),
+    }
+    assert_eq!(ctx.selection, before, "no partial change");
+
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &["not-a-number"]),
+    )
+    .expect_err("malformed id");
+    assert!(error.to_string().contains("is not an integer"), "{error}");
+    assert_eq!(ctx.selection, before);
+
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("sideways", &["1"]),
+    )
+    .expect_err("bad mode");
+    assert!(
+        error
+            .to_string()
+            .contains("mode must be replace, add or toggle"),
+        "{error}"
+    );
+    assert_eq!(ctx.selection, before);
+
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        Args::new().with("shapes", ArgValue::Text("1".to_owned())),
+    )
+    .expect_err("wrong kind");
+    assert!(
+        error.to_string().contains("shapes must be a list"),
+        "{error}"
+    );
+    assert_eq!(ctx.selection, before);
 }
 
 #[test]
