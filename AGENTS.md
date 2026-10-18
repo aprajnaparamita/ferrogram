@@ -113,7 +113,7 @@ Slow steps a worker adds to the hand-off gate:
 |---|---|
 | wasm | touches `crates/ui`, `apps/ferrogram-web`, `#[cfg(target_arch)]` code, or any `Cargo.toml` / `Cargo.lock` |
 | fuzz | touches a `crates/*/fuzz` directory, or changes the public API of a crate that has one (`ui-spec`, `vsdx`, `render`, `ui`) |
-| coverage | is a test or coverage task, or your task's acceptance criteria name a coverage number |
+| coverage | is a test or coverage task, adds interface stubs (give each stub a test of its "not implemented" contract), or your task's acceptance criteria name a coverage number |
 
 Skip only the untriggered steps: for example `cargo xtask gate --skip coverage,fuzz` runs wasm. If unsure, run the step. Name the steps you ran in the Result's gate summary. Use `cargo xtask gate --quick` while iterating.
 
