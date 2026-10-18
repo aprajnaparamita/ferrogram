@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::SettingsError;
 use crate::clipboard::Clipboard;
-use crate::undo::UndoStack;
+use crate::error::CommandError;
+use crate::undo::{Edit, UndoStack};
 
 /// How the UI formats lengths at the screen edge (AGENTS.md section 6:
 /// internal units stay inches; only presentation converts).
@@ -116,6 +117,13 @@ impl Default for ViewState {
 /// The selection is per application, not per document: the commands that
 /// switch document or page clear it. `shapes` is in click order and the
 /// last entry is the primary shape (the one the panels show).
+///
+/// `entered` is the group the user is "inside" (task P5-04, the
+/// `shape.enter_group` / `shape.exit_group` state of ADR 0041): while it
+/// is set, clicks and `edit.select_all` act on the group's members
+/// instead of mapping every hit to its top-level ancestor. It is ours,
+/// not a Visio field; the black-box check against Visio is on the
+/// screenshot-pass list.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Selection {
     /// The selected shapes of the active page, in click order.
@@ -124,6 +132,8 @@ pub struct Selection {
     pub anchor: Option<ferrogram_model::ShapeId>,
     /// The page the selection belongs to.
     pub page: Option<PageId>,
+    /// The group currently entered, or `None` at page level.
+    pub entered: Option<ferrogram_model::ShapeId>,
 }
 
 impl Selection {
@@ -151,12 +161,37 @@ impl Selection {
     pub fn primary(&self) -> Option<ferrogram_model::ShapeId> {
         self.anchor
     }
+
+    /// Re-derives [`Self::page`] from the selected shapes.
+    ///
+    /// `PageId` is a list position (task P5-02), so `Document::delete_page`
+    /// and `Document::move_page` renumber every later page and a stored
+    /// `PageId` goes stale. Every command that renumbers pages calls this
+    /// afterwards; the editing commands call it whenever they change the
+    /// selection. The anchor's page wins, then the first selected shape's.
+    pub fn refresh_page(&mut self, document: &ferrogram_model::Document) {
+        let derived = self
+            .anchor
+            .or_else(|| self.shapes.first().copied())
+            .and_then(|shape| document.page_of(shape));
+        if derived.is_some() {
+            self.page = derived;
+        }
+    }
+
+    /// Clears the selection (shapes, anchor and entered group).
+    pub fn clear(&mut self) {
+        self.shapes.clear();
+        self.anchor = None;
+        self.page = None;
+        self.entered = None;
+    }
 }
 
 /// The identity of one [`DocumentSession`] (P4-15).
 ///
 /// The key is assigned once per session and never reused within the
-/// process, so an [`Edit`](crate::Edit) whose `apply`/`revert` opens or
+/// process, so an [`Edit`] whose `apply`/`revert` opens or
 /// closes documents can still find the session it belongs to: the
 /// document index moves, the identity does not. The wrapped number is
 /// opaque; compare ids, do not order by them.
@@ -284,7 +319,7 @@ pub struct AppCtx {
     pub documents: Vec<DocumentSession>,
     /// Index of the active document in `documents`, if any.
     pub active: Option<usize>,
-    /// The selection (empty in Phase 4).
+    /// The selection of the active page (ADR 0041).
     pub selection: Selection,
     /// The user settings.
     pub settings: Settings,
@@ -292,6 +327,12 @@ pub struct AppCtx {
     pub warnings: Vec<String>,
     /// The internal clipboard (ADR 0047).
     pub clipboard: crate::clipboard::Clipboard,
+    /// The undo-recording gate (ADR 0040 rule 2): set while an
+    /// [`Edit`]'s `apply`/`revert` runs. While it is set,
+    /// [`AppCtx::push_edit`] drops the edit and warns instead of
+    /// recording it, so a nested edit can never corrupt the undo
+    /// cursor or vanish into the runner's placeholder stack.
+    undo_suspended: bool,
 }
 
 impl AppCtx {
@@ -307,6 +348,7 @@ impl AppCtx {
             settings,
             warnings: Vec::new(),
             clipboard: Clipboard::new(),
+            undo_suspended: false,
         }
     }
 
@@ -360,10 +402,74 @@ impl AppCtx {
     /// Bumps the active document's change counter (ADR 0040). Every
     /// document mutation path calls this after editing, including undo
     /// and redo.
+    ///
+    /// Rule (task P5-04): the editing `Edit`s call
+    /// [`AppCtx::touch_session`] with their own session, so every
+    /// `apply`/`revert` bumps the counter of the document it changed
+    /// (which may not be the active one). A command that mutates a
+    /// document through no `Edit` calls this directly. A view-only or
+    /// selection-only command never does.
     pub fn touch(&mut self) {
-        if let Some(session) = self.active_document_mut() {
-            session.changes = session.changes.wrapping_add(1);
+        if let Some(id) = self.active_document().map(|session| session.id) {
+            self.touch_session(id);
         }
+    }
+
+    /// Bumps the change counter of one session (ADR 0040).
+    ///
+    /// Returns whether the session still exists; a stale [`SessionId`]
+    /// is not an error (the session went away with its counter).
+    pub fn touch_session(&mut self, session: SessionId) -> bool {
+        if let Some(slot) = self.documents.iter_mut().find(|s| s.id == session) {
+            slot.changes = slot.changes.wrapping_add(1);
+            return true;
+        }
+        false
+    }
+
+    /// Records a completed edit on the undo stack of `session` (ADR 0040
+    /// rule 2): the **only** push path. The dispatcher of
+    /// [`Outcome::edit`](crate::Outcome::edit) calls it after `execute`
+    /// returns `Ok`.
+    ///
+    /// - While an [`Edit`]'s `apply`/`revert` runs (the recording gate,
+    ///   [`AppCtx::undo_recording_suspended`]) the edit is **dropped**
+    ///   and one warning line is recorded ("an edit tried to record
+    ///   during undo; step dropped"). The runner's zero-capacity
+    ///   placeholder stack is therefore inert: nothing can land on it.
+    /// - The session is found by [`SessionId`], never by index, so a
+    ///   command that opened or closed documents cannot land its edit on
+    ///   the wrong stack.
+    /// - A [`SessionId`] that no longer names a session is an error:
+    ///   there is no stack to record on.
+    pub fn push_edit(
+        &mut self,
+        session: SessionId,
+        edit: Box<dyn Edit>,
+    ) -> Result<(), CommandError> {
+        if self.undo_suspended {
+            self.record_warning("an edit tried to record during undo; step dropped");
+            return Ok(());
+        }
+        let Some(slot) = self.documents.iter_mut().find(|s| s.id == session) else {
+            return Err(CommandError::failed("no document session for the edit"));
+        };
+        slot.undo.push(edit);
+        Ok(())
+    }
+
+    /// Whether undo recording is suspended (the recording gate, ADR 0040).
+    pub fn undo_recording_suspended(&self) -> bool {
+        self.undo_suspended
+    }
+
+    /// Sets the recording gate and returns its previous value.
+    ///
+    /// The gate is a flag, not a counter: the outermost runner restores
+    /// the saved value, so nested `apply`/`revert` calls keep it closed
+    /// until the whole step is done (task P5-04).
+    pub(crate) fn set_undo_suspended(&mut self, value: bool) -> bool {
+        std::mem::replace(&mut self.undo_suspended, value)
     }
 
     /// Records a warning for the status bar (capped ring, ADR 0029).
@@ -559,5 +665,164 @@ mod tests {
         ctx.touch();
         ctx.touch();
         assert_eq!(ctx.active_document().map(|s| s.changes), Some(2));
+    }
+
+    /// An edit that records its label in the session's warnings.
+    struct LabelEdit(&'static str);
+
+    impl crate::undo::Edit for LabelEdit {
+        fn label(&self) -> &str {
+            self.0
+        }
+
+        fn apply(&mut self, _ctx: &mut AppCtx) -> Result<(), CommandError> {
+            Ok(())
+        }
+
+        fn revert(&mut self, _ctx: &mut AppCtx) -> Result<(), CommandError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn touch_session_names_the_session() {
+        let mut ctx = AppCtx::new(Settings::default());
+        assert!(!ctx.touch_session(SessionId(0)), "a stale session id");
+        let index = ctx.open_document(DocumentSession::new(Document::new(), None));
+        let id = ctx.documents.get(index).expect("session").id;
+        assert!(ctx.touch_session(id));
+        assert_eq!(ctx.active_document().map(|s| s.changes), Some(1));
+    }
+
+    /// ADR 0040 rule 2: `push_edit` is the only push path and finds the
+    /// session by identity, never by index.
+    #[test]
+    fn push_edit_lands_on_the_named_session() {
+        let mut ctx = AppCtx::new(Settings::default());
+        let first = ctx.open_document(DocumentSession::new(Document::new(), None));
+        let first_id = ctx.documents.get(first).expect("session").id;
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        let second_id = ctx.active_document().expect("session").id;
+
+        ctx.push_edit(first_id, Box::new(LabelEdit("one")))
+            .expect("push");
+        assert!(!ctx.undo_recording_suspended());
+        let first = ctx
+            .documents
+            .iter()
+            .find(|s| s.id == first_id)
+            .expect("first session");
+        assert!(first.undo.can_undo());
+        assert_eq!(first.undo.undo_labels(), vec!["one"]);
+        let second = ctx
+            .documents
+            .iter()
+            .find(|s| s.id == second_id)
+            .expect("second session");
+        assert!(second.undo.is_empty(), "the other session is untouched");
+
+        // A stale session has no stack to record on.
+        let error = ctx
+            .push_edit(SessionId(0), Box::new(LabelEdit("lost")))
+            .expect_err("no such session");
+        assert!(error.to_string().contains("no document session"), "{error}");
+        assert!(
+            !ctx.warnings.iter().any(|w| w.contains("lost")),
+            "an error is not a silent drop"
+        );
+    }
+
+    /// ADR 0040: an edit that records while undo runs is dropped with
+    /// exactly one warning.
+    #[test]
+    fn push_edit_drops_the_edit_while_recording_is_suspended() {
+        let mut ctx = AppCtx::new(Settings::default());
+        let index = ctx.open_document(DocumentSession::new(Document::new(), None));
+        let id = ctx.documents.get(index).expect("session").id;
+        assert!(!ctx.set_undo_suspended(true), "the gate was open before");
+        let result = ctx.push_edit(id, Box::new(LabelEdit("nested")));
+        assert!(result.is_ok(), "a dropped edit is not an error");
+        assert_eq!(ctx.warnings.len(), 1);
+        assert_eq!(
+            ctx.warnings.first().map(String::as_str),
+            Some("an edit tried to record during undo; step dropped")
+        );
+        assert!(
+            ctx.documents
+                .get(index)
+                .map(|s| s.undo.is_empty())
+                .unwrap_or(false),
+            "nothing landed on the stack"
+        );
+        assert!(ctx.undo_recording_suspended());
+        assert!(ctx.set_undo_suspended(false));
+        assert!(!ctx.undo_recording_suspended());
+    }
+
+    #[test]
+    fn selection_refresh_page_follows_the_shapes() {
+        let mut document = Document::new();
+        document
+            .pages
+            .push(ferrogram_model::Page::new(PageId { index: 0 }, 1));
+        document
+            .pages
+            .push(ferrogram_model::Page::new(PageId { index: 1 }, 2));
+        let shape = document.add_shape(ferrogram_model::Shape::new(
+            ferrogram_model::ShapeId { index: 0 },
+            1,
+        ));
+        document.pages[1].shapes.push(shape);
+        let mut selection = Selection::new();
+        selection.shapes = vec![shape];
+        selection.anchor = Some(shape);
+        assert_eq!(selection.page, None);
+        selection.refresh_page(&document);
+        assert_eq!(selection.page, Some(PageId { index: 1 }));
+
+        // A page delete renumbers the pages: the refresh follows the
+        // shape, not the recorded index (task P5-02 note).
+        document.delete_page(PageId { index: 0 }).expect("delete");
+        selection.refresh_page(&document);
+        assert_eq!(selection.page, Some(PageId { index: 0 }));
+
+        // An empty selection keeps its page (nothing derives a new one).
+        selection.shapes.clear();
+        selection.anchor = None;
+        selection.refresh_page(&document);
+        assert_eq!(selection.page, Some(PageId { index: 0 }));
+
+        selection.clear();
+        assert_eq!(selection, Selection::new());
+    }
+
+    /// The label edits the push tests hand out run like any other edit.
+    #[test]
+    fn label_edits_apply_and_revert() {
+        let mut ctx = AppCtx::new(Settings::default());
+        let mut edit = LabelEdit("x");
+        assert_eq!(crate::undo::Edit::label(&edit), "x");
+        assert!(edit.apply(&mut ctx).is_ok());
+        assert!(edit.revert(&mut ctx).is_ok());
+    }
+
+    /// The two `close_document` arms the earlier tests never took: no
+    /// active document at all, and a close *after* the active one.
+    #[test]
+    fn closing_with_no_active_document_or_after_it() {
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.active = None;
+        assert!(ctx.close_document(0).is_some());
+        assert_eq!(ctx.active, None);
+
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        ctx.active = Some(0);
+        assert!(ctx.close_document(2).is_some());
+        assert_eq!(ctx.active, Some(0), "the active document keeps its index");
     }
 }
