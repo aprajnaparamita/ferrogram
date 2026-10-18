@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group A: P5-02, P5-03)
+- Current phase: **5 in progress** (group B: P5-04, P5-15)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -14,8 +14,9 @@ Task board. Only the master agent edits this file, on `main`.
 |---|---|---|---|---|---|
 | [P5-01](tasks/P5-01.md) | architect | Phase 4 | — | merged (ADRs 0038–0049, stubs, task files) | agent/P5-01 |
 | [P5-02](tasks/P5-02.md) | implementer | P5-01 | A | merged (mutation API, connects, writer deletes and text) | agent/P5-02 |
-| [P5-03](tasks/P5-03.md) | implementer | P5-01 | A | ready | — |
+| [P5-03](tasks/P5-03.md) | implementer | P5-01 | A | merged (hit-testing, snapping, overlay; error variants fixed by the master) | agent/P5-03 |
 | [P5-04](tasks/P5-04.md) | implementer | P5-02 | B | ready (parallel-safe with P5-03) | — |
+| [P5-15](tasks/P5-15.md) | test-engineer | P5-02 | B | ready (model back to its 99.6% ratchet) | — |
 | [P5-05](tasks/P5-05.md) | implementer | P5-03, P5-04 | C | waiting | — |
 | [P5-06](tasks/P5-06.md) | implementer | P5-05 | D | waiting | — |
 | [P5-07](tasks/P5-07.md) | implementer | P5-05 | D | waiting | — |
@@ -195,3 +196,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P4-15 (open): the parity matrix has one row per Fluent control, so command-only ids (`app.office.center.options`, `app.quit`, `file.exit`, `view.units`) do not appear in `docs/parity/controls.md`; the master's P4-15 criterion asked for it by mistake. Phase 5: add a `| command | label | status |` table to the generator. `with_undo`'s placeholder stack is zero-capacity and visible to an `Edit` while it runs. The 4096-id global intern pool is still a test hazard (`intern_into` gives tests a private pool). `commands` dropped `serde-saphyr` and builds its stubs from `Loader::from_embedded()`; `DocumentSession::id` is the new session identity.
 - P4-16 (open): the context menus stay parked (`Ribbon::show_context_menu` / `set_context_menu` never called; the committed menus carry no controls). The canvas "inconsistent raster size" guard is unreachable through `render_raster`. The rfd `pick_file`/`save_file` calls and `open_dialog`'s configuration are desktop-only and untested (the rest sits behind `picked_path`/`save_picked`). `ShortcutMap::resolve` and `shortcuts::dispatch` return `Vec<Intent>`: a mismatching chord fires the held-back completion and then starts a new sequence (ADR 0036 sketch updated by the master). A programmatic outcome still updates the status line; dialogs, downloads, quit and confirm are interactive-only. Closes P4-03's intercepts and `Shell::show` items, the P4-10 mismatch item and P4-15 open issue 4 (edits land on the session the command ran against).
 - P5-02 (open): a new page with no shapes gets no contents part and no `Rel` (the P2-10 write-stability rule kept over ADR 0048's wording); check with Visio as a black box that such a file opens, and change the rule and `write_edge_cases.rs` together if it does not. `scale_geometry` drops cells the typed rows do not model (`NurbsTo` E, `PolylineTo` A, `Unknown` rows) and does not scale arc bows, elliptical ratios or spline knots, so non-uniform resizes distort them slightly (Phase 6 recalc replaces it). Master rows without `IX` are overridden by position. Group bounds use the shape frame, not the geometry. The writer still allocates relationship ids with `fresh_rel_id`, not `Package::next_relationship_id`. `model::mutate` is now `pub` (the glue constants).
+- P5-03 (open): `snap_axis` takes the nearest candidate with ties broken by order, with no ADR 0043 kind priority; check against Visio in the screenshot pass. Text selection bounds are the layout box, not the glyphs (revisit with text editing, P5-07). A rotated group's bounds overestimate slightly. `hit_test` ignores clips. The marquee rule and the 4 px / 8 px constants are our own. Master fix at merge: `geom::Error::InvalidArgument` and `render::Error::InvalidNode` replace the borrowed `WrongUnit` and `InvalidOptions`, and `geom` exports `FLATTEN_TOLERANCE`. Merge gate after P5-02: model coverage 97.7% < 99.6% ratchet (P5-02 skipped coverage under the new trigger rules). P5-15 restores it, and AGENTS.md now runs coverage for every code change.

@@ -113,9 +113,9 @@ Slow steps a worker adds to the hand-off gate:
 |---|---|
 | wasm | touches `crates/ui`, `apps/ferrogram-web`, `#[cfg(target_arch)]` code, or any `Cargo.toml` / `Cargo.lock` |
 | fuzz | touches a `crates/*/fuzz` directory, or changes the public API of a crate that has one (`ui-spec`, `vsdx`, `render`, `ui`) |
-| coverage | is a test or coverage task, adds interface stubs (give each stub a test of its "not implemented" contract), or your task's acceptance criteria name a coverage number |
+| coverage | changes any non-test code in a crate. The ratchets sit near 99%, so new untested code fails them. Give each interface stub a test of its "not implemented" contract. Skip coverage only for docs-only or test-only tasks |
 
-Skip only the untriggered steps: for example `cargo xtask gate --skip coverage,fuzz` runs wasm. If unsure, run the step. Name the steps you ran in the Result's gate summary. Use `cargo xtask gate --quick` while iterating.
+Skip only the untriggered steps: for example `cargo xtask gate --skip wasm,fuzz` runs coverage. If unsure, run the step. Name the steps you ran in the Result's gate summary. Use `cargo xtask gate --quick` while iterating.
 
 Coverage thresholds: geom, model, vsdx, vsd-binary, shapesheet, commands, ui-spec ≥ 85%; render, text ≥ 75%; control, ui, apps ≥ 50% (UI via egui_kittest). No crate may drop below its previous-phase number (`[ratchet]` in `coverage.toml`; only the master updates it).
 
