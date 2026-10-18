@@ -235,8 +235,9 @@ pub struct TextNode {
 pub struct Shape {
     /// The model shape this node was built from, when there is one (ADR
     /// 0041): hit-testing and selection map a node back to the model
-    /// through it. A node the builder synthesises (a shadow body) has
-    /// `None`.
+    /// through it. The builder records the id at the shape construction
+    /// site in `build.rs`; a node the builder synthesises (a shadow body)
+    /// has `None`.
     pub shape_id: Option<ferrogram_model::ShapeId>,
     /// The shape-local to parent transform (ADR 0020): relative to the
     /// enclosing [`Group`] node, or to the page for a top-level node.
