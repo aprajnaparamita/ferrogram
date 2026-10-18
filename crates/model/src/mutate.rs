@@ -339,7 +339,7 @@ fn unique_name_u(wanted: &str, taken: &[String]) -> String {
     }
     for n in 2..10_000u32 {
         let candidate = format!("{wanted} ({n})");
-        if !taken.iter().any(|name| *name == candidate) {
+        if !taken.contains(&candidate) {
             return candidate;
         }
     }
@@ -2449,7 +2449,7 @@ mod tests {
             doc.move_page(9, 0),
             Err(Error::UnknownPage(PageId { index: 9 }))
         );
-        assert_eq!(doc.page(second).is_some(), true);
+        assert!(doc.page(second).is_some());
     }
 
     #[test]

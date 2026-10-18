@@ -10,7 +10,7 @@ use ferrogram_model::{Connect, Document, Error, PageId, Shape, ShapeId};
 
 /// A document with one page and a connector with two endpoints glued to
 /// two targets.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn glued() -> (Document, PageId, ShapeId, ShapeId, ShapeId) {
     let mut doc = Document::new();
     let page = doc.add_page("Page-1").expect("page");
@@ -27,7 +27,7 @@ fn glued() -> (Document, PageId, ShapeId, ShapeId, ShapeId) {
 }
 
 /// One glue record from the connector's `BeginX` to the target's pin.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn begin(connector: ShapeId, doc: &Document, target: ShapeId) -> Connect {
     let mut connect = Connect::new();
     connect.from_sheet = doc.shape(connector).expect("connector").visio_id;
@@ -40,7 +40,7 @@ fn begin(connector: ShapeId, doc: &Document, target: ShapeId) -> Connect {
 }
 
 /// One glue record from the connector's `EndX` to the target's pin.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn end(connector: ShapeId, doc: &Document, target: ShapeId) -> Connect {
     let mut connect = Connect::new();
     connect.from_sheet = doc.shape(connector).expect("connector").visio_id;

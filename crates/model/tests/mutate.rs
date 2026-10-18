@@ -11,7 +11,7 @@ use ferrogram_model::{
 };
 
 /// A document with one page.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn document() -> (Document, PageId) {
     let mut doc = Document::new();
     let page = doc.add_page("Page-1").expect("page");
@@ -19,6 +19,7 @@ fn document() -> (Document, PageId) {
 }
 
 /// A rectangle shape with `Width`/`Height` transform cells.
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn box_shape(width: f64, height: f64) -> Shape {
     let mut shape = Shape::new(ShapeId { index: 0 }, 0);
     shape.sheet.cells = vec![
@@ -31,6 +32,7 @@ fn box_shape(width: f64, height: f64) -> Shape {
 }
 
 /// A cell with a cached number.
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn number_cell(name: &str, value: f64) -> Cell {
     let mut cell = Cell::new(CellName::new(name));
     cell.value = Some(CellValue::Number(value));
@@ -39,7 +41,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
 }
 
 /// The cached number of one of the shape's own cells.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn cell_number(doc: &Document, shape: ShapeId, name: &str) -> f64 {
     match doc
         .shape(shape)
@@ -56,7 +58,7 @@ fn cell_number(doc: &Document, shape: ShapeId, name: &str) -> f64 {
 }
 
 /// The first `Geometry` section of the shape's own sheet.
-#[allow(clippy::expect_used)] // test helper
+#[allow(clippy::expect_used, clippy::panic)] // test helper
 fn geometry(doc: &Document, shape: ShapeId) -> Section {
     doc.shape(shape)
         .expect("shape")

@@ -682,6 +682,43 @@ fn patch_sheet(
 // Shapes
 // ---------------------------------------------------------------------------
 
+/// Patches the `Text` element of a shape from the model's edited text
+/// (ADR 0019 write-back).
+///
+/// `Shape::text` is a typed copy of the `Text` element; the shape's
+/// preserved fragment holds the element the model rebuilt after a
+/// [`set_shape_text`](ferrogram_model::Document::set_shape_text) edit.
+/// When it differs from the tree's element, the tree takes it (keeping
+/// the tree's spelling of the element name); when it is identical (an
+/// unedited shape), nothing happens and the write is a no-op.
+fn patch_text(node: &mut XmlNode, shape: &Shape) {
+    let Some(edited) = shape
+        .preserved
+        .children
+        .iter()
+        .find(|child| child.name.local == "Text")
+    else {
+        return;
+    };
+    let existing = node.children.iter().position(
+        |child| matches!(child, XmlChild::Element(element) if element.name.local == "Text"),
+    );
+    match existing {
+        Some(index) => {
+            if let Some(XmlChild::Element(element)) = node.children.get_mut(index)
+                && element != edited
+            {
+                let mut replacement = edited.clone();
+                replacement.name = element.name.clone();
+                *element = replacement;
+            }
+        }
+        None => {
+            insert_child(&mut node.children, edited.clone(), sheet_rank, 3);
+        }
+    }
+}
+
 /// Patches one `Shape` element from a model shape, including its sub-shapes.
 ///
 /// The recursion is bounded by the nesting depth of the source tree.
@@ -698,6 +735,7 @@ pub(crate) fn patch_shape(node: &mut XmlNode, ctx: &Ctx, shape: &Shape, depth: u
     sync_opt_uint(node, "FillStyle", shape.fill_style);
     sync_opt_uint(node, "TextStyle", shape.text_style);
     patch_sheet(node, &ctx.style, &shape.sheet, &shape.preserved);
+    patch_text(node, shape);
     if depth >= crate::package::Limits::DEFAULT.max_xml_depth {
         return;
     }
