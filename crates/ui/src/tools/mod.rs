@@ -25,6 +25,7 @@ pub mod text;
 
 use ferrogram_commands::AppCtx;
 use ferrogram_geom::Point;
+use ferrogram_model::{PageId, ShapeId};
 use ferrogram_render::Overlay;
 
 use crate::{Intent, UiError};
@@ -105,6 +106,22 @@ pub enum ToolEvent {
     Cancel,
 }
 
+/// A selection change requested by a tool (ADR 0041).
+///
+/// Selection is not a document edit and P5-04's command set has no
+/// "select this shape" command, so the pointer tool reports the new
+/// selection here and the shell applies it (the tool itself stays
+/// read-only over `AppCtx`, ADR 0042).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SelectionUpdate {
+    /// The selected shapes, in click order.
+    pub shapes: Vec<ShapeId>,
+    /// The anchor shape (the panels' subject).
+    pub anchor: Option<ShapeId>,
+    /// The page the shapes are on.
+    pub page: Option<PageId>,
+}
+
 /// What one event produced (ADR 0042).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ToolEffect {
@@ -112,6 +129,8 @@ pub struct ToolEffect {
     pub intents: Vec<Intent>,
     /// The overlay marks to draw this frame (ADR 0042).
     pub overlay: Overlay,
+    /// The selection change this event asks the shell to apply.
+    pub selection: Option<SelectionUpdate>,
 }
 
 impl ToolEffect {
@@ -128,7 +147,7 @@ pub struct ToolMachine {
     pub tool: Tool,
     /// The opaque tool state (drag anchors, draw previews); only the
     /// owning tool module reads it.
-    pub(crate) state: Option<pointer::PointerState>,
+    pub(crate) state: pointer::PointerState,
 }
 
 impl ToolMachine {
@@ -143,15 +162,27 @@ impl ToolMachine {
     /// caller dispatches them (ADR 0028). Task P5-05 implements the
     /// pointer tool and dispatches to the other tool modules.
     pub fn handle(&mut self, event: ToolEvent, ctx: &AppCtx) -> Result<ToolEffect, UiError> {
-        let _ = (event, ctx);
-        Err(UiError::NotImplemented)
+        match self.tool {
+            Tool::Pointer => pointer::handle(self, &event, ctx),
+            Tool::Rectangle | Tool::Ellipse | Tool::Line => draw::handle(self, &event, ctx),
+            Tool::Connector => connector::handle(self, &event, ctx),
+            Tool::Text => text::handle(self, &event, ctx),
+        }
+    }
+
+    /// The selection overlay while the pointer tool is idle (the shell
+    /// calls it every frame; a drag keeps its preview from the last
+    /// event).
+    pub fn idle_overlay(&mut self, ctx: &AppCtx) -> Result<Option<Overlay>, UiError> {
+        match self.tool {
+            Tool::Pointer => pointer::idle_overlay(self, ctx),
+            _ => Ok(None),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    //! Stub contract (P5-01): every tool reports "not implemented" until
-    //! its task lands. Replace these with real tests when implementing.
     use super::*;
     use ferrogram_commands::Settings;
 
@@ -159,7 +190,7 @@ mod tests {
     type Anchor = fn(&ToolMachine) -> Option<Point>;
 
     #[test]
-    fn every_tool_is_a_not_implemented_stub() {
+    fn the_pointer_tool_is_implemented_and_the_others_stay_stubs() {
         let ctx = AppCtx::new(Settings::default());
         let event = ToolEvent::PointerDown {
             pos: Point::new(1.0, 2.0),
@@ -167,12 +198,12 @@ mod tests {
         };
         let mut machine = ToolMachine::new();
         assert_eq!(machine.tool, Tool::Pointer);
-        assert!(matches!(
-            machine.handle(event.clone(), &ctx),
-            Err(UiError::NotImplemented)
-        ));
-        let tools: [(Handler, Anchor); 5] = [
-            (pointer::handle, pointer::anchor),
+        // No document: the pointer reports an empty effect, not an error.
+        let effect = machine.handle(event.clone(), &ctx).expect("pointer");
+        assert!(effect.intents.is_empty());
+        assert!(effect.selection.is_none());
+
+        let tools: [(Handler, Anchor); 4] = [
             (draw::handle, draw::anchor),
             (connector::handle, connector::anchor),
             (stencil::handle, stencil::anchor),
@@ -187,5 +218,6 @@ mod tests {
         }
         assert_eq!(ToolEffect::new(), ToolEffect::default());
         assert_eq!(Modifiers::none(), Modifiers::default());
+        assert_eq!(SelectionUpdate::default(), SelectionUpdate::default());
     }
 }
