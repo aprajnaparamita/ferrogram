@@ -2295,9 +2295,11 @@ mod tests {
         row.row_type = Some("LineTo".to_owned());
         row.ix = Some(0);
         section.rows.push(row);
-        if let Some(entity) = doc.shape_mut(shape) {
-            entity.sheet.sections.push(section);
-        }
+        doc.shape_mut(shape)
+            .expect("shape")
+            .sheet
+            .sections
+            .push(section);
         doc.write_row_cell(
             SheetRef::Shape(shape),
             &SectionName::from_static("Geometry"),
@@ -2376,9 +2378,11 @@ mod tests {
         ];
         section.rows.push(move_row);
         section.rows.push(rel_row);
-        if let Some(entity) = doc.shape_mut(shape) {
-            entity.sheet.sections.push(section);
-        }
+        doc.shape_mut(shape)
+            .expect("shape")
+            .sheet
+            .sections
+            .push(section);
         doc.scale_geometry(shape, Size::new(1.0, 1.0), Size::new(2.0, 4.0))
             .expect("scale");
         let section = &doc.shape(shape).expect("s").sheet.sections[0];
@@ -2410,12 +2414,14 @@ mod tests {
         let (mut doc, page) = document();
         let second = doc.add_page("Page-2").expect("2");
         let third = doc.add_page("Page-3").expect("3");
-        if let Some(entity) = doc.pages.get_mut(third.index as usize) {
-            entity.background = Some(second);
-        }
-        if let Some(entity) = doc.pages.get_mut(page.index as usize) {
-            entity.background = Some(second);
-        }
+        doc.pages
+            .get_mut(third.index as usize)
+            .expect("third")
+            .background = Some(second);
+        doc.pages
+            .get_mut(page.index as usize)
+            .expect("first")
+            .background = Some(second);
         let removed = doc.delete_page(second).expect("delete");
         assert_eq!(removed.name_u, "Page-2");
         assert_eq!(doc.pages.len(), 2);
@@ -2434,9 +2440,10 @@ mod tests {
         let (mut doc, page) = document();
         let second = doc.add_page("Page-2").expect("2");
         let third = doc.add_page("Page-3").expect("3");
-        if let Some(entity) = doc.pages.get_mut(page.index as usize) {
-            entity.background = Some(third);
-        }
+        doc.pages
+            .get_mut(page.index as usize)
+            .expect("first")
+            .background = Some(third);
         doc.move_page(2, 0).expect("move");
         assert_eq!(doc.pages[0].id, PageId { index: 0 });
         assert_eq!(doc.pages[0].name_u, "Page-3");
@@ -2764,5 +2771,890 @@ mod tests {
             .map(|(n, _, _)| n)
             .collect();
         assert_eq!(widths, vec!["LocPinX", "TxtPinX", "TxtLocPinX", "TxtWidth"]);
+    }
+
+    /// The `(name, value, unit)` triple of one mapped row cell. A cell
+    /// with no number value is not part of the triples.
+    fn mapped(row: &Row) -> Vec<(&str, f64, Unit)> {
+        row.cells
+            .iter()
+            .filter_map(|cell| match &cell.value {
+                Some(CellValue::Number(value)) => Some((cell.name.as_str(), *value, cell.unit)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// One scaled-row expectation: the row, its `Row/@T` kind and the
+    /// mapped `(name, value, unit)` triples.
+    type RowCase = (
+        crate::geometry::GeometryRow,
+        &'static str,
+        Vec<(&'static str, f64, Unit)>,
+    );
+
+    #[test]
+    fn scaled_row_scales_coordinates_and_keeps_scalars() {
+        use crate::geometry::GeometryRow as G;
+        let inch = Unit::Inches;
+        let none = Unit::Unitsless;
+        let cases: Vec<RowCase> = vec![
+            (
+                G::MoveTo { x: 1.0, y: 2.0 },
+                "MoveTo",
+                vec![("X", 2.0, inch), ("Y", 6.0, inch)],
+            ),
+            (
+                G::LineTo { x: 3.0, y: 4.0 },
+                "LineTo",
+                vec![("X", 6.0, inch), ("Y", 12.0, inch)],
+            ),
+            (
+                G::ArcTo {
+                    x: 3.0,
+                    y: 4.0,
+                    bow: 5.0,
+                },
+                "ArcTo",
+                vec![("X", 6.0, inch), ("Y", 12.0, inch), ("A", 5.0, inch)],
+            ),
+            (
+                G::EllipticalArcTo {
+                    x: 3.0,
+                    y: 4.0,
+                    ctrl: Point::new(5.0, 6.0),
+                    angle: Angle::from_radians(0.5),
+                    ratio: 2.0,
+                },
+                "EllipticalArcTo",
+                vec![
+                    ("X", 6.0, inch),
+                    ("Y", 12.0, inch),
+                    ("A", 10.0, inch),
+                    ("B", 18.0, inch),
+                    ("C", 0.5, Unit::Radians),
+                    ("D", 2.0, none),
+                ],
+            ),
+            (
+                G::NurbsTo {
+                    x: 3.0,
+                    y: 4.0,
+                    second_last_knot: 5.0,
+                    last_weight: 6.0,
+                    first_knot: 7.0,
+                    first_weight: 8.0,
+                    data: None,
+                },
+                "NurbsTo",
+                vec![
+                    ("X", 6.0, inch),
+                    ("Y", 12.0, inch),
+                    ("A", 5.0, none),
+                    ("B", 6.0, none),
+                    ("C", 7.0, none),
+                    ("D", 8.0, none),
+                ],
+            ),
+            (
+                G::PolylineTo {
+                    x: 3.0,
+                    y: 4.0,
+                    data: None,
+                },
+                "PolylineTo",
+                vec![("X", 6.0, inch), ("Y", 12.0, inch)],
+            ),
+            (
+                G::SplineStart {
+                    x: 3.0,
+                    y: 4.0,
+                    second_knot: 5.0,
+                    first_knot: 6.0,
+                    last_knot: 7.0,
+                    degree: 3,
+                },
+                "SplineStart",
+                vec![
+                    ("X", 6.0, inch),
+                    ("Y", 12.0, inch),
+                    ("A", 5.0, none),
+                    ("B", 6.0, none),
+                    ("C", 7.0, none),
+                    ("D", 3.0, none),
+                ],
+            ),
+            (
+                G::SplineKnot {
+                    x: 3.0,
+                    y: 4.0,
+                    knot: 5.0,
+                },
+                "SplineKnot",
+                vec![("X", 6.0, inch), ("Y", 12.0, inch), ("A", 5.0, none)],
+            ),
+            (
+                G::Ellipse {
+                    center: Point::new(1.0, 2.0),
+                    a: Point::new(3.0, 4.0),
+                    b: Point::new(5.0, 6.0),
+                },
+                "Ellipse",
+                vec![
+                    ("X", 2.0, inch),
+                    ("Y", 6.0, inch),
+                    ("A", 6.0, inch),
+                    ("B", 12.0, inch),
+                    ("C", 10.0, inch),
+                    ("D", 18.0, inch),
+                ],
+            ),
+            (
+                G::InfiniteLine {
+                    p1: Point::new(1.0, 2.0),
+                    p2: Point::new(3.0, 4.0),
+                },
+                "InfiniteLine",
+                vec![
+                    ("X", 2.0, inch),
+                    ("Y", 6.0, inch),
+                    ("A", 6.0, inch),
+                    ("B", 12.0, inch),
+                ],
+            ),
+            (
+                G::RelMoveTo { x: 0.25, y: 0.5 },
+                "RelMoveTo",
+                vec![("X", 0.25, none), ("Y", 0.5, none)],
+            ),
+            (
+                G::RelLineTo { x: 0.25, y: 0.5 },
+                "RelLineTo",
+                vec![("X", 0.25, none), ("Y", 0.5, none)],
+            ),
+            (
+                G::RelQuadBezTo {
+                    x: 0.25,
+                    y: 0.5,
+                    ctrl: Point::new(0.75, 1.0),
+                },
+                "RelQuadBezTo",
+                vec![
+                    ("X", 0.25, none),
+                    ("Y", 0.5, none),
+                    ("A", 0.75, none),
+                    ("B", 1.0, none),
+                ],
+            ),
+            (
+                G::RelCubBezTo {
+                    x: 0.25,
+                    y: 0.5,
+                    ctrl1: Point::new(0.75, 1.0),
+                    ctrl2: Point::new(1.25, 1.5),
+                },
+                "RelCubBezTo",
+                vec![
+                    ("X", 0.25, none),
+                    ("Y", 0.5, none),
+                    ("A", 0.75, none),
+                    ("B", 1.0, none),
+                    ("C", 1.25, none),
+                    ("D", 1.5, none),
+                ],
+            ),
+            (
+                G::RelEllipticalArcTo {
+                    x: 0.25,
+                    y: 0.5,
+                    ctrl: Point::new(0.75, 1.0),
+                    angle: Angle::from_radians(0.5),
+                    ratio: 2.0,
+                },
+                "RelEllipticalArcTo",
+                vec![
+                    ("X", 0.25, none),
+                    ("Y", 0.5, none),
+                    ("A", 0.75, none),
+                    ("B", 1.0, none),
+                    ("C", 0.5, Unit::Radians),
+                    ("D", 2.0, none),
+                ],
+            ),
+        ];
+        for (row, kind, want) in cases {
+            let fresh = scaled_row(&row, 2.0, 3.0, 7);
+            assert_eq!(fresh.row_type.as_deref(), Some(kind), "{kind}");
+            assert_eq!(fresh.ix, Some(7), "{kind}");
+            assert_eq!(mapped(&fresh), want, "{kind}");
+        }
+    }
+
+    #[test]
+    fn scaled_row_keeps_the_type_of_an_unknown_row() {
+        use crate::geometry::GeometryRow as G;
+        let fresh = scaled_row(
+            &G::Unknown {
+                row_type: "SplineKnot".to_owned(),
+            },
+            2.0,
+            3.0,
+            7,
+        );
+        assert_eq!(fresh.row_type.as_deref(), Some("SplineKnot"));
+        assert_eq!(fresh.ix, Some(7));
+        assert!(fresh.cells.is_empty());
+        // A cell with no number value is dropped from the triples.
+        let mut odd = Row::new();
+        odd.cells.push({
+            let mut cell = Cell::new(CellName::new("X"));
+            cell.value = Some(CellValue::Str("not a number".to_owned()));
+            cell
+        });
+        assert!(mapped(&odd).is_empty());
+    }
+
+    #[test]
+    fn row_kind_spells_every_row_type() {
+        use crate::geometry::GeometryRow as G;
+        let point = Point::new(1.0, 2.0);
+        let angle = Angle::from_radians(0.0);
+        let rows = vec![
+            (G::MoveTo { x: 0.0, y: 0.0 }, "MoveTo"),
+            (G::LineTo { x: 0.0, y: 0.0 }, "LineTo"),
+            (
+                G::ArcTo {
+                    x: 0.0,
+                    y: 0.0,
+                    bow: 0.0,
+                },
+                "ArcTo",
+            ),
+            (
+                G::EllipticalArcTo {
+                    x: 0.0,
+                    y: 0.0,
+                    ctrl: point,
+                    angle,
+                    ratio: 1.0,
+                },
+                "EllipticalArcTo",
+            ),
+            (
+                G::NurbsTo {
+                    x: 0.0,
+                    y: 0.0,
+                    second_last_knot: 0.0,
+                    last_weight: 0.0,
+                    first_knot: 0.0,
+                    first_weight: 0.0,
+                    data: None,
+                },
+                "NurbsTo",
+            ),
+            (
+                G::PolylineTo {
+                    x: 0.0,
+                    y: 0.0,
+                    data: None,
+                },
+                "PolylineTo",
+            ),
+            (
+                G::SplineStart {
+                    x: 0.0,
+                    y: 0.0,
+                    second_knot: 0.0,
+                    first_knot: 0.0,
+                    last_knot: 0.0,
+                    degree: 3,
+                },
+                "SplineStart",
+            ),
+            (
+                G::SplineKnot {
+                    x: 0.0,
+                    y: 0.0,
+                    knot: 0.0,
+                },
+                "SplineKnot",
+            ),
+            (
+                G::Ellipse {
+                    center: point,
+                    a: point,
+                    b: point,
+                },
+                "Ellipse",
+            ),
+            (
+                G::InfiniteLine {
+                    p1: point,
+                    p2: point,
+                },
+                "InfiniteLine",
+            ),
+            (G::RelMoveTo { x: 0.0, y: 0.0 }, "RelMoveTo"),
+            (G::RelLineTo { x: 0.0, y: 0.0 }, "RelLineTo"),
+            (
+                G::RelQuadBezTo {
+                    x: 0.0,
+                    y: 0.0,
+                    ctrl: point,
+                },
+                "RelQuadBezTo",
+            ),
+            (
+                G::RelCubBezTo {
+                    x: 0.0,
+                    y: 0.0,
+                    ctrl1: point,
+                    ctrl2: point,
+                },
+                "RelCubBezTo",
+            ),
+            (
+                G::RelEllipticalArcTo {
+                    x: 0.0,
+                    y: 0.0,
+                    ctrl: point,
+                    angle,
+                    ratio: 1.0,
+                },
+                "RelEllipticalArcTo",
+            ),
+            (
+                G::Unknown {
+                    row_type: "Foo".to_owned(),
+                },
+                "",
+            ),
+        ];
+        for (row, kind) in rows {
+            assert_eq!(row_kind(&row), kind);
+        }
+    }
+
+    #[test]
+    fn text_element_writes_the_run_markers_with_the_template_name() {
+        let text = TextContent {
+            parts: vec![
+                TextPart::Text("a".to_owned()),
+                TextPart::CharRun { ix: 1 },
+                TextPart::ParaRun { ix: 2 },
+                TextPart::TabsRun { ix: 3 },
+                TextPart::Field { ix: 4 },
+                TextPart::Text("b".to_owned()),
+            ],
+        };
+        let template = QName {
+            prefix: Some("v".to_owned()),
+            uri: Some("urn:test".to_owned()),
+            local: "Text".to_owned(),
+        };
+        let node = text_element(&text, Some(&template));
+        assert_eq!(node.name.prefix.as_deref(), Some("v"));
+        assert_eq!(node.name.uri.as_deref(), Some("urn:test"));
+        assert_eq!(node.name.local, "Text");
+        assert!(!node.self_closing);
+        let mut markers = Vec::new();
+        let mut literals = Vec::new();
+        for child in &node.children {
+            if let XmlChild::Text(text) = child {
+                literals.push(text.clone());
+            }
+            if let XmlChild::Element(element) = child {
+                assert_eq!(element.name.prefix.as_deref(), Some("v"));
+                assert_eq!(element.name.uri.as_deref(), Some("urn:test"));
+                let ix = element
+                    .attributes
+                    .iter()
+                    .find(|attribute| attribute.name.local == "IX")
+                    .expect("IX attribute");
+                markers.push((element.name.local.clone(), ix.value.clone()));
+            }
+        }
+        assert_eq!(literals, vec!["a".to_owned(), "b".to_owned()]);
+        assert_eq!(
+            markers,
+            vec![
+                ("cp".to_owned(), "1".to_owned()),
+                ("pp".to_owned(), "2".to_owned()),
+                ("tp".to_owned(), "3".to_owned()),
+                ("fld".to_owned(), "4".to_owned()),
+            ]
+        );
+        // An empty text is a self-closing element with the plain local name.
+        let empty = text_element(&TextContent::new(), None);
+        assert!(empty.self_closing);
+        assert_eq!(empty.name, QName::local("Text"));
+    }
+
+    #[test]
+    fn unique_name_u_falls_back_when_the_range_is_full() {
+        let mut taken = vec!["Box".to_owned()];
+        for n in 2..10_000u32 {
+            taken.push(format!("Box ({n})"));
+        }
+        assert_eq!(unique_name_u("Box", &taken), "Box");
+    }
+
+    #[test]
+    fn insert_shape_links_the_children_and_rejects_a_stale_child() {
+        let (mut doc, page) = document();
+        let child = doc.add_shape(box_shape(1.0, 1.0));
+        let mut shape = box_shape(1.0, 1.0);
+        shape.children = vec![child];
+        let id = doc.insert_shape(page, shape, None).expect("insert");
+        assert_eq!(doc.shape(child).expect("child").parent, Some(id));
+        assert_eq!(doc.shape(id).expect("shape").children, vec![child]);
+        let mut bad = box_shape(1.0, 1.0);
+        bad.children = vec![ShapeId { index: 999 }];
+        assert_eq!(
+            doc.insert_shape(page, bad, None),
+            Err(Error::UnknownShape(ShapeId { index: 999 }))
+        );
+    }
+
+    #[test]
+    fn insert_subshape_links_children_and_keeps_a_detached_subtree_id_free() {
+        let (mut doc, page) = document();
+        let root = doc
+            .insert_shape(page, box_shape(1.0, 1.0), None)
+            .expect("root");
+        let grandchild = doc.add_shape(box_shape(1.0, 1.0));
+        let mut shape = box_shape(1.0, 1.0);
+        shape.children = vec![grandchild];
+        let id = doc
+            .insert_subshape(root, shape, Some(0))
+            .expect("insert subshape");
+        assert_eq!(doc.shape(id).expect("shape").parent, Some(root));
+        assert_eq!(doc.shape(grandchild).expect("grandchild").parent, Some(id));
+        assert_eq!(doc.shape(root).expect("root").children, vec![id]);
+        let mut bad = box_shape(1.0, 1.0);
+        bad.children = vec![ShapeId { index: 999 }];
+        assert_eq!(
+            doc.insert_subshape(root, bad, None),
+            Err(Error::UnknownShape(ShapeId { index: 999 }))
+        );
+        // A parent no page reaches gets no Visio `ID` for its child.
+        let detached = doc.detach_shape(root).expect("detach");
+        assert_eq!(detached.parent, None);
+        let under = doc
+            .insert_subshape(root, box_shape(1.0, 1.0), None)
+            .expect("under");
+        assert_eq!(doc.shape(under).expect("under").visio_id, 0);
+        assert_eq!(doc.shape(under).expect("under").parent, Some(root));
+    }
+
+    #[test]
+    fn page_and_master_lists_stop_at_the_cap() {
+        let mut doc = Document::new();
+        doc.pages = vec![Page::new(PageId { index: 0 }, 1); MAX_LIST];
+        assert_eq!(doc.add_page("P"), Err(Error::TooManyShapes));
+        doc.masters = vec![Master::new(MasterId { index: 0 }, 1); MAX_LIST];
+        assert_eq!(
+            doc.add_master(Master::new(MasterId { index: 0 }, 1)),
+            Err(Error::TooManyShapes)
+        );
+    }
+
+    #[test]
+    fn write_row_cell_needs_a_row_and_overwrites_an_existing_cell() {
+        let (mut doc, page) = document();
+        let mut shape = box_shape(1.0, 1.0);
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        let mut row = Row::new();
+        row.ix = Some(0);
+        row.cells.push(number_cell("X", 1.0));
+        section.rows.push(row);
+        shape.sheet.sections.push(section);
+        let id = doc.insert_shape(page, shape, None).expect("shape");
+        let sheet = SheetRef::Shape(id);
+        let section_name = SectionName::from_static("Geometry");
+        // Neither a position nor an `IX` names no row at all.
+        assert_eq!(
+            doc.write_row_cell(
+                sheet,
+                &section_name,
+                RowTarget {
+                    position: None,
+                    ix: None
+                },
+                &CellName::new("X"),
+                &CellWrite::new("2", CellValue::Number(2.0)),
+            ),
+            Err(Error::BadCell("no such row"))
+        );
+        // An existing cell is overwritten in place, not added twice.
+        doc.write_row_cell(
+            sheet,
+            &section_name,
+            RowTarget::at(0),
+            &CellName::new("X"),
+            &CellWrite::new("2", CellValue::Number(2.0)),
+        )
+        .expect("write");
+        doc.write_row_cell(
+            sheet,
+            &section_name,
+            RowTarget {
+                position: None,
+                ix: Some(0),
+            },
+            &CellName::new("X"),
+            &CellWrite::new("3", CellValue::Number(3.0)),
+        )
+        .expect("write by ix");
+        let rows = &doc
+            .shape(id)
+            .expect("shape")
+            .sheet
+            .sections
+            .first()
+            .expect("section")
+            .rows;
+        assert_eq!(rows.len(), 1);
+        let cells = &rows[0].cells;
+        assert_eq!(cells.len(), 1);
+        assert_eq!(cells[0].formula.as_deref(), Some("3"));
+        assert_eq!(cells[0].value, Some(CellValue::Number(3.0)));
+    }
+
+    #[test]
+    fn write_row_cell_targets_a_page_sheet() {
+        let (mut doc, page) = document();
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        let mut row = Row::new();
+        row.ix = Some(0);
+        row.cells.push(number_cell("X", 1.0));
+        section.rows.push(row);
+        doc.pages
+            .get_mut(page.index as usize)
+            .expect("page")
+            .sheet
+            .sections
+            .push(section);
+        let write = CellWrite::new("2", CellValue::Number(2.0));
+        doc.write_row_cell(
+            SheetRef::Page(page),
+            &SectionName::from_static("Geometry"),
+            RowTarget::at(0),
+            &CellName::new("X"),
+            &write,
+        )
+        .expect("write");
+        let cells = &doc
+            .page(page)
+            .expect("page")
+            .sheet
+            .sections
+            .first()
+            .expect("section")
+            .rows[0]
+            .cells;
+        assert_eq!(cells.len(), 1);
+        assert_eq!(cells[0].formula.as_deref(), Some("2"));
+        // A stale page id is an error, not a panic.
+        assert_eq!(
+            doc.write_row_cell(
+                SheetRef::Page(PageId { index: 9 }),
+                &SectionName::from_static("Geometry"),
+                RowTarget::at(0),
+                &CellName::new("X"),
+                &write,
+            ),
+            Err(Error::UnknownPage(PageId { index: 9 }))
+        );
+    }
+
+    #[test]
+    fn replace_geometry_sections_drops_the_extra_geometry_only() {
+        let geometry = |name: &str| {
+            let mut section = Section::new(SectionName::new(name));
+            let mut row = Row::new();
+            row.row_type = Some("MoveTo".to_owned());
+            section.rows.push(row);
+            section
+        };
+        let mut other = Section::new(SectionName::from_static("Character"));
+        other.cells.push(number_cell("Size", 1.0));
+        let mut sections = vec![geometry("Geometry"), geometry("Geometry"), other];
+        let mut fresh = Section::new(SectionName::from_static("Geometry"));
+        fresh.rows.push({
+            let mut row = Row::new();
+            row.row_type = Some("LineTo".to_owned());
+            row
+        });
+        replace_geometry_sections(&mut sections, vec![fresh]);
+        let names: Vec<&str> = sections
+            .iter()
+            .map(|section| section.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["Geometry", "Character"]);
+        assert_eq!(sections[0].rows.len(), 1);
+        assert_eq!(sections[0].rows[0].row_type.as_deref(), Some("LineTo"));
+        assert_eq!(sections[1].cells.len(), 1);
+    }
+
+    #[test]
+    fn walk_position_reports_a_stale_page_a_stale_shape_and_a_repeat() {
+        let (mut doc, page) = document();
+        let root = doc
+            .insert_shape(page, box_shape(1.0, 1.0), None)
+            .expect("root");
+        let child = doc
+            .insert_subshape(root, box_shape(1.0, 1.0), None)
+            .expect("child");
+        assert_eq!(doc.walk_position(page, root), 0);
+        assert_eq!(doc.walk_position(page, child), 1);
+        assert_eq!(doc.walk_position(PageId { index: 9 }, root), usize::MAX);
+        // A child listed twice is walked once, and a `children` entry the
+        // arena does not hold keeps its place in the draw order.
+        doc.shape_mut(root).expect("root").children.push(child);
+        doc.shape_mut(root)
+            .expect("root")
+            .children
+            .push(ShapeId { index: 999 });
+        assert_eq!(doc.walk_position(page, child), 1);
+        assert_eq!(doc.walk_position(page, ShapeId { index: 999 }), 2);
+        // A shape the tree does not reach ends the walk at `usize::MAX`.
+        assert_eq!(doc.walk_position(page, ShapeId { index: 998 }), usize::MAX);
+    }
+
+    #[test]
+    fn unlist_tolerates_a_stale_owner() {
+        let (mut doc, page) = document();
+        let root = doc
+            .insert_shape(page, box_shape(1.0, 1.0), None)
+            .expect("root");
+        let orphan = doc.add_shape(box_shape(1.0, 1.0));
+        doc.shape_mut(orphan).expect("orphan").parent = Some(ShapeId { index: 999 });
+        doc.unlist(orphan);
+        assert_eq!(doc.page(page).expect("page").shapes, vec![root]);
+    }
+
+    #[test]
+    fn frame_of_rejects_a_stale_shape() {
+        let (doc, _page) = document();
+        assert!(matches!(
+            doc.frame_of(ShapeId { index: 999 }),
+            Err(Error::UnknownShape(id)) if id.index == 999
+        ));
+    }
+
+    #[test]
+    fn subtree_ids_skip_a_stale_child_and_stop_at_the_walk_cap() {
+        let (mut doc, page) = document();
+        let root = doc
+            .insert_shape(page, box_shape(1.0, 1.0), None)
+            .expect("root");
+        let child = doc
+            .insert_subshape(root, box_shape(1.0, 1.0), None)
+            .expect("child");
+        // The same child listed twice is walked once and a `children`
+        // list naming a shape the arena does not hold is walked past.
+        doc.shape_mut(root).expect("root").children.push(child);
+        doc.shape_mut(root)
+            .expect("root")
+            .children
+            .push(ShapeId { index: 999 });
+        assert_eq!(
+            doc.subtree_ids(root),
+            vec![root, child, ShapeId { index: 999 }]
+        );
+
+        // A subtree wider than the walk cap is cut at the cap.
+        let mut wide = Document::new();
+        let root = ShapeId { index: 0 };
+        let mut top = box_shape(1.0, 1.0);
+        top.children = (1..=MAX_WALK as u32)
+            .map(|index| ShapeId { index })
+            .collect();
+        wide.add_shape(top);
+        for index in 1..=MAX_WALK as u32 {
+            let mut shape = box_shape(1.0, 1.0);
+            shape.id = ShapeId { index };
+            wide.shapes.push(shape);
+        }
+        let ids = wide.subtree_ids(root);
+        assert_eq!(ids.len(), MAX_WALK + 1);
+        assert_eq!(ids.first(), Some(&root));
+    }
+
+    #[test]
+    fn is_descendant_stops_at_the_walk_cap() {
+        let mut doc = Document::new();
+        for index in 0..=(MAX_WALK as u32 + 1) {
+            let mut shape = box_shape(1.0, 1.0);
+            shape.id = ShapeId { index };
+            shape.parent = index.checked_sub(1).map(|parent| ShapeId { index: parent });
+            doc.shapes.push(shape);
+        }
+        // The chain is deeper than the walk cap: the answer is "no".
+        assert!(!doc.is_descendant(
+            ShapeId {
+                index: MAX_WALK as u32 + 1
+            },
+            ShapeId { index: 0 }
+        ));
+        // The direct parent link is still found.
+        assert!(doc.is_descendant(ShapeId { index: 1 }, ShapeId { index: 0 }));
+    }
+
+    #[test]
+    fn materialised_geometry_skips_a_stale_chain_rung() {
+        let (mut doc, page) = document();
+        // The inner master's content carries the rows the walk must fall
+        // back to.
+        let mut inner = box_shape(1.0, 1.0);
+        inner.sheet.sections.push(geometry_row("MoveTo", 5.0, 7.0));
+        let inner = doc.add_shape(inner);
+        let mut inner_master = Master::new(MasterId { index: 1 }, 2);
+        inner_master.shapes = vec![inner];
+        let inner_master = doc.add_master(inner_master).expect("inner master");
+        // The outer master's content continues the chain through its own
+        // `Master` link.
+        let mut outer = box_shape(1.0, 1.0);
+        outer.sheet.sections.push(geometry_row("MoveTo", 2.0, 4.0));
+        outer.master = Some(inner_master);
+        let outer = doc.add_shape(outer);
+        let mut outer_master = Master::new(MasterId { index: 0 }, 1);
+        outer_master.shapes = vec![outer];
+        let outer_master = doc.add_master(outer_master).expect("outer master");
+        let mut instance = box_shape(1.0, 1.0);
+        instance.master = Some(outer_master);
+        let instance = doc.insert_shape(page, instance, None).expect("instance");
+        // A hand-built arena entry whose `id` field no longer matches its
+        // slot: the chain records the stale id and both walks skip it.
+        doc.shapes[outer.index as usize].id = ShapeId { index: 999 };
+        let sections = doc
+            .materialised_geometry(instance, 2.0, 3.0)
+            .expect("materialised");
+        assert_eq!(sections.len(), 1);
+        // The rows still come from the merged geometry, scaled per axis.
+        let before = doc.shape_geometry(instance).expect("geometry");
+        assert_eq!(sections[0].rows, scaled_rows(&before, 2.0, 3.0));
+    }
+
+    #[test]
+    fn materialised_geometry_ignores_a_rung_that_carries_no_rows() {
+        let (mut doc, page) = document();
+        let mut inner = box_shape(1.0, 1.0);
+        inner.sheet.sections.push(geometry_row("MoveTo", 5.0, 7.0));
+        let inner = doc.add_shape(inner);
+        let mut inner_master = Master::new(MasterId { index: 1 }, 2);
+        inner_master.shapes = vec![inner];
+        let inner_master = doc.add_master(inner_master).expect("inner master");
+        // The outer rung has a `Geometry` section but no rows.
+        let mut outer = box_shape(1.0, 1.0);
+        outer
+            .sheet
+            .sections
+            .push(Section::new(SectionName::from_static("Geometry")));
+        outer.master = Some(inner_master);
+        let outer = doc.add_shape(outer);
+        let mut outer_master = Master::new(MasterId { index: 0 }, 1);
+        outer_master.shapes = vec![outer];
+        let outer_master = doc.add_master(outer_master).expect("outer master");
+        let mut instance = box_shape(1.0, 1.0);
+        instance.master = Some(outer_master);
+        let instance = doc.insert_shape(page, instance, None).expect("instance");
+        // The identity walk passes the row-less rung and takes the inner
+        // master's section.
+        let sections = doc
+            .materialised_geometry(instance, 2.0, 3.0)
+            .expect("materialised");
+        assert_eq!(sections.len(), 1);
+        let before = doc.shape_geometry(instance).expect("geometry");
+        assert_eq!(sections[0].rows, scaled_rows(&before, 2.0, 3.0));
+
+        // A single row-less rung leaves nothing to materialise.
+        let mut lonely = box_shape(1.0, 1.0);
+        lonely
+            .sheet
+            .sections
+            .push(Section::new(SectionName::from_static("Geometry")));
+        let lonely = doc.add_shape(lonely);
+        let mut lonely_master = Master::new(MasterId { index: 2 }, 3);
+        lonely_master.shapes = vec![lonely];
+        let lonely_master = doc.add_master(lonely_master).expect("lonely master");
+        let mut instance = box_shape(1.0, 1.0);
+        instance.master = Some(lonely_master);
+        let instance = doc.insert_shape(page, instance, None).expect("instance");
+        assert!(
+            doc.materialised_geometry(instance, 2.0, 3.0)
+                .expect("materialised")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn materialised_geometry_ignores_a_rung_without_the_section() {
+        let (mut doc, page) = document();
+        // The master's content has no `Geometry` section at all.
+        let content = doc.add_shape(box_shape(1.0, 1.0));
+        let mut master = Master::new(MasterId { index: 0 }, 1);
+        master.shapes = vec![content];
+        let master = doc.add_master(master).expect("master");
+        let mut instance = box_shape(1.0, 1.0);
+        instance.master = Some(master);
+        instance
+            .sheet
+            .sections
+            .push(geometry_row("MoveTo", 2.0, 4.0));
+        let instance = doc.insert_shape(page, instance, None).expect("instance");
+        let sections = doc
+            .materialised_geometry(instance, 2.0, 3.0)
+            .expect("materialised");
+        assert_eq!(sections.len(), 1);
+        let before = doc.shape_geometry(instance).expect("geometry");
+        assert_eq!(sections[0].rows, scaled_rows(&before, 2.0, 3.0));
+    }
+
+    #[test]
+    fn materialised_geometry_rejects_a_stale_shape() {
+        let (doc, _page) = document();
+        assert!(matches!(
+            doc.materialised_geometry(ShapeId { index: 999 }, 1.0, 1.0),
+            Err(Error::UnknownShape(id)) if id.index == 999
+        ));
+    }
+
+    #[test]
+    fn section_ix_of_ignores_a_malformed_ix() {
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        section.preserved.attributes.push(XmlAttribute {
+            name: QName::local("IX"),
+            value: "not a number".to_owned(),
+        });
+        assert_eq!(section_ix_of(&section), None);
+        section.preserved.attributes[0].value = "3".to_owned();
+        assert_eq!(section_ix_of(&section), Some(3));
+    }
+
+    /// The rows [`scaled_row`] produces for the merged geometry's first
+    /// path: the documented result of the materialisation.
+    fn scaled_rows(geometry: &crate::geometry::ShapeGeometry, sx: f64, sy: f64) -> Vec<Row> {
+        geometry.paths[0]
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(position, row)| scaled_row(row, sx, sy, position as i32))
+            .collect()
+    }
+
+    /// A `Geometry` section with one `MoveTo` row at (`x`, `y`).
+    fn geometry_row(kind: &str, x: f64, y: f64) -> Section {
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        let mut row = Row::new();
+        row.row_type = Some(kind.to_owned());
+        row.ix = Some(0);
+        row.cells = vec![
+            row_number_cell("X", x, Unit::Inches),
+            row_number_cell("Y", y, Unit::Inches),
+        ];
+        section.rows.push(row);
+        section
     }
 }
