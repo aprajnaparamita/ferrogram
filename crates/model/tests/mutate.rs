@@ -6,8 +6,8 @@ use ferrogram_geom::{Point, Size, Unit};
 use ferrogram_model::mutate::{CellWrite, DetachedShapes};
 use ferrogram_model::stencils;
 use ferrogram_model::{
-    Cell, CellName, CellValue, Document, Error, GeometryRow, Master, MasterId, PageId, Row,
-    Section, SectionName, Shape, ShapeId, SheetRef, TextContent,
+    Cell, CellName, CellValue, Connect, Document, Error, GeometryRow, Master, MasterId, PageId,
+    Row, RowTarget, Section, SectionName, Shape, ShapeId, SheetRef, TextContent,
 };
 
 /// A document with one page.
@@ -501,4 +501,650 @@ fn set_shape_text_survives_a_detach_and_restore() {
     let detached = doc.detach_shape(shape).expect("detach");
     let restored = doc.restore_shapes(detached).expect("restore");
     assert_eq!(doc.shape(restored).expect("s").text, Some(text));
+}
+
+// ---------------------------------------------------------------------------
+// Error arms and edge cases (ADR 0039, task P5-15)
+// ---------------------------------------------------------------------------
+
+/// A shape with explicit transform cells, so a test can build the frames
+/// the bounding-box and write rules are checked against.
+#[allow(clippy::expect_used, clippy::panic)] // test helper
+fn framed_shape(
+    pinx: f64,
+    piny: f64,
+    locpinx: f64,
+    locpiny: f64,
+    angle: f64,
+    width: f64,
+    height: f64,
+) -> Shape {
+    let mut shape = Shape::new(ShapeId { index: 0 }, 0);
+    shape.sheet.cells = vec![
+        number_cell("Width", width),
+        number_cell("Height", height),
+        number_cell("PinX", pinx),
+        number_cell("PinY", piny),
+        number_cell("LocPinX", locpinx),
+        number_cell("LocPinY", locpiny),
+        number_cell("Angle", angle),
+        number_cell("FlipX", 0.0),
+        number_cell("FlipY", 0.0),
+    ];
+    shape
+}
+
+/// A `Geometry` section with one `MoveTo` row.
+#[allow(clippy::expect_used, clippy::panic)] // test helper
+fn move_to_section(x: f64, y: f64) -> Section {
+    let mut section = Section::new(SectionName::from_static("Geometry"));
+    let mut row = Row::new();
+    row.row_type = Some("MoveTo".to_owned());
+    row.ix = Some(0);
+    row.cells = vec![
+        Cell {
+            name: CellName::new("X"),
+            formula: Some(x.to_string()),
+            value: Some(CellValue::Number(x)),
+            unit: Unit::Inches,
+            preserved: Default::default(),
+        },
+        Cell {
+            name: CellName::new("Y"),
+            formula: Some(y.to_string()),
+            value: Some(CellValue::Number(y)),
+            unit: Unit::Inches,
+            preserved: Default::default(),
+        },
+    ];
+    section.rows.push(row);
+    section
+}
+
+#[test]
+fn restore_rejects_a_page_that_is_gone() {
+    let (mut doc, page) = document();
+    let root = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("r");
+    let mut detached = doc.detach_shape(root).expect("detach");
+    detached.page = PageId { index: 9 };
+    assert_eq!(
+        doc.restore_shapes(detached),
+        Err(Error::UnknownPage(PageId { index: 9 }))
+    );
+}
+
+#[test]
+fn reparent_rejects_a_stale_owner_and_a_cross_page_move() {
+    let (mut doc, page) = document();
+    let shape = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("s");
+    let stale = ShapeId { index: 999 };
+    assert_eq!(
+        doc.reparent_shape(shape, Some(stale), 0),
+        Err(Error::UnknownShape(stale))
+    );
+    let other = doc.add_page("Page-2").expect("p2");
+    let owner = doc
+        .insert_shape(other, box_shape(1.0, 1.0), None)
+        .expect("owner");
+    assert_eq!(
+        doc.reparent_shape(shape, Some(owner), 0),
+        Err(Error::NotOnPage(owner, page))
+    );
+    // The shape is untouched by both refusals.
+    assert_eq!(doc.shape(shape).expect("s").parent, None);
+    assert_eq!(doc.page(page).expect("page").shapes, vec![shape]);
+}
+
+#[test]
+fn write_cell_writes_a_page_sheet() {
+    let (mut doc, page) = document();
+    doc.write_cell(
+        SheetRef::Page(page),
+        &CellName::new("PageWidth"),
+        &CellWrite::new("11", CellValue::Number(11.0)),
+    )
+    .expect("write");
+    let cells = &doc.page(page).expect("page").sheet.cells;
+    let cell = cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "PageWidth")
+        .expect("PageWidth");
+    assert_eq!(cell.formula.as_deref(), Some("11"));
+    assert_eq!(cell.value, Some(CellValue::Number(11.0)));
+    assert_eq!(cell.unit, Unit::Inches);
+    // A stale page id is an error, not a panic.
+    assert_eq!(
+        doc.write_cell(
+            SheetRef::Page(PageId { index: 9 }),
+            &CellName::new("PageWidth"),
+            &CellWrite::new("11", CellValue::Number(11.0)),
+        ),
+        Err(Error::UnknownPage(PageId { index: 9 }))
+    );
+}
+
+#[test]
+fn scale_geometry_rejects_a_stale_shape() {
+    let (mut doc, _page) = document();
+    let stale = ShapeId { index: 999 };
+    assert_eq!(
+        doc.scale_geometry(stale, Size::new(1.0, 1.0), Size::new(2.0, 2.0)),
+        Err(Error::UnknownShape(stale))
+    );
+}
+
+#[test]
+fn delete_page_follows_the_background_references() {
+    let mut doc = Document::new();
+    let first = doc.add_page("A").expect("a");
+    let second = doc.add_page("B").expect("b");
+    let third = doc.add_page("C").expect("c");
+    // B draws on A; C draws on B.
+    doc.pages[1].background = Some(first);
+    doc.pages[2].background = Some(second);
+    assert_eq!(doc.pages[2].id, third);
+    let removed = doc.delete_page(first).expect("delete");
+    assert_eq!(removed.name, "A");
+    // B's background named the deleted page: it is cleared. Page ids are
+    // list positions, so the survivors are renumbered.
+    assert_eq!(doc.pages[0].name, "B");
+    assert_eq!(doc.pages[0].id, PageId { index: 0 });
+    assert_eq!(doc.pages[0].background, None);
+    // C's background follows its page down one position.
+    assert_eq!(doc.pages[1].name, "C");
+    assert_eq!(doc.pages[1].id, PageId { index: 1 });
+    assert_eq!(doc.pages[1].background, Some(PageId { index: 0 }));
+}
+
+#[test]
+fn move_page_at_the_same_index_is_a_no_op() {
+    let mut doc = Document::new();
+    let first = doc.add_page("A").expect("a");
+    let second = doc.add_page("B").expect("b");
+    doc.pages[1].background = Some(first);
+    doc.move_page(1, 1).expect("move");
+    assert_eq!(
+        doc.pages
+            .iter()
+            .map(|page| page.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["A", "B"]
+    );
+    assert_eq!(doc.pages[1].id, second);
+    assert_eq!(doc.pages[1].background, Some(first));
+}
+
+#[test]
+fn instantiate_master_rejects_a_stale_master_or_page_and_a_bad_size() {
+    let (mut doc, page) = document();
+    let content = doc.add_shape(box_shape(2.0, 4.0));
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name_u = "Box".to_owned();
+    master.shapes = vec![content];
+    let master = doc.add_master(master).expect("master");
+    assert_eq!(
+        doc.instantiate_master(MasterId { index: 5 }, page, Point::new(0.0, 0.0), None),
+        Err(Error::UnknownMaster(MasterId { index: 5 }))
+    );
+    assert_eq!(
+        doc.instantiate_master(master, PageId { index: 9 }, Point::new(0.0, 0.0), None),
+        Err(Error::UnknownPage(PageId { index: 9 }))
+    );
+    assert_eq!(
+        doc.instantiate_master(
+            master,
+            page,
+            Point::new(0.0, 0.0),
+            Some(Size::new(-1.0, 1.0))
+        ),
+        Err(Error::BadCell("negative or non-finite size"))
+    );
+}
+
+#[test]
+fn group_shapes_rejects_a_stale_member() {
+    let (mut doc, page) = document();
+    let shape = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("s");
+    let stale = ShapeId { index: 999 };
+    assert_eq!(
+        doc.group_shapes(page, &[shape, stale]),
+        Err(Error::UnknownShape(stale))
+    );
+}
+
+#[test]
+fn group_shapes_rejects_a_non_finite_bounding_box() {
+    let (mut doc, page) = document();
+    // The corners leave the finite plane: `LocPinX` is subtracted first.
+    let shape = doc
+        .insert_shape(
+            page,
+            framed_shape(1.0e308, 0.0, -1.0e308, 0.5, 0.0, 1.0, 1.0),
+            None,
+        )
+        .expect("s");
+    assert_eq!(
+        doc.group_shapes(page, &[shape]),
+        Err(Error::BadCell("non-finite bounding box"))
+    );
+}
+
+#[test]
+fn group_shapes_reports_a_non_finite_member_pin() {
+    // The bounding box of the two members is finite but wider than the
+    // finite plane allows: the member pins leave the local box as `inf`
+    // and the cell write rejects them (ADR 0038 rule 1).
+    let (mut doc, page) = document();
+    let first = doc
+        .insert_shape(
+            page,
+            framed_shape(1.7e308, 0.0, 0.5, 0.5, 0.0, 1.0, 1.0),
+            None,
+        )
+        .expect("first");
+    let second = doc
+        .insert_shape(
+            page,
+            framed_shape(-1.7e308, 0.0, 0.5, 0.5, 0.0, 1.0, 1.0),
+            None,
+        )
+        .expect("second");
+    assert_eq!(
+        doc.group_shapes(page, &[first, second]),
+        Err(Error::BadCell("non-finite number"))
+    );
+
+    let (mut doc, page) = document();
+    let first = doc
+        .insert_shape(
+            page,
+            framed_shape(0.0, 1.7e308, 0.5, 0.5, 0.0, 1.0, 1.0),
+            None,
+        )
+        .expect("first");
+    let second = doc
+        .insert_shape(
+            page,
+            framed_shape(0.0, -1.7e308, 0.5, 0.5, 0.0, 1.0, 1.0),
+            None,
+        )
+        .expect("second");
+    assert_eq!(
+        doc.group_shapes(page, &[first, second]),
+        Err(Error::BadCell("non-finite number"))
+    );
+}
+
+#[test]
+fn ungroup_reports_a_non_finite_pin_or_angle() {
+    // The dissolved group's transform sends the child's pin to `inf` in x.
+    let (mut doc, page) = document();
+    let child = doc.add_shape(framed_shape(1.7e308, 0.0, 0.5, 0.5, 0.0, 1.0, 1.0));
+    let mut group = framed_shape(1.7e308, 0.0, -1.7e308, 0.5, 0.0, 1.0, 1.0);
+    group.children = vec![child];
+    let group = doc.insert_shape(page, group, None).expect("group");
+    assert_eq!(
+        doc.ungroup_shape(group),
+        Err(Error::BadCell("non-finite number"))
+    );
+
+    // The same overflow in y: the `PinX` write succeeds first.
+    let (mut doc, page) = document();
+    let child = doc.add_shape(framed_shape(0.0, 1.7e308, 0.5, 0.5, 0.0, 1.0, 1.0));
+    let mut group = framed_shape(0.0, 1.7e308, 0.5, -1.7e308, 0.0, 1.0, 1.0);
+    group.children = vec![child];
+    let group = doc.insert_shape(page, group, None).expect("group");
+    assert_eq!(
+        doc.ungroup_shape(group),
+        Err(Error::BadCell("non-finite number"))
+    );
+
+    // Finite pins but an absorbed rotation that sums to `inf`: only the
+    // `Angle` write fails.
+    let (mut doc, page) = document();
+    let child = doc.add_shape(framed_shape(1.0, 1.0, 0.5, 0.5, 1.0e308, 1.0, 1.0));
+    let mut group = framed_shape(0.0, 0.0, 0.5, 0.5, 1.0e308, 1.0, 1.0);
+    group.children = vec![child];
+    let group = doc.insert_shape(page, group, None).expect("group");
+    assert_eq!(
+        doc.ungroup_shape(group),
+        Err(Error::BadCell("non-finite number"))
+    );
+}
+
+#[test]
+fn write_connector_path_rejects_a_too_long_path() {
+    let (mut doc, page) = document();
+    let shape = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("s");
+    let path = vec![Point::new(0.0, 0.0); (1 << 16) + 1];
+    assert_eq!(
+        doc.write_connector_path(shape, &path),
+        Err(Error::BadCell("connector path too long"))
+    );
+}
+
+#[test]
+fn write_connector_path_replaces_the_extra_geometry_sections() {
+    let (mut doc, page) = document();
+    let mut shape = box_shape(1.0, 1.0);
+    shape.sheet.sections = vec![move_to_section(0.0, 0.0), move_to_section(2.0, 2.0), {
+        let mut section = Section::new(SectionName::from_static("Character"));
+        section.cells.push(number_cell("Size", 12.0));
+        section
+    }];
+    let shape = doc.insert_shape(page, shape, None).expect("s");
+    doc.write_connector_path(shape, &[Point::new(0.0, 0.0), Point::new(1.0, 1.0)])
+        .expect("path");
+    let sections = &doc.shape(shape).expect("s").sheet.sections;
+    let names: Vec<&str> = sections
+        .iter()
+        .map(|section| section.name.as_str())
+        .collect();
+    // One `Geometry` section survives (the first slot keeps its place) and
+    // the non-geometry section is untouched.
+    assert_eq!(names, vec!["Geometry", "Character"]);
+    let rows = &sections[0].rows;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].row_type.as_deref(), Some("MoveTo"));
+    assert_eq!(rows[1].row_type.as_deref(), Some("LineTo"));
+    assert_eq!(sections[1].cells.len(), 1);
+}
+
+#[test]
+fn next_visio_id_walks_a_repeated_child_once_and_stops_at_the_cap() {
+    let (mut doc, page) = document();
+    let root = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("root");
+    let child = doc
+        .insert_subshape(root, box_shape(1.0, 1.0), None)
+        .expect("child");
+    // The same child listed twice is walked once; a `children` entry the
+    // arena does not hold is walked past.
+    doc.shape_mut(root).expect("root").children.push(child);
+    doc.shape_mut(root)
+        .expect("root")
+        .children
+        .push(ShapeId { index: 999 });
+    assert_eq!(doc.next_visio_id(page).expect("id"), 3);
+    // The largest `ID` in use leaves no room for the next one.
+    doc.shape_mut(child).expect("child").visio_id = i32::MAX;
+    assert_eq!(doc.next_visio_id(page), Err(Error::TooManyShapes));
+}
+
+#[test]
+fn ungroup_into_a_parent_group_reinserts_the_children() {
+    let (mut doc, page) = document();
+    let first = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("first");
+    let second = doc
+        .insert_shape(page, box_shape(2.0, 1.0), None)
+        .expect("second");
+    let inner = doc.group_shapes(page, &[first, second]).expect("inner");
+    let outer = doc.group_shapes(page, &[inner]).expect("outer");
+    assert_eq!(doc.shape(outer).expect("outer").children, vec![inner]);
+    // Dissolving the inner group hands its children to the outer group:
+    // they keep their order and their group-local pins.
+    let children = doc.ungroup_shape(inner).expect("ungroup");
+    assert_eq!(children, vec![first, second]);
+    assert_eq!(
+        doc.shape(outer).expect("outer").children,
+        vec![first, second]
+    );
+    assert_eq!(doc.shape(first).expect("first").parent, Some(outer));
+    assert_eq!(doc.shape(second).expect("second").parent, Some(outer));
+    assert_eq!(doc.page(page).expect("page").shapes, vec![outer]);
+    // Dissolving the outer group puts them back on the page.
+    let children = doc.ungroup_shape(outer).expect("ungroup");
+    assert_eq!(children, vec![first, second]);
+    assert_eq!(doc.shape(first).expect("first").parent, None);
+    assert_eq!(doc.shape(second).expect("second").parent, None);
+    assert_eq!(doc.page(page).expect("page").shapes, vec![first, second]);
+}
+
+#[test]
+fn shape_by_visio_id_walks_a_broken_children_list_once() {
+    let (mut doc, page) = document();
+    let root = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("root");
+    let child = doc
+        .insert_subshape(root, box_shape(1.0, 1.0), None)
+        .expect("child");
+    // A `children` list naming a shape the arena does not hold is walked
+    // past, never indexed (AGENTS.md section 6: no panics).
+    doc.shape_mut(root)
+        .expect("root")
+        .children
+        .push(ShapeId { index: 999 });
+    assert_eq!(doc.shape_by_visio_id(page, 1), Some(root));
+    assert_eq!(doc.shape_by_visio_id(page, 2), Some(child));
+    assert_eq!(doc.shape_by_visio_id(page, 9), None);
+}
+
+#[test]
+fn detach_ignores_a_child_the_arena_does_not_hold() {
+    let (mut doc, page) = document();
+    let root = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("root");
+    let child = doc
+        .insert_subshape(root, box_shape(1.0, 1.0), None)
+        .expect("child");
+    doc.shape_mut(root)
+        .expect("root")
+        .children
+        .push(ShapeId { index: 999 });
+    let detached = doc.detach_shape(root).expect("detach");
+    let ids: Vec<ShapeId> = detached.shapes.iter().map(|shape| shape.id).collect();
+    assert_eq!(ids, vec![root, child]);
+    assert_eq!(doc.shape(root).expect("root").parent, None);
+}
+
+#[test]
+fn delete_page_keeps_a_background_of_an_earlier_page() {
+    let mut doc = Document::new();
+    let first = doc.add_page("A").expect("a");
+    let second = doc.add_page("B").expect("b");
+    let third = doc.add_page("C").expect("c");
+    // A draws on B; deleting C must not move that reference.
+    doc.pages[0].background = Some(second);
+    doc.delete_page(third).expect("delete");
+    assert_eq!(doc.pages.len(), 2);
+    assert_eq!(doc.pages[0].id, first);
+    assert_eq!(doc.pages[0].background, Some(second));
+    assert_eq!(doc.pages[1].id, PageId { index: 1 });
+}
+
+#[test]
+fn connects_of_keeps_the_first_record_of_each_end() {
+    let (mut doc, page) = document();
+    let connector = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("connector");
+    let target = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("target");
+    let from = doc.shape(connector).expect("connector").visio_id;
+    let to = doc.shape(target).expect("target").visio_id;
+    let mut begin = Connect::new();
+    begin.from_sheet = from;
+    begin.from_cell = "BeginX".to_owned();
+    begin.to_sheet = to;
+    let mut begin_again = Connect::new();
+    begin_again.from_sheet = from;
+    begin_again.from_cell = "BeginY".to_owned();
+    begin_again.to_sheet = to;
+    let mut end = Connect::new();
+    end.from_sheet = from;
+    end.from_cell = "EndX".to_owned();
+    end.to_sheet = to;
+    for connect in [&begin, &begin_again, &end] {
+        doc.add_connect(page, connect.clone()).expect("connect");
+    }
+    let ends = doc.connects_of(page, connector).expect("ends");
+    assert_eq!(ends[0].as_ref().expect("begin").from_cell, begin.from_cell);
+    assert_eq!(ends[1].as_ref().expect("end").from_cell, end.from_cell);
+}
+
+#[test]
+fn add_connect_reports_a_stale_page() {
+    let (mut doc, _page) = document();
+    assert_eq!(
+        doc.add_connect(PageId { index: 9 }, Connect::new()),
+        Err(Error::UnknownPage(PageId { index: 9 }))
+    );
+}
+
+#[test]
+fn instantiate_master_needs_a_master_shape() {
+    let (mut doc, page) = document();
+    let master = doc
+        .add_master(Master::new(MasterId { index: 0 }, 1))
+        .expect("master");
+    // `size: None` takes the master's own size, which needs a shape.
+    assert_eq!(
+        doc.instantiate_master(master, page, Point::new(0.0, 0.0), None),
+        Err(Error::BadCell("master has no shapes"))
+    );
+}
+
+#[test]
+fn id_allocation_stops_at_the_visio_id_cap() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("p");
+    // A sub-shape on a page whose largest `ID` leaves no room for the
+    // next one.
+    let root = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("root");
+    doc.shape_mut(root).expect("root").visio_id = i32::MAX;
+    assert_eq!(
+        doc.insert_subshape(root, box_shape(1.0, 1.0), None),
+        Err(Error::TooManyShapes)
+    );
+    // The same for a page and for a master.
+    doc.pages[0].visio_id = i32::MAX;
+    assert_eq!(doc.add_page("Page-2"), Err(Error::TooManyShapes));
+    doc.masters
+        .push(Master::new(MasterId { index: 0 }, i32::MAX));
+    assert_eq!(
+        doc.add_master(Master::new(MasterId { index: 1 }, 0)),
+        Err(Error::TooManyShapes)
+    );
+}
+
+#[test]
+fn write_row_cell_reports_a_stale_sheet_and_a_bad_number() {
+    let (mut doc, _page) = document();
+    let stale = ShapeId { index: 999 };
+    let section = SectionName::from_static("Geometry");
+    assert_eq!(
+        doc.write_row_cell(
+            SheetRef::Shape(stale),
+            &section,
+            RowTarget::at(0),
+            &CellName::new("X"),
+            &CellWrite::new("1", CellValue::Number(1.0)),
+        ),
+        Err(Error::UnknownShape(stale))
+    );
+    let (mut doc, page) = document();
+    let mut shape = box_shape(1.0, 1.0);
+    let mut geometry = Section::new(SectionName::from_static("Geometry"));
+    let mut row = Row::new();
+    row.ix = Some(0);
+    geometry.rows.push(row);
+    shape.sheet.sections.push(geometry);
+    let shape = doc.insert_shape(page, shape, None).expect("shape");
+    assert_eq!(
+        doc.write_row_cell(
+            SheetRef::Shape(shape),
+            &section,
+            RowTarget::at(0),
+            &CellName::new("X"),
+            &CellWrite::new("nan", CellValue::Number(f64::NAN)),
+        ),
+        Err(Error::BadCell("non-finite number"))
+    );
+}
+
+#[test]
+fn ungroup_reports_a_group_no_page_reaches() {
+    let (mut doc, page) = document();
+    let member = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("member");
+    let group = doc.group_shapes(page, &[member]).expect("group");
+    // A parent chain that ends outside the arena: the detach cannot name
+    // the group's page, so the dissolve is an error, not a panic.
+    doc.shape_mut(group).expect("group").parent = Some(ShapeId { index: 999 });
+    assert_eq!(doc.ungroup_shape(group), Err(Error::UnknownShape(group)));
+}
+
+#[test]
+fn restore_rejects_a_shape_the_arena_does_not_hold() {
+    let (mut doc, page) = document();
+    let mut detached = DetachedShapes {
+        page,
+        parent: None,
+        index: 0,
+        shapes: Vec::new(),
+        connects: Vec::new(),
+    };
+    detached.shapes.push(Shape::new(ShapeId { index: 999 }, 0));
+    assert_eq!(
+        doc.restore_shapes(detached),
+        Err(Error::UnknownShape(ShapeId { index: 999 }))
+    );
+}
+
+#[test]
+fn reparent_reports_a_parent_chain_outside_the_arena() {
+    let (mut doc, page) = document();
+    let shape = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("shape");
+    doc.shape_mut(shape).expect("shape").parent = Some(ShapeId { index: 999 });
+    assert_eq!(
+        doc.reparent_shape(shape, None, 0),
+        Err(Error::UnknownShape(shape))
+    );
+}
+
+#[test]
+fn ungroup_reports_a_child_the_arena_does_not_hold() {
+    let (mut doc, page) = document();
+    let group = doc
+        .insert_shape(page, box_shape(1.0, 1.0), None)
+        .expect("group");
+    doc.shape_mut(group)
+        .expect("group")
+        .children
+        .push(ShapeId { index: 999 });
+    assert_eq!(
+        doc.ungroup_shape(group),
+        Err(Error::UnknownShape(ShapeId { index: 999 }))
+    );
+}
+
+#[test]
+fn master_size_reports_a_master_shape_the_arena_does_not_hold() {
+    let (mut doc, page) = document();
+    // A master list built by hand can name a shape the arena lost.
+    doc.masters.push(Master::new(MasterId { index: 0 }, 1));
+    doc.masters[0].shapes = vec![ShapeId { index: 999 }];
+    assert_eq!(
+        doc.instantiate_master(MasterId { index: 0 }, page, Point::new(0.0, 0.0), None),
+        Err(Error::UnknownShape(ShapeId { index: 999 }))
+    );
 }
