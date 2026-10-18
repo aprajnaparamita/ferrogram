@@ -61,3 +61,30 @@ impl TextEditor {
         Err(UiError::NotImplemented)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Stub contract (P5-01); replace with real tests when implementing.
+    use super::*;
+    use ferrogram_commands::Settings;
+
+    #[test]
+    fn the_text_editor_is_a_not_implemented_stub() {
+        let mut editor = TextEditor::new();
+        assert!(!editor.is_active());
+        assert!(matches!(
+            editor.begin(ShapeId { index: 0 }, &TextContent::default()),
+            Err(UiError::NotImplemented)
+        ));
+        assert!(matches!(editor.finish(), Err(UiError::NotImplemented)));
+        let ctx = AppCtx::new(Settings::default());
+        assert!(matches!(
+            editor.original_text(&ctx),
+            Err(UiError::NotImplemented)
+        ));
+        editor.shape = Some(ShapeId { index: 1 });
+        assert!(editor.is_active());
+        editor.cancel();
+        assert_eq!(editor, TextEditor::new());
+    }
+}

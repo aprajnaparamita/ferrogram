@@ -77,3 +77,29 @@ pub fn selection_bounds(ctx: &AppCtx) -> Result<Rect, UiError> {
 
 /// The screen-pixel hit tolerance of a handle (ADR 0042).
 pub const TOLERANCE_PX: f64 = 6.0;
+
+#[cfg(test)]
+mod tests {
+    //! Stub contract (P5-01); replace with real tests when implementing.
+    use super::*;
+    use ferrogram_commands::Settings;
+
+    #[test]
+    fn the_handle_helpers_are_not_implemented_stubs() {
+        let bounds = Rect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0));
+        let angle = Angle::from_radians(0.0);
+        assert!(matches!(
+            handle_at(Point::new(0.5, 0.5), bounds, angle, 1.0),
+            Err(UiError::NotImplemented)
+        ));
+        assert!(matches!(
+            handles_for(bounds, angle),
+            Err(UiError::NotImplemented)
+        ));
+        let ctx = AppCtx::new(Settings::default());
+        assert!(matches!(
+            selection_bounds(&ctx),
+            Err(UiError::NotImplemented)
+        ));
+    }
+}

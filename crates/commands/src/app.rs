@@ -532,4 +532,32 @@ mod tests {
         assert_eq!(ctx.warnings.first().map(String::as_str), Some("w5"));
         assert_eq!(ctx.warnings.last().map(String::as_str), Some("w204"));
     }
+
+    #[test]
+    fn selections_answer_membership_and_the_primary_shape() {
+        let a = ferrogram_model::ShapeId { index: 1 };
+        let b = ferrogram_model::ShapeId { index: 2 };
+        let mut selection = Selection::new();
+        assert!(selection.is_empty());
+        assert_eq!(selection.primary(), None);
+        selection.shapes = vec![a, b];
+        selection.anchor = Some(a);
+        assert_eq!(selection.len(), 2);
+        assert!(!selection.is_empty());
+        assert!(selection.contains(b));
+        assert!(!selection.contains(ferrogram_model::ShapeId { index: 3 }));
+        assert_eq!(selection.primary(), Some(a));
+    }
+
+    #[test]
+    fn touch_bumps_the_active_document_change_counter() {
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.touch();
+        assert!(ctx.clipboard.is_empty());
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        assert_eq!(ctx.active_document().map(|s| s.changes), Some(0));
+        ctx.touch();
+        ctx.touch();
+        assert_eq!(ctx.active_document().map(|s| s.changes), Some(2));
+    }
 }

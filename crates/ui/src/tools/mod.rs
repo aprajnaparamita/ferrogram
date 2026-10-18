@@ -147,3 +147,45 @@ impl ToolMachine {
         Err(UiError::NotImplemented)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Stub contract (P5-01): every tool reports "not implemented" until
+    //! its task lands. Replace these with real tests when implementing.
+    use super::*;
+    use ferrogram_commands::Settings;
+
+    type Handler = fn(&mut ToolMachine, &ToolEvent, &AppCtx) -> Result<ToolEffect, UiError>;
+    type Anchor = fn(&ToolMachine) -> Option<Point>;
+
+    #[test]
+    fn every_tool_is_a_not_implemented_stub() {
+        let ctx = AppCtx::new(Settings::default());
+        let event = ToolEvent::PointerDown {
+            pos: Point::new(1.0, 2.0),
+            modifiers: Modifiers::none(),
+        };
+        let mut machine = ToolMachine::new();
+        assert_eq!(machine.tool, Tool::Pointer);
+        assert!(matches!(
+            machine.handle(event.clone(), &ctx),
+            Err(UiError::NotImplemented)
+        ));
+        let tools: [(Handler, Anchor); 5] = [
+            (pointer::handle, pointer::anchor),
+            (draw::handle, draw::anchor),
+            (connector::handle, connector::anchor),
+            (stencil::handle, stencil::anchor),
+            (text::handle, text::anchor),
+        ];
+        for (handle, anchor) in tools {
+            assert!(matches!(
+                handle(&mut machine, &event, &ctx),
+                Err(UiError::NotImplemented)
+            ));
+            assert_eq!(anchor(&machine), None);
+        }
+        assert_eq!(ToolEffect::new(), ToolEffect::default());
+        assert_eq!(Modifiers::none(), Modifiers::default());
+    }
+}

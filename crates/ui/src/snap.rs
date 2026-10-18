@@ -84,3 +84,26 @@ impl Snapper {
         Err(UiError::NotImplemented)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Stub contract (P5-01); replace with real tests when implementing.
+    use super::*;
+    use ferrogram_commands::Settings;
+
+    #[test]
+    fn the_snapper_is_a_not_implemented_stub() {
+        let snapper = Snapper::new(SnapSettings::default());
+        assert_eq!(snapper, Snapper::default());
+        let ctx = AppCtx::new(Settings::default());
+        let point = Point::new(1.0, 1.0);
+        assert!(matches!(
+            snapper.snap_move(&ctx, &[ShapeId { index: 0 }], point, 1.0, false),
+            Err(UiError::NotImplemented)
+        ));
+        assert!(matches!(
+            snapper.snap_point(&ctx, point, 1.0, true),
+            Err(UiError::NotImplemented)
+        ));
+    }
+}
