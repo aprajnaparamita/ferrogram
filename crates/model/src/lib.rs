@@ -14,6 +14,7 @@
 
 pub mod aliases;
 mod cell;
+mod connection;
 mod defaults;
 mod document;
 mod error;
