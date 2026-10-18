@@ -308,12 +308,7 @@ trait ListEntity {
 
 impl ListEntity for Page {
     fn has_content(&self) -> bool {
-        // A page with content or a preserved `Rel` keeps its contents
-        // part, and so does a page with no preserved content at all: a
-        // new page always gets one (ADR 0048). A page the source wrote
-        // without a part *and* with unmapped content keeps its missing
-        // `Rel`.
-        !self.shapes.is_empty() || !self.connects.is_empty() || self.preserved.children.is_empty()
+        !self.shapes.is_empty() || !self.connects.is_empty()
     }
     fn preserved(&self) -> &Preserved {
         &self.preserved

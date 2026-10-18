@@ -331,7 +331,12 @@ fn a_deleted_page_drops_its_part_and_relationships() {
 fn a_new_page_gains_a_part_a_relationship_and_a_content_type() {
     let document = built();
     let (_, package, mut first) = write_and_read(&document, &Package::new());
-    first.add_page("Page-3").expect("page");
+    let page = first.add_page("Page-3").expect("page");
+    // A page with content always gets its contents part (a content-less
+    // page keeps the P2-10 no-`Rel` rule).
+    first
+        .insert_shape(page, rectangle(1.0, 1.0), None)
+        .expect("s");
     let (_, reread, second) = write_and_read(&first, &package);
     assert_eq!(second.pages.len(), 3);
     // The new page has a contents part (page3.xml), declared and related.
