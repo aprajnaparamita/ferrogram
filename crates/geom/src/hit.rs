@@ -588,6 +588,83 @@ mod tests {
     }
 
     #[test]
+    fn curve_containment_uses_the_flattened_chords() {
+        // The quadratic bulge (0, 0) -> (0.5, 1) -> (1, 0) closes over
+        // its chord: everything between the chord and the curve is
+        // inside (the curve passes through (0.5, 0.5)).
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(0.5, 1.0),
+            to: Point::new(1.0, 0.0),
+        });
+        path.push(Segment::Close);
+        assert_eq!(path_contains(&path, Point::new(0.5, 0.25)), Ok(true));
+        assert_eq!(path_contains(&path, Point::new(0.5, 0.75)), Ok(false));
+    }
+
+    #[test]
+    fn cubic_containment_uses_the_flattened_chords() {
+        // The cubic (0, 0) -> (0, 1), (1, 1) -> (1, 0) passes through
+        // (0.5, 0.75).
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(0.0, 1.0),
+            ctrl2: Point::new(1.0, 1.0),
+            to: Point::new(1.0, 0.0),
+        });
+        path.push(Segment::Close);
+        assert_eq!(path_contains(&path, Point::new(0.5, 0.5)), Ok(true));
+        assert_eq!(path_contains(&path, Point::new(0.5, 0.9)), Ok(false));
+    }
+
+    #[test]
+    fn non_finite_segments_break_the_walk_without_failing() {
+        let nan = f64::NAN;
+        let mut path = Path::new();
+        path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(Segment::LineTo(Point::new(nan, 0.0)));
+        path.push(Segment::MoveTo(Point::new(0.5, 0.0)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(nan, 1.0),
+            to: Point::new(1.0, 0.0),
+        });
+        path.push(Segment::MoveTo(Point::new(1.5, 0.0)));
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(nan, 1.0),
+            ctrl2: Point::new(2.5, 1.0),
+            to: Point::new(2.5, 0.0),
+        });
+        assert_eq!(
+            distance_point_path(Point::new(0.5, 0.5), &path),
+            Ok(f64::INFINITY)
+        );
+        assert_eq!(path_contains(&path, Point::new(0.5, 0.5)), Ok(false));
+    }
+
+    #[test]
+    fn segments_without_a_start_are_ignored() {
+        let mut path = Path::new();
+        path.push(Segment::LineTo(Point::new(1.0, 0.0)));
+        path.push(Segment::QuadTo {
+            ctrl: Point::new(1.0, 1.0),
+            to: Point::new(2.0, 0.0),
+        });
+        path.push(Segment::CubicTo {
+            ctrl1: Point::new(2.0, 1.0),
+            ctrl2: Point::new(3.0, 1.0),
+            to: Point::new(3.0, 0.0),
+        });
+        path.push(Segment::Close);
+        assert_eq!(
+            distance_point_path(Point::new(1.0, 0.0), &path),
+            Ok(f64::INFINITY)
+        );
+        assert_eq!(path_contains(&path, Point::new(1.0, 0.0)), Ok(false));
+    }
+
+    #[test]
     fn rect_distance_is_zero_inside_and_measures_outside() {
         let rect = Rect::new(Point::new(0.0, 0.0), Point::new(2.0, 1.0));
         assert_eq!(distance_point_rect(Point::new(1.0, 0.5), &rect), Ok(0.0));

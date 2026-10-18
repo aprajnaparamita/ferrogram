@@ -201,6 +201,28 @@ mod tests {
     }
 
     #[test]
+    fn a_non_finite_transform_degrades_to_the_placement_bounds() {
+        let mut scene = Scene::new(8.5, 11.0);
+        let transform = Transform {
+            m11: f64::NAN,
+            ..Transform::identity()
+        };
+        scene.nodes.push(shape(transform, box_path(1.0, 1.0)));
+        let overlay =
+            build_selection_overlay(&scene, &[NodePath::new().child(0)]).expect("no error");
+        match overlay.marks.first() {
+            Some(OverlayMark::SelectionOutline { bounds, angle }) => {
+                assert_eq!(
+                    *bounds,
+                    Rect::new(Point::new(0.0, 0.0), Point::new(0.0, 0.0))
+                );
+                assert_eq!(angle.radians(), 0.0);
+            }
+            other => panic!("expected a selection outline, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn several_shapes_get_one_axis_aligned_handle_frame() {
         let mut scene = Scene::new(8.5, 11.0);
         scene

@@ -280,9 +280,20 @@ pub(crate) fn placement_bounds(placement: &Placement) -> Rect {
     match placement.local {
         Some(local) => {
             let mapped = rect_bounds(local, placement.transform);
-            mapped.unwrap_or_else(|| point_bounds(placement.transform.apply(Point::new(0.0, 0.0))))
+            mapped.unwrap_or_else(|| origin_bounds(placement.transform))
         }
-        None => point_bounds(placement.transform.apply(Point::new(0.0, 0.0))),
+        None => origin_bounds(placement.transform),
+    }
+}
+
+/// The zero rectangle at the transformed origin, at `(0, 0)` when even
+/// that is not finite (a non-finite transform degrades, never panics).
+fn origin_bounds(transform: Transform) -> Rect {
+    let origin = transform.apply(Point::new(0.0, 0.0));
+    if finite(origin) {
+        point_bounds(origin)
+    } else {
+        point_bounds(Point::new(0.0, 0.0))
     }
 }
 
@@ -653,10 +664,42 @@ mod tests {
         assert_eq!(quad[1], Point::new(3.0, 3.0));
         assert_eq!(quad[2], Point::new(3.0, 2.0));
         assert_eq!(quad[3], Point::new(1.0, 2.0));
-        let empty = TextNode {
-            layout: ferrogram_text::Layout::default(),
-            ..text
+    }
+
+    #[test]
+    fn text_quads_reject_bad_input() {
+        let nan = f64::NAN;
+        let base = TextNode {
+            fonts: Vec::new(),
+            runs: Vec::new(),
+            layout: ferrogram_text::Layout {
+                width: 1.0,
+                height: 1.0,
+                ..ferrogram_text::Layout::default()
+            },
+            color: crate::scene::Rgba::opaque(0, 0, 0),
+            origin: Point::new(0.0, 0.0),
         };
-        assert_eq!(text_quad(&empty), None);
+        let moved = TextNode {
+            origin: Point::new(nan, 0.0),
+            ..base.clone()
+        };
+        assert_eq!(text_quad(&moved), None);
+        let turned = TextNode {
+            layout: ferrogram_text::Layout {
+                rotation: ferrogram_geom::Angle::from_radians(nan),
+                ..base.layout.clone()
+            },
+            ..base.clone()
+        };
+        assert_eq!(text_quad(&turned), None);
+        let shrunk = TextNode {
+            layout: ferrogram_text::Layout {
+                height: 0.0,
+                ..base.layout.clone()
+            },
+            ..base
+        };
+        assert_eq!(text_quad(&shrunk), None);
     }
 }

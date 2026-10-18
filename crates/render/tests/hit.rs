@@ -381,6 +381,115 @@ fn stale_node_paths_are_caller_errors() {
 }
 
 #[test]
+fn a_shape_node_has_no_children() {
+    let mut scene = Scene::new(8.5, 11.0);
+    scene
+        .nodes
+        .push(filled(None, Transform::identity(), 1.0, 1.0));
+    assert_eq!(
+        node_bounds(&scene, &NodePath::new().child(0).child(1)),
+        Err(ferrogram_render::Error::InvalidOptions)
+    );
+}
+
+#[test]
+fn group_bounds_cover_the_members() {
+    let mut scene = Scene::new(8.5, 11.0);
+    let member = filled(None, Transform::translate(Point::new(0.0, 3.0)), 1.0, 1.0);
+    scene
+        .nodes
+        .push(Node::Group(ferrogram_render::scene::Group {
+            transform: Transform::translate(Point::new(2.0, 0.0)),
+            clip: None,
+            children: vec![member],
+        }));
+    assert_eq!(
+        scene_bounds(&scene).expect("no error"),
+        Rect::new(Point::new(2.0, 3.0), Point::new(3.0, 4.0))
+    );
+}
+
+#[test]
+fn text_bounds_include_the_block() {
+    let mut scene = Scene::new(8.5, 11.0);
+    scene.nodes.push(shape_node(
+        None,
+        Transform::identity(),
+        Path::new(),
+        false,
+        Some(text_block(Point::new(0.0, 1.0), 1.0, 1.0)),
+    ));
+    let bounds = node_bounds(&scene, &NodePath::new().child(0)).expect("no error");
+    assert_eq!(
+        bounds,
+        Rect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0))
+    );
+    let hits = hit_marquee(
+        &scene,
+        Rect::new(Point::new(0.5, 0.5), Point::new(2.0, 2.0)),
+    )
+    .expect("no error");
+    assert_eq!(hits.len(), 1, "the text block intersects the marquee");
+}
+
+#[test]
+fn curve_paths_map_through_the_transform() {
+    let mut path = Path::new();
+    path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+    path.push(Segment::QuadTo {
+        ctrl: Point::new(0.5, 1.0),
+        to: Point::new(1.0, 0.0),
+    });
+    path.push(Segment::CubicTo {
+        ctrl1: Point::new(1.0, 1.0),
+        ctrl2: Point::new(2.0, 1.0),
+        to: Point::new(2.0, 0.0),
+    });
+    let mut scene = Scene::new(8.5, 11.0);
+    scene.nodes.push(shape_node(
+        None,
+        Transform::translate(Point::new(10.0, 0.0)),
+        path,
+        false,
+        None,
+    ));
+    // The quadratic passes through (10.5, 0.5) after the translation.
+    let hits = hit_test(&scene, Point::new(10.5, 0.5), &HitOptions::new(0.01)).expect("no error");
+    assert_eq!(shape(&hits), vec![(vec![0], None, HitKind::Stroke)]);
+    // The bounds cover every mapped control point.
+    let bounds = node_bounds(&scene, &NodePath::new().child(0)).expect("no error");
+    assert_eq!(
+        bounds,
+        Rect::new(Point::new(10.0, 0.0), Point::new(12.0, 1.0))
+    );
+}
+
+#[test]
+fn the_scene_walk_depth_is_bounded() {
+    // A shape nested deeper than the walk cap is never visited; the
+    // walk degrades instead of overflowing the stack.
+    let deep = |groups: usize| {
+        let mut node = filled(None, Transform::identity(), 1.0, 1.0);
+        for _ in 0..groups {
+            node = Node::Group(ferrogram_render::scene::Group {
+                transform: Transform::identity(),
+                clip: None,
+                children: vec![node],
+            });
+        }
+        let mut scene = Scene::new(8.5, 11.0);
+        scene.nodes.push(node);
+        scene
+    };
+    let hits =
+        hit_test(&deep(127), Point::new(0.5, 0.5), &HitOptions::default()).expect("no error");
+    assert_eq!(hits.len(), 1, "a shape at the depth cap still hits");
+    let hits =
+        hit_test(&deep(200), Point::new(0.5, 0.5), &HitOptions::default()).expect("no error");
+    assert!(hits.is_empty(), "a shape past the depth cap is skipped");
+}
+
+#[test]
 fn empty_scenes_measure_the_zero_rectangle() {
     let scene = Scene::new(8.5, 11.0);
     assert_eq!(
