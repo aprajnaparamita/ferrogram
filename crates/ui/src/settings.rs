@@ -12,14 +12,19 @@
 //!
 //! [`show_options`] draws the View/Options dialog body: the ribbon
 //! layout radio choice (ADR 0032), the grid and rulers toggles and the
-//! display units. It edits the [`Settings`] it is given and reports
-//! whether anything changed; the caller marks the store dirty.
+//! display units. The dialog never mutates [`Settings`] (the ADR 0032
+//! amendment): it returns the [`Intent`]s for the rows the user
+//! changed and the shell dispatches them through the command registry
+//! (`view.ui_layout.*`, `view.toggle_grid`, `view.rulers`,
+//! `view.units`).
 
 use egui::Ui;
-use ferrogram_commands::{DisplayUnits, Settings, SettingsError, SettingsStore};
+use ferrogram_commands::{
+    ArgValue, Args, DisplayUnits, Invocation, Settings, SettingsError, SettingsStore, Source,
+};
 use ferrogram_ui_spec::LayoutKind;
 
-use crate::UiError;
+use crate::{Intent, UiError};
 
 /// The settings JSON slot of the eframe storage (ADR 0032).
 ///
@@ -119,38 +124,40 @@ pub fn save_settings(store: &mut dyn SettingsStore, settings: &Settings) -> Resu
     store.save(settings).map_err(settings_error)
 }
 
-/// Draws the View/Options dialog body (ADR 0032): the ribbon layout
-/// radio choice, grid and rulers toggles, display units.
+/// Draws the View/Options dialog body (ADR 0032 as amended): the
+/// ribbon layout radio choice, grid and rulers toggles, display units.
 ///
-/// Returns `true` when the user changed a setting. The dialog only
-/// edits `settings`; persisting is the caller's job
-/// ([`save_settings`]).
-pub fn show_options(ui: &mut Ui, settings: &mut Settings) -> Result<bool, UiError> {
-    let before = settings.clone();
+/// The dialog draws its rows over a draft copy of `settings` and
+/// returns one [`Intent`] per row the user changed
+/// ([`option_changes`]); the caller dispatches them through the
+/// registry, so every change is an ordinary command run (status
+/// message, undo, parity). The dialog itself writes nothing.
+pub fn show_options(ui: &mut Ui, settings: &Settings) -> Result<Vec<Intent>, UiError> {
+    let mut draft = settings.clone();
 
     ui.heading("Options");
     ui.separator();
     ui.label("Ribbon layout");
     ui.radio_value(
-        &mut settings.ui_layout,
+        &mut draft.ui_layout,
         LayoutKind::Visio2016,
         "Visio 2016 ribbon",
     );
     ui.radio_value(
-        &mut settings.ui_layout,
+        &mut draft.ui_layout,
         LayoutKind::Visio365,
         "Microsoft 365 ribbon",
     );
     ui.separator();
-    ui.checkbox(&mut settings.show_grid, "Show grid");
-    ui.checkbox(&mut settings.show_rulers, "Show rulers");
+    ui.checkbox(&mut draft.show_grid, "Show grid");
+    ui.checkbox(&mut draft.show_rulers, "Show rulers");
     ui.horizontal(|ui| {
         ui.label("Units");
         let choice = egui::ComboBox::from_id_salt("settings-units")
-            .selected_text(unit_label(settings.units))
+            .selected_text(unit_label(draft.units))
             .show_ui(ui, |ui| {
                 for (unit, label) in UNIT_CHOICES {
-                    ui.selectable_value(&mut settings.units, *unit, *label);
+                    ui.selectable_value(&mut draft.units, *unit, *label);
                 }
             });
         // A combo box with no label atom has no accessible name; egui
@@ -158,7 +165,45 @@ pub fn show_options(ui: &mut Ui, settings: &mut Settings) -> Result<bool, UiErro
         choice.response.on_hover_text("Display units");
     });
 
-    Ok(settings != &before)
+    option_changes(settings, &draft)
+}
+
+/// The dispatch requests for the Options rows `after` changed against
+/// `before` (ADR 0032 amendment): the layout radios dispatch
+/// `view.ui_layout.visio_2016` / `view.ui_layout.visio_365`, the grid
+/// and rulers checkboxes dispatch `view.toggle_grid` / `view.rulers`,
+/// and the units combo dispatches `view.units` with its `units`
+/// argument. All are `Source::Ui` (the dialog is interactive).
+pub fn option_changes(before: &Settings, after: &Settings) -> Result<Vec<Intent>, UiError> {
+    let mut intents = Vec::new();
+    if before.ui_layout != after.ui_layout {
+        let id = match after.ui_layout {
+            LayoutKind::Visio2016 => "view.ui_layout.visio_2016",
+            LayoutKind::Visio365 => "view.ui_layout.visio_365",
+        };
+        intents.push(intent(id)?);
+    }
+    if before.show_grid != after.show_grid {
+        intents.push(intent("view.toggle_grid")?);
+    }
+    if before.show_rulers != after.show_rulers {
+        intents.push(intent("view.rulers")?);
+    }
+    if before.units != after.units {
+        let args = Args::new().with("units", ArgValue::Text(after.units.name().to_owned()));
+        let mut changed = intent("view.units")?;
+        changed.invocation = Invocation::new(args, Source::Ui);
+        intents.push(changed);
+    }
+    Ok(intents)
+}
+
+/// One dispatch request for a static command id.
+fn intent(id: &'static str) -> Result<Intent, UiError> {
+    let command = ferrogram_commands::CommandId::parse(id).map_err(|error| UiError::Io {
+        message: format!("the options command id {id} is not valid: {error}"),
+    })?;
+    Ok(Intent::new(command, Invocation::empty(Source::Ui)))
 }
 
 /// The display label of one unit choice, or "Inches" for a unit this
@@ -255,29 +300,28 @@ mod tests {
     }
 
     #[test]
-    fn a_quiet_options_dialog_changes_nothing() {
-        let mut settings = Settings::default();
+    fn a_quiet_options_dialog_produces_no_intents() {
+        let settings = Settings::default();
         with_ui(|ui| {
-            let changed = show_options(ui, &mut settings).expect("the dialog draws");
-            assert!(!changed);
+            let intents = show_options(ui, &settings).expect("the dialog draws");
+            assert!(intents.is_empty());
         });
-        assert_eq!(settings, Settings::default());
     }
 
     #[test]
-    fn options_dialog_edits_the_settings() {
+    fn options_dialog_edits_no_settings_and_returns_the_change() {
         use egui::accesskit::Role;
         use egui_kittest::{Harness, kittest::Queryable};
 
         let settings = Rc::new(RefCell::new(Settings::default()));
-        let changed = Rc::new(RefCell::new(false));
+        let intents = Rc::new(RefCell::new(Vec::new()));
         let mut harness = Harness::builder().build_ui({
             let settings = Rc::clone(&settings);
-            let changed = Rc::clone(&changed);
+            let intents = Rc::clone(&intents);
             move |ui| {
-                let mut settings = settings.borrow_mut();
-                let moved = show_options(ui, &mut settings).expect("the dialog draws");
-                *changed.borrow_mut() = *changed.borrow() || moved;
+                let settings = settings.borrow();
+                let mut changed = show_options(ui, &settings).expect("the dialog draws");
+                intents.borrow_mut().append(&mut changed);
             }
         });
         harness.run();
@@ -290,8 +334,69 @@ mod tests {
             node.click();
         }
         harness.run();
-        assert!(*changed.borrow(), "the radio click is a change");
-        assert_eq!(settings.borrow().ui_layout, LayoutKind::Visio365);
+        let intents = intents.borrow();
+        assert_eq!(
+            intents
+                .iter()
+                .map(|intent| intent.command.as_str())
+                .collect::<Vec<_>>(),
+            vec!["view.ui_layout.visio_365"],
+            "the radio dispatches its registry command (ADR 0032 amendment)"
+        );
+        assert_eq!(intents[0].invocation.source, ferrogram_commands::Source::Ui);
+        // The dialog writes nothing itself: the settings still hold
+        // the old layout until the shell dispatches the intent.
+        assert_eq!(settings.borrow().ui_layout, LayoutKind::Visio2016);
+    }
+
+    #[test]
+    fn every_changed_row_maps_to_its_registry_command() {
+        let before = Settings::default();
+        let mut after = Settings::default();
+        after.ui_layout = LayoutKind::Visio365;
+        after.show_grid = false;
+        after.show_rulers = false;
+        after.units = DisplayUnits::Feet;
+        let intents = option_changes(&before, &after).expect("intents");
+        let ids: Vec<&str> = intents
+            .iter()
+            .map(|intent| intent.command.as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                "view.ui_layout.visio_365",
+                "view.toggle_grid",
+                "view.rulers",
+                "view.units"
+            ]
+        );
+        let units = &intents[3].invocation.args;
+        assert_eq!(
+            units.text("units"),
+            Some("Feet"),
+            "`view.units` takes its `units` argument"
+        );
+    }
+
+    #[test]
+    fn the_layout_radio_names_the_chosen_layout() {
+        let mut before = Settings::default();
+        before.ui_layout = LayoutKind::Visio365;
+        let after = Settings::default();
+        let intents = option_changes(&before, &after).expect("intents");
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].command.as_str(), "view.ui_layout.visio_2016");
+    }
+
+    #[test]
+    fn unchanged_settings_produce_no_intents() {
+        let settings = Settings::default();
+        assert!(
+            option_changes(&settings, &settings)
+                .expect("intents")
+                .is_empty()
+        );
     }
 
     #[test]

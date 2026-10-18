@@ -23,6 +23,8 @@
 
 use std::path::PathBuf;
 
+use proptest::prelude::*;
+
 use ferrogram_commands::{AppCtx, DisplayUnits, Settings, SettingsError, SettingsStore};
 use ferrogram_ui_spec::LayoutKind;
 
@@ -194,69 +196,53 @@ fn a_failing_store_load_falls_back_with_one_warning() {
     assert!(matches!(error, SettingsError::Format { .. }));
 }
 
-/// Deterministic pseudo-random generator (no proptest dev-dependency
-/// in `crates/ui`: `crates/ui/Cargo.toml` belongs to P4-03; see the
-/// P4-10 report's open issues).
-struct Lcg(u64);
-
-impl Lcg {
-    fn next(&mut self) -> u64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        self.0 >> 11
-    }
-
-    fn pick<'a, T>(&mut self, choices: &'a [T]) -> &'a T {
-        &choices[self.next() as usize % choices.len()]
-    }
+/// An arbitrary `Settings` (the round-trip property below).
+///
+/// `Settings` is `#[non_exhaustive]` (it lives in
+/// `ferrogram-commands`), so the strategy builds from the default and
+/// fills every field; `recent_files` holds arbitrary hostiles names.
+fn arb_settings() -> impl Strategy<Value = Settings> {
+    (
+        any::<bool>(),
+        any::<bool>(),
+        any::<bool>(),
+        prop::sample::select(vec![
+            DisplayUnits::Inches,
+            DisplayUnits::Millimeters,
+            DisplayUnits::Centimeters,
+            DisplayUnits::Meters,
+            DisplayUnits::Feet,
+        ]),
+        prop::collection::vec(any::<String>().prop_map(PathBuf::from), 0..4),
+    )
+        .prop_map(|(layout, show_grid, show_rulers, units, recent)| {
+            let mut settings = Settings::default();
+            settings.ui_layout = if layout {
+                LayoutKind::Visio2016
+            } else {
+                LayoutKind::Visio365
+            };
+            settings.show_grid = show_grid;
+            settings.show_rulers = show_rulers;
+            settings.units = units;
+            settings.recent_files = recent;
+            settings
+        })
 }
 
-#[test]
-fn save_then_load_round_trips_every_generated_setting() {
-    let layouts = [LayoutKind::Visio2016, LayoutKind::Visio365];
-    let units = [
-        DisplayUnits::Inches,
-        DisplayUnits::Millimeters,
-        DisplayUnits::Centimeters,
-        DisplayUnits::Meters,
-        DisplayUnits::Feet,
-    ];
-    // Hostile path names a user could plausibly open.
-    let long = "x".repeat(300);
-    let names = [
-        "",
-        " ",
-        "drawing.vsdx",
-        "..",
-        "/etc/passwd",
-        "with space.vsdx",
-        "\u{0}nul.vsdx",
-        "\u{e9}\u{4e2d}\u{1f600}.vsdx",
-        "trailing/",
-        long.as_str(),
-    ];
-    let mut rng = Lcg(0x853c_49e6_0664_7b2d);
-    for round in 0..200 {
-        let recent: Vec<PathBuf> = (0..rng.next() % 4)
-            .map(|_| PathBuf::from(*rng.pick(&names)))
-            .collect();
-        // `Settings` is `#[non_exhaustive]` (it lives in
-        // `ferrogram-commands`), so it is built from the default.
-        let mut settings = Settings::default();
-        settings.ui_layout = *rng.pick(&layouts);
-        settings.show_grid = rng.next().is_multiple_of(2);
-        settings.show_rulers = rng.next().is_multiple_of(2);
-        settings.units = *rng.pick(&units);
-        settings.recent_files = recent.clone();
+proptest! {
+    /// The round-trip property (P4-10's seeded loop, on proptest
+    /// since P4-16): `save` then `load` returns the same settings for
+    /// any values, hostile `recent_files` included.
+    #[test]
+    fn save_then_load_round_trips_any_settings(settings in arb_settings()) {
         let mut store = TextStore::new(None);
         save_settings(&mut store, &settings).unwrap();
         let written = store.take_written().unwrap();
-        let mut reloaded = TextStore::new(Some(written.clone()));
+        let mut reloaded = TextStore::new(Some(written));
         let back = reloaded.load().unwrap();
-        assert!(reloaded.take_warning().is_none(), "round {round}");
-        assert_eq!(back, settings, "round {round}");
+        prop_assert!(reloaded.take_warning().is_none());
+        proptest::prop_assert_eq!(back, settings);
     }
 }
 

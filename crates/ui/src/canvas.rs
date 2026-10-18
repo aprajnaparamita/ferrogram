@@ -105,6 +105,24 @@ pub struct CanvasCache {
     raster_zoom: f64,
     generation: u64,
     last_warning: Option<String>,
+    failed: Option<FailedKey>,
+}
+
+/// The cache key of a raster attempt that failed (P4-16 review minor
+/// 11): the page is not rasterized again until the key changes, so a
+/// page that cannot raster does not rebuild and re-report every frame.
+#[derive(Clone, PartialEq)]
+struct FailedKey {
+    document: Document,
+    page: Option<PageId>,
+    zoom: f64,
+}
+
+impl FailedKey {
+    /// Whether this is the key of the given raster request.
+    fn matches(&self, document: &Document, page: Option<PageId>, zoom: f64) -> bool {
+        self.document == *document && self.page == page && self.zoom == zoom
+    }
 }
 
 impl CanvasCache {
@@ -119,6 +137,7 @@ impl CanvasCache {
             raster_zoom: 0.0,
             generation: 0,
             last_warning: None,
+            failed: None,
         }
     }
 
@@ -132,6 +151,7 @@ impl CanvasCache {
         self.raster_zoom = 0.0;
         self.generation = 0;
         self.last_warning = None;
+        self.failed = None;
     }
 
     /// Whether no raster is cached.
@@ -207,6 +227,7 @@ impl PartialEq for CanvasCache {
             && self.raster_zoom == other.raster_zoom
             && self.generation == other.generation
             && self.last_warning == other.last_warning
+            && self.failed == other.failed
     }
 }
 
@@ -227,6 +248,7 @@ impl std::fmt::Debug for CanvasCache {
             .field("texture", &self.texture_id())
             .field("document", &self.document.is_some())
             .field("last_warning", &self.last_warning)
+            .field("failed", &self.failed.is_some())
             .finish()
     }
 }
@@ -680,9 +702,49 @@ fn intent(id: &'static str) -> Result<Intent, UiError> {
     Ok(Intent::new(command, Invocation::empty(Source::Ui)))
 }
 
-/// Builds the scene of the active page and uploads it as a texture
-/// (ADR 0033: `render_raster` at `zoom * 96` pixels per inch).
+/// Rasterizes the active page into the cache (ADR 0033: `render_raster`
+/// at `zoom * 96` pixels per inch).
+///
+/// A page whose raster failed is not retried every frame: the failed
+/// key is remembered and the attempt runs again only when the key
+/// (document, page, zoom) changes (P4-16 review minor 11), so the
+/// failure is reported once, not once per frame.
 fn rasterize(
+    ctx: &Context,
+    session: &DocumentSession,
+    cache: &mut CanvasCache,
+) -> Result<(), UiError> {
+    let Some(page) = session.active_page else {
+        cache.clear();
+        return Ok(());
+    };
+    let zoom = safe_zoom(session.view.zoom);
+    if cache
+        .failed
+        .as_ref()
+        .is_some_and(|failed| failed.matches(&session.document, Some(page), zoom))
+    {
+        return Ok(());
+    }
+    match rasterize_at(ctx, session, cache) {
+        Ok(()) => {
+            cache.failed = None;
+            Ok(())
+        }
+        Err(error) => {
+            cache.failed = Some(FailedKey {
+                document: session.document.clone(),
+                page: Some(page),
+                zoom,
+            });
+            Err(error)
+        }
+    }
+}
+
+/// Builds the scene of the active page and uploads it as a texture
+/// (the raster attempt behind [`rasterize`]).
+fn rasterize_at(
     ctx: &Context,
     session: &DocumentSession,
     cache: &mut CanvasCache,
@@ -1128,5 +1190,64 @@ mod tests {
         assert_eq!(safe_zoom(0.01), MIN_ZOOM);
         assert_eq!(safe_zoom(1000.0), MAX_ZOOM);
         assert_eq!(safe_zoom(2.0), 2.0);
+    }
+
+    #[test]
+    fn render_errors_map_into_ui_errors() {
+        // The `UiError::Render` mapping (P4-12 coverage major 4).
+        let error = render_error(ferrogram_render::Error::TooLarge);
+        assert!(matches!(error, UiError::Render { .. }), "{error:?}");
+        assert_eq!(
+            error.to_string(),
+            "render error: the canvas raster failed: output is larger than the allowed caps"
+        );
+    }
+
+    #[test]
+    fn a_page_that_cannot_raster_reports_once_and_is_not_retried() {
+        // P4-16 review minor 11: a failed raster remembers its cache
+        // key and is retried only when the key changes. The error is
+        // reported once, not once per frame.
+        let ctx = Context::default();
+        let mut cache = CanvasCache::new();
+        let mut session = DocumentSession::new(filled_document(), None);
+        // A page id the document does not hold: `build_scene` rejects
+        // it and `rasterize` maps the failure to `UiError::Render`.
+        session.active_page = Some(PageId { index: 42 });
+        let error = rasterize(&ctx, &session, &mut cache).expect_err("the raster fails");
+        assert!(matches!(error, UiError::Render { .. }), "{error:?}");
+        for _ in 0..3 {
+            rasterize(&ctx, &session, &mut cache).expect("the failed key is not retried");
+        }
+        assert!(cache.is_empty());
+        assert_eq!(cache.generation(), 0, "no rasterization ran again");
+
+        // A different page is a different key: retried (and fails).
+        session.active_page = Some(PageId { index: 43 });
+        rasterize(&ctx, &session, &mut cache).expect_err("retried at a new key");
+        // A different zoom is a different key too.
+        session.view.zoom = 2.0;
+        rasterize(&ctx, &session, &mut cache).expect_err("retried at a new zoom");
+        // And so is a different document.
+        session.document = Document::new();
+        rasterize(&ctx, &session, &mut cache).expect_err("retried at a new document");
+    }
+
+    #[test]
+    fn a_successful_raster_clears_the_failed_key() {
+        let ctx = Context::default();
+        let mut cache = CanvasCache::new();
+        let mut session = DocumentSession::new(filled_document(), None);
+        session.active_page = Some(PageId { index: 42 });
+        rasterize(&ctx, &session, &mut cache).expect_err("the raster fails");
+        // The key that failed rasterizes fine once the page is valid.
+        session.active_page = Some(PageId { index: 0 });
+        rasterize(&ctx, &session, &mut cache).expect("the page rasterizes");
+        assert_eq!(cache.generation(), 1);
+        assert!(!cache.is_empty());
+        // The failed key is forgotten after a success: a new failure
+        // at the old key is reported again.
+        session.active_page = Some(PageId { index: 42 });
+        rasterize(&ctx, &session, &mut cache).expect_err("reported again");
     }
 }

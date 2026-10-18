@@ -45,6 +45,8 @@ web-sys = { version = "0.3", features = [
 egui_kittest = "0.37"
 # Counts pinned per layout (ADR 0037, P4-04).
 insta = "1"
+# Property tests (ADR 0037; the settings-slot round trip, P4-16).
+proptest = "1"
 
 [lints]
 workspace = true

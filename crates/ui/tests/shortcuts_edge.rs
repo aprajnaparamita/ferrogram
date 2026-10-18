@@ -87,9 +87,16 @@ fn mods(ctrl: bool, shift: bool, alt: bool) -> Modifiers {
 /// One frame: `dispatch` first (before the widgets, ADR 0036), then an
 /// optional focused text edit.
 struct Frame {
-    intent: Option<Intent>,
+    intents: Vec<Intent>,
     events_left: usize,
     pending: bool,
+}
+
+impl Frame {
+    /// The first dispatched intent, when one fired.
+    fn intent(&self) -> Option<&Intent> {
+        self.intents.first()
+    }
 }
 
 #[allow(clippy::expect_used)] // test helper: a failure here is the bug
@@ -104,7 +111,7 @@ fn frame(
 ) -> Frame {
     let mut text = String::from("hello");
     let mut frame = Frame {
-        intent: None,
+        intents: Vec::new(),
         events_left: 0,
         pending: false,
     };
@@ -115,7 +122,7 @@ fn frame(
             ..Default::default()
         },
         |ctx| {
-            frame.intent = dispatch(ctx, map, app, scope).expect("dispatch");
+            frame.intents = dispatch(ctx, map, app, scope).expect("dispatch");
             frame.events_left = ctx.input(|input| input.events.len());
             frame.pending = map.pending();
             if with_text_edit {
@@ -199,7 +206,7 @@ fn the_event_side_normalizes_like_the_file_side() {
             0.0,
             false,
         );
-        let intent = result.intent.expect("the binding fires");
+        let intent = result.intent().expect("the binding fires");
         assert_eq!(intent.command.as_str(), "edit.copy");
     }
     // `<` typed as Shift+Comma with Ctrl.
@@ -219,7 +226,7 @@ fn the_event_side_normalizes_like_the_file_side() {
     );
     assert_eq!(
         result
-            .intent
+            .intent()
             .expect("`Ctrl+Shift+<` fires")
             .command
             .as_str(),
@@ -246,7 +253,10 @@ fn a_chord_token_set_is_order_insensitive() {
         0.0,
         false,
     );
-    assert_eq!(result.intent.expect("fires").command.as_str(), "edit.copy");
+    assert_eq!(
+        result.intent().expect("fires").command.as_str(),
+        "edit.copy"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +338,7 @@ fn a_prefix_sequence_defers_and_fires_on_a_mismatch() {
             "view.zoom.out",
             ShortcutScope::Global,
         ),
+        shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Global),
     ]);
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
@@ -341,12 +352,13 @@ fn a_prefix_sequence_defers_and_fires_on_a_mismatch() {
         0.0,
         false,
     );
-    assert!(first.intent.is_none(), "the prefix waits");
+    assert!(first.intents.is_empty(), "the prefix waits");
     assert!(first.pending);
 
-    // A chord that continues nothing fires the held-back completion.
-    // The mismatching chord itself is dropped (documented behavior;
-    // see the P4-10 report): it is consumed with the completion.
+    // A chord that continues nothing fires the held-back completion
+    // and is then tried as the start of a new sequence (P4-16, the
+    // P4-10 finding 2): its own binding fires in the same frame, the
+    // chord is not dropped.
     let second = frame(
         &ctx,
         &mut map,
@@ -356,17 +368,15 @@ fn a_prefix_sequence_defers_and_fires_on_a_mismatch() {
         0.1,
         false,
     );
-    assert_eq!(
-        second
-            .intent
-            .expect("the deferred prefix fires")
-            .command
-            .as_str(),
-        "view.zoom.in"
-    );
+    let ids: Vec<&str> = second
+        .intents
+        .iter()
+        .map(|intent| intent.command.as_str())
+        .collect();
+    assert_eq!(ids, vec!["view.zoom.in", "edit.copy"], "{ids:?}");
     assert!(!second.pending);
 
-    // The dropped chord is gone; typing it again starts fresh.
+    // The chord is a normal binding again: typing it dispatches it.
     let third = frame(
         &ctx,
         &mut map,
@@ -376,7 +386,12 @@ fn a_prefix_sequence_defers_and_fires_on_a_mismatch() {
         0.2,
         false,
     );
-    assert!(third.intent.is_none());
+    let ids: Vec<&str> = third
+        .intents
+        .iter()
+        .map(|intent| intent.command.as_str())
+        .collect();
+    assert_eq!(ids, vec!["edit.copy"], "{ids:?}");
 }
 
 #[test]
@@ -405,7 +420,7 @@ fn the_longer_sequence_of_a_prefix_pair_completes() {
     );
     assert_eq!(
         result
-            .intent
+            .intent()
             .expect("the long sequence fires")
             .command
             .as_str(),
@@ -446,7 +461,7 @@ fn a_prefix_sequence_fires_when_the_longer_one_times_out() {
         1.0,
         false,
     );
-    assert!(early.intent.is_none());
+    assert!(early.intents.is_empty());
     assert!(early.pending);
 
     // After `SEQUENCE_TIMEOUT_SECONDS` the deferred completion fires
@@ -461,7 +476,7 @@ fn a_prefix_sequence_fires_when_the_longer_one_times_out() {
         false,
     );
     assert_eq!(
-        late.intent
+        late.intent()
             .expect("the timeout fires the prefix")
             .command
             .as_str(),
@@ -490,19 +505,23 @@ fn resolve_keeps_half_typed_state_across_calls() {
             },
         )
     };
-    assert!(map.resolve(&[chord("H", true)], &active).unwrap().is_none());
+    assert!(
+        map.resolve(&[chord("H", true)], &active)
+            .unwrap()
+            .is_empty()
+    );
     assert!(map.pending());
     assert_eq!(map.pending_display(), "Alt+H");
     assert!(
         map.resolve(&[chord("F", false)], &active)
             .unwrap()
-            .is_none()
+            .is_empty()
     );
     assert_eq!(map.pending_display(), "Alt+H, F");
     let intent = map
         .resolve(&[chord("O", false)], &active)
         .unwrap()
-        .expect("the sequence completes");
+        .remove(0);
     assert_eq!(intent.command.as_str(), "view.zoom.in");
     assert!(!map.pending());
 }
@@ -525,7 +544,7 @@ fn an_unmatched_chord_is_left_alone_and_consumes_nothing() {
         0.0,
         false,
     );
-    assert!(result.intent.is_none());
+    assert!(result.intents.is_empty());
     assert_eq!(result.events_left, 1, "the chord survives for the widgets");
 }
 
@@ -549,7 +568,7 @@ fn a_completed_sequence_with_no_active_binding_is_still_consumed() {
         0.0,
         false,
     );
-    assert!(result.intent.is_none());
+    assert!(result.intents.is_empty());
     assert_eq!(result.events_left, 0);
 }
 
@@ -609,10 +628,7 @@ fn the_most_specific_active_scope_wins() {
         ),
     ];
     for (active, expected) in cases {
-        let intent = map
-            .resolve(&chord, active)
-            .unwrap()
-            .unwrap_or_else(|| panic!("no binding for {active:?}"));
+        let intent = map.resolve(&chord, active).unwrap().remove(0);
         assert_eq!(intent.command.as_str(), *expected, "for {active:?}");
     }
 }
@@ -676,7 +692,7 @@ fn egui_editing_chords_are_never_stolen_inside_a_text_edit() {
         -1.0,
         true,
     );
-    assert!(warm.intent.is_none());
+    assert!(warm.intents.is_empty());
     for (key, modifiers) in [
         (Key::A, mods(true, false, false)),
         (Key::C, mods(true, false, false)),
@@ -697,7 +713,7 @@ fn egui_editing_chords_are_never_stolen_inside_a_text_edit() {
             0.0,
             true,
         );
-        assert!(result.intent.is_none(), "{key:?} must defer to egui");
+        assert!(result.intents.is_empty(), "{key:?} must defer to egui");
         assert_eq!(result.events_left, 1, "{key:?} must reach the text edit");
     }
 }
@@ -727,7 +743,7 @@ fn other_bound_chords_dispatch_inside_a_text_edit() {
         -1.0,
         true,
     );
-    assert!(warm.intent.is_none());
+    assert!(warm.intents.is_empty());
     for (key, modifiers, expected) in [
         (Key::C, mods(true, true, false), "tools.format_painter"),
         (Key::F6, mods(false, false, true), "view.zoom.in"),
@@ -741,7 +757,7 @@ fn other_bound_chords_dispatch_inside_a_text_edit() {
             0.0,
             true,
         );
-        let intent = result.intent.expect("the chord dispatches");
+        let intent = result.intent().expect("the chord dispatches");
         assert_eq!(intent.command.as_str(), expected);
     }
     // Plain typing is never matched or consumed.
@@ -757,7 +773,7 @@ fn other_bound_chords_dispatch_inside_a_text_edit() {
         1.0,
         true,
     );
-    assert!(result.intent.is_none());
+    assert!(result.intents.is_empty());
     assert_eq!(result.events_left, 2);
 }
 
@@ -782,11 +798,11 @@ fn a_five_hundred_chord_sequence_builds_and_completes() {
     let chord = [KeyChord::new("H", vec!["Alt".to_owned()])];
     for step in 0..499 {
         assert!(
-            map.resolve(&chord, &active).unwrap().is_none(),
+            map.resolve(&chord, &active).unwrap().is_empty(),
             "step {step} must wait"
         );
     }
-    let intent = map.resolve(&chord, &active).unwrap().expect("completes");
+    let intent = map.resolve(&chord, &active).unwrap().remove(0);
     assert_eq!(intent.command.as_str(), "edit.copy");
 }
 
@@ -841,14 +857,14 @@ fn two_thousand_entries_over_few_commands_build() {
         KeyChord::new("A", vec![]),
         KeyChord::new("0", vec![]),
     ];
-    let intent = map.resolve(&typed, &active).unwrap().expect("entry 0");
+    let intent = map.resolve(&typed, &active).unwrap().remove(0);
     assert_eq!(intent.command.as_str(), "edit.copy");
     let late = [
         KeyChord::new("F2", vec!["Alt".to_owned()]),
         KeyChord::new("B", vec![]),
         KeyChord::new("5", vec![]),
     ];
-    assert!(map.resolve(&late, &active).unwrap().is_some());
+    assert!(!map.resolve(&late, &active).unwrap().is_empty());
 }
 
 #[test]

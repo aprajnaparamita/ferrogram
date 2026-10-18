@@ -124,23 +124,42 @@ pub struct NativeFilePicker;
 impl FilePicker for NativeFilePicker {
     fn open(&self, request: &OpenRequest) -> Result<Option<FileChoice>, UiError> {
         let dialog = open_dialog(request);
-        Ok(dialog.pick_file().map(FileChoice::Path))
+        Ok(picked_path(|| dialog.pick_file()))
     }
 
     fn save(&self, request: &SaveRequest, data: &[u8]) -> Result<Option<FileChoice>, UiError> {
         let dialog = rfd::FileDialog::new()
             .set_title(request.title.as_str())
             .set_file_name(request.default_name.as_str());
-        let Some(path) = dialog.save_file() else {
-            return Ok(None);
-        };
-        if !data.is_empty() {
-            std::fs::write(&path, data).map_err(|error| UiError::Io {
-                message: format!("cannot write {}: {error}", path.display()),
-            })?;
-        }
-        Ok(Some(FileChoice::Path(path)))
+        save_picked(|| dialog.save_file(), data)
     }
+}
+
+/// The picked path of a synchronous open dialog as a [`FileChoice`]
+/// (the seam behind the rfd call, testable headless).
+#[cfg(not(target_arch = "wasm32"))]
+fn picked_path(pick: impl FnOnce() -> Option<PathBuf>) -> Option<FileChoice> {
+    pick().map(FileChoice::Path)
+}
+
+/// The body of a synchronous save dialog (the seam behind the rfd
+/// call, testable headless): writes `data` when it is not empty (the
+/// ask-only rule of the module docs) and reports a write failure as
+/// [`UiError::Io`] with the ADR 0026 one-line cause.
+#[cfg(not(target_arch = "wasm32"))]
+fn save_picked(
+    pick: impl FnOnce() -> Option<PathBuf>,
+    data: &[u8],
+) -> Result<Option<FileChoice>, UiError> {
+    let Some(path) = pick() else {
+        return Ok(None);
+    };
+    if !data.is_empty() {
+        std::fs::write(&path, data).map_err(|error| UiError::Io {
+            message: format!("cannot write {}: {error}", path.display()),
+        })?;
+    }
+    Ok(Some(FileChoice::Path(path)))
 }
 
 /// The rfd dialog configured from one [`OpenRequest`].
@@ -344,5 +363,62 @@ mod tests {
         };
         assert_eq!(open, open.clone());
         assert_eq!(save, save.clone());
+    }
+
+    /// The desktop seams behind the rfd calls (P4-12 coverage major
+    /// 1): the pick mapping and the save body run headless; only the
+    /// `rfd::FileDialog::pick_file` / `save_file` calls themselves
+    /// need a real desktop session and stay untested.
+    #[cfg(not(target_arch = "wasm32"))]
+    mod desktop {
+        use super::*;
+
+        /// A scratch path under the process temp directory.
+        fn scratch(name: &str) -> PathBuf {
+            std::env::temp_dir().join(format!("ferrogram-dialogs-{}-{name}", std::process::id()))
+        }
+
+        #[test]
+        fn picked_path_wraps_the_choice() {
+            assert_eq!(
+                picked_path(|| Some(PathBuf::from("/tmp/a.vsdx"))),
+                Some(FileChoice::Path(PathBuf::from("/tmp/a.vsdx")))
+            );
+            assert_eq!(picked_path(|| None), None);
+        }
+
+        #[test]
+        fn save_picked_writes_the_data() {
+            let path = scratch("write.vsdx");
+            let _ = std::fs::remove_file(&path);
+            let choice = save_picked(|| Some(path.clone()), b"contents").expect("save");
+            assert_eq!(choice, Some(FileChoice::Path(path.clone())));
+            assert_eq!(std::fs::read(&path).expect("written"), b"contents");
+            let _ = std::fs::remove_file(&path);
+        }
+
+        #[test]
+        fn save_picked_with_empty_data_only_asks() {
+            // The ask-only rule of the module docs: the command writes
+            // the file when it is dispatched with the picked path.
+            let path = scratch("ask-only.vsdx");
+            let _ = std::fs::remove_file(&path);
+            let choice = save_picked(|| Some(path.clone()), b"").expect("ask");
+            assert_eq!(choice, Some(FileChoice::Path(path.clone())));
+            assert!(!path.exists(), "nothing was written");
+        }
+
+        #[test]
+        fn a_cancelled_save_answers_none() {
+            assert_eq!(save_picked(|| None, b"data").expect("cancel"), None);
+        }
+
+        #[test]
+        fn a_failed_write_is_an_io_error() {
+            let path = scratch("no-such-dir").join("nope.vsdx");
+            let error = save_picked(|| Some(path.clone()), b"data").expect_err("the write fails");
+            let message = error.to_string();
+            assert!(message.starts_with("io error: cannot write "), "{message}");
+        }
     }
 }

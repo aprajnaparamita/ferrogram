@@ -9,7 +9,7 @@
 //! - the window commands (`app.quit`, `app.office.center.options`)
 //!   from the programmatic side: [`dispatch_one`] returns their
 //!   [`UiRequest`](ferrogram_commands::UiRequest) with no side effect
-//!   (P4-15 implements them; the shell intercepts are P4-16's);
+//!   (P4-15 implements them; P4-16 removed the shell intercepts);
 //! - quitting: the flag the shell resets when it hands the close to
 //!   the viewport.
 //!
@@ -152,7 +152,8 @@ fn the_window_commands_only_request_their_windows() {
     // a programmatic caller through `dispatch_one` gets the request
     // (`UiRequest::Quit` / `UiRequest::ShowOptions`) and no side
     // effect: never a silent quit, never a dialog (AGENTS.md
-    // section 6). The shell's own intercepts go in P4-16.
+    // section 6). P4-16 removed the shell intercepts; the shell acts
+    // on the requests for interactive sources only.
     let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
     let mut app = AppCtx::new(Settings::default());
     for (id, request) in [
@@ -176,7 +177,9 @@ fn the_window_commands_only_request_their_windows() {
 }
 
 #[test]
-fn quit_is_intercepted_and_handed_to_the_viewport() {
+fn quit_is_handed_to_the_viewport() {
+    // `app.quit` runs through the registry (P4-16: no shell
+    // intercept); its `UiRequest::Quit` reaches the viewport.
     let mut rig = ShellRig::new();
     let outcome = rig.dispatch("app.quit", Source::Ui).expect("no error");
     assert_eq!(outcome.message.as_deref(), Some("Quit"));

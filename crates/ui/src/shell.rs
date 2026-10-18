@@ -21,8 +21,8 @@
 
 use egui::{Context, PointerButton, Ui};
 use ferrogram_commands::{
-    AppCtx, ArgValue, CommandError, CommandId, Enabled, Invocation, NeededInput, Outcome,
-    PathPurpose, Payload, Registry, Source, UiRequest,
+    AppCtx, ArgValue, CommandError, CommandId, Invocation, NeededInput, Outcome, PathPurpose,
+    Payload, Registry, Source, UiRequest,
 };
 use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
 
@@ -62,18 +62,6 @@ const VIEW_MENU: &[&str] = &[
 
 /// The Help menu items (registry ids, in order).
 const HELP_MENU: &[&str] = &["help.about"];
-
-/// The window-level commands the shell runs itself (see
-/// [`Shell::dispatch`]): quitting the window and opening the
-/// View/Options dialog. Their `commands.yaml` rows stay stubs.
-const SHELL_HANDLED: &[&str] = &["app.quit", "app.office.center.options"];
-
-/// Quitting the window (the P4-02 note: "`app.quit` stays a stub (the
-/// shell quits itself)").
-const QUIT: &str = "app.quit";
-
-/// Opening the View/Options dialog (ADR 0032).
-const OPTIONS: &str = "app.office.center.options";
 
 /// The file extensions the picker accepts (ADR 0036).
 const OPEN_EXTENSIONS: &[&str] = &["vsdx", "vssx", "vstx"];
@@ -250,33 +238,17 @@ impl Shell {
         }
     }
 
-    /// Shows the reason of a disabled command in the status bar (ADR
-    /// 0036 "a disabled status-bar hint"), for every intent source;
-    /// the error still goes back to the caller untouched.
-    fn note_disabled(&mut self, error: &CommandError) {
-        if matches!(error, CommandError::NotEnabled { .. }) {
-            self.note_error(error.to_string());
-        }
-    }
-
-    /// Draws one frame and returns the intents the widgets produced.
+    /// Draws one frame into `ui` and returns the intents (ADR 0031).
     ///
     /// This is the fixed P4-01 entry point. egui 0.37 hands the root
     /// [`Ui`] to `eframe::App::ui`, and [`Context::root_ui`] panics
-    /// while that ui is borrowed, so the apps call [`Shell::show_in`]
-    /// with the ui they were given and this wrapper only serves
-    /// callers outside a frame pass.
-    pub fn show(&mut self, egui_ctx: &Context) -> Result<Vec<Intent>, UiError> {
-        egui_ctx.root_ui(|ui| self.show_in(ui))
-    }
-
-    /// Draws one frame into `ui` and returns the intents (ADR 0031).
+    /// while that ui is borrowed (the never-crash rule of AGENTS.md
+    /// section 6, P4-16 review minor 10), so the callers pass the ui
+    /// they were given.
     ///
     /// The keyboard shortcut pass runs before the widgets (ADR 0036,
-    /// P4-14) and its intent joins the widget intents. Widget stubs
-    /// report [`UiError::NotImplemented`] in this task's absence;
-    /// their error text goes to the status bar and the frame still
-    /// renders.
+    /// P4-14) and its intents join the widget intents. A widget
+    /// failure goes to the status bar and the frame still renders.
     pub fn show_in(&mut self, ui: &mut Ui) -> Result<Vec<Intent>, UiError> {
         let mut intents = Vec::new();
         self.finish_pick();
@@ -291,8 +263,7 @@ impl Shell {
         // (`Source::Shortcut`).
         self.note_pointer_focus(ui.ctx());
         match shortcuts::dispatch(ui.ctx(), &mut self.shortcuts, &self.app, self.focus) {
-            Ok(Some(intent)) => intents.push(intent),
-            Ok(None) => {}
+            Ok(produced) => intents.extend(produced),
             Err(error) => self.note_error(error.to_string()),
         }
 
@@ -444,20 +415,23 @@ impl Shell {
     }
 
     /// The modal windows: View/Options, About and the close
-    /// confirmation (ADR 0028 [`UiRequest`] flow).
+    /// confirmation (ADR 0028 [`UiRequest`] flow). The Options dialog
+    /// body returns the [`Intent`]s of the rows the user changed (the
+    /// ADR 0032 amendment); they join the frame's intents and run
+    /// through the registry like any other control.
     fn show_dialogs(&mut self, ui: &mut Ui, intents: &mut Vec<Intent>) {
         if self.options_open {
             let mut open = true;
+            let mut produced = Ok(Vec::new());
             egui::Window::new("Options")
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut open)
                 .show(ui.ctx(), |ui| {
-                    if let Err(error) = settings::show_options(ui, &mut self.app.settings) {
-                        self.note_error(error.to_string());
-                    }
+                    produced = settings::show_options(ui, &self.app.settings);
                 });
             self.options_open = open;
+            self.absorb(produced, intents);
         }
         if self.about_open {
             let mut open = true;
@@ -529,9 +503,9 @@ impl Shell {
 
     /// One menu item for a registry id: `Some(intent)` when clicked.
     ///
-    /// The label and the enabled state come from the registry; the
-    /// shell-handled window commands ([`SHELL_HANDLED`]) are always
-    /// enabled because their registry rows are still stubs.
+    /// The label and the enabled state come from the registry (the
+    /// window commands included: their rows are implemented commands
+    /// like any other, P4-16).
     fn menu_item(
         &mut self,
         ui: &mut Ui,
@@ -546,7 +520,7 @@ impl Shell {
             .meta(&command)
             .map(|meta| meta.label.clone())
             .unwrap_or_else(|| id.to_owned());
-        let enabled = self.menu_enabled(&command);
+        let enabled = self.registry.enabled(&command, &self.app);
         let response = ui.add_enabled_ui(enabled.value, |ui| match checked {
             Some(selected) => ui.radio(selected, label),
             None => ui.button(label),
@@ -560,15 +534,6 @@ impl Shell {
             Some(Intent::new(command, Invocation::empty(Source::Menu)))
         } else {
             None
-        }
-    }
-
-    /// The enabled state of a menu item (see [`SHELL_HANDLED`]).
-    fn menu_enabled(&self, command: &CommandId) -> Enabled {
-        if SHELL_HANDLED.contains(&command.as_str()) {
-            Enabled::yes()
-        } else {
-            self.registry.enabled(command, &self.app)
         }
     }
 
@@ -602,8 +567,11 @@ impl Shell {
 
     /// Dispatches intents through the registry (ADR 0028), in order.
     ///
-    /// One result per intent. A cancelled dialog dispatches nothing
-    /// and reports [`Outcome::message`] "Cancelled" (ADR 0036).
+    /// One result per intent, each error back to the caller untouched.
+    /// Every [`CommandError`] also reaches the status bar as one line
+    /// through [`Shell::note_error`] (ADR 0021; P4-16 review major 2:
+    /// a failed command is never silent). A cancelled dialog
+    /// dispatches nothing and stays quiet (ADR 0036).
     pub fn dispatch(
         &mut self,
         intents: &[Intent],
@@ -621,22 +589,6 @@ impl Shell {
         &mut self,
         intent: &Intent,
     ) -> Result<Result<Outcome, CommandError>, UiError> {
-        // Window-level commands the shell runs itself (ADR 0028 note
-        // from P4-02: `app.quit` stays a stub and the shell quits).
-        match intent.command.as_str() {
-            QUIT => {
-                self.quit_requested = true;
-                return Ok(Ok(Outcome::message("Quit")));
-            }
-            OPTIONS => {
-                self.options_open = true;
-                let mut outcome = Outcome::message("Options");
-                outcome.ui_request = Some(UiRequest::ShowOptions);
-                return Ok(Ok(outcome));
-            }
-            _ => {}
-        }
-
         let source = intent.invocation.source;
         let first = dispatch_one(
             &self.registry,
@@ -657,7 +609,7 @@ impl Shell {
                         ) {
                             Ok(outcome) => outcome,
                             Err(UiError::Command(error)) => {
-                                self.note_disabled(&error);
+                                self.note_error(error.to_string());
                                 return Ok(Err(error));
                             }
                             Err(error) => return Err(error),
@@ -669,17 +621,19 @@ impl Shell {
                     }
                     Ask::Cancelled => return Ok(Ok(Outcome::message("Cancelled"))),
                     Ask::NoDialog(needed) => {
-                        return Ok(Err(CommandError::NeedsInput(needed)));
+                        let error = CommandError::NeedsInput(needed);
+                        self.note_error(error.to_string());
+                        return Ok(Err(error));
                     }
                 }
             }
             Err(UiError::Command(error)) => {
-                self.note_disabled(&error);
+                self.note_error(error.to_string());
                 return Ok(Err(error));
             }
             Err(error) => return Err(error),
         };
-        self.apply_outcome(&outcome)?;
+        self.apply_outcome(&outcome, source)?;
         Ok(Ok(outcome))
     }
 
@@ -745,14 +699,23 @@ impl Shell {
 
     /// Acts on the follow-up requests of a completed command (ADR
     /// 0028 [`UiRequest`], ADR 0036 [`Payload`]).
-    fn apply_outcome(&mut self, outcome: &Outcome) -> Result<(), UiError> {
+    ///
+    /// Only for an interactive [`Source`]: a programmatic caller gets
+    /// its outcome back untouched — no dialog opens, no download
+    /// starts, no window quits (AGENTS.md section 6; P4-16 review
+    /// major 3). The status line still shows the message.
+    fn apply_outcome(&mut self, outcome: &Outcome, source: Source) -> Result<(), UiError> {
         if let Some(message) = &outcome.message {
             self.status = message.clone();
+        }
+        if !source.is_interactive() {
+            return Ok(());
         }
         match &outcome.ui_request {
             Some(UiRequest::ShowAbout) => self.about_open = true,
             Some(UiRequest::ShowOptions) => self.options_open = true,
             Some(UiRequest::ConfirmClose { name }) => self.confirm_close = Some(name.clone()),
+            Some(UiRequest::Quit) => self.quit_requested = true,
             _ => {}
         }
         if let Some(Payload::Bytes { name, data }) = &outcome.payload {
@@ -845,18 +808,29 @@ fn with_choice(invocation: &Invocation, choice: FileChoice) -> Invocation {
 /// Phase 8 control channel reuse (ADR 0028).
 ///
 /// The command's undoable edit (when it produced one) is pushed onto
-/// the active document's undo stack after a successful run (ADR 0028).
+/// the undo stack of the session the command ran against after a
+/// successful run (ADR 0028). That is the active session **before**
+/// the run, found by its [`DocumentSession::id`](ferrogram_commands::DocumentSession)
+/// (the `with_undo` way, P4-15 open issue 4): a command that opens a
+/// document must not leave its edit on the new document's stack. With
+/// no session before the run (the command opened the first document)
+/// the edit belongs to the session it opened.
 pub fn dispatch_one(
     registry: &Registry,
     app: &mut AppCtx,
     command: &CommandId,
     invocation: Invocation,
 ) -> Result<Outcome, UiError> {
+    let ran_against = app.active_document().map(|session| session.id);
     let mut outcome = registry
         .execute(command, app, invocation)
         .map_err(UiError::Command)?;
     if let Some(edit) = outcome.edit.take() {
-        match app.active_document_mut() {
+        let target = match ran_against {
+            Some(id) => app.documents.iter_mut().find(|session| session.id == id),
+            None => app.active_document_mut(),
+        };
+        match target {
             Some(session) => {
                 session.undo.push(edit);
             }
@@ -876,7 +850,7 @@ mod tests {
     use super::*;
     use crate::dialogs::{OpenRequest, SaveRequest};
     use ferrogram_commands::{
-        Command, CommandMeta, CommandStatus, DocumentSession, Edit, Settings, StubCommand,
+        Command, CommandMeta, CommandStatus, DocumentSession, Edit, Enabled, Settings, StubCommand,
     };
     use ferrogram_model::Document;
     use ferrogram_ui_spec::Loader;
@@ -904,10 +878,11 @@ mod tests {
     }
 
     /// A picker that records its calls and answers with a fixed
-    /// choice.
+    /// choice; its asynchronous side (`poll`) answers `poll_state`.
     #[derive(Default)]
     struct FakePicker {
         choice: Option<FileChoice>,
+        poll_state: PickState,
         open_calls: Rc<RefCell<usize>>,
         save_calls: Rc<RefCell<Vec<Vec<u8>>>>,
     }
@@ -920,6 +895,9 @@ mod tests {
         fn save(&self, _request: &SaveRequest, data: &[u8]) -> Result<Option<FileChoice>, UiError> {
             self.save_calls.borrow_mut().push(data.to_vec());
             Ok(self.choice.clone())
+        }
+        fn poll(&self) -> PickState {
+            self.poll_state.clone()
         }
     }
 
@@ -1104,19 +1082,45 @@ mod tests {
     }
 
     #[test]
-    fn the_window_commands_are_shell_handled() {
+    fn the_window_commands_run_through_the_registry() {
+        // No shell intercept (P4-16): `app.quit` reaches its registry
+        // row. A stub row fails like any other stub and the shell does
+        // not quit on its own.
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(StubCommand::new(CommandMeta::new(
+                CommandId::parse("app.quit").expect("id"),
+                "Exit",
+                CommandStatus::Stub,
+            ))))
+            .expect("register");
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        let results = shell
+            .dispatch(&[intent("app.quit", Source::Menu)])
+            .expect("dispatch");
+        assert!(matches!(results[0], Err(CommandError::Unsupported { .. })));
+        assert!(!shell.quit_requested(), "no silent quit behind a stub");
+
+        // The builtin row is a real command: its `UiRequest::Quit`
+        // closes the window (`show_in` hands it to the viewport).
         let mut shell = full_shell();
-        let quit = intent("app.quit", Source::Menu);
-        let results = shell.dispatch(&[quit]).expect("dispatch");
-        assert_eq!(results.len(), 1);
-        assert!(shell.quit_requested());
+        let results = shell
+            .dispatch(&[intent("app.quit", Source::Menu)])
+            .expect("dispatch");
         assert_eq!(
             results[0].as_ref().expect("quit").message.as_deref(),
             Some("Quit")
         );
+        assert!(shell.quit_requested());
 
-        let options = intent("app.office.center.options", Source::Menu);
-        let results = shell.dispatch(&[options]).expect("dispatch");
+        // `app.office.center.options` asks for the dialog the same way.
+        let results = shell
+            .dispatch(&[intent("app.office.center.options", Source::Menu)])
+            .expect("dispatch");
         assert!(matches!(
             results[0].as_ref().expect("options").ui_request,
             Some(UiRequest::ShowOptions)
@@ -1228,6 +1232,7 @@ mod tests {
             choice: Some(FileChoice::Path("/tmp/a.vsdx".into())),
             open_calls: Rc::clone(&opens),
             save_calls: Rc::new(RefCell::new(Vec::new())),
+            ..FakePicker::default()
         }));
         let results = shell
             .dispatch(&[intent("file.needs_path", Source::Cli)])
@@ -1254,6 +1259,7 @@ mod tests {
             choice: None,
             open_calls: Rc::new(RefCell::new(0)),
             save_calls: Rc::clone(&saves),
+            ..FakePicker::default()
         }));
         let results = shell
             .dispatch(&[intent("file.makes_payload", Source::Ui)])
@@ -1365,11 +1371,13 @@ mod tests {
     }
 
     #[test]
-    fn show_through_the_context_draws_the_frame() {
+    fn show_in_through_the_root_ui_draws_the_frame() {
         let mut shell = full_shell();
         let ctx = Context::default();
         ctx.begin_pass(Default::default());
-        let intents = shell.show(&ctx).expect("the frame renders");
+        let intents = ctx
+            .root_ui(|ui| shell.show_in(ui))
+            .expect("the frame renders");
         let mut output = ctx.end_pass();
         output.textures_delta.clear();
         assert!(intents.is_empty());
@@ -1683,5 +1691,278 @@ mod tests {
             "{:?}",
             shell.app.warnings
         );
+    }
+
+    /// A command that fails with an ADR 0026 one-line report (the
+    /// corrupt-file case of the P4-16 review major 2).
+    struct Fails;
+
+    impl Command for Fails {
+        fn meta(&self) -> &CommandMeta {
+            use std::sync::OnceLock;
+            static META: OnceLock<CommandMeta> = OnceLock::new();
+            META.get_or_init(|| {
+                CommandMeta::new(
+                    CommandId::parse("file.fails").expect("id"),
+                    "Fails",
+                    CommandStatus::Implemented,
+                )
+            })
+        }
+        fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+            Enabled::yes()
+        }
+        fn execute(
+            &self,
+            _ctx: &mut AppCtx,
+            _invocation: &Invocation,
+        ) -> Result<Outcome, CommandError> {
+            Err(CommandError::failed("cannot read input: corrupt.vsdx"))
+        }
+    }
+
+    #[test]
+    fn a_failed_command_reaches_the_status_bar() {
+        // P4-16 review major 2: every `Err` `Shell::dispatch` gets
+        // back for an intent becomes one `note_error` line (ADR 0021),
+        // not only `NotEnabled`. The error itself still goes back to
+        // the caller untouched.
+        let mut registry = Registry::new();
+        registry.register(Box::new(Fails)).expect("register");
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        let results = shell
+            .dispatch(&[intent("file.fails", Source::Ui)])
+            .expect("dispatch");
+        assert!(matches!(results[0], Err(CommandError::Failed { .. })));
+        assert_eq!(
+            shell.app.warnings.last().map(String::as_str),
+            Some("cannot read input: corrupt.vsdx"),
+            "the one-line report reaches the status bar: {:?}",
+            shell.app.warnings
+        );
+    }
+
+    #[test]
+    fn a_programmatic_payload_goes_back_untouched() {
+        // P4-16 review major 3: a save dialog (or a wasm download) is
+        // for interactive sources only; a programmatic outcome keeps
+        // its payload and the picker is never touched (AGENTS.md
+        // section 6).
+        let mut registry = Registry::new();
+        registry.register(Box::new(MakesPayload)).expect("register");
+        let saves = Rc::new(RefCell::new(Vec::new()));
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        shell.set_picker(Box::new(FakePicker {
+            choice: None,
+            open_calls: Rc::new(RefCell::new(0)),
+            save_calls: Rc::clone(&saves),
+            ..FakePicker::default()
+        }));
+        let results = shell
+            .dispatch(&[intent("file.makes_payload", Source::Control)])
+            .expect("dispatch");
+        let outcome = results[0].as_ref().expect("the outcome comes back");
+        assert!(
+            matches!(outcome.payload, Some(Payload::Bytes { .. })),
+            "the payload is still there: {outcome:?}"
+        );
+        assert!(saves.borrow().is_empty(), "no dialog, no download");
+    }
+
+    #[test]
+    fn a_programmatic_quit_only_returns_the_request() {
+        // The window commands have no shell intercept (P4-16): a
+        // programmatic `app.quit` / `app.office.center.options` gets
+        // its `UiRequest` back and the shell does nothing (never a
+        // silent quit, never a dialog).
+        let mut shell = full_shell();
+        for (id, request) in [
+            ("app.quit", UiRequest::Quit),
+            ("app.office.center.options", UiRequest::ShowOptions),
+        ] {
+            let results = shell
+                .dispatch(&[intent(id, Source::Mcp)])
+                .expect("dispatch");
+            assert_eq!(
+                results[0].as_ref().expect(id).ui_request,
+                Some(request),
+                "{id}"
+            );
+        }
+        assert!(!shell.quit_requested());
+        assert!(!shell.options_open);
+    }
+
+    /// A command that demands a path once and then fails with it.
+    struct FailsAfterPick;
+
+    impl Command for FailsAfterPick {
+        fn meta(&self) -> &CommandMeta {
+            use std::sync::OnceLock;
+            static META: OnceLock<CommandMeta> = OnceLock::new();
+            META.get_or_init(|| {
+                CommandMeta::new(
+                    CommandId::parse("file.fails_after_pick").expect("id"),
+                    "Fails After Pick",
+                    CommandStatus::Implemented,
+                )
+            })
+        }
+        fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+            Enabled::yes()
+        }
+        fn execute(
+            &self,
+            _ctx: &mut AppCtx,
+            invocation: &Invocation,
+        ) -> Result<Outcome, CommandError> {
+            if invocation.args.path("path").is_some() {
+                Err(CommandError::failed("cannot read input: bad.vsdx"))
+            } else {
+                Err(CommandError::NeedsInput(NeededInput::Path {
+                    purpose: PathPurpose::OpenFile,
+                    suggested: None,
+                }))
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_retry_after_a_pick_reports_the_error() {
+        // The `Ask::Again` error arm (P4-12 coverage major 2): the
+        // re-dispatch with the picked path fails and its error reaches
+        // the status bar like any other.
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(FailsAfterPick))
+            .expect("register");
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        shell.set_picker(Box::new(FakePicker {
+            choice: Some(FileChoice::Path("/tmp/bad.vsdx".into())),
+            ..FakePicker::default()
+        }));
+        let results = shell
+            .dispatch(&[intent("file.fails_after_pick", Source::Ui)])
+            .expect("dispatch");
+        assert!(matches!(results[0], Err(CommandError::Failed { .. })));
+        assert_eq!(
+            shell.app.warnings.last().map(String::as_str),
+            Some("cannot read input: bad.vsdx")
+        );
+    }
+
+    #[test]
+    fn the_pending_arm_waits_for_an_asynchronous_pick() {
+        // The `Ask::Pending` arm (P4-12 coverage major 2): the picker
+        // has an asynchronous pick in flight (the wasm upload) and the
+        // command waits for `finish_pick`.
+        let mut registry = Registry::new();
+        let runs = Arc::new(AtomicUsize::new(0));
+        registry
+            .register(Box::new(NeedsPath {
+                runs: Arc::clone(&runs),
+            }))
+            .expect("register");
+        let mut shell = Shell::new(
+            registry,
+            LayoutSets::default(),
+            AppCtx::new(Settings::default()),
+        );
+        shell.set_picker(Box::new(FakePicker {
+            choice: None,
+            poll_state: PickState::Pending,
+            ..FakePicker::default()
+        }));
+        let results = shell
+            .dispatch(&[intent("file.needs_path", Source::Ui)])
+            .expect("dispatch");
+        let outcome = results[0].as_ref().expect("waiting");
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("Waiting for the file dialog")
+        );
+        assert_eq!(runs.load(Ordering::SeqCst), 1, "no re-dispatch yet");
+    }
+
+    /// A command that opens a document and produces an undoable edit
+    /// (the P4-15 open issue 4 shape).
+    struct OpensAndEdits;
+
+    impl Command for OpensAndEdits {
+        fn meta(&self) -> &CommandMeta {
+            use std::sync::OnceLock;
+            static META: OnceLock<CommandMeta> = OnceLock::new();
+            META.get_or_init(|| {
+                CommandMeta::new(
+                    CommandId::parse("file.opens_and_edits").expect("id"),
+                    "Opens And Edits",
+                    CommandStatus::Implemented,
+                )
+            })
+        }
+        fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+            Enabled::yes()
+        }
+        fn execute(
+            &self,
+            ctx: &mut AppCtx,
+            _invocation: &Invocation,
+        ) -> Result<Outcome, CommandError> {
+            ctx.open_document(DocumentSession::new(Document::new(), None));
+            let mut outcome = Outcome::message("edited");
+            outcome.edit = Some(Box::new(NoopEdit));
+            Ok(outcome)
+        }
+    }
+
+    #[test]
+    fn an_edit_lands_on_the_session_the_command_ran_against() {
+        // P4-15 open issue 4: the edit belongs to the session the
+        // command ran against (the active one before the run), not to
+        // the document the command opened.
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(OpensAndEdits))
+            .expect("register");
+        let mut app = AppCtx::new(Settings::default());
+        app.open_document(DocumentSession::new(Document::new(), None));
+        let id = CommandId::parse("file.opens_and_edits").expect("id");
+        dispatch_one(&registry, &mut app, &id, Invocation::empty(Source::Test)).expect("run");
+        assert_eq!(app.documents.len(), 2);
+        assert!(
+            app.documents[0].undo.can_undo(),
+            "the edit is on the session it ran against"
+        );
+        assert!(
+            !app.documents[1].undo.can_undo(),
+            "not on the document the command opened"
+        );
+    }
+
+    #[test]
+    fn an_edit_lands_on_the_session_the_command_opened_first() {
+        // With no session before the run the command opened the first
+        // document and the edit belongs to it.
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(OpensAndEdits))
+            .expect("register");
+        let mut app = AppCtx::new(Settings::default());
+        let id = CommandId::parse("file.opens_and_edits").expect("id");
+        dispatch_one(&registry, &mut app, &id, Invocation::empty(Source::Test)).expect("run");
+        assert_eq!(app.documents.len(), 1);
+        assert!(app.documents[0].undo.can_undo());
     }
 }

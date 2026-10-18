@@ -9,7 +9,8 @@
 //! - a ribbon button/checkbox click dispatches its registry command
 //!   (the View tab's `ShowGrid` toggle);
 //! - the View/Options dialog switches the ribbon layout with no
-//!   restart;
+//!   restart and toggling the grid there changes what the canvas
+//!   draws (P4-16: the dialog dispatches through the registry);
 //! - the Help menu opens the About window;
 //! - the close-confirmation dialog closes a dirty document on confirm;
 //! - the File button opens the backstage with its placements;
@@ -29,9 +30,11 @@
 use std::collections::BTreeSet;
 
 use egui::accesskit::Role;
+use egui::{Color32, Context, RawInput, Rect, Shape};
 use ferrogram_commands::Source;
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_model::{Document, Page, PageId};
+use ferrogram_ui::canvas::{self, CanvasCache};
 use ferrogram_ui_spec::LayoutKind;
 
 use crate::{ShellRig, sets};
@@ -129,6 +132,11 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
         let shell = rig.shell.borrow();
         assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
         assert_eq!(&shell.app as *const AppCtx as usize, before);
+        // The dialog writes nothing itself (P4-16, the ADR 0032
+        // amendment): the switch happened because the radio's intent
+        // (`view.ui_layout.visio_365`) ran through the registry, and
+        // its message is the status line.
+        assert_eq!(shell.status(), "Ribbon layout: Visio 365");
     }
 
     // The next frame draws the 365 ribbon: no restart, same harness.
@@ -236,6 +244,93 @@ fn clicking_the_qat_new_button_opens_a_document() {
         1,
         "the QAT button runs `file.new`"
     );
+}
+
+/// The grid colors of `crates/ui/src/canvas.rs` (`GRID_MINOR`,
+/// `GRID_MAJOR`).
+fn is_grid_line(color: Color32) -> bool {
+    color == Color32::from_rgb(190, 190, 190) || color == Color32::from_rgb(160, 160, 160)
+}
+
+/// The grid line segments of one painted shape (the canvas paints its
+/// grid as line segments).
+fn grid_segments(shape: &Shape) -> usize {
+    match shape {
+        Shape::LineSegment { stroke, .. } => usize::from(is_grid_line(stroke.color)),
+        Shape::Vec(shapes) => shapes.iter().map(grid_segments).sum(),
+        _ => 0,
+    }
+}
+
+/// How many grid lines the canvas draws for `session` right now: one
+/// scratch frame of `canvas::show` over a fresh cache.
+fn grid_lines(session: &mut DocumentSession) -> usize {
+    let ctx = Context::default();
+    let mut cache = CanvasCache::new();
+    let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let mut output = ctx.run_ui(
+        RawInput {
+            screen_rect: Some(rect),
+            ..Default::default()
+        },
+        |ui| {
+            canvas::show(ui, session, &mut cache).expect("the canvas draws");
+        },
+    );
+    let mut count = 0;
+    for clipped in &output.shapes {
+        count += grid_segments(&clipped.shape);
+    }
+    output.textures_delta.clear();
+    count
+}
+
+#[test]
+fn toggling_grid_in_options_changes_what_the_canvas_draws() {
+    let mut rig = ShellRig::large();
+    rig.dispatch("file.new", Source::Ui).expect("file.new runs");
+    rig.run();
+    let before = {
+        let mut shell = rig.shell.borrow_mut();
+        let session = shell.app.active_document_mut().expect("a document");
+        assert!(session.view.show_grid, "a new drawing starts with the grid");
+        grid_lines(session)
+    };
+    assert!(before > 0, "the grid draws ({before} lines)");
+
+    // The Options dialog opens from its registry command and its
+    // checkbox dispatches `view.toggle_grid` (the ADR 0032
+    // amendment): the dialog writes nothing itself, so the state can
+    // only change through the registry.
+    let outcome = rig
+        .dispatch("app.office.center.options", Source::Ui)
+        .expect("no error");
+    assert!(
+        matches!(
+            outcome.ui_request,
+            Some(ferrogram_commands::UiRequest::ShowOptions)
+        ),
+        "{outcome:?}"
+    );
+    rig.run();
+    rig.click(Role::CheckBox, "Show grid");
+    {
+        let shell = rig.shell.borrow();
+        let session = shell.app.active_document().expect("a document");
+        assert!(
+            !session.view.show_grid,
+            "the checkbox ran `view.toggle_grid`"
+        );
+        assert!(!shell.app.settings.show_grid, "and the default with it");
+        assert_eq!(shell.status(), "Grid off");
+    }
+
+    let after = {
+        let mut shell = rig.shell.borrow_mut();
+        let session = shell.app.active_document_mut().expect("a document");
+        grid_lines(session)
+    };
+    assert_eq!(after, 0, "the canvas draws no grid lines any more");
 }
 
 #[test]

@@ -85,11 +85,18 @@ fn alt() -> Modifiers {
 /// optional focused text edit.
 struct Frame {
     /// What `dispatch` returned.
-    intent: Option<Intent>,
+    intents: Vec<Intent>,
     /// How many input events survived `dispatch` (not consumed).
     events_left: usize,
     /// `ShortcutMap::pending` after the frame.
     pending: bool,
+}
+
+impl Frame {
+    /// The first dispatched intent, when one fired.
+    fn intent(&self) -> Option<&Intent> {
+        self.intents.first()
+    }
 }
 
 #[allow(clippy::expect_used)] // test helper: a failure here is the bug
@@ -104,7 +111,7 @@ fn frame(
 ) -> Frame {
     let mut text = String::from("hello");
     let mut frame = Frame {
-        intent: None,
+        intents: Vec::new(),
         events_left: 0,
         pending: false,
     };
@@ -115,7 +122,7 @@ fn frame(
             ..Default::default()
         },
         |ctx| {
-            frame.intent = dispatch(ctx, map, app, scope).expect("dispatch");
+            frame.intents = dispatch(ctx, map, app, scope).expect("dispatch");
             frame.events_left = ctx.input(|input| input.events.len());
             frame.pending = map.pending();
             if with_text_edit {
@@ -203,7 +210,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
         0.0,
         false,
     );
-    let intent = global.intent.expect("a Global shortcut fires");
+    let intent = global.intent().expect("a Global shortcut fires");
     assert_eq!(intent.command.as_str(), "arrange.group");
     assert_eq!(
         intent.invocation.source,
@@ -222,7 +229,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
     );
     assert_eq!(
         window
-            .intent
+            .intent()
             .expect("a Window shortcut fires")
             .command
             .as_str(),
@@ -239,7 +246,10 @@ fn a_single_chord_shortcut_per_scope_resolves() {
         false,
     );
     assert_eq!(
-        page.intent.expect("a Page shortcut fires").command.as_str(),
+        page.intent()
+            .expect("a Page shortcut fires")
+            .command
+            .as_str(),
         "view.zoom.fit"
     );
 
@@ -253,7 +263,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
         0.3,
         false,
     );
-    assert!(no_page.intent.is_none());
+    assert!(no_page.intents.is_empty());
     assert_eq!(no_page.events_left, 0);
 
     let ribbon = frame(
@@ -267,7 +277,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
     );
     assert_eq!(
         ribbon
-            .intent
+            .intent()
             .expect("a Ribbon shortcut fires")
             .command
             .as_str(),
@@ -295,7 +305,7 @@ fn a_text_shortcut_fires_only_with_a_focused_text_edit() {
         0.0,
         false,
     );
-    assert!(no_focus.intent.is_none());
+    assert!(no_focus.intents.is_empty());
 
     // Frame 1 focuses a text edit; frame 2 dispatches before the
     // widgets, as the shell does.
@@ -318,7 +328,7 @@ fn a_text_shortcut_fires_only_with_a_focused_text_edit() {
         true,
     );
     let intent = focused
-        .intent
+        .intent()
         .expect("a Text shortcut fires in a text edit");
     assert_eq!(intent.command.as_str(), "format.text.italic");
 }
@@ -348,7 +358,7 @@ fn a_selection_shortcut_never_fires_in_phase_4() {
             0.0,
             false,
         );
-        assert!(outcome.intent.is_none(), "{focus:?} must not fire");
+        assert!(outcome.intents.is_empty(), "{focus:?} must not fire");
     }
 }
 
@@ -371,7 +381,7 @@ fn a_multi_chord_sequence_resolves_after_its_chords() {
         0.0,
         false,
     );
-    assert!(first.intent.is_none());
+    assert!(first.intents.is_empty());
     assert!(first.pending, "the half-typed sequence is pending");
     assert_eq!(first.events_left, 0, "the chord is consumed");
 
@@ -384,7 +394,7 @@ fn a_multi_chord_sequence_resolves_after_its_chords() {
         0.1,
         false,
     );
-    let intent = second.intent.expect("the sequence resolves");
+    let intent = second.intent().expect("the sequence resolves");
     assert_eq!(intent.command.as_str(), "arrange.group");
     assert!(!second.pending);
 }
@@ -433,7 +443,7 @@ fn a_half_typed_sequence_sets_pending_and_times_out() {
         false,
     );
     assert!(!late.pending);
-    assert!(late.intent.is_none());
+    assert!(late.intents.is_empty());
 }
 
 #[test]
@@ -472,7 +482,7 @@ fn one_real_conflict_warns_once_and_an_exact_repeat_is_silent() {
     );
     assert_eq!(
         outcome
-            .intent
+            .intent()
             .expect("the first entry wins")
             .command
             .as_str(),
@@ -501,7 +511,7 @@ fn the_most_specific_active_scope_wins() {
         false,
     );
     assert_eq!(
-        global.intent.expect("global binding").command.as_str(),
+        global.intent().expect("global binding").command.as_str(),
         "arrange.group"
     );
 
@@ -516,7 +526,7 @@ fn the_most_specific_active_scope_wins() {
         false,
     );
     assert_eq!(
-        page.intent.expect("page binding").command.as_str(),
+        page.intent().expect("page binding").command.as_str(),
         "arrange.ungroup"
     );
 
@@ -540,7 +550,7 @@ fn the_most_specific_active_scope_wins() {
         true,
     );
     assert_eq!(
-        text.intent.expect("text binding").command.as_str(),
+        text.intent().expect("text binding").command.as_str(),
         "edit.copy"
     );
 }
@@ -565,7 +575,7 @@ fn ctrl_c_is_edit_copy_on_the_canvas_and_egui_copy_in_a_text_edit() {
         false,
     );
     assert_eq!(
-        page.intent.expect("Ctrl+C on the page").command.as_str(),
+        page.intent().expect("Ctrl+C on the page").command.as_str(),
         "edit.copy"
     );
 
@@ -587,7 +597,7 @@ fn ctrl_c_is_edit_copy_on_the_canvas_and_egui_copy_in_a_text_edit() {
         0.2,
         true,
     );
-    assert!(text.intent.is_none(), "egui copies the text");
+    assert!(text.intents.is_empty(), "egui copies the text");
     assert_eq!(text.events_left, 1, "the chord stays with egui");
 }
 
@@ -608,7 +618,11 @@ fn ctrl_shift_c_is_the_format_painter_outside_text_and_align_center_inside() {
         false,
     );
     assert_eq!(
-        global.intent.expect("the format painter").command.as_str(),
+        global
+            .intent()
+            .expect("the format painter")
+            .command
+            .as_str(),
         "tools.format_painter"
     );
 
@@ -632,7 +646,7 @@ fn ctrl_shift_c_is_the_format_painter_outside_text_and_align_center_inside() {
         true,
     );
     assert_eq!(
-        text.intent.expect("the text binding").command.as_str(),
+        text.intent().expect("the text binding").command.as_str(),
         "format.text.align_center"
     );
 }
@@ -672,7 +686,7 @@ fn typing_and_caret_chords_reach_the_text_edit_untouched() {
             0.1,
             true,
         );
-        assert!(typed.intent.is_none());
+        assert!(typed.intents.is_empty());
         assert_eq!(typed.events_left, 1, "the chord stays with egui");
     }
 }
@@ -707,7 +721,7 @@ fn egui_undo_wins_inside_a_text_edit_and_other_bound_ctrl_chords_dispatch() {
         0.1,
         true,
     );
-    assert!(undo.intent.is_none(), "egui undoes the text edit");
+    assert!(undo.intents.is_empty(), "egui undoes the text edit");
     assert_eq!(undo.events_left, 1, "the chord stays with egui");
     let group = frame(
         &ctx,
@@ -719,7 +733,7 @@ fn egui_undo_wins_inside_a_text_edit_and_other_bound_ctrl_chords_dispatch() {
         true,
     );
     assert_eq!(
-        group.intent.expect("Ctrl+G fires").command.as_str(),
+        group.intent().expect("Ctrl+G fires").command.as_str(),
         "arrange.group"
     );
     assert_eq!(group.events_left, 0, "the chord is consumed");
@@ -743,7 +757,7 @@ fn an_unmatched_chord_is_left_for_the_widgets() {
         0.0,
         false,
     );
-    assert!(outcome.intent.is_none());
+    assert!(outcome.intents.is_empty());
     assert_eq!(outcome.events_left, 1);
 }
 
@@ -766,7 +780,7 @@ fn the_arrow_keys_dispatch_the_nudge_shortcut_on_a_page() {
         false,
     );
     assert_eq!(
-        outcome.intent.expect("arrows nudge").command.as_str(),
+        outcome.intent().expect("arrows nudge").command.as_str(),
         "arrange.nudge"
     );
 }
