@@ -27,6 +27,9 @@ pub enum Error {
     InvalidPackage(String),
     /// A [`ferrogram_model`] operation failed while mapping.
     Model(ferrogram_model::Error),
+    /// The operation is not implemented yet (a Phase 5 interface stub,
+    /// task P5-01).
+    NotImplemented,
 }
 
 impl fmt::Display for Error {
@@ -39,6 +42,7 @@ impl fmt::Display for Error {
             Error::BadRelationship(why) => write!(f, "bad relationship: {why}"),
             Error::InvalidPackage(why) => write!(f, "invalid package: {why}"),
             Error::Model(e) => write!(f, "model error: {e}"),
+            Error::NotImplemented => write!(f, "not implemented yet"),
         }
     }
 }
@@ -85,6 +89,7 @@ mod tests {
             .to_string(),
             "model error: unknown shape id 2"
         );
+        assert_eq!(Error::NotImplemented.to_string(), "not implemented yet");
     }
 
     #[test]

@@ -4,6 +4,7 @@
 //! plus `[Content_Types].xml` and relationships (task P2-05).
 
 pub(crate) mod discovery;
+mod edit;
 mod read;
 mod write;
 mod xml;
