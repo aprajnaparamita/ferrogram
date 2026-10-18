@@ -25,8 +25,15 @@ startup (one per loaded `LayoutSet`):
 pub struct ShortcutMap { /* chord-sequence trie -> CommandId */ }
 impl ShortcutMap {
     pub fn from_shortcuts(shortcuts: &ui_spec::Shortcuts) -> Result<Self, UiError>;
-    /// Matches typed chords against the map; `Some` when a sequence completes.
-    pub fn resolve(&mut self, chords: &[KeyChord]) -> Option<Intent>;
+    /// Matches typed chords against the map in the active scopes; one
+    /// intent per completed sequence, in order (a chord that mismatches a
+    /// half-typed sequence fires the held-back completion and then starts
+    /// a new sequence, so one chord can complete two).
+    pub fn resolve(
+        &mut self,
+        chords: &[KeyChord],
+        active: &ActiveScopes,
+    ) -> Result<Vec<Intent>, UiError>;
     /// True while a multi-chord sequence is half-typed (status bar hint).
     pub fn pending(&self) -> bool;
 }
@@ -70,7 +77,7 @@ impl ShortcutMap {
   `NotEnabled` for is consumed and shown as a disabled status-bar hint,
   never passed on to a widget.
 
-Dispatch returns an `Intent` (ADR 0028) with `Source::Shortcut`; the shell
+Dispatch returns the `Intent`s (ADR 0028) with `Source::Shortcut`; the shell
 executes it through the registry.
 
 ### File open and save
