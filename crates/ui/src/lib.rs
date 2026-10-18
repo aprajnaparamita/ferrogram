@@ -14,6 +14,7 @@
 
 pub mod canvas;
 pub mod dialogs;
+pub mod handles;
 pub mod icons;
 pub mod panels;
 pub mod ribbon;
@@ -21,6 +22,9 @@ pub mod settings;
 pub mod shapes_window;
 pub mod shell;
 pub mod shortcuts;
+pub mod snap;
+pub mod text_edit;
+pub mod tools;
 
 use std::fmt;
 
@@ -70,6 +74,9 @@ pub enum UiError {
         /// The formatted cause.
         message: String,
     },
+    /// The operation is not implemented yet (a Phase 5 interface stub,
+    /// task P5-01).
+    NotImplemented,
 }
 
 impl fmt::Display for UiError {
@@ -79,6 +86,7 @@ impl fmt::Display for UiError {
             UiError::Layout(error) => write!(f, "ui-spec error: {error}"),
             UiError::Io { message } => write!(f, "io error: {message}"),
             UiError::Render { message } => write!(f, "render error: {message}"),
+            UiError::NotImplemented => write!(f, "not implemented yet"),
         }
     }
 }
@@ -141,6 +149,7 @@ mod tests {
             message: "too large".into(),
         };
         assert_eq!(render.to_string(), "render error: too large");
+        assert_eq!(UiError::NotImplemented.to_string(), "not implemented yet");
     }
 
     #[test]
