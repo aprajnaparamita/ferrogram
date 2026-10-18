@@ -23,6 +23,7 @@ fn path_rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Path {
 /// A filled and stroked shape node.
 fn shape(path: Path, fill: Option<Paint>, stroke: Option<Stroke>) -> Node {
     Node::Shape(Box::new(Shape {
+        shape_id: None,
         transform: Transform::identity(),
         path,
         fill,

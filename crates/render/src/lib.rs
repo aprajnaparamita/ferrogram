@@ -11,6 +11,8 @@
 
 pub mod build;
 mod error;
+pub mod hit;
+pub mod overlay;
 pub mod png;
 pub mod raster;
 pub mod scene;
@@ -19,6 +21,10 @@ pub mod svg;
 
 pub use build::{BuildOptions, build_scene};
 pub use error::Error;
+pub use hit::{
+    Hit, HitKind, HitOptions, NodePath, hit_marquee, hit_test, node_bounds, scene_bounds,
+};
+pub use overlay::{Overlay, OverlayMark, build_selection_overlay};
 pub use png::{PngOptions, render_png};
 pub use raster::{RasterImage, RasterOptions, render_raster};
 pub use scene::{Rgba, Scene};

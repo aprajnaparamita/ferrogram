@@ -928,6 +928,7 @@ mod tests {
 
     fn shape(path: Path, fill: Option<ScenePaint>) -> Node {
         Node::Shape(Box::new(Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path,
             fill,
@@ -1292,6 +1293,7 @@ mod tests {
             2.0,
             2.0,
             vec![Node::Shape(Box::new(Shape {
+                shape_id: None,
                 transform: Transform::identity(),
                 path: Path::new(),
                 fill: None,

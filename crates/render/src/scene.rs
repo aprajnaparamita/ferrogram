@@ -233,6 +233,11 @@ pub struct TextNode {
 /// One shape node: a filled and stroked path with optional text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shape {
+    /// The model shape this node was built from, when there is one (ADR
+    /// 0041): hit-testing and selection map a node back to the model
+    /// through it. A node the builder synthesises (a shadow body) has
+    /// `None`.
+    pub shape_id: Option<ferrogram_model::ShapeId>,
     /// The shape-local to parent transform (ADR 0020): relative to the
     /// enclosing [`Group`] node, or to the page for a top-level node.
     pub transform: Transform,
@@ -328,6 +333,7 @@ mod tests {
     #[test]
     fn nodes_hold_their_data() {
         let shape = Shape {
+            shape_id: None,
             transform: Transform::identity(),
             path: Path::new(),
             fill: Some(Paint::Solid(Rgba::opaque(0, 0, 0))),
