@@ -498,7 +498,7 @@ fn shape_node(
             local
         };
         node = Some(Node::Shape(Box::new(Shape {
-            shape_id: None,
+            shape_id: Some(id),
             transform,
             path,
             fill,
