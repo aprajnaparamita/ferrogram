@@ -49,7 +49,7 @@ Allowed sources only:
 - Microsoft's published Office Fluent UI control identifiers.
 - Microsoft support articles (e.g. keyboard shortcuts).
 - libvisio, under section 5.
-- Observed behavior of Visio as a black box.
+- Observed behavior of Visio as a black box. Only derived facts (structure, geometry, color values, our own descriptions) are committed.
 
 Never:
 - Disassemble, decompile or debug any Microsoft binary or installer, or extract resources from one (ribbon XML, strings, icons, images, fonts).
@@ -61,7 +61,7 @@ Always:
 - Raw downloads stay in `reference/` (gitignored). Commit only derived facts (IDs, names, structure, enumerations) and our own summaries.
 - Record every source in `reference/SOURCES.md` (local) and `docs/sources.md` (committed).
 - Fonts: Carlito (for Calibri) and Selawik (for Segoe UI), bundled with their OFL licenses.
-- Icons: an open-licensed set with its license recorded in `ATTRIBUTION.md`, or simple placeholders. No Office icons.
+- Icons: an open-licensed set with its license recorded in `ATTRIBUTION.md`, or simple placeholders. No Office icons, no traced or redrawn copies of them, and no Microsoft-published icon sets. Open icons may be recolored to match our theme palette.
 - Every stencil master we ship is original work.
 - Every committed asset file has a row in `ATTRIBUTION.md`, added in the same commit.
 
