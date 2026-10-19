@@ -11,6 +11,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 mod draw;
+mod drag_timing;
 mod pointer;
 mod snap;
 mod text;
@@ -164,6 +165,7 @@ impl CanvasRig {
                         events = output.events;
                     }
                     let had_events = !events.is_empty();
+                    {
                     for event in events {
                         let effect = tools.handle(event, &app).expect("the tool handles it");
                         *overlay = effect.overlay;
@@ -181,6 +183,7 @@ impl CanvasRig {
                     {
                         *overlay = idle;
                     }
+                    }
                 }
             });
         let mut rig = Self {
@@ -195,26 +198,28 @@ impl CanvasRig {
     }
 
     /// Runs one frame.
-    pub fn run(&mut self) {
-        self.harness.run();
+    pub fn run(&mut self) -> u64 {
+        self.harness.run()
     }
 
     /// Presses the primary button at a screen point and runs a frame.
-    pub fn down(&mut self, pos: egui::Pos2) {
+    /// Answers the frames the harness settled (one in the usual case).
+    pub fn down(&mut self, pos: egui::Pos2) -> u64 {
         self.harness.drag_at(pos);
-        self.harness.run();
+        self.harness.run()
     }
 
-    /// Moves the pointer and runs a frame.
-    pub fn move_to(&mut self, pos: egui::Pos2) {
+    /// Moves the pointer and runs a frame (module docs of
+    /// `drag_timing`: the frames it settled).
+    pub fn move_to(&mut self, pos: egui::Pos2) -> u64 {
         self.harness.hover_at(pos);
-        self.harness.run();
+        self.harness.run()
     }
 
     /// Releases the primary button at a screen point and runs a frame.
-    pub fn up(&mut self, pos: egui::Pos2) {
+    pub fn up(&mut self, pos: egui::Pos2) -> u64 {
         self.harness.drop_at(pos);
-        self.harness.run();
+        self.harness.run()
     }
 
     /// A click: down and up at the same point.
