@@ -2,37 +2,59 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 2 of 8 complete.** Nothing is usable as an app yet. The libraries read `.vsdx` files into a document model and write them back without loss, but nothing renders or edits them. Do not use Ferrogram for real work.
+> **Status: pre-alpha, Phase 5 of 8 in progress (Phases 0–4 complete).** The app opens, renders and saves `.vsdx` files, and the Phase 5 editing core is merged: you can draw, move, connect and type into shapes, and undo it. It is not ready for real work: formulas are not evaluated, `.vsd` import and the control channel are not built, and visual fidelity is approximate.
+
+## Build status
+
+Last full gate on `main`: **green, 2026-10-20** (after the P5-10 merge, commit `2a749a0`). There is no public CI yet; the gate runs locally.
+
+| Step | Result |
+|---|---|
+| codegen, parity, fmt, clippy, doc, deny, layers | pass |
+| test (`cargo test --workspace --all-features`) | pass |
+| coverage (per-crate thresholds and ratchet) | pass |
+| wasm (`ferrogram-web`) | pass |
+| fuzz (`cargo +nightly fuzz build`) | pass |
+
+Line coverage per crate (`cargo xtask coverage`):
+
+| Crate | Coverage | Crate | Coverage |
+|---|---:|---|---:|
+| geom | 100.0% | text | 98.8% |
+| shapesheet | 100.0% | commands | 98.1% |
+| model | 99.6% | vsdx | 97.9% |
+| ui-spec | 99.4% | ferrogram-cli | 96.8% |
+| render | 98.4% | ui | 96.5% |
+| ferrogram (desktop) | 80.0% | ferrogram-web | 77.9% |
+
+`control` and `vsd-binary` have no code yet (Phases 8 and 7).
 
 ## What works today
 
-Library code and developer tools only. There is no app, CLI feature or UI yet.
+- **UI and ShapeSheet definitions** (Phase 1), generated from Microsoft's published data by `cargo xtask extract`: Visio 2016 and Microsoft 365 ribbon layouts, 977 command ids, the keyboard shortcut table and the ShapeSheet table.
+- **Document model and `.vsdx` I/O** (Phase 2): pages, masters, shapes, styles and ShapeSheet cells; lossless read and write, with content the model does not cover kept in place. Every corpus file round-trips.
+- **Rendering and CLI** (Phase 3): pages render from cached cell values to PNG (`tiny-skia`) and SVG, with text shaping and bundled open fonts (Carlito, Selawik). `ferrogram-cli inspect`, `render` and `export`.
+- **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a ribbon generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the ribbon, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panels; original stencils; file open, save and export.
+- **Editing core** (Phase 5, in progress):
+  - select, marquee, move, resize and rotate with handles and snapping;
+  - pointer, rectangle, ellipse, line, text and connector tools, chosen through registry commands;
+  - drag masters from the Shapes window onto the page;
+  - dynamic connectors that glue to connection points or outlines and re-route when shapes move;
+  - in-place text editing;
+  - cut, copy, paste, duplicate, group, align, distribute, z-order, and page add, delete, rename and reorder;
+  - undo and redo for every edit.
 
-- **UI and ShapeSheet definitions** (Phase 1), generated from Microsoft's published data by `cargo xtask extract`:
-  - Visio 2016 and Microsoft 365 ribbon layouts (`ui-spec/`);
-  - 935 command ids, 90 keyboard shortcuts and the ShapeSheet table;
-  - loaded and checked at runtime by `crates/ui-spec`.
-- **Geometry** (`crates/geom`): units and conversions, points, rectangles, angles and affine transforms.
-- **Document model** (`crates/model`): pages, masters, shapes, styles and ShapeSheet cells, each cell keeping its formula, cached value and unit. Master and style inheritance is resolved by a lookup, and XML can be compared semantically. The ShapeSheet table is generated from `ui-spec/shapesheet.toml` by `cargo xtask codegen`.
-- **`.vsdx` reading and writing** (`crates/vsdx`):
-  - The zip package layer reads and writes packages, with caps against zip bombs and oversized input.
-  - Pages, masters, shapes, styles and document properties are read into the model, and content the model does not cover is kept.
-  - The writer updates each part from the model and keeps everything else in place. All 15 corpus files round-trip without loss.
-  - Tested with malformed input, a fuzz target, property tests, the libvisio oracle and schema checks.
-- **Test tooling:**
-  - `cargo xtask corpus` fetches third-party test files (they are not committed);
-  - `cargo xtask oracle` builds libvisio's tools as a test oracle;
-  - hand-written test files are in `corpus/fixtures/`.
+  The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). The Phase 5 test pass and audits are still open.
 
-## Next (Phase 3)
+## Next
 
-Rendering to PNG and SVG, and the first CLI commands.
+Finish Phase 5 (test pass, review, coverage and clean-room audits), then Phase 6: the ShapeSheet formula engine.
 
-The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/).
+The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the ribbon is in [docs/parity/controls.md](docs/parity/controls.md).
 
 ## What does not work yet
 
-Rendering, editing, the ribbon UI, the ShapeSheet formula engine, `.vsd` import, the CLI and the MCP/control channel.
+The ShapeSheet formula engine (shapes whose cells have no cached values render blank), `.vsd` import, the MCP/control channel, and most ribbon commands (they are listed but stubbed).
 
 ## Plan (alpha MVP)
 
@@ -41,9 +63,9 @@ Rendering, editing, the ribbon UI, the ShapeSheet formula engine, `.vsd` import,
 | 0 | Bootstrap: workspace, gate, CI, agent process | done |
 | 1 | Sources and UI/ShapeSheet definitions | done |
 | 2 | Document model and .vsdx I/O (lossless round-trip) | done |
-| 3 | Rendering (PNG/SVG) and CLI | planned |
-| 4 | App shell, switchable 2016/365 ribbon | planned |
-| 5 | Editing core | planned |
+| 3 | Rendering (PNG/SVG) and CLI | done |
+| 4 | App shell, switchable 2016/365 ribbon | done |
+| 5 | Editing core | in progress |
 | 6 | ShapeSheet engine (core subset) | planned |
 | 7 | Binary .vsd import (read-only) | planned |
 | 8 | Control channel and MCP | planned |
