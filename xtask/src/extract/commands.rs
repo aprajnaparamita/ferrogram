@@ -580,6 +580,7 @@ pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("arrange.align.center_x", "Align Center"),
     ("arrange.distribute.horizontal", "Distribute Horizontally"),
     ("arrange.distribute.vertical", "Distribute Vertically"),
+    ("connector.draw", "Draw Connector"),
     ("connector.glue_begin", "Glue Begin"),
     ("connector.glue_end", "Glue End"),
     ("connector.reroute_all", "Reroute All"),

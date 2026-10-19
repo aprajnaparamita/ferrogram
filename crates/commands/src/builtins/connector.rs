@@ -36,7 +36,9 @@ use crate::undo::Edit;
 use crate::{ArgValue, Args, Invocation, NeededInput, Outcome};
 
 use super::edit::{CellEdit, PageKey, document_mut, page_key, resolve_page};
-use super::{CommandTable, edit_outcome, has_pages, model_error, no_document, outcome};
+use super::{
+    CommandTable, edit_outcome, has_pages, model_error, need_finite, no_document, outcome,
+};
 
 /// The implemented `connector.*` commands (P5-08).
 pub(crate) const TABLE: CommandTable = &[
@@ -55,6 +57,7 @@ pub(crate) const TABLE: CommandTable = &[
         run_reroute_all,
     ),
     ("connector.style", "Connector Style", has_pages, run_style),
+    ("connector.draw", "Draw Connector", has_pages, run_draw),
 ];
 
 /// Which connector endpoint a glue record names.
@@ -205,9 +208,9 @@ fn glue_record(
         .visio_id;
     let (to_cell, to_part) = match point {
         Some(ix) if ix >= 0 => {
-            let point_count = doc.connection_points(target).len();
-            let index = usize::try_from(ix).unwrap_or(usize::MAX);
-            if index >= point_count {
+            let points = doc.connection_points_indexed(target);
+            let point_count = points.len();
+            if !points.iter().any(|(row, _)| *row == ix) {
                 return Err(CommandError::invalid_args(format!(
                     "connection point {ix} does not exist (the target has {point_count})"
                 )));
@@ -590,6 +593,301 @@ fn style_from_value(value: f64) -> RouteStyle {
     }
 }
 
+/// `connector.draw`: one connector drag as one undoable step
+/// (task P5-17, Goal 6).
+///
+/// Arguments: `stencil`, `master`, `x`, `y` (the connector's insert
+/// point), optional `begin_target`/`begin_point` and
+/// `end_target`/`end_point` (Visio ids and connection row `IX`), and
+/// optional `begin_x`/`begin_y` or `end_x`/`end_y` free endpoints in
+/// page inches. A free end is routed exactly like a glued one; the
+/// result is the connector's literal path, so a later re-route keeps
+/// the free point until the connector itself moves.
+///
+/// The command inserts the connector through [`insert::run_insert_shape`]
+/// and folds its edit, the endpoint glues and the routed path into one
+/// [`CompositeEdit`], so undo restores the page in one step.
+fn run_draw(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
+    let stencil = need_text(&inv.args, "stencil", "the stencil name")?;
+    let master = need_text(&inv.args, "master", "the master name")?;
+    let x = need_finite(&inv.args, "x", "connector start x in inches")?;
+    let y = need_finite(&inv.args, "y", "connector start y in inches")?;
+    let begin_target = optional_visio_id(&inv.args, "begin_target")?;
+    let begin_point = optional_row(&inv.args, "begin_point")?;
+    let end_target = optional_visio_id(&inv.args, "end_target")?;
+    let end_point = optional_row(&inv.args, "end_point")?;
+    let begin_free = optional_free_point(&inv.args, "begin_x", "begin_y")?;
+    let end_free = optional_free_point(&inv.args, "end_x", "end_y")?;
+    if begin_point.is_some() && begin_target.is_none() {
+        return Err(CommandError::invalid_args(
+            "begin_point needs a begin_target",
+        ));
+    }
+    if end_point.is_some() && end_target.is_none() {
+        return Err(CommandError::invalid_args("end_point needs an end_target"));
+    }
+
+    let insert_args = Args::new()
+        .with("stencil", ArgValue::Text(stencil))
+        .with("master", ArgValue::Text(master))
+        .with("x", ArgValue::Number(x))
+        .with("y", ArgValue::Number(y));
+    let insert = super::insert::run_insert_shape(ctx, &Invocation::new(insert_args, inv.source))?;
+    let insert_edit = insert
+        .edit
+        .ok_or_else(|| CommandError::failed("the connector insert produced no edit"))?;
+    let mut edits: Vec<Box<dyn Edit>> = vec![insert_edit];
+    let warnings = insert.warnings;
+
+    let result = (|| -> Result<(), CommandError> {
+        let (session, page) = active_page(ctx)?;
+        let connector = ctx
+            .selection
+            .anchor
+            .ok_or_else(|| CommandError::failed("the inserted connector is not selected"))?;
+        let connector_visio = {
+            let doc = &ctx.active_document().ok_or_else(no_document)?.document;
+            doc.shape(connector)
+                .ok_or_else(|| CommandError::failed("the inserted connector is missing"))?
+                .visio_id
+        };
+        for (end, target, point) in [
+            (End::Begin, begin_target, begin_point),
+            (End::End, end_target, end_point),
+        ] {
+            let Some(target_visio_id) = target else {
+                continue;
+            };
+            let mut edit = {
+                let doc = &ctx.active_document().ok_or_else(no_document)?.document;
+                let target = doc
+                    .shape_by_visio_id(page, target_visio_id)
+                    .ok_or_else(|| {
+                        CommandError::invalid_args(format!(
+                            "unknown glue target {target_visio_id} on the active page"
+                        ))
+                    })?;
+                let record = glue_record(connector, target, target_visio_id, point, end, doc)?;
+                GlueEdit::new(
+                    doc,
+                    session,
+                    match end {
+                        End::Begin => "Glue connector begin",
+                        End::End => "Glue connector end",
+                    },
+                    page,
+                    connector,
+                    connector_visio,
+                    end,
+                    Some(record),
+                )?
+            };
+            edit.apply(ctx)?;
+            edits.push(Box::new(edit));
+        }
+
+        let mut path_edit = {
+            let doc = &ctx.active_document().ok_or_else(no_document)?.document;
+            let transform = page_transform(doc, connector)?;
+            let current = geometry_endpoints(doc, connector, transform);
+            let fallback = transform_point(transform, loc_pin(doc, connector));
+            let start = resolved_end(
+                doc,
+                page,
+                connector,
+                End::Begin,
+                begin_free,
+                current,
+                fallback,
+            )?;
+            let end = resolved_end(doc, page, connector, End::End, end_free, current, fallback)?;
+            let points = route(
+                start,
+                end,
+                &RouteOptions::new(connector_style(doc, connector)),
+            )
+            .map_err(|error| CommandError::failed(format!("cannot route connector: {error}")))?;
+            PathEdit::new(doc, session, connector, points)?
+        };
+        path_edit.apply(ctx)?;
+        edits.push(Box::new(path_edit));
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        for edit in edits.iter_mut().rev() {
+            let _ = edit.revert(ctx);
+        }
+        return Err(error);
+    }
+
+    let mut composite = CompositeEdit::new("Draw connector");
+    for edit in edits {
+        composite.push(edit);
+    }
+    Ok(edit_outcome(
+        "Connector drawn",
+        warnings,
+        Box::new(composite),
+    ))
+}
+
+/// One connector endpoint: its glue target's resolved point when that
+/// end is glued, else the given free point (or the connector's current
+/// geometry point). Task P5-17 Goal 6 routes both kinds the same way.
+fn resolved_end(
+    doc: &Document,
+    page: PageId,
+    connector: ShapeId,
+    end: End,
+    free: Option<Point>,
+    current: Option<(Point, Point)>,
+    fallback: Point,
+) -> Result<Point, CommandError> {
+    let connector_visio = doc
+        .shape(connector)
+        .ok_or_else(|| CommandError::failed("the connector shape is missing"))?
+        .visio_id;
+    let connects = doc.connects_of(page, connector).map_err(model_error)?;
+    let (index, reference, current_point) = match end {
+        End::Begin => (
+            0,
+            current.map(|(start, _)| start),
+            current.map(|(start, _)| start),
+        ),
+        End::End => (1, current.map(|(_, end)| end), current.map(|(_, end)| end)),
+    };
+    if let Some(connect) = connects.get(index).and_then(Option::as_ref) {
+        let mut lines = Vec::new();
+        return resolve_endpoint(
+            doc,
+            page,
+            connect,
+            reference.unwrap_or(fallback),
+            connector_visio,
+            &mut lines,
+        )
+        .ok_or_else(|| CommandError::failed("cannot resolve a glued connector end"));
+    }
+    free.or(current_point)
+        .ok_or_else(|| CommandError::invalid_args("a free connector end needs its x and y"))
+}
+
+/// One required text argument.
+fn need_text(args: &Args, name: &str, prompt: &str) -> Result<String, CommandError> {
+    match args.text(name) {
+        Some(text) => Ok(text.to_owned()),
+        None => Err(CommandError::NeedsInput(NeededInput::Text {
+            prompt: prompt.to_owned(),
+            default: None,
+        })),
+    }
+}
+
+/// One optional Visio shape id argument.
+fn optional_visio_id(args: &Args, name: &str) -> Result<Option<i32>, CommandError> {
+    match args.get(name) {
+        None => Ok(None),
+        Some(_) => need_integer(args, name, "shape id").map(Some),
+    }
+}
+
+/// One optional connection row `IX` argument.
+fn optional_row(args: &Args, name: &str) -> Result<Option<i32>, CommandError> {
+    match args.get(name) {
+        None => Ok(None),
+        Some(_) => {
+            let value = need_integer(args, name, "connection point row index")?;
+            if value < 0 {
+                return Err(CommandError::invalid_args(format!(
+                    "{name} must not be negative"
+                )));
+            }
+            Ok(Some(value))
+        }
+    }
+}
+
+/// One free endpoint `(x, y)` pair, or `None` when neither is given.
+fn optional_free_point(
+    args: &Args,
+    x_name: &str,
+    y_name: &str,
+) -> Result<Option<Point>, CommandError> {
+    match (args.get(x_name), args.get(y_name)) {
+        (None, None) => Ok(None),
+        (Some(_), None) => Err(CommandError::invalid_args(format!(
+            "{y_name} is required with {x_name}"
+        ))),
+        (None, Some(_)) => Err(CommandError::invalid_args(format!(
+            "{x_name} is required with {y_name}"
+        ))),
+        (Some(_), Some(_)) => {
+            let x = need_finite(args, x_name, "x in inches")?;
+            let y = need_finite(args, y_name, "y in inches")?;
+            Ok(Some(Point::new(x, y)))
+        }
+    }
+}
+
+/// One undoable connector path write; `revert` restores the exact prior
+/// `Geometry` sections.
+struct PathEdit {
+    session: SessionId,
+    connector: ShapeId,
+    old_sections: Vec<Section>,
+    points: Vec<Point>,
+}
+
+impl PathEdit {
+    fn new(
+        doc: &Document,
+        session: SessionId,
+        connector: ShapeId,
+        points: Vec<Point>,
+    ) -> Result<Self, CommandError> {
+        let old_sections = doc
+            .shape(connector)
+            .ok_or_else(|| CommandError::failed("the connector shape is missing"))?
+            .sheet
+            .sections
+            .clone();
+        Ok(Self {
+            session,
+            connector,
+            old_sections,
+            points,
+        })
+    }
+}
+
+#[rustfmt::skip]
+impl Edit for PathEdit {
+    fn label(&self) -> &str { "Route connector" }
+
+    fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+        let session = self.session;
+        let connector = self.connector;
+        let points = self.points.clone();
+        let doc = document_mut(ctx, session)?;
+        doc.write_connector_path(connector, &points)
+            .map_err(model_error)?;
+        ctx.touch_session(session);
+        Ok(())
+    }
+
+    fn revert(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+        let session = self.session;
+        let sections = self.old_sections.clone();
+        let doc = document_mut(ctx, session)?;
+        if let Some(entity) = doc.shape_mut(self.connector) {
+            entity.sheet.sections = sections;
+        }
+        ctx.touch_session(session);
+        Ok(())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Re-route
 // ---------------------------------------------------------------------------
@@ -780,7 +1078,13 @@ fn resolve_endpoint(
         || connect.to_cell.starts_with("Connections.")
     {
         let ix = connection_index(connect);
-        if let Some(local) = ix.and_then(|ix| doc.connection_points(target).get(ix).copied()) {
+        if let Some(local) = ix.and_then(|ix| {
+            let ix = i32::try_from(ix).ok()?;
+            doc.connection_points_indexed(target)
+                .into_iter()
+                .find(|(row, _)| *row == ix)
+                .map(|(_, point)| point)
+        }) {
             let point = transform_point(transform, local);
             if point.x.is_finite() && point.y.is_finite() {
                 return Some(point);
@@ -1681,5 +1985,69 @@ mod tests {
         }
         let doc = &ctx.active_document().expect("session").document;
         assert!(page_transform(doc, connector).is_err());
+    }
+    #[test]
+    fn direct_calls_without_a_document_or_page_name_the_failure() {
+        let invocation = Invocation::empty(crate::Source::Test);
+        let mut ctx = AppCtx::new(Settings::default());
+        assert_eq!(
+            run_reroute_all(&mut ctx, &invocation)
+                .expect_err("no document")
+                .to_string(),
+            "no open document"
+        );
+        ctx.open_document(DocumentSession::new(Document::new(), None));
+        assert_eq!(
+            run_reroute_all(&mut ctx, &invocation)
+                .expect_err("no page")
+                .to_string(),
+            "no active page"
+        );
+    }
+
+    #[test]
+    fn unknown_connector_and_target_ids_are_argument_errors() {
+        let (mut ctx, _session, _page, _connector, _left, _right) = fixture();
+        let invocation = Invocation::new(
+            args(&[("connector", 99)]).with("end", ArgValue::Text("begin".to_owned())),
+            crate::Source::Test,
+        );
+        let error = run_unglue(&mut ctx, &invocation).expect_err("connector");
+        assert!(error.to_string().contains("unknown connector shape id 99"));
+
+        let invocation = Invocation::new(
+            args(&[("connector", 3), ("target", 99)]),
+            crate::Source::Test,
+        );
+        let error = run_glue_begin(&mut ctx, &invocation).expect_err("target");
+        assert!(error.to_string().contains("unknown target shape id 99"));
+    }
+
+    #[test]
+    fn unglue_validates_the_end_argument() {
+        let (mut ctx, _session, _page, _connector, _left, _right) = fixture();
+        let missing = Invocation::new(args(&[("connector", 3)]), crate::Source::Test);
+        assert!(matches!(
+            run_unglue(&mut ctx, &missing),
+            Err(CommandError::NeedsInput(_))
+        ));
+        let bad = Invocation::new(
+            args(&[("connector", 3)]).with("end", ArgValue::Text("side".to_owned())),
+            crate::Source::Test,
+        );
+        let error = run_unglue(&mut ctx, &bad).expect_err("bad end");
+        assert!(
+            error.to_string().contains("end must be begin or end"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_reroute_with_no_document_is_a_no_op() {
+        let mut ctx = AppCtx::new(Settings::default());
+        assert_eq!(
+            reroute_after_edit(&mut ctx, PageId { index: 0 }).expect("no document"),
+            0
+        );
     }
 }

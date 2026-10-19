@@ -40,12 +40,27 @@ impl Document {
     /// stale shape id or a chain without rows yields an empty list. This
     /// function never panics.
     pub fn connection_points(&self, shape: ShapeId) -> Vec<Point> {
+        self.connection_points_indexed(shape)
+            .into_iter()
+            .map(|(_, point)| point)
+            .collect()
+    }
+
+    /// The connection points of `shape` with their `Connection` row
+    /// indexes (`Row/@IX`), in file order.
+    ///
+    /// A malformed row (missing or non-finite `X`/`Y`) is skipped
+    /// without renumbering the rows around it, so a glue record that
+    /// names `IX` addresses the same row the file does (task P5-17,
+    /// Goal 4). A row without an `IX` is named by its position in the
+    /// section, which matches the readers that assign one.
+    pub fn connection_points_indexed(&self, shape: ShapeId) -> Vec<(i32, Point)> {
         let Some(entity) = self.shape(shape) else {
             return Vec::new();
         };
         let own = connection_rows(&entity.sheet.sections);
         if !own.is_empty() {
-            return own.into_iter().filter_map(row_point).collect();
+            return indexed_rows(own);
         }
 
         for master_id in self.master_chain_shapes(shape, MAX_CHAIN) {
@@ -57,10 +72,7 @@ impl Document {
                 continue;
             }
             let (scale_x, scale_y) = self.connection_scale(entity, master);
-            return rows
-                .into_iter()
-                .filter_map(|row| row_point_scaled(row, scale_x, scale_y))
-                .collect();
+            return indexed_rows_scaled(rows, scale_x, scale_y);
         }
         Vec::new()
     }
@@ -91,10 +103,25 @@ fn connection_rows(sections: &[Section]) -> Vec<&Row> {
         .collect()
 }
 
-/// One row's `X`/`Y` as a local point, or `None` when either is missing or
-/// non-finite.
-fn row_point(row: &Row) -> Option<Point> {
-    row_point_scaled(row, 1.0, 1.0)
+/// The `(IX, point)` pairs of one row list, skipping malformed rows.
+fn indexed_rows(rows: Vec<&Row>) -> Vec<(i32, Point)> {
+    indexed_rows_scaled(rows, 1.0, 1.0)
+}
+
+/// The `(IX, point)` pairs of one row list with per-axis scaling,
+/// skipping malformed rows.
+fn indexed_rows_scaled(rows: Vec<&Row>, scale_x: f64, scale_y: f64) -> Vec<(i32, Point)> {
+    rows.into_iter()
+        .enumerate()
+        .filter_map(|(position, row)| {
+            let point = row_point_scaled(row, scale_x, scale_y)?;
+            let ix = row
+                .ix
+                .filter(|ix| *ix >= 0)
+                .unwrap_or_else(|| i32::try_from(position).unwrap_or(i32::MAX));
+            Some((ix, point))
+        })
+        .collect()
 }
 
 /// One row's `X`/`Y` scaled by the per-axis factors, or `None` when either

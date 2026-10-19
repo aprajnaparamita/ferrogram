@@ -14,7 +14,7 @@ use ferrogram_render::{Overlay, OverlayMark};
 use super::{Modifiers, ToolEffect, ToolEvent};
 use crate::UiError;
 use crate::handles::{node_entries, scene_for};
-use crate::snap::{Snapper, connection_points};
+use crate::snap::Snapper;
 use crate::tools::ToolMachine;
 
 /// The smallest size a `Shift`-drag draws, in inches (one screen pixel at
@@ -314,15 +314,14 @@ fn nearest_target(
         let Some(shape) = session.document.shape(entry.shape) else {
             continue;
         };
-        for (ix, candidate) in connection_points(&session.document, &entry)
-            .into_iter()
-            .enumerate()
-        {
+        for (ix, local) in session.document.connection_points_indexed(entry.shape) {
+            let candidate = entry.transform.apply(local);
             let distance = candidate.sub(point).x.hypot(candidate.sub(point).y);
             if !distance.is_finite() || distance > max_distance {
                 continue;
             }
             if best.is_none_or(|(_, _, best)| distance < best) {
+                let ix = usize::try_from(ix).unwrap_or(usize::MAX);
                 best = Some((shape.visio_id, ix, distance));
             }
         }

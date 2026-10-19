@@ -169,25 +169,37 @@ fn up(
             message: "the Basic Flowchart Connector master is missing".to_owned(),
         });
     };
+    let mut args = Args::new()
+        .with("stencil", ArgValue::Text(stencil.to_owned()))
+        .with("master", ArgValue::Text(master.to_owned()))
+        .with("x", ArgValue::Number(start.x))
+        .with("y", ArgValue::Number(start.y));
+    match start_glue {
+        Some(glue) => {
+            args.set("begin_target", ArgValue::Integer(i64::from(glue.visio_id)));
+            if let Some(point) = glue.point {
+                args.set("begin_point", ArgValue::Integer(i64::from(point)));
+            }
+        }
+        None => {
+            args.set("begin_x", ArgValue::Number(start.x));
+            args.set("begin_y", ArgValue::Number(start.y));
+        }
+    }
+    match end_glue {
+        Some(glue) => {
+            args.set("end_target", ArgValue::Integer(i64::from(glue.visio_id)));
+            if let Some(point) = glue.point {
+                args.set("end_point", ArgValue::Integer(i64::from(point)));
+            }
+        }
+        None => {
+            args.set("end_x", ArgValue::Number(current.x));
+            args.set("end_y", ArgValue::Number(current.y));
+        }
+    }
     let mut effect = ToolEffect::new();
-    effect.intents.push(intent(
-        "insert.shape",
-        Args::new()
-            .with("stencil", ArgValue::Text(stencil.to_owned()))
-            .with("master", ArgValue::Text(master.to_owned()))
-            .with("x", ArgValue::Number(start.x))
-            .with("y", ArgValue::Number(start.y)),
-    )?);
-    if let Some(glue) = start_glue {
-        effect
-            .intents
-            .push(glue_intent("connector.glue_begin", glue)?);
-    }
-    if let Some(glue) = end_glue {
-        effect
-            .intents
-            .push(glue_intent("connector.glue_end", glue)?);
-    }
+    effect.intents.push(intent("connector.draw", args)?);
     Ok(effect)
 }
 
@@ -239,7 +251,7 @@ fn locate(
         let Some(shape) = doc.shape(entry.shape) else {
             continue;
         };
-        for (ix, local) in doc.connection_points(entry.shape).into_iter().enumerate() {
+        for (ix, local) in doc.connection_points_indexed(entry.shape) {
             let point = entry.transform.apply(local);
             if !point.x.is_finite() || !point.y.is_finite() {
                 continue;
@@ -247,7 +259,6 @@ fn locate(
             let delta = point.sub(pos);
             let gap = delta.x.hypot(delta.y);
             if gap <= max_distance && nearest.as_ref().is_none_or(|(best, _, _)| gap < *best) {
-                let ix = i32::try_from(ix).unwrap_or(i32::MAX);
                 nearest = Some((
                     gap,
                     point,
@@ -293,16 +304,6 @@ fn connector_master() -> Option<(&'static str, &'static str)> {
         }
     }
     None
-}
-
-/// A glue intent; no connector id, so the command uses the selection
-/// anchor (the shape `insert.shape` just selected).
-fn glue_intent(id: &'static str, glue: Glue) -> Result<crate::Intent, UiError> {
-    let mut args = Args::new().with("target", ArgValue::Integer(i64::from(glue.visio_id)));
-    if let Some(point) = glue.point {
-        args.set("point", ArgValue::Integer(i64::from(point)));
-    }
-    intent(id, args)
 }
 
 /// One dispatch request for a command id and arguments.
@@ -407,22 +408,15 @@ mod tests {
         ToolEvent::PointerUp { pos, modifiers }
     }
 
-    fn insert_intent(effect: &ToolEffect) -> Option<&crate::Intent> {
+    fn draw_intent(effect: &ToolEffect) -> Option<&crate::Intent> {
         effect
             .intents
             .iter()
-            .find(|intent| intent.command.as_str() == "insert.shape")
-    }
-
-    fn glue_intent_named<'a>(effect: &'a ToolEffect, id: &str) -> Option<&'a crate::Intent> {
-        effect
-            .intents
-            .iter()
-            .find(|intent| intent.command.as_str() == id)
+            .find(|intent| intent.command.as_str() == "connector.draw")
     }
 
     #[test]
-    fn a_drag_between_connection_points_emits_one_insert_and_two_glues() {
+    fn a_drag_between_connection_points_emits_one_draw_command() {
         let app = fixture();
         let mut machine = ToolMachine::new();
         machine.tool = super::super::Tool::Connector;
@@ -442,26 +436,24 @@ mod tests {
         let effect = machine
             .handle(up(Point::new(6.0, 3.0), Modifiers::none()), &app)
             .expect("up");
-        assert_eq!(effect.intents.len(), 3, "{:?}", effect.intents);
-        let insert = insert_intent(&effect).expect("insert");
+        assert_eq!(effect.intents.len(), 1, "{:?}", effect.intents);
+        let draw = draw_intent(&effect).expect("connector.draw");
         assert_eq!(
-            insert.invocation.args.text("stencil"),
+            draw.invocation.args.text("stencil"),
             Some("Basic Flowchart")
         );
-        assert_eq!(insert.invocation.args.text("master"), Some("Connector"));
-        assert_eq!(insert.invocation.args.number("x"), Some(1.0));
-        assert_eq!(insert.invocation.args.number("y"), Some(3.0));
-        let begin = glue_intent_named(&effect, "connector.glue_begin").expect("begin");
-        assert_eq!(begin.invocation.args.integer("target"), Some(1));
-        assert_eq!(begin.invocation.args.integer("point"), Some(0));
-        assert_eq!(begin.invocation.args.integer("connector"), None);
-        let end = glue_intent_named(&effect, "connector.glue_end").expect("end");
-        assert_eq!(end.invocation.args.integer("target"), Some(2));
-        assert_eq!(end.invocation.args.integer("point"), Some(0));
+        assert_eq!(draw.invocation.args.text("master"), Some("Connector"));
+        assert_eq!(draw.invocation.args.number("x"), Some(1.0));
+        assert_eq!(draw.invocation.args.number("y"), Some(3.0));
+        assert_eq!(draw.invocation.args.integer("begin_target"), Some(1));
+        assert_eq!(draw.invocation.args.integer("begin_point"), Some(0));
+        assert_eq!(draw.invocation.args.integer("end_target"), Some(2));
+        assert_eq!(draw.invocation.args.integer("end_point"), Some(0));
+        assert_eq!(draw.invocation.args.number("end_x"), None);
     }
 
     #[test]
-    fn a_drag_from_an_outline_glues_the_outline() {
+    fn a_drag_from_an_outline_carries_the_outline_glue() {
         let app = fixture();
         let mut machine = ToolMachine::new();
         machine.tool = super::super::Tool::Connector;
@@ -472,12 +464,11 @@ mod tests {
         let effect = machine
             .handle(up(Point::new(6.5, 3.4), Modifiers::none()), &app)
             .expect("up");
-        let begin = glue_intent_named(&effect, "connector.glue_begin").expect("begin");
-        assert_eq!(begin.invocation.args.integer("target"), Some(1));
-        assert_eq!(begin.invocation.args.integer("point"), None);
-        let end = glue_intent_named(&effect, "connector.glue_end").expect("end");
-        assert_eq!(end.invocation.args.integer("target"), Some(2));
-        assert_eq!(end.invocation.args.integer("point"), None);
+        let draw = draw_intent(&effect).expect("connector.draw");
+        assert_eq!(draw.invocation.args.integer("begin_target"), Some(1));
+        assert_eq!(draw.invocation.args.integer("begin_point"), None);
+        assert_eq!(draw.invocation.args.integer("end_target"), Some(2));
+        assert_eq!(draw.invocation.args.integer("end_point"), None);
     }
 
     #[test]
@@ -519,8 +510,12 @@ mod tests {
             .handle(up(Point::new(6.01, 3.0), alt), &app)
             .expect("up");
         assert_eq!(effect.intents.len(), 1, "no glue without snapping");
-        let insert = insert_intent(&effect).expect("insert");
-        assert_eq!(insert.invocation.args.number("x"), Some(1.02));
+        let draw = draw_intent(&effect).expect("connector.draw");
+        assert_eq!(draw.invocation.args.number("x"), Some(1.02));
+        assert_eq!(draw.invocation.args.integer("begin_target"), None);
+        assert_eq!(draw.invocation.args.number("begin_x"), Some(1.02));
+        assert_eq!(draw.invocation.args.integer("end_target"), None);
+        assert_eq!(draw.invocation.args.number("end_x"), Some(6.01));
     }
 
     #[test]

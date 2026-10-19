@@ -25,7 +25,8 @@ pub mod registry;
 pub mod undo;
 
 pub use app::{
-    AppCtx, DisplayUnits, DocumentSession, Selection, SessionId, Settings, SettingsStore, ViewState,
+    ActiveTool, AppCtx, DisplayUnits, DocumentSession, Selection, SessionId, Settings,
+    SettingsStore, ViewState,
 };
 pub use clipboard::{Clipboard, ClipboardContent, ClipboardKind};
 pub use edit::CompositeEdit;

@@ -40,6 +40,7 @@ use ferrogram_render::{
 };
 
 use crate::handles::rotated_corners;
+use crate::text_edit::{self, EditorAction, TextEditor};
 use crate::tools::{Modifiers, ToolEvent};
 use crate::{Intent, UiError};
 
@@ -397,6 +398,65 @@ pub fn show_with_overlay(
 
     output.status = canvas_status(session, cache);
     Ok(output)
+}
+
+/// Draws the in-place text editor over the canvas (task P5-17, Goal 5).
+///
+/// `rect` is the canvas area of this frame; the editor's text block is
+/// mapped through the canvas viewport, pan and zoom. The caller owns the
+/// [`TextEditor`] and acts on the returned [`EditorAction`]. A shape
+/// that is no longer in the scene draws nothing this frame.
+pub fn show_text_editor(
+    ui: &mut Ui,
+    session: &DocumentSession,
+    rect: Rect,
+    editor: &mut TextEditor,
+) -> Result<EditorAction, UiError> {
+    let Some(shape) = editor.shape else {
+        return Ok(EditorAction::Pending);
+    };
+    let Some(page) = session.active_page else {
+        return Ok(EditorAction::Pending);
+    };
+    let viewport = viewport_rect(rect, session.view.show_rulers);
+    let scene = build_scene(&session.document, page, &BuildOptions::new()).map_err(|error| {
+        UiError::Io {
+            message: error.to_string(),
+        }
+    })?;
+    let Some(editor_rect) = text_edit::editor_rect(
+        &scene,
+        shape,
+        viewport,
+        session.view.pan,
+        safe_zoom(session.view.zoom),
+    ) else {
+        return Ok(EditorAction::Pending);
+    };
+    Ok(editor.show(ui, editor_rect))
+}
+
+/// Maps a screen point over the canvas area to page inches (task P5-17:
+/// the shell feeds a Shapes-window drag to the stencil tool, which needs
+/// the same mapping the canvas events use). `None` when the point is
+/// outside the canvas viewport or a view value is unusable.
+pub fn page_position(rect: Rect, session: &DocumentSession, screen: Pos2) -> Option<Point> {
+    let viewport = viewport_rect(rect, session.view.show_rulers);
+    if !viewport.contains(screen) {
+        return None;
+    }
+    let zoom = safe_zoom(session.view.zoom);
+    let k = points_per_inch(zoom);
+    let height = page_size(&session.document, session.active_page).1;
+    let point = Point::new(
+        (f64::from(screen.x) - f64::from(viewport.min.x)) / k - session.view.pan.x,
+        height - ((f64::from(screen.y) - f64::from(viewport.min.y)) / k - session.view.pan.y),
+    );
+    if point.x.is_finite() && point.y.is_finite() {
+        Some(point)
+    } else {
+        None
+    }
 }
 
 /// The page height the pointer mapping needs: the rasterized page size,

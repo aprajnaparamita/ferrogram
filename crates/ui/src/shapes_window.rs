@@ -47,6 +47,9 @@ enum Preview {
 pub struct ShapesWindow {
     selected: Option<StencilPick>,
     previews: HashMap<(&'static str, &'static str), Preview>,
+    /// The master whose row drag started this frame (task P5-17): the
+    /// shell takes it and calls `stencil::begin_drag`.
+    drag_started: Option<StencilPick>,
 }
 
 impl std::fmt::Debug for ShapesWindow {
@@ -66,6 +69,7 @@ impl std::fmt::Debug for ShapesWindow {
             .collect();
         f.debug_struct("ShapesWindow")
             .field("selected", &self.selected)
+            .field("drag_started", &self.drag_started)
             .field("previews", &previews)
             .finish()
     }
@@ -88,6 +92,12 @@ impl ShapesWindow {
     /// The currently selected master, if any.
     pub fn selected(&self) -> Option<&StencilPick> {
         self.selected.as_ref()
+    }
+
+    /// Takes the master whose row drag started since the last call
+    /// (task P5-17). The shell starts a stencil drag with it.
+    pub fn take_drag_started(&mut self) -> Option<StencilPick> {
+        self.drag_started.take()
     }
 
     /// Draws the stencil sections and master list with previews
@@ -113,9 +123,17 @@ impl ShapesWindow {
                         ui.horizontal(|ui| {
                             self.preview(ui, stencil.name, master);
                             let selected = self.selected == Some(pick);
-                            if ui.selectable_label(selected, master.name).clicked() {
+                            let response = ui.add(
+                                egui::Button::selectable(selected, master.name)
+                                    .sense(egui::Sense::click_and_drag()),
+                            );
+                            if response.clicked() {
                                 self.select(pick);
                                 picks.push(pick);
+                            }
+                            if response.drag_started() {
+                                self.select(pick);
+                                self.drag_started = Some(pick);
                             }
                         });
                     }

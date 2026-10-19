@@ -454,13 +454,18 @@ fn double_click(
         .document
         .shape(shape)
         .is_some_and(|entry| !entry.children.is_empty());
+    effect
+        .intents
+        .push(select_intent(&session.document, "replace", &[shape])?);
     if is_group {
         effect
             .intents
-            .push(select_intent(&session.document, "replace", &[shape])?);
-        effect
-            .intents
             .push(intent("shape.enter_group", Args::new())?);
+    } else {
+        // A non-group shape starts in-place text editing (ADR 0044,
+        // task P5-17 Goal 5). `text.begin` reads the selection the
+        // `edit.select` intent just installed.
+        effect.intents.push(intent("text.begin", Args::new())?);
     }
     Ok(effect)
 }
@@ -1060,7 +1065,7 @@ mod tests {
         assert_eq!(effect.intents[0].command.as_str(), "edit.select");
         assert_eq!(effect.intents[1].command.as_str(), "shape.enter_group");
 
-        // A double click on empty space and on a plain shape are no-ops.
+        // A double click on empty space is a no-op.
         let effect = machine
             .handle(
                 ToolEvent::DoubleClick {
@@ -1070,6 +1075,29 @@ mod tests {
             )
             .expect("empty double click");
         assert!(effect.intents.is_empty());
+    }
+
+    #[test]
+    fn a_double_click_on_a_plain_shape_starts_text_editing() {
+        let (app, shape) = fixture();
+        let mut machine = ToolMachine::new();
+        let effect = machine
+            .handle(
+                ToolEvent::DoubleClick {
+                    pos: Point::new(3.0, 3.0),
+                },
+                &app,
+            )
+            .expect("double click");
+        assert_eq!(
+            select_command(&effect),
+            Some(("replace", vec!["1".to_owned()])),
+            "the shape becomes the selection"
+        );
+        assert_eq!(effect.intents.len(), 2);
+        assert_eq!(effect.intents[0].command.as_str(), "edit.select");
+        assert_eq!(effect.intents[1].command.as_str(), "text.begin");
+        let _ = shape;
     }
 
     #[test]
