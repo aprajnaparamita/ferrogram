@@ -133,6 +133,8 @@ pub struct ToolMachine {
     pub(crate) draw: draw::State,
     /// The stencil drag from the Shapes window (owner: `stencil`).
     pub(crate) stencil: stencil::State,
+    /// The connector tool's drag state (P5-08).
+    pub(crate) connector: connector::ConnectorState,
 }
 
 impl ToolMachine {
@@ -171,11 +173,8 @@ mod tests {
     use super::*;
     use ferrogram_commands::Settings;
 
-    type Handler = fn(&mut ToolMachine, &ToolEvent, &AppCtx) -> Result<ToolEffect, UiError>;
-    type Anchor = fn(&ToolMachine) -> Option<Point>;
-
     #[test]
-    fn the_pointer_and_drawing_tools_are_implemented_and_the_rest_stay_stubs() {
+    fn every_tool_is_a_no_op_without_a_document() {
         let ctx = AppCtx::new(Settings::default());
         let event = ToolEvent::PointerDown {
             pos: Point::new(1.0, 2.0),
@@ -204,19 +203,16 @@ mod tests {
         );
         assert_eq!(stencil::anchor(&machine), None);
 
-        let tools: [(Handler, Anchor); 1] = [(connector::handle, connector::anchor)];
-        for (handle, anchor) in tools {
-            assert!(matches!(
-                handle(&mut machine, &event, &ctx),
-                Err(UiError::NotImplemented)
-            ));
-            assert_eq!(anchor(&machine), None);
-        }
         // P5-07 implemented the text tool: with no document its events are
         // a no-op (and it has no drag anchor).
         let effect = text::handle(&mut machine, &event, &ctx).expect("text tool");
         assert!(effect.intents.is_empty());
         assert_eq!(text::anchor(&machine), None);
+        // The connector tool is implemented (P5-08): without a document
+        // it is a no-op, never the stub error.
+        let effect = connector::handle(&mut machine, &event, &ctx).expect("connector");
+        assert!(effect.intents.is_empty());
+        assert_eq!(connector::anchor(&machine), None);
         assert_eq!(ToolEffect::new(), ToolEffect::default());
         assert_eq!(Modifiers::none(), Modifiers::default());
     }

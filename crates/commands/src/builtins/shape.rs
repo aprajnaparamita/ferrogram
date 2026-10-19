@@ -31,6 +31,7 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
+use super::connector::reroute_after_edit;
 use super::edit::{
     CellEdit, GeometryEdit, count_label, document_mut, number_literal, read_cell_number,
     selection_targets,
@@ -74,6 +75,21 @@ fn in_group(ctx: &AppCtx) -> crate::Enabled {
         crate::Enabled::yes()
     } else {
         crate::Enabled::no("not inside a group")
+    }
+}
+
+/// The active page, when one exists (the re-route hook's argument).
+fn active_page(ctx: &AppCtx) -> Option<ferrogram_model::PageId> {
+    ctx.active_document()
+        .and_then(|session| session.active_page)
+}
+
+/// Re-routes the page's glued connectors after an editing command.
+fn reroute(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
+    if let Some(page) = page
+        && let Err(error) = reroute_after_edit(ctx, page)
+    {
+        ctx.record_warning(format!("connectors were not re-routed: {error}"));
     }
 }
 
@@ -183,6 +199,7 @@ pub(super) fn run_move(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
         }
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome(
         count_label("Moved", targets.len()),
         warnings,
@@ -233,6 +250,7 @@ pub(super) fn run_resize(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
         }
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome(
         count_label("Resized", targets.len()),
         warnings,
@@ -262,6 +280,7 @@ pub(super) fn run_rotate(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
         }
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome(
         count_label("Rotated", targets.len()),
         warnings,
@@ -318,6 +337,7 @@ fn set_size(ctx: &mut AppCtx, inv: &Invocation, axis: Axis) -> Result<Outcome, C
         edit.push(cell_edit(doc, session, "Set size", shape, cell, value)?);
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome(
         match axis {
             Axis::Width => "Width set",
@@ -340,6 +360,7 @@ pub(super) fn run_set_pin(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome,
         edit.push(cell_edit(doc, session, "Set Pin", shape, "PinY", y)?);
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome("Pin set", warnings, Box::new(edit)))
 }
 
@@ -354,6 +375,7 @@ pub(super) fn run_set_angle(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcom
         edit.push(cell_edit(doc, session, "Set Angle", shape, "Angle", angle)?);
     }
     edit.apply(ctx)?;
+    reroute(ctx, active_page(ctx));
     Ok(edit_outcome("Angle set", warnings, Box::new(edit)))
 }
 

@@ -32,6 +32,7 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
+use super::connector::reroute_after_edit;
 use super::{
     CommandTable, edit_outcome, has_pages, has_selection, model_error, no_document, outcome,
 };
@@ -559,12 +560,50 @@ pub(crate) fn count_label(verb: &str, count: usize) -> String {
     }
 }
 
+/// One warning line per connector glued to a shape this delete removes
+/// (ADR 0045: a glue whose target is detached is dropped, with one line).
+///
+/// The model's `detach_shape` removes the records themselves; this counts
+/// them before the edit runs so the user sees why the arrows came loose.
+fn deleted_glue_warnings(ctx: &AppCtx, page: Option<PageId>, targets: &[ShapeId]) -> Vec<String> {
+    let Some(page) = page else {
+        return Vec::new();
+    };
+    let Some(session) = ctx.active_document() else {
+        return Vec::new();
+    };
+    let doc = &session.document;
+    let Some(entity) = doc.page(page) else {
+        return Vec::new();
+    };
+    let removed: Vec<i32> = targets
+        .iter()
+        .filter_map(|shape| doc.shape(*shape).map(|entry| entry.visio_id))
+        .collect();
+    entity
+        .connects
+        .iter()
+        .filter(|connect| removed.contains(&connect.to_sheet))
+        .map(|connect| {
+            format!(
+                "connector {} lost its glue to detached shape {}",
+                connect.from_sheet, connect.to_sheet
+            )
+        })
+        .collect()
+}
+
 /// `edit.delete`: detaches every selected shape (one undo step).
 ///
 /// The removed shapes leave the selection; an entered group that went
 /// with them is exited.
 pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
-    let (session, targets, warnings) = selection_targets(ctx)?;
+    let (session, targets, mut warnings) = selection_targets(ctx)?;
+    let page = ctx
+        .active_document()
+        .and_then(|session| session.active_page);
+    let glue_warnings = deleted_glue_warnings(ctx, page, &targets);
+    warnings.extend(glue_warnings);
     let mut edit = CompositeEdit::new(count_label("Delete", targets.len()));
     {
         let doc = document_mut(ctx, session)?;
@@ -578,6 +617,11 @@ pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
         }
     }
     edit.apply(ctx)?;
+    if let Some(page) = page
+        && let Err(error) = reroute_after_edit(ctx, page)
+    {
+        ctx.record_warning(format!("connectors were not re-routed: {error}"));
+    }
 
     // The detached shapes (and anything inside them) leave the selection.
     let AppCtx {
