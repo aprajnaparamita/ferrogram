@@ -12,9 +12,21 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 
 | id | type | label | path | status |
 |----|------|-------|------|--------|
+| AlignLeft | toggleButton | AlignLeft | tab/TabHome/GroupParagraph | implemented |
+| AlignRight | toggleButton | AlignRight | tab/TabHome/GroupParagraph | implemented |
+| Copy | button | Copy | tab/TabIconEditor/GroupIconEditClipboard | implemented |
+| Cut | button | Cut | tab/TabIconEditor/GroupIconEditClipboard | implemented |
 | FileNewDefault | button | FileNewDefault | qat | implemented |
 | FileOpenUsingBackstage | button | FileOpenUsingBackstage | qat | implemented |
 | FileSave | button | FileSave | qat | implemented |
+| ObjectBringForward | button | ObjectBringForward | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| ObjectBringToFront | button | ObjectBringToFront | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| ObjectBringToFrontMenu | splitButton | ObjectBringToFrontMenu | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| ObjectSendBackward | button | ObjectSendBackward | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| ObjectSendToBack | button | ObjectSendToBack | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| ObjectSendToBackMenu | splitButton | ObjectSendToBackMenu | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
+| Paste | button | Paste | tab/TabIconEditor/GroupIconEditClipboard | implemented |
+| PasteMenu | splitButton | PasteMenu | tab/TabHome/GroupClipboard | implemented |
 | SelectAll | button | SelectAll | tab/TabIconEditor/GroupIconEditSelect | implemented |
 | ShowGrid | checkBox | ShowGrid | tab/TabView/GroupViewShowHide | implemented |
 | ShowRulerVisio | checkBox | ShowRulerVisio | tab/TabView/GroupViewShowHide | implemented |
@@ -25,8 +37,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | AlignCenter | toggleButton | AlignCenter | tab/TabHome/GroupParagraph | stub |
 | AlignGallery | gallery | AlignGallery | tab/TabHome/GroupArrange | stub |
 | AlignJustify | toggleButton | AlignJustify | tab/TabHome/GroupParagraph | stub |
-| AlignLeft | toggleButton | AlignLeft | tab/TabHome/GroupParagraph | stub |
-| AlignRight | toggleButton | AlignRight | tab/TabHome/GroupParagraph | stub |
 | AllowPersonallyIdentifiableInformation | control | AllowPersonallyIdentifiableInformation | backstage/TabInfo | stub |
 | AllowThemes | toggleButton | AllowThemes | tab/TabHome/GroupShapeStyles | stub |
 | AppGuardTrustPromotion | button | AppGuardTrustPromotion | backstage/TabSave | stub |
@@ -133,13 +143,11 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | ContextMenuWindowStyleExplorer | contextMenu | ContextMenuWindowStyleExplorer | menu/ContextMenuWindowStyleExplorer | stub |
 | ControlProperties | button | ControlProperties | tab/TabDeveloper/GroupControls | stub |
 | ControlsGallery | gallery | ControlsGallery | tab/TabDeveloper/GroupControls | stub |
-| Copy | button | Copy | tab/TabIconEditor/GroupIconEditClipboard | stub |
 | CreatePPT | task | CreatePPT | backstage/TabPublish | stub |
 | CreateStageViewDiagram | button | CreateStageViewDiagram | tab/TabProcess/GroupSharepointWorkflow | stub |
 | CreateWord | task | CreateWord | backstage/TabPublish | stub |
 | CreateWorkflowDiagram | button | CreateWorkflowDiagram | tab/TabProcess/GroupSharepointWorkflow | stub |
 | CropTool | toggleButton | CropTool | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| Cut | button | Cut | tab/TabIconEditor/GroupIconEditClipboard | stub |
 | DVExportVtpx | button | DVExportVtpx | tab/TabDVDesign/GroupExportDVDiagram | stub |
 | DVOpenDataSource | button | DVOpenDataSource | tab/TabDVDesign/GroupSourceDataDVDiagram | stub |
 | DVRelinkDataSource | button | DVRelinkDataSource | tab/TabDVDesign/GroupSourceDataDVDiagram | stub |
@@ -431,17 +439,11 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | NewBlankStencilMetric | button | NewBlankStencilMetric | tab/TabStencil/GroupStencil | stub |
 | NewBlankStencilUS | button | NewBlankStencilUS | tab/TabStencil/GroupStencil | stub |
 | NewMaster | button | NewMaster | tab/TabStencil/GroupStencilMasterShape | stub |
-| ObjectBringForward | button | ObjectBringForward | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| ObjectBringToFront | button | ObjectBringToFront | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| ObjectBringToFrontMenu | splitButton | ObjectBringToFrontMenu | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
 | ObjectEffectGlowGallery | gallery | ObjectEffectGlowGallery | tab/TabHome/GroupShapeStyles | stub |
 | ObjectEffectShadowGallery | gallery | ObjectEffectShadowGallery | tab/TabHome/GroupShapeStyles | stub |
 | ObjectEffectSoftEdgesGallery | gallery | ObjectEffectSoftEdgesGallery | tab/TabHome/GroupShapeStyles | stub |
 | ObjectFormatDialog | buttonDialogBoxLauncher | ObjectFormatDialog | tab/TabHome/GroupShapeStyles | stub |
 | ObjectRotateGallery | gallery | ObjectRotateGallery | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| ObjectSendBackward | button | ObjectSendBackward | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| ObjectSendToBack | button | ObjectSendToBack | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
-| ObjectSendToBackMenu | splitButton | ObjectSendToBackMenu | tab/TabPictureToolsFormat/GroupPictureToolArrange | stub |
 | ObjectsAddToGroup | button | ObjectsAddToGroup | tab/TabDeveloper/GroupShapeDesign | stub |
 | ObjectsConvertToGroup | button | ObjectsConvertToGroup | tab/TabDeveloper/GroupShapeDesign | stub |
 | ObjectsGroup | button | ObjectsGroup | tab/TabDeveloper/GroupShapeDesign | stub |
@@ -494,10 +496,8 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | PageSize | gallery | PageSize | tab/TabDesignVisio/GroupPrintPreviewPageSetup | stub |
 | PanAndZoomWindow | toggleButton | PanAndZoomWindow | tab/TabView/GroupViewShowHide | stub |
 | ParagraphDialogVisio | buttonDialogBoxLauncher | ParagraphDialogVisio | tab/TabHome/GroupParagraph | stub |
-| Paste | button | Paste | tab/TabIconEditor/GroupIconEditClipboard | stub |
 | PasteAsHyperlink | button | PasteAsHyperlink | tab/TabHome/GroupClipboard | stub |
 | PasteDuplicate | button | PasteDuplicate | tab/TabHome/GroupClipboard | stub |
-| PasteMenu | splitButton | PasteMenu | tab/TabHome/GroupClipboard | stub |
 | PasteSpecialDialog | button | PasteSpecialDialog | tab/TabHome/GroupClipboard | stub |
 | PenAddFavorite | button | PenAddFavorite | tab/TabDrawInk/GroupPens | stub |
 | PenPressure | toggleButton | PenPressure | tab/TabInkToolsPens/GroupInkPens | stub |

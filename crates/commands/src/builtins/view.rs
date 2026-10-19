@@ -317,12 +317,16 @@ fn move_page(ctx: &mut AppCtx, delta: i64) -> Result<Outcome, CommandError> {
         return Err(CommandError::failed("the document has no pages"));
     };
     let number = index.saturating_add(1);
+    let previous = session.active_page;
     session.active_page = Some(page.id);
     let label = if page.name.is_empty() {
         format!("Page {number}")
     } else {
         page.name.clone()
     };
+    if previous != Some(page.id) {
+        ctx.selection.clear();
+    }
     Ok(outcome(label, Vec::new()))
 }
 
@@ -334,4 +338,49 @@ pub(super) fn run_about(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
         ui_request: Some(UiRequest::ShowAbout),
         ..Outcome::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{AppCtx, DocumentSession, Settings};
+    use ferrogram_model::{Cell, CellName, Page, PageId};
+
+    #[test]
+    fn undo_and_redo_without_history_say_so() {
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(ferrogram_model::Document::new(), None));
+        let invocation = Invocation::empty(crate::Source::Test);
+        let outcome = run_undo(&mut ctx, &invocation).expect("undo");
+        assert_eq!(outcome.message.as_deref(), Some("Nothing to undo"));
+        let outcome = run_redo(&mut ctx, &invocation).expect("redo");
+        assert_eq!(outcome.message.as_deref(), Some("Nothing to redo"));
+    }
+
+    #[test]
+    fn page_navigation_without_pages_reports_it() {
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(ferrogram_model::Document::new(), None));
+        let invocation = Invocation::empty(crate::Source::Test);
+        let error = run_page_next(&mut ctx, &invocation).expect_err("no pages");
+        assert_eq!(error.to_string(), "the document has no pages");
+    }
+
+    #[test]
+    fn zoom_fit_falls_back_for_a_non_numeric_page_size() {
+        let mut document = ferrogram_model::Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        let mut width = Cell::new(CellName::from_static("PageWidth"));
+        width.value = Some(CellValue::Str("wide".to_owned()));
+        page.sheet.cells.push(width);
+        document.pages.push(page);
+        let mut ctx = AppCtx::new(Settings::default());
+        ctx.open_document(DocumentSession::new(document, None));
+        let args = crate::Args::new()
+            .with("width", crate::ArgValue::Number(600.0))
+            .with("height", crate::ArgValue::Number(600.0));
+        let outcome =
+            run_zoom_fit(&mut ctx, &Invocation::new(args, crate::Source::Test)).expect("zoom fit");
+        assert!(outcome.message.unwrap_or_default().starts_with("Zoom "));
+    }
 }
