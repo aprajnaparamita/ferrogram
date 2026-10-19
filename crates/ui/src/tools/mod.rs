@@ -171,7 +171,7 @@ mod tests {
     type Anchor = fn(&ToolMachine) -> Option<Point>;
 
     #[test]
-    fn the_pointer_tool_is_implemented_and_the_others_stay_stubs() {
+    fn the_pointer_and_drawing_tools_are_implemented_and_the_rest_stay_stubs() {
         let ctx = AppCtx::new(Settings::default());
         let event = ToolEvent::PointerDown {
             pos: Point::new(1.0, 2.0),
@@ -183,10 +183,25 @@ mod tests {
         let effect = machine.handle(event.clone(), &ctx).expect("pointer");
         assert!(effect.intents.is_empty());
 
-        let tools: [(Handler, Anchor); 4] = [
-            (draw::handle, draw::anchor),
+        let mut drawing = machine.clone();
+        drawing.tool = Tool::Rectangle;
+        assert!(
+            draw::handle(&mut drawing, &event, &ctx)
+                .expect("drawing")
+                .intents
+                .is_empty()
+        );
+        assert_eq!(draw::anchor(&drawing), None);
+        assert!(
+            stencil::handle(&mut machine, &event, &ctx)
+                .expect("stencil")
+                .intents
+                .is_empty()
+        );
+        assert_eq!(stencil::anchor(&machine), None);
+
+        let tools: [(Handler, Anchor); 2] = [
             (connector::handle, connector::anchor),
-            (stencil::handle, stencil::anchor),
             (text::handle, text::anchor),
         ];
         for (handle, anchor) in tools {
