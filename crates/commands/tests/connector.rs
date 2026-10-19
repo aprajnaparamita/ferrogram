@@ -788,8 +788,20 @@ fn a_glue_without_a_point_binds_the_shape_outline() {
 #[test]
 fn a_new_glue_replaces_the_old_record_on_the_same_end() {
     let (mut ctx, registry, page) = flow();
-    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("first glue");
-    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 3, 0)).expect("second glue");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_end",
+        glue_args(11, 2, 0),
+    )
+    .expect("first glue");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_end",
+        glue_args(11, 3, 0),
+    )
+    .expect("second glue");
 
     let records = connects(&ctx, page);
     assert_eq!(records.len(), 1, "the end holds one record, not two");
@@ -810,8 +822,20 @@ fn a_new_glue_replaces_the_old_record_on_the_same_end() {
 #[test]
 fn unglue_removes_both_end_records_and_keeps_the_free_endpoints() {
     let (mut ctx, registry, page) = flow();
-    dispatch(&mut ctx, &registry, "connector.glue_begin", glue_args(11, 1, 1)).expect("glue begin");
-    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("glue end");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        glue_args(11, 1, 1),
+    )
+    .expect("glue begin");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_end",
+        glue_args(11, 2, 0),
+    )
+    .expect("glue end");
     let routed = path(&ctx, 11);
     assert_eq!(routed.len(), 2, "two routed endpoints");
 
@@ -852,8 +876,20 @@ fn unglue_removes_both_end_records_and_keeps_the_free_endpoints() {
 #[test]
 fn deleting_the_target_drops_its_glue_and_undo_restores_it() {
     let (mut ctx, registry, page) = flow();
-    dispatch(&mut ctx, &registry, "connector.glue_begin", glue_args(11, 1, 1)).expect("glue begin");
-    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("glue end");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        glue_args(11, 1, 1),
+    )
+    .expect("glue begin");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_end",
+        glue_args(11, 2, 0),
+    )
+    .expect("glue end");
 
     let box_one = ctx
         .active_document()
@@ -991,7 +1027,10 @@ fn a_grouped_connector_re_route_is_idempotent() {
 #[test]
 fn a_duplicated_connector_leaves_the_page_re_route_stable() {
     let (mut ctx, registry, page) = flow();
-    for (end, args) in [("connector.glue_begin", glue_args(11, 1, 1)), ("connector.glue_end", glue_args(11, 2, 0))] {
+    for (end, args) in [
+        ("connector.glue_begin", glue_args(11, 1, 1)),
+        ("connector.glue_end", glue_args(11, 2, 0)),
+    ] {
         dispatch(&mut ctx, &registry, end, args).expect("glue");
     }
     let connector = connector_shape_id(&ctx, 11);
@@ -1008,10 +1047,7 @@ fn a_duplicated_connector_leaves_the_page_re_route_stable() {
         .expect("page")
         .shapes
         .clone();
-    let ids: Vec<i32> = tops
-        .iter()
-        .map(|shape| visio(&ctx, *shape))
-        .collect();
+    let ids: Vec<i32> = tops.iter().map(|shape| visio(&ctx, *shape)).collect();
     let before: Vec<(i32, Vec<ferrogram_model::Row>)> = ids
         .iter()
         .map(|id| (*id, geometry_rows(&ctx, *id)))
@@ -1021,5 +1057,8 @@ fn a_duplicated_connector_leaves_the_page_re_route_stable() {
         .iter()
         .map(|id| (*id, geometry_rows(&ctx, *id)))
         .collect();
-    assert_eq!(after, before, "the command's own re-route was the last word");
+    assert_eq!(
+        after, before,
+        "the command's own re-route was the last word"
+    );
 }

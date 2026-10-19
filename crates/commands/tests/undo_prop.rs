@@ -263,14 +263,7 @@ fn document(ctx: &AppCtx) -> Document {
 fn top_level(ctx: &AppCtx) -> Vec<ShapeId> {
     let session = ctx.active_document().expect("document");
     let page = session.active_page.expect("an active page");
-    session
-        .document
-        .page(page)
-        .expect("page")
-        .shapes
-        .iter()
-        .copied()
-        .collect()
+    session.document.page(page).expect("page").shapes.to_vec()
 }
 
 /// The Visio `ID` of one shape.
@@ -414,7 +407,7 @@ fn reachable(document: &Document) -> Document {
     };
 
     let mut out = Document::new();
-    out.kind = document.kind.clone();
+    out.kind = document.kind;
     out.stylesheet = document.stylesheet.clone();
     out.properties = document.properties.clone();
     out.themes = document.themes.clone();
@@ -625,10 +618,7 @@ fn run_move(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) 
         ctx,
         registry,
         id,
-        numbers(&[
-            ("dx", jitter(pick, 1)),
-            ("dy", jitter(pick, 2)),
-        ]),
+        numbers(&[("dx", jitter(pick, 1)), ("dy", jitter(pick, 2))]),
     );
 }
 
@@ -663,10 +653,7 @@ fn run_set_pin(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u3
         ctx,
         registry,
         id,
-        numbers(&[
-            ("x", 2.0 + jitter(pick, 5)),
-            ("y", 2.0 + jitter(pick, 6)),
-        ]),
+        numbers(&[("x", 2.0 + jitter(pick, 5)), ("y", 2.0 + jitter(pick, 6))]),
     );
 }
 
@@ -706,24 +693,18 @@ fn run_paste(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32)
         ctx,
         registry,
         id,
-        numbers(&[
-            ("x", 3.0 + jitter(pick, 8)),
-            ("y", 3.0 + jitter(pick, 9)),
-        ]),
+        numbers(&[("x", 3.0 + jitter(pick, 8)), ("y", 3.0 + jitter(pick, 9))]),
     );
 }
 
 /// `insert.shape`: a catalog master instance (the first drop also
 /// materialises the master, a known difference of the undo contract).
 fn run_insert_shape(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) {
-    let mut args = numbers(&[
-        ("x", 3.0 + jitter(pick, 10)),
-        ("y", 3.0 + jitter(pick, 11)),
-    ]);
+    let mut args = numbers(&[("x", 3.0 + jitter(pick, 10)), ("y", 3.0 + jitter(pick, 11))]);
     args.set("stencil", ArgValue::Text("Basic Shapes".to_owned()));
     args.set(
         "master",
-        ArgValue::Text(if pick % 2 == 0 {
+        ArgValue::Text(if pick.is_multiple_of(2) {
             "Rectangle".to_owned()
         } else {
             "Rounded Rectangle".to_owned()
@@ -769,8 +750,11 @@ fn run_glue(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) 
         "connector",
         ArgValue::Integer(i64::from(visio_of(ctx, connector))),
     );
-    args.set("target", ArgValue::Integer(i64::from(visio_of(ctx, target))));
-    if pick % 3 != 0 {
+    args.set(
+        "target",
+        ArgValue::Integer(i64::from(visio_of(ctx, target))),
+    );
+    if !pick.is_multiple_of(3) {
         args.set("point", ArgValue::Integer(i64::from(pick % 2)));
     }
     try_dispatch(ctx, registry, id, args);
@@ -784,7 +768,13 @@ fn run_unglue(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32
         session
             .document
             .page(page)
-            .map(|entry| entry.connects.iter().map(|record| record.from_sheet).collect())
+            .map(|entry| {
+                entry
+                    .connects
+                    .iter()
+                    .map(|record| record.from_sheet)
+                    .collect()
+            })
             .unwrap_or_default()
     };
     let Some(connector) = glued.first().copied() else {
@@ -794,7 +784,7 @@ fn run_unglue(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32
     args.set("connector", ArgValue::Integer(i64::from(connector)));
     args.set(
         "end",
-        ArgValue::Text(if pick % 2 == 0 {
+        ArgValue::Text(if pick.is_multiple_of(2) {
             "begin".to_owned()
         } else {
             "end".to_owned()
@@ -805,12 +795,16 @@ fn run_unglue(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32
 
 /// `connector.style` over the first two top-level shapes.
 fn run_style(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) {
-    let ids: Vec<i32> = top_level(ctx).iter().take(2).map(|s| visio_of(ctx, *s)).collect();
+    let ids: Vec<i32> = top_level(ctx)
+        .iter()
+        .take(2)
+        .map(|s| visio_of(ctx, *s))
+        .collect();
     select_visio(ctx, &ids);
     let mut args = numbers(&[]);
     args.set(
         "style",
-        ArgValue::Text(if pick % 2 == 0 {
+        ArgValue::Text(if pick.is_multiple_of(2) {
             "right_angle".to_owned()
         } else {
             "straight".to_owned()
@@ -1098,16 +1092,28 @@ const NON_EDITING: &[(&str, &str)] = &[
     ("edit.select_all", "selection only (P5-16)"),
     ("edit.deselect", "selection only (P5-16)"),
     ("edit.copy", "clipboard only (ADR 0047)"),
-    ("edit.undo", "the undo stack itself (the property drives it)"),
-    ("edit.redo", "the undo stack itself (the property drives it)"),
+    (
+        "edit.undo",
+        "the undo stack itself (the property drives it)",
+    ),
+    (
+        "edit.redo",
+        "the undo stack itself (the property drives it)",
+    ),
     (
         "connector.reroute_all",
         "re-routing is not undoable on its own (ADR 0045 rule 3)",
     ),
     ("shape.enter_group", "selection only (P5-04)"),
     ("shape.exit_group", "selection only (P5-04)"),
-    ("text.begin", "editor lifecycle, no document write (ADR 0044)"),
-    ("text.cancel", "editor lifecycle, no document write (ADR 0044)"),
+    (
+        "text.begin",
+        "editor lifecycle, no document write (ADR 0044)",
+    ),
+    (
+        "text.cancel",
+        "editor lifecycle, no document write (ADR 0044)",
+    ),
     ("tools.pointer", "tool choice only (P5-17)"),
     ("tools.rectangle", "tool choice only (P5-17)"),
     ("tools.ellipse", "tool choice only (P5-17)"),

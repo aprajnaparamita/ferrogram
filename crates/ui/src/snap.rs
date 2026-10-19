@@ -103,11 +103,11 @@ impl Snapper {
 
         let mut x_candidates: Vec<(SnapKind, f64)> = Vec::new();
         let mut y_candidates: Vec<(SnapKind, f64)> = Vec::new();
-        let moving_entries: Vec<_> = node_entries(&scene)
+        let moving_entries: Vec<_> = node_entries(scene)
             .into_iter()
             .filter(|entry| is_within(doc, entry.shape, moving))
             .collect();
-        let stationary: Vec<_> = node_entries(&scene)
+        let stationary: Vec<_> = node_entries(scene)
             .into_iter()
             .filter(|entry| !is_within(doc, entry.shape, moving))
             .collect();
@@ -115,7 +115,7 @@ impl Snapper {
         // Alignment: the moving selection's edges and centre against the
         // stationary shapes' edges and centres (one axis at a time).
         for entry in &stationary {
-            let Ok(other) = node_bounds(&scene, &entry.path) else {
+            let Ok(other) = node_bounds(scene, &entry.path) else {
                 continue;
             };
             let center = rect_center(other);
@@ -220,8 +220,8 @@ impl Snapper {
         let doc = &session.document;
         let mut x_candidates: Vec<(SnapKind, f64)> = Vec::new();
         let mut y_candidates: Vec<(SnapKind, f64)> = Vec::new();
-        for entry in node_entries(&scene) {
-            let Ok(bounds) = node_bounds(&scene, &entry.path) else {
+        for entry in node_entries(scene) {
+            let Ok(bounds) = node_bounds(scene, &entry.path) else {
                 continue;
             };
             let center = rect_center(bounds);

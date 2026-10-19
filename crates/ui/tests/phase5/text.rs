@@ -267,7 +267,7 @@ fn shell_dispatch(shell: &Rc<RefCell<ferrogram_ui::shell::Shell>>, id: &'static 
     let intent = ferrogram_ui::Intent::new(command, Invocation::empty(Source::Test));
     let mut shell = shell.borrow_mut();
     let mut results = shell.dispatch(&[intent]).expect("the intent dispatches");
-    results.pop().expect("one result per intent");
+    let _ = results.pop().expect("one result per intent");
 }
 
 /// The text edit through the whole shell: `text.begin` opens the editor
@@ -280,9 +280,7 @@ fn the_text_edit_cancels_and_commits_through_the_shell() {
     let registry = ferrogram_commands::builtins::registry().expect("registry");
     let sets = Loader::from_embedded().expect("layouts");
     let shell = Rc::new(RefCell::new(ferrogram_ui::shell::Shell::new(
-        registry,
-        sets,
-        app,
+        registry, sets, app,
     )));
     let harness_shell = Rc::clone(&shell);
     let mut harness = Harness::builder()

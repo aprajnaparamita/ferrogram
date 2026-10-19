@@ -190,11 +190,11 @@ pub(crate) fn selection_frame(
             }
         }
     };
-    let paths = paths_for_shapes(&scene, ctx, &ctx.selection.shapes)?;
+    let paths = paths_for_shapes(scene, ctx, &ctx.selection.shapes)?;
     if paths.is_empty() {
         return Ok(None);
     }
-    let overlay = build_selection_overlay(&scene, &paths).map_err(render_error)?;
+    let overlay = build_selection_overlay(scene, &paths).map_err(render_error)?;
     for mark in overlay.marks {
         if let OverlayMark::Handles { bounds, angle } = mark {
             return Ok(Some((bounds, angle)));

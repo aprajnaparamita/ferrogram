@@ -425,9 +425,9 @@ fn up(
             let _ = zoom;
             let alt = alt || modifiers.alt;
             let scene = state.state.scene(ctx)?;
-            if let Some(intent) =
-                drag_intent(ctx, scene, kind, start, pos, frame, &moving, alt, start_zoom)?
-            {
+            if let Some(intent) = drag_intent(
+                ctx, scene, kind, start, pos, frame, &moving, alt, start_zoom,
+            )? {
                 effect.intents.push(intent);
             }
             let Some(scene) = scene else {
@@ -543,8 +543,17 @@ fn drag_overlay(
             zoom,
         } => {
             let mut overlay = Overlay::new();
-            let (bounds, angle, snapped) =
-                preview_frame(ctx, Some(scene), *kind, *start, *current, *frame, moving, *alt, *zoom)?;
+            let (bounds, angle, snapped) = preview_frame(
+                ctx,
+                Some(scene),
+                *kind,
+                *start,
+                *current,
+                *frame,
+                moving,
+                *alt,
+                *zoom,
+            )?;
             overlay
                 .marks
                 .push(OverlayMark::SelectionOutline { bounds, angle });

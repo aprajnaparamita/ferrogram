@@ -50,9 +50,11 @@ const LOCAL_MULTIPLIER: f64 = 2.0;
 /// assertion runs on a known pair or with `FERROGRAM_DRAG_BUDGET_MS`.
 fn known_hardware() -> Option<String> {
     match (std::env::consts::ARCH, std::env::consts::OS) {
-        ("aarch64" | "x86_64", "macos" | "linux") => {
-            Some(format!("{} {}", std::env::consts::ARCH, std::env::consts::OS))
-        }
+        ("aarch64" | "x86_64", "macos" | "linux") => Some(format!(
+            "{} {}",
+            std::env::consts::ARCH,
+            std::env::consts::OS
+        )),
         _ => None,
     }
 }
@@ -60,10 +62,10 @@ fn known_hardware() -> Option<String> {
 /// The budget to assert, in milliseconds, or `None` to skip (module
 /// docs).
 fn budget() -> Option<(f64, String)> {
-    if let Ok(explicit) = std::env::var("FERROGRAM_DRAG_BUDGET_MS") {
-        if let Ok(value) = explicit.trim().parse::<f64>() {
-            return Some((value, format!("FERROGRAM_DRAG_BUDGET_MS={value}")));
-        }
+    if let Ok(explicit) = std::env::var("FERROGRAM_DRAG_BUDGET_MS")
+        && let Ok(value) = explicit.trim().parse::<f64>()
+    {
+        return Some((value, format!("FERROGRAM_DRAG_BUDGET_MS={value}")));
     }
     let hardware = known_hardware()?;
     let multiplier = if std::env::var_os("CI").is_some() {

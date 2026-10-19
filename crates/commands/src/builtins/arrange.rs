@@ -741,7 +741,11 @@ struct UngroupSnapshot {
 }
 
 /// The snapshot `UngroupEdit::apply` takes before it dissolves a group.
-fn capture_group(doc: &Document, page: PageId, group: ShapeId) -> Result<UngroupSnapshot, CommandError> {
+fn capture_group(
+    doc: &Document,
+    page: PageId,
+    group: ShapeId,
+) -> Result<UngroupSnapshot, CommandError> {
     let (shape, index) = capture_shapes(doc, &[group])?
         .into_iter()
         .next()

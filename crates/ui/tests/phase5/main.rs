@@ -10,8 +10,8 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-mod draw;
 mod drag_timing;
+mod draw;
 mod pointer;
 mod snap;
 mod text;
@@ -166,23 +166,23 @@ impl CanvasRig {
                     }
                     let had_events = !events.is_empty();
                     {
-                    for event in events {
-                        let effect = tools.handle(event, &app).expect("the tool handles it");
-                        *overlay = effect.overlay;
-                        for intent in effect.intents {
-                            let _ = dispatch_one(
-                                &registry,
-                                &mut app,
-                                &intent.command,
-                                intent.invocation,
-                            );
+                        for event in events {
+                            let effect = tools.handle(event, &app).expect("the tool handles it");
+                            *overlay = effect.overlay;
+                            for intent in effect.intents {
+                                let _ = dispatch_one(
+                                    &registry,
+                                    &mut app,
+                                    &intent.command,
+                                    intent.invocation,
+                                );
+                            }
                         }
-                    }
-                    if !had_events
-                        && let Some(idle) = tools.idle_overlay(&app).expect("idle overlay")
-                    {
-                        *overlay = idle;
-                    }
+                        if !had_events
+                            && let Some(idle) = tools.idle_overlay(&app).expect("idle overlay")
+                        {
+                            *overlay = idle;
+                        }
                     }
                 }
             });
