@@ -3,7 +3,9 @@
 //! Reads the two layout files and produces
 //! `docs/parity/controls.md`: every Fluent control id in both
 //! layouts, with a status of `implemented`, `stub`, or
-//! `out-of-scope`.
+//! `out-of-scope`, and (P5-10, the P4-15 deferred item) a second
+//! `| command | label | status |` table listing **every** registry id,
+//! including command-only ids with no Fluent control.
 //!
 //! The status is **derived, never hand-edited** (ADR 0037):
 //!
@@ -18,6 +20,15 @@
 //! status even when a command resolves: the alpha does not implement
 //! that control (the pre-Phase 4 rule, kept so the extractor fixtures
 //! and the committed matrix agree).
+//!
+//! The commands table derives its status the same way (ADR 0037) over
+//! command ids: `out-of-scope` when the command id is listed in
+//! `ui-spec/out-of-scope.txt` (case-insensitively) or every one of its
+//! Fluent ids is (the controls it serves are out of the alpha),
+//! `implemented` when
+//! `ferrogram_commands::builtins::registry()` reports
+//! `CommandStatus::Implemented` for the id, `stub` otherwise.
+//! `out-of-scope` wins over `implemented`, as in the control table.
 //!
 //! `cargo xtask parity` (P4-09, `xtask/src/parity.rs`) is the runner
 //! that regenerates the committed file or checks it for freshness.
@@ -148,7 +159,143 @@ pub fn generate(out_dir: &Path) -> ExtractResult<String> {
             r.status.as_str(),
         ));
     }
+    text.push_str(&command_section(&rules)?);
     Ok(text)
+}
+
+/// The second section of the document (P5-10, the P4-15 deferred
+/// item): a `| command | label | status |` table listing **every**
+/// registry id, including command-only ids with no Fluent control
+/// (`app.quit`, `file.exit`, `view.units`, the Phase 5 editing ids).
+///
+/// The status is derived by [`command_status`]; the rows are sorted by
+/// `(status, id)` like the control table.
+fn command_section(rules: &StatusRules) -> ExtractResult<String> {
+    let rows = command_rows(rules)?;
+    let mut text = String::new();
+    text.push_str("\n# Parity matrix: registry commands\n\n");
+    text.push_str(
+        "Every command id in \
+         `ferrogram_commands::builtins::registry()`, including ids with \
+         no Fluent control, with a status of `implemented`, `stub`, or \
+         `out-of-scope`. Sorted by `(status, id)`; the status order is \
+         `implemented`, `stub`, `out-of-scope`.\n\n\
+         The status is derived, never hand-edited (ADR 0037):\n\n\
+         - `out-of-scope` when the command id is listed in \
+         `ui-spec/out-of-scope.txt` (matched case-insensitively, \
+         exactly or by a `*` glob), or every one of its Fluent ids is \
+         listed (the controls it serves are out of the alpha);\n\
+         - `implemented` when \
+         `ferrogram_commands::builtins::registry()` reports \
+         `CommandStatus::Implemented` for the id;\n\
+         - `stub` otherwise.\n\n\
+         An `out-of-scope` row stays out of scope even when a handler \
+         resolves: the same precedence as the control table. \
+         Regenerate with `cargo xtask parity`; the gate's `parity` \
+         step runs `cargo xtask parity --check` and fails when this \
+         file is stale.\n\n",
+    );
+    text.push_str("| command | label | status |\n");
+    text.push_str("|---------|-------|--------|\n");
+    for row in &rows {
+        text.push_str(&format!(
+            "| {} | {} | {} |\n",
+            md_escape(&row.id),
+            md_escape(&row.label),
+            row.status.as_str(),
+        ));
+    }
+    Ok(text)
+}
+
+/// One row of the commands table.
+#[derive(Debug)]
+struct CommandRow {
+    /// The registry command id.
+    id: String,
+    /// The command's short UI label.
+    label: String,
+    /// The derived status.
+    status: Status,
+}
+
+/// The commands table rows over the builtin registry.
+fn command_rows(rules: &StatusRules) -> ExtractResult<Vec<CommandRow>> {
+    command_rows_from(ferrogram_commands::builtins::registry(), rules)
+}
+
+/// [`command_rows`] over an injected registry build (the same seam as
+/// [`implemented_ids_from`], so the "does not build" error arm is
+/// testable).
+fn command_rows_from<E: std::fmt::Display>(
+    registry: std::result::Result<ferrogram_commands::Registry, E>,
+    rules: &StatusRules,
+) -> ExtractResult<Vec<CommandRow>> {
+    let registry = registry.map_err(|error| ExtractError::Parse {
+        path: PathBuf::from("crates/commands"),
+        message: format!("builtin registry does not build: {error}"),
+    })?;
+    let mut rows: Vec<CommandRow> = registry
+        .ids()
+        .map(|id| {
+            let meta = registry.meta(&id);
+            let label = meta.map(|meta| meta.label.clone()).unwrap_or_default();
+            let fluent: Vec<&str> = meta
+                .map(|meta| {
+                    meta.fluent_ids
+                        .iter()
+                        .map(|fluent| fluent.0.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            CommandRow {
+                label,
+                status: command_status(
+                    id.as_str(),
+                    &fluent,
+                    registry.status(&id) == ferrogram_commands::CommandStatus::Implemented,
+                    rules,
+                ),
+                id: id.as_str().to_owned(),
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        a.status
+            .order()
+            .cmp(&b.status.order())
+            .then(a.id.cmp(&b.id))
+    });
+    Ok(rows)
+}
+
+/// One command row's status (ADR 0037's rules over command ids).
+///
+/// `out-of-scope` when the id or every one of its Fluent ids is listed
+/// in `ui-spec/out-of-scope.txt` (out-of-scope wins over implemented,
+/// as in the control table), `implemented` when the registry reports a
+/// real handler, `stub` otherwise. A command with no Fluent ids is
+/// never out of scope by its fluent list (it serves no listed control).
+/// The list is matched case-insensitively here: it holds CamelCase
+/// Fluent ids while command ids are lowercase
+/// (`tools.macro.dlg` vs `MacroPlay`), so the alpha's product
+/// decisions apply to both spellings.
+fn command_status(id: &str, fluent_ids: &[&str], implemented: bool, rules: &StatusRules) -> Status {
+    if rules.out_of_scope.contains_ci(id) {
+        return Status::OutOfScope;
+    }
+    if !fluent_ids.is_empty()
+        && fluent_ids
+            .iter()
+            .all(|fluent| rules.out_of_scope.contains_ci(fluent))
+    {
+        return Status::OutOfScope;
+    }
+    if implemented {
+        Status::Implemented
+    } else {
+        Status::Stub
+    }
 }
 
 /// The row's `(control_type, path)`: the entry from either layout
@@ -379,6 +526,25 @@ impl OutOfScope {
         }
         false
     }
+
+    /// Whether `id` is marked out of scope, matched case-insensitively
+    /// ([`command_status`]: command ids are lowercase while the list
+    /// holds CamelCase Fluent ids).
+    pub fn contains_ci(&self, id: &str) -> bool {
+        if self
+            .exact
+            .iter()
+            .any(|entry| entry.eq_ignore_ascii_case(id))
+        {
+            return true;
+        }
+        for g in &self.globs {
+            if glob_match(&format!("(?i){g}"), id) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// Converts a shell-style glob (`*` only) into a regex anchored at
@@ -490,6 +656,19 @@ mod tests {
         let oos = load_out_of_scope(&p).unwrap();
         assert!(oos.exact.is_empty());
         assert!(oos.globs.is_empty());
+    }
+
+    /// `contains_ci` (the commands table's rule) sees both spellings;
+    /// `contains` (the control table's rule) stays case-sensitive.
+    #[test]
+    fn case_insensitive_matching_sees_both_spellings() {
+        let oos = parse_out_of_scope("*Macro*\nCoauthorMenu\n");
+        assert!(oos.contains_ci("tools.macro.dlg"));
+        assert!(oos.contains_ci("MACRO something"));
+        assert!(oos.contains_ci("coauthormenu"));
+        assert!(!oos.contains_ci("plain.command"));
+        assert!(!oos.contains("tools.macro.dlg"));
+        assert!(oos.contains("CoauthorMenu"));
     }
 
     #[test]
@@ -848,6 +1027,93 @@ tabs:
         let ids = implemented_ids().unwrap();
         assert!(!ids.is_empty());
         assert!(implemented_ids_from(ferrogram_commands::builtins::registry()).is_ok());
+    }
+
+    // ---- the commands table (P5-10) --------------------------------
+
+    /// The status rules over command ids (ADR 0037): out-of-scope by
+    /// the id or by every Fluent id, out-of-scope beats implemented,
+    /// `stub` otherwise.
+    #[test]
+    fn command_status_follows_the_adr_0037_rules() {
+        let r = rules(&["file.save"], &[], &["*Macro*", "FlatId"]);
+        assert_eq!(
+            command_status("file.save", &[], true, &r),
+            Status::Implemented
+        );
+        assert_eq!(command_status("file.open", &[], false, &r), Status::Stub);
+        // The id itself is listed (exactly or by glob, matched
+        // case-insensitively: `tools.macro.dlg` vs `*Macro*`).
+        assert_eq!(command_status("FlatId", &[], true, &r), Status::OutOfScope);
+        assert_eq!(
+            command_status("tools.macro.dlg", &[], true, &r),
+            Status::OutOfScope
+        );
+        // Every Fluent id listed: the controls it serves are out of the
+        // alpha, so the command is too.
+        assert_eq!(
+            command_status("tools.macro.play", &["MacroPlay", "MacroRecord"], true, &r),
+            Status::OutOfScope
+        );
+        // One in-scope Fluent id keeps the command in scope.
+        assert_eq!(
+            command_status("mixed", &["MacroPlay", "FileSave"], true, &r),
+            Status::Implemented
+        );
+        assert_eq!(
+            command_status("mixed.stub", &["MacroPlay", "FileSave"], false, &r),
+            Status::Stub
+        );
+        // No Fluent ids: the fluent-list rule never fires.
+        assert_eq!(
+            command_status("app.quit", &[], true, &r),
+            Status::Implemented
+        );
+    }
+
+    /// `command_rows_from`: a registry that does not build is an error
+    /// naming the crate (the same seam as `implemented_ids_from`).
+    #[test]
+    fn command_rows_of_a_registry_that_does_not_build_are_an_error() {
+        let r = rules(&[], &[], &[]);
+        let error =
+            command_rows_from(Err::<ferrogram_commands::Registry, _>("boom"), &r).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("builtin registry does not build"),
+            "{message}"
+        );
+        assert!(message.contains("boom"), "{message}");
+    }
+
+    /// The committed commands table lists every registry id exactly
+    /// once, with the id's label and its derived status, and the
+    /// command-only ids the P4-15 note named are visible (P5-10).
+    #[test]
+    fn the_commands_table_lists_every_registry_id() {
+        let root = ws();
+        let rules = StatusRules::load(&root).unwrap();
+        let registry = ferrogram_commands::builtins::registry().unwrap();
+        let rows = command_rows(&rules).unwrap();
+        assert_eq!(rows.len(), registry.len(), "one row per registry id");
+        let text = generate(&root).unwrap();
+        for row in &rows {
+            let line = format!(
+                "| {} | {} | {} |",
+                md_escape(&row.id),
+                md_escape(&row.label),
+                row.status.as_str()
+            );
+            let found = text.lines().filter(|l| *l == line).count();
+            assert_eq!(found, 1, "expected exactly one row: {line}");
+        }
+        // Ids with no Fluent control appear (the P4-15 deferred item).
+        for id in ["app.quit", "file.exit", "view.units", "connector.draw"] {
+            assert!(
+                text.lines().any(|l| l.starts_with(&format!("| {id} |"))),
+                "{id} is missing from the commands table"
+            );
+        }
     }
     // ---- P1-08 goal 4: property tests -------------------------------
 

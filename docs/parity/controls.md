@@ -718,3 +718,995 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | MacroSecurity | button | MacroSecurity | tab/TabDeveloper/GroupCode | out-of-scope |
 | QuickDataLinkDataToShapes | button | QuickDataLinkDataToShapes | tab/TabData/GroupExternalData | out-of-scope |
 | TabAddIns | tab | TabAddIns | tab/TabAddIns | out-of-scope |
+
+# Parity matrix: registry commands
+
+Every command id in `ferrogram_commands::builtins::registry()`, including ids with no Fluent control, with a status of `implemented`, `stub`, or `out-of-scope`. Sorted by `(status, id)`; the status order is `implemented`, `stub`, `out-of-scope`.
+
+The status is derived, never hand-edited (ADR 0037):
+
+- `out-of-scope` when the command id is listed in `ui-spec/out-of-scope.txt` (matched case-insensitively, exactly or by a `*` glob), or every one of its Fluent ids is listed (the controls it serves are out of the alpha);
+- `implemented` when `ferrogram_commands::builtins::registry()` reports `CommandStatus::Implemented` for the id;
+- `stub` otherwise.
+
+An `out-of-scope` row stays out of scope even when a handler resolves: the same precedence as the control table. Regenerate with `cargo xtask parity`; the gate's `parity` step runs `cargo xtask parity --check` and fails when this file is stale.
+
+| command | label | status |
+|---------|-------|--------|
+| app.office.center.options | Options | implemented |
+| app.quit | Exit | implemented |
+| arrange.align.bottom | Bottom | implemented |
+| arrange.align.center_x | Align Center | implemented |
+| arrange.align.left | Align Left | implemented |
+| arrange.align.middle | Middle | implemented |
+| arrange.align.right | Align Right | implemented |
+| arrange.align.top | Top | implemented |
+| arrange.bring_forward | Bring Forward | implemented |
+| arrange.bring_to_front | Bring to Front | implemented |
+| arrange.distribute.horizontal | Distribute Horizontally | implemented |
+| arrange.distribute.vertical | Distribute Vertically | implemented |
+| arrange.group | Group | implemented |
+| arrange.send_backward | Send Backward | implemented |
+| arrange.send_to_back | Send to Back | implemented |
+| arrange.ungroup | Ungroup | implemented |
+| connector.draw | Draw Connector | implemented |
+| connector.glue_begin | Glue Begin | implemented |
+| connector.glue_end | Glue End | implemented |
+| connector.reroute_all | Reroute All | implemented |
+| connector.style | Connector Style | implemented |
+| connector.unglue | Unglue | implemented |
+| edit.copy | Copy | implemented |
+| edit.cut | Cut | implemented |
+| edit.delete | Delete | implemented |
+| edit.deselect | Deselect | implemented |
+| edit.duplicate | Duplicate | implemented |
+| edit.paste | Paste | implemented |
+| edit.redo | Redo | implemented |
+| edit.select | Select | implemented |
+| edit.select_all | Select All | implemented |
+| edit.undo | Undo | implemented |
+| file.close | Close | implemented |
+| file.exit | Exit | implemented |
+| file.export | Export | implemented |
+| file.inspect | Inspect | implemented |
+| file.new | New | implemented |
+| file.open | Open | implemented |
+| file.render | Render | implemented |
+| file.save | Save | implemented |
+| file.save_as | Save As | implemented |
+| help.about | About | implemented |
+| insert.drawing.ellipse | Ellipse | implemented |
+| insert.drawing.line | Line | implemented |
+| insert.drawing.rectangle | Rectangle | implemented |
+| insert.drawing.text_box | Text Box | implemented |
+| insert.shape | Shape | implemented |
+| page.add | New Page | implemented |
+| page.delete | Delete Page | implemented |
+| page.move_left | Move Page Left | implemented |
+| page.move_right | Move Page Right | implemented |
+| page.next | Next Page | implemented |
+| page.previous | Previous Page | implemented |
+| page.rename | Rename Page | implemented |
+| page.reorder | Reorder | implemented |
+| shape.ellipse | Ellipse | implemented |
+| shape.enter_group | Enter Group | implemented |
+| shape.exit_group | Exit Group | implemented |
+| shape.line | Line | implemented |
+| shape.move | Move | implemented |
+| shape.rectangle | Rectangle | implemented |
+| shape.resize | Resize | implemented |
+| shape.rotate | Rotate | implemented |
+| shape.set.angle | Angle | implemented |
+| shape.set.height | Height | implemented |
+| shape.set.pin | Position | implemented |
+| shape.set.text | Shape Text | implemented |
+| shape.set.width | Width | implemented |
+| text.begin | Edit Text | implemented |
+| text.cancel | Cancel Text | implemented |
+| text.commit | Commit Text | implemented |
+| tools.connector | Connector Tool | implemented |
+| tools.ellipse | Ellipse | implemented |
+| tools.pointer | Pointer Tool | implemented |
+| tools.rectangle | Rectangle | implemented |
+| tools.text | Text Tool | implemented |
+| view.rulers | Rulers | implemented |
+| view.toggle_grid | Toggle Grid | implemented |
+| view.ui_layout.visio_2016 | Visio 2016 Ribbon | implemented |
+| view.ui_layout.visio_365 | Microsoft 365 Ribbon | implemented |
+| view.units | Units | implemented |
+| view.zoom.fit | Fit to Window | implemented |
+| view.zoom.in | Zoom In | implemented |
+| view.zoom.out | Zoom Out | implemented |
+| app.bar.auto_height | Auto Height | stub |
+| app.bar.auto_hide | Auto Hide | stub |
+| app.bar.hide | Hide | stub |
+| app.bar.toggle_float | Toggle Float | stub |
+| app.coauth.merging | Merging | stub |
+| app.guard.trust.promotion | Guard Trust Promotion | stub |
+| app.maximize | Maximize | stub |
+| app.mdi.maximize | Maximize | stub |
+| app.mdi.minimize | Minimize | stub |
+| app.mdi.restore | Restore | stub |
+| app.minimize | Minimize | stub |
+| app.minimize.ribbon.toggle | Toggle | stub |
+| app.office.diagnostics | Diagnostics | stub |
+| app.office.feedback.help | Office Feedback Help | stub |
+| app.office.feedback.icon | Office Feedback Icon | stub |
+| app.restore | Restore | stub |
+| app.trust.center.dlg | Dlg | stub |
+| arrange.align.box | Align | stub |
+| arrange.align.center | Align Center | stub |
+| arrange.align_objects | Align Shapes | stub |
+| arrange.auto.align | Align | stub |
+| arrange.auto.align.and.space | Space | stub |
+| arrange.auto.generate.data.graphics | Graphics | stub |
+| arrange.auto.space | Space | stub |
+| arrange.diagram.check | Diagram Check | stub |
+| arrange.diagram.flip.horizontal | Horizontal | stub |
+| arrange.diagram.flip.vertical | Vertical | stub |
+| arrange.diagram.gallery | Gallery | stub |
+| arrange.diagram.navigation | Diagram Navigation | stub |
+| arrange.disband.container | Container Disband | stub |
+| arrange.distribute.bottom | Bottom | stub |
+| arrange.distribute.center | Center | stub |
+| arrange.distribute.h.space | Space | stub |
+| arrange.distribute.left | Left | stub |
+| arrange.distribute.middle | Middle | stub |
+| arrange.distribute.right | Right | stub |
+| arrange.distribute.top | Top | stub |
+| arrange.distribute.v.space | Space | stub |
+| arrange.flip_horizontal | Flip Horizontal | stub |
+| arrange.flip_vertical | Flip Vertical | stub |
+| arrange.group.office.insider.about | Group Office Insider About | stub |
+| arrange.group.office.insider.channel | Group Office Insider Channel | stub |
+| arrange.group.office.insider.help | Group Office Insider Help | stub |
+| arrange.group.office.insider.registration | Group Office Insider Registration | stub |
+| arrange.intersect | Shapes Object Intersect | stub |
+| arrange.join | Shapes Object Join | stub |
+| arrange.layout.apply.to.shape.style | Layout Apply To Shape Style | stub |
+| arrange.layout.dynamic | Dynamic | stub |
+| arrange.layout.more.options | Layout More Options | stub |
+| arrange.nudge | Move Shape | stub |
+| arrange.object.add.to.group | Group | stub |
+| arrange.object.combine | Shapes Object Combine | stub |
+| arrange.object.connect.objects | Objects | stub |
+| arrange.object.convert.to.group | Group | stub |
+| arrange.object.distribute.dlg | Dlg | stub |
+| arrange.object.effect.glow | Object Effect Glow | stub |
+| arrange.object.effect.shadow | Object Effect Shadow | stub |
+| arrange.object.effect.soft.edges | Object Effect Soft Edges | stub |
+| arrange.object.fragment | Shapes Object Fragment | stub |
+| arrange.object.help | Help | stub |
+| arrange.object.info.dlg | Dlg | stub |
+| arrange.object.remove.from.group | Group | stub |
+| arrange.object.reverse | Reverse | stub |
+| arrange.object.rotate90 | Rotate90 | stub |
+| arrange.object.swap.ends | Ends | stub |
+| arrange.object.union | Shapes Object Union | stub |
+| arrange.offset.dlg | Dlg | stub |
+| arrange.position | Position | stub |
+| arrange.relayout.shapes | Shapes | stub |
+| arrange.reorder.list | List | stub |
+| arrange.rotate.object | Object Rotate | stub |
+| arrange.rotate90.clockwise | Clockwise | stub |
+| arrange.rotate_left | Rotate Left | stub |
+| arrange.rotate_right | Rotate Right | stub |
+| arrange.size.and.position.window | Size And Position Window | stub |
+| arrange.size.objects | Objects | stub |
+| arrange.size.pos | Pos | stub |
+| arrange.size.text.block | Block | stub |
+| arrange.size1.d | D | stub |
+| arrange.size2.d | D | stub |
+| arrange.smart.align | Align | stub |
+| arrange.smart.align.and.space | Space | stub |
+| arrange.smart.space | Smart Space | stub |
+| arrange.space.shapes.avoid.page.breaks.toggle | Toggle | stub |
+| arrange.subtract | Shapes Object Subtract | stub |
+| arrange.trim | Shapes Object Trim | stub |
+| connector.auto_connect | AutoConnect | stub |
+| connector.conn.points | Points | stub |
+| connector.curved | Curved Connector | stub |
+| connector.curved.lines | Curved Lines | stub |
+| connector.dyn.conn.reroute | Reroute | stub |
+| connector.dynamic.grid | Dynamic Grid | stub |
+| connector.right_angle | Right-Angle Connector | stub |
+| connector.show.line.jumps | Show Line Jumps | stub |
+| connector.straight | Straight Connector | stub |
+| connector.straight.lines | Straight Lines | stub |
+| data.auto.connect | Connect | stub |
+| data.auto.link | Link | stub |
+| data.auto.link.wiz | Wiz | stub |
+| data.automatically.link | Automatically Link | stub |
+| data.column.settings.dlg | Dlg | stub |
+| data.explorer.window | Window | stub |
+| data.graphic.callouts | Graphic Callouts | stub |
+| data.graphic.create.new | Graphic Create New | stub |
+| data.graphic.edit | Graphic Edit | stub |
+| data.graphic.position | Graphic Position | stub |
+| data.graphic.position.horizontal | Graphic Position Horizontal | stub |
+| data.graphic.position.vertical | Graphic Position Vertical | stub |
+| data.graphics.configure | Graphics Configure | stub |
+| data.graphics.gallery.visio | Graphics Gallery Visio | stub |
+| data.link.row.to.shape | Shape | stub |
+| data.options | Options | stub |
+| data.recordset.properties | Properties | stub |
+| data.recordset.set.command | Command | stub |
+| data.recordset.set.primary.key | Key | stub |
+| data.refresh | Refresh Data | stub |
+| data.refresh.add.conflict | Conflict | stub |
+| data.refresh.config.dlg | Dlg | stub |
+| data.refresh.delete.conflict | Conflict | stub |
+| data.refresh.dlg | Dlg | stub |
+| data.refresh.resolve.conflict | Conflict | stub |
+| data.selector.dlg | Dlg | stub |
+| data.unlink.row | Row | stub |
+| data.unlink.shape | Shape Data | stub |
+| data.update.channel | Update Channel | stub |
+| data.update.columns.in.linked.shapes | Shapes | stub |
+| data.update.content.cache | Cache | stub |
+| data.update.icon | Update Icon | stub |
+| developer.prog.ref.help | Help | stub |
+| developer.run.add.on.dlg | Dlg | stub |
+| developer.run.addon.menu | Menu | stub |
+| edit.break.ole.link | Link | stub |
+| edit.cancel.in.place.editing | Editing | stub |
+| edit.clear | Delete | stub |
+| edit.convert.object | Object | stub |
+| edit.del.connect.pt | Pt | stub |
+| edit.delete.comment | Comment | stub |
+| edit.delete.connectors | Connectors | stub |
+| edit.delete.data.graphic | Graphic | stub |
+| edit.delete.data.recordset | Recordset | stub |
+| edit.delete.theme | Theme | stub |
+| edit.delete_back_word | Delete Word Back | stub |
+| edit.delete_forward_word | Delete Forward Word | stub |
+| edit.deselect.all | All | stub |
+| edit.drag.duplicate | Duplicate | stub |
+| edit.duplicate.data.graphic | Graphic | stub |
+| edit.duplicate.page | Duplicate This Page | stub |
+| edit.duplicate.theme | Theme | stub |
+| edit.find | Find | stub |
+| edit.insert.field | Field Insert | stub |
+| edit.insert.object | Object | stub |
+| edit.links | Links | stub |
+| edit.mod.connect.pt | Pt | stub |
+| edit.mod.control.pt | Pt | stub |
+| edit.mov.connect.pt | Pt | stub |
+| edit.move.comment | Comment | stub |
+| edit.move1.d | D | stub |
+| edit.move2.d | D | stub |
+| edit.open.object | Object | stub |
+| edit.paste.duplicate | Paste Duplicate | stub |
+| edit.paste.link | Link | stub |
+| edit.paste.shortcut | Shortcut | stub |
+| edit.paste.special | Special | stub |
+| edit.paste.special.dialog | Paste Special Dialog | stub |
+| edit.paste.to.location | Location | stub |
+| edit.recalc.object.wh | Wh | stub |
+| edit.redo.multiple | Multiple | stub |
+| edit.redo.or.repeat | Redo Or Repeat | stub |
+| edit.reinstate.validation.issue | Issue | stub |
+| edit.remove.data.graphic.from.sel | Sel | stub |
+| edit.remove.from.all.containers | Containers | stub |
+| edit.remove.member.from.container | Container | stub |
+| edit.remove.member.from.list | List | stub |
+| edit.remove.theme.from.sel | Remove Theme | stub |
+| edit.remove.vba.from.active.doc | Doc | stub |
+| edit.repeat | Repeat | stub |
+| edit.replace | Replace | stub |
+| edit.replace.dialog | Replace Dialog | stub |
+| edit.replace.shape | Replace Shape | stub |
+| edit.right.button.icon.color | Right Button Icon Color | stub |
+| edit.right.button.icon.transparent | Right Button Icon Transparent | stub |
+| edit.right.drag.cancel | Cancel | stub |
+| edit.right.drag.copy | Copy | stub |
+| edit.right.drag.link | Link | stub |
+| edit.right.drag.move | Move | stub |
+| edit.select.by.type.dialog | Select By Type Dialog | stub |
+| edit.select.container.members | Members | stub |
+| edit.select.contents | Select Contents | stub |
+| edit.select.special | Select | stub |
+| edit.sw.accept | Accept | stub |
+| edit.sw.add.section.dlg | Dlg | stub |
+| edit.sw.cancel | Cancel | stub |
+| edit.sw.change.row.type.dlg | Dlg | stub |
+| edit.sw.delete.row | Row | stub |
+| edit.sw.delete.section | Section | stub |
+| edit.sw.expand.row | Row | stub |
+| edit.sw.formula | Formula | stub |
+| edit.sw.insert.row | Row | stub |
+| edit.sw.insert.row.after | After | stub |
+| edit.sw.paste.function.dlg | Dlg | stub |
+| edit.sw.paste.name.dlg | Dlg | stub |
+| edit.sw.shape.action.dlg | Dlg | stub |
+| edit.sw.show.formulas | Formulas | stub |
+| edit.sw.show.sections.dlg | Dlg | stub |
+| edit.sw.show.toggle | Toggle | stub |
+| edit.sw.show.values | Values | stub |
+| edit.theme | Theme | stub |
+| edit.theme.colors | Colors | stub |
+| edit.theme.effects | Effects | stub |
+| edit.undo.multiple | Multiple | stub |
+| file.browse.sample.drawings | Drawings | stub |
+| file.checkin | Checkin | stub |
+| file.checkout | Checkout | stub |
+| file.choose.templates | Templates | stub |
+| file.close.ink.tools.ribbon.tab | Ink Tools Close | stub |
+| file.close_window | Close Window | stub |
+| file.create.edit.master | Edit Master | stub |
+| file.create.new.drawing | Drawing | stub |
+| file.create.shortcut | Shortcut | stub |
+| file.create.stage.view.diagram | Create Stage View Diagram | stub |
+| file.create.workflow.diagram | Create Workflow Diagram | stub |
+| file.email.routing | Routing | stub |
+| file.export.database.addon | Addon | stub |
+| file.header.footer | Footer | stub |
+| file.import | Import | stub |
+| file.last.file1 | File1 | stub |
+| file.last.file10 | File10 | stub |
+| file.last.file11 | File11 | stub |
+| file.last.file12 | File12 | stub |
+| file.last.file13 | File13 | stub |
+| file.last.file14 | File14 | stub |
+| file.last.file15 | File15 | stub |
+| file.last.file16 | File16 | stub |
+| file.last.file17 | File17 | stub |
+| file.last.file18 | File18 | stub |
+| file.last.file19 | File19 | stub |
+| file.last.file2 | File2 | stub |
+| file.last.file20 | File20 | stub |
+| file.last.file3 | File3 | stub |
+| file.last.file4 | File4 | stub |
+| file.last.file5 | File5 | stub |
+| file.last.file6 | File6 | stub |
+| file.last.file7 | File7 | stub |
+| file.last.file8 | File8 | stub |
+| file.last.file9 | File9 | stub |
+| file.new.blank.drawing | Drawing | stub |
+| file.new.blank.drawing.metric | Metric | stub |
+| file.new.blank.drawing.us | Us | stub |
+| file.new.blank.stencil | New Blank Stencil | stub |
+| file.new.blank.stencil.metric | New Blank Stencil Metric | stub |
+| file.new.blank.stencil.us | New Blank Stencil Us | stub |
+| file.new.def.doc.blank.drawing | Drawing | stub |
+| file.new.from.existing | Existing | stub |
+| file.new.stencil.dlg | Dlg | stub |
+| file.new.theme.colors | Theme Colors Create New Visio | stub |
+| file.new.theme.effects | Effects | stub |
+| file.open.active.object | Object | stub |
+| file.open.comment.for.edit | Edit | stub |
+| file.open.in.visio | Visio | stub |
+| file.open.stencil | Open Stencil | stub |
+| file.print | Print | stub |
+| file.print.page | Page | stub |
+| file.print.shape.sheet | Print Shape Sheet | stub |
+| file.print_preview | Print Preview | stub |
+| file.publish.to.process.repository | Repository | stub |
+| file.publish.to.visio.services | Services | stub |
+| file.save.as.drawing | Drawing | stub |
+| file.save.as.drawing.previous.file.format | Format | stub |
+| file.save.as.dwg | Dwg | stub |
+| file.save.as.emf | Emf | stub |
+| file.save.as.fixed.format.dlg | Dlg | stub |
+| file.save.as.jpg | Jpg | stub |
+| file.save.as.png | Png | stub |
+| file.save.as.svg | Svg | stub |
+| file.save.as.template | Template | stub |
+| file.save.as.web.page | Page | stub |
+| file.save.for.auto.recover | Recover | stub |
+| file.save.workspace | Workspace | stub |
+| file.send.as.attachment | Send As Attachment | stub |
+| file.send.as.mail | Mail | stub |
+| file.summary.info.dlg | Dlg | stub |
+| file.undo.checkout | Checkout | stub |
+| file.upgrade.document | Upgrade Document | stub |
+| file.upgrade.theme.model | Model | stub |
+| format.all.text.props | Props | stub |
+| format.apply.data.graphic | Data Graphic Apply After Linking Data | stub |
+| format.apply.data.graphic.after.link | Link | stub |
+| format.apply.main.theme | Theme | stub |
+| format.apply.main.theme.to.document | Document | stub |
+| format.apply.main.theme.to.page | Page | stub |
+| format.apply.theme.colors | Colors | stub |
+| format.apply.theme.effects | Effects | stub |
+| format.apply.theme.to.doc | Doc | stub |
+| format.apply.theme.to.new.shapes.toggle | Theme Apply To New Shapes | stub |
+| format.apply.theme.to.page | Page | stub |
+| format.behavior | Behavior | stub |
+| format.block | Block | stub |
+| format.corners | Corners | stub |
+| format.cust.prop.def | Def | stub |
+| format.cust.prop.edit | Edit | stub |
+| format.decrease.indent | Indent Decrease Word | stub |
+| format.decrease.para.spacing | Spacing | stub |
+| format.define.styles | Styles | stub |
+| format.double.click | Click | stub |
+| format.fill | Fill | stub |
+| format.increase.indent | Indent Increase Word | stub |
+| format.increase.para.spacing | Spacing | stub |
+| format.ink.dlg | Dlg | stub |
+| format.line | Line | stub |
+| format.paragraph | Paragraph | stub |
+| format.picture.autobalance | Autobalance | stub |
+| format.picture.compression.dlg | Dlg | stub |
+| format.protection | Protection | stub |
+| format.set.add.markup | Markup | stub |
+| format.set.char.color | Color | stub |
+| format.set.container.properties | Properties | stub |
+| format.set.dyn.conn.appearance.curved | Curved | stub |
+| format.set.dyn.conn.appearance.default | Default | stub |
+| format.set.dyn.conn.appearance.straight | Straight | stub |
+| format.set.dyn.conn.reroute.as.needed | Needed | stub |
+| format.set.dyn.conn.reroute.freely | Freely | stub |
+| format.set.dyn.conn.reroute.never | Never | stub |
+| format.set.dyn.conn.reroute.on.crossover | Crossover | stub |
+| format.set.dyn.conn.routing.style | Style | stub |
+| format.set.fill.color | Fill Color | stub |
+| format.set.fill.pattern | Pattern | stub |
+| format.set.fill.shadow | Shadow | stub |
+| format.set.header.footer | Footer | stub |
+| format.set.index.in.stencil | Stencil | stub |
+| format.set.language.dlg | Set Language | stub |
+| format.set.line.color | Line Color | stub |
+| format.set.line.corner.style | Style | stub |
+| format.set.line.ends | Ends | stub |
+| format.set.line.pattern | Line Pattern | stub |
+| format.set.line.weight | Line Weight | stub |
+| format.set.page.orientation | Page Orientation | stub |
+| format.set.page.plow | Plow | stub |
+| format.set.page.size | Size | stub |
+| format.set.theme.behavior | Behavior | stub |
+| format.shadow | Shadow | stub |
+| format.special | Special | stub |
+| format.style | Style | stub |
+| format.style.explorer | Style Explorer | stub |
+| format.tabs | Tabs | stub |
+| format.text | Text | stub |
+| format.text.align_bottom | Bottom-Align Text | stub |
+| format.text.align_center | Center Text | stub |
+| format.text.align_justify | Justify Text | stub |
+| format.text.align_left | Align Text Left | stub |
+| format.text.align_middle | Center Text Vertically | stub |
+| format.text.align_right | Align Text Right | stub |
+| format.text.align_top | Top-Align Text | stub |
+| format.text.all_caps | Text All Caps | stub |
+| format.text.bold | Bold | stub |
+| format.text.decrease_size | Decrease Font Size | stub |
+| format.text.increase_size | Increase Font Size | stub |
+| format.text.italic | Italic | stub |
+| format.text.small_caps | Text Small Caps | stub |
+| format.text.subscript | Subscript | stub |
+| format.text.underline | Underline | stub |
+| help.about.visio | Visio | stub |
+| help.contents | Help | stub |
+| help.mode | Mode | stub |
+| help.research.look.up | Up | stub |
+| help.research.thesaurus | Research | stub |
+| help.research.translate | Translate | stub |
+| help.rhi | Rhi | stub |
+| help.rhi.dlg | Dlg | stub |
+| help.search | Search | stub |
+| help.shape.basics | Basics | stub |
+| help.templates | Templates | stub |
+| insert.acquire.images | Images | stub |
+| insert.add.connect.pt | Pt | stub |
+| insert.add.control.pt | Pt | stub |
+| insert.add.data.recordset | Recordset | stub |
+| insert.add.member.to.container | Container | stub |
+| insert.add.ons | Add Ons | stub |
+| insert.add.text.shape | Shape | stub |
+| insert.add.to.all.containers | Containers | stub |
+| insert.add.to.new.container | Container | stub |
+| insert.auto.cad.add.on | On | stub |
+| insert.check.box.control | Control | stub |
+| insert.clip.art | Clip Art Insert Dialog | stub |
+| insert.clip.art.dlg | Dlg | stub |
+| insert.combo.box.control | Control | stub |
+| insert.comment | Comment | stub |
+| insert.control.dlg | Dlg | stub |
+| insert.data.map | Map | stub |
+| insert.drop.and.contain | Contain | stub |
+| insert.drop.and.insert.into.list | List | stub |
+| insert.drop.callout | Callout | stub |
+| insert.drop.many.linked | Linked | stub |
+| insert.drop.many.on.page | Page | stub |
+| insert.drop.on.page | Page | stub |
+| insert.drop.on.stencil | Stencil | stub |
+| insert.drop.on.text | Text | stub |
+| insert.hyper.link | Link | stub |
+| insert.image.control | Control | stub |
+| insert.image.properties | Properties | stub |
+| insert.image.properties.dlg | Dlg | stub |
+| insert.inser.text.box.control | Control | stub |
+| insert.label.control | Control | stub |
+| insert.legend.horizontal | Legend Insert | stub |
+| insert.legend.vertical1 | Vertical1 | stub |
+| insert.list.box.control | Control | stub |
+| insert.m365.picture | M365 Picture | stub |
+| insert.member.into.list | List | stub |
+| insert.microsoft.graph | Graph | stub |
+| insert.new.background.page | Background Page Insert | stub |
+| insert.page.tab | Tab | stub |
+| insert.push.button.control | Control | stub |
+| insert.radio.button.control | Control | stub |
+| insert.scroll.bar.control | Control | stub |
+| insert.spin.control | Control | stub |
+| insert.stamp.tool | Tool | stub |
+| insert.text.box | Text Box Insert Horizontal | stub |
+| insert.toggle.button.control | Control | stub |
+| insert.vert.text.box | Box | stub |
+| insert.word.art | Art | stub |
+| layer.dialog | Dialog | stub |
+| layer.dlg | Dlg | stub |
+| layer.properties.dialog | Properties Dialog | stub |
+| layer.setup.dlg | Dlg | stub |
+| page.auto.size.toggle | Auto Size Page | stub |
+| page.measure.units.dlg | Dlg | stub |
+| page.multiple.file.import | Import | stub |
+| page.pages.list | List | stub |
+| page.relayout | Relayout | stub |
+| page.size.dlg | Size | stub |
+| page.size.to.fit.drawing | Drawing Page | stub |
+| review.check.compatibility | Compatibility | stub |
+| review.ignore.this.issue | Ignore This Issue | stub |
+| review.ignore.validation.issue | Issue | stub |
+| review.ignore.validation.rule | Ignore Rule | stub |
+| review.new.comment | New Comment | stub |
+| review.reviewer.visibility.all | All | stub |
+| review.reviewer.visibility.none | None | stub |
+| review.spelling.change | Spelling | stub |
+| review.spelling.options.dlg | Dlg | stub |
+| review.validate.diagram | Diagram | stub |
+| review.validation.issue.navigate.to.shape | Shape | stub |
+| review.validation.issues.arrange.by.category | Category | stub |
+| review.validation.issues.arrange.by.ignored | Ignored | stub |
+| review.validation.issues.arrange.by.page | Page | stub |
+| review.validation.issues.arrange.by.rule | Rule | stub |
+| review.validation.issues.arrange.original.order | Order | stub |
+| review.validation.issues.window.toggle | Issues Window | stub |
+| shape.actions | Actions | stub |
+| shape.arc | Arc | stub |
+| shape.associate.callout | Callout | stub |
+| shape.behavior | Behavior | stub |
+| shape.comment | Comment | stub |
+| shape.comment.delete | Delete | stub |
+| shape.comment.dlg | Dlg | stub |
+| shape.container.auto.resize.expand.contract | Contract | stub |
+| shape.container.auto.resize.expand.only | Only | stub |
+| shape.container.auto.resize.off | Off | stub |
+| shape.container.heading.styles | Container Heading Styles | stub |
+| shape.container.margins | Container Margins | stub |
+| shape.container.no.heading.toggle | Toggle | stub |
+| shape.container.styles | Container Styles | stub |
+| shape.crop.object | Object | stub |
+| shape.data.window | Data Window | stub |
+| shape.data.window.show.hide | Data Window Show Hide | stub |
+| shape.draw.add.guide | Guide | stub |
+| shape.draw.convert.ink.to.geometry | Draw Convert Ink To Geometry | stub |
+| shape.draw.convert.visio.ink.to.text | Draw Convert Visio Ink To Text | stub |
+| shape.draw.fill.style | Style | stub |
+| shape.draw.glue | Glue | stub |
+| shape.draw.line.style | Style | stub |
+| shape.draw.oval | Oval | stub |
+| shape.draw.rect | Rect | stub |
+| shape.draw.region | Region | stub |
+| shape.draw.select | Draw Select | stub |
+| shape.draw.snap | Snap | stub |
+| shape.draw.text.style | Style | stub |
+| shape.draw.zoom | Zoom | stub |
+| shape.drawing.explorer | Drawing Explorer | stub |
+| shape.drawing.tools | Developer Drawing Tools | stub |
+| shape.effects | Effects | stub |
+| shape.explorer | Explorer | stub |
+| shape.gallery.add.on | On | stub |
+| shape.geo | Geo | stub |
+| shape.hand | Hand | stub |
+| shape.icon.bucket.tool | Icon Bucket | stub |
+| shape.icon.edit.close | Icon Edit Close | stub |
+| shape.icon.insert.from.file | Icon Insert From File | stub |
+| shape.icon.lasso.tool | Tool | stub |
+| shape.icon.left.color | Left Button Icon Color | stub |
+| shape.icon.pencil.tool | Icon Pencil | stub |
+| shape.icon.right.tool | Tool | stub |
+| shape.icon.select.area | Icon Select Area | stub |
+| shape.icon.select.lasso | Icon Select Lasso | stub |
+| shape.icon.select.net | Net | stub |
+| shape.intersect | Intersect | stub |
+| shape.layer.toolbar | Toolbar | stub |
+| shape.lock.container | Container Lock | stub |
+| shape.master.explorer | Master Explorer | stub |
+| shape.master.properties | Master Properties | stub |
+| shape.master.setup | Setup | stub |
+| shape.name | Name | stub |
+| shape.protection | Protection | stub |
+| shape.reports | Reports | stub |
+| shape.search.window.toggle | Toggle | stub |
+| shape.shapes.object.offset | Shapes Object Offset | stub |
+| shape.shapes.object.update.alignment | Shapes Object Update Alignment | stub |
+| shape.shapes.rotate | Shapes Rotate | stub |
+| shape.shapes.window | Shapes Window | stub |
+| shape.sheet.delete.row | Sheet Delete Row | stub |
+| shape.sheet.delete.section | Sheet Delete Section | stub |
+| shape.sheet.edit.formula | Sheet Edit Formula | stub |
+| shape.sheet.insert.row | Sheet Insert Row | stub |
+| shape.sheet.insert.section | Sheet Insert Section | stub |
+| shape.sheet.shape.action | Sheet Shape Action | stub |
+| shape.spline | Freeform | stub |
+| shape.sten.activate | Activate | stub |
+| shape.sten.auto.arrange | Arrange | stub |
+| shape.sten.cleanup | Cleanup | stub |
+| shape.sten.close | Close | stub |
+| shape.sten.drawing.explorer | Explorer | stub |
+| shape.sten.edit.drawing | Drawing | stub |
+| shape.sten.edit.icon | Edit Icon | stub |
+| shape.sten.edit.off | Off | stub |
+| shape.sten.edit.on | On | stub |
+| shape.sten.edit.toggle | Toggle | stub |
+| shape.sten.icon.and.detail | Detail | stub |
+| shape.sten.icon.and.name | Name | stub |
+| shape.sten.icon.only | Only | stub |
+| shape.sten.image.master | Master | stub |
+| shape.sten.name.master | Master | stub |
+| shape.sten.name.only | Only | stub |
+| shape.sten.names.under.icons | Names Under Icons | stub |
+| shape.sten.new.master | New Master | stub |
+| shape.sten.properties | Properties | stub |
+| shape.sten.save | Save | stub |
+| shape.sten.save.as | As | stub |
+| shape.studio.add.on | On | stub |
+| shape.styles | Styles | stub |
+| shape.transparency | Transparency | stub |
+| shape.transparency.dlg | Dlg | stub |
+| shape.vert | Vert | stub |
+| text.bullets | Bullets | stub |
+| text.direction.left.to.right | Direction Left To Right | stub |
+| text.direction.right.to.left | Direction Right To Left | stub |
+| text.direction.vertical | Direction Vertical | stub |
+| text.double.strike.through | Through | stub |
+| text.double.u.line | Line | stub |
+| text.edit.ruler | Ruler | stub |
+| text.edit.state | State | stub |
+| text.font | Font | stub |
+| text.font.color | Font Color | stub |
+| text.font.size | Font Size | stub |
+| text.font.size.decrease | Font Size Decrease | stub |
+| text.font.size.increase | Font Size Increase | stub |
+| text.h.align.distribute | Distribute | stub |
+| text.initial.caps | Initial Caps | stub |
+| text.normal.case | Normal Case | stub |
+| text.rotate90 | Rotate90 Degrees | stub |
+| text.size | Size | stub |
+| text.strike.through | Through | stub |
+| text.style | Style | stub |
+| text.super.script | Script | stub |
+| text.u.line | Line | stub |
+| tools.accessibility.checker | Accessibility Checker | stub |
+| tools.allow.personally.identifiable.information | Allow Personally Identifiable Information | stub |
+| tools.allow.themes | Allow Themes | stub |
+| tools.area.select | Area Select | stub |
+| tools.array.shapes.add.on | On | stub |
+| tools.arrows.more | Arrows More | stub |
+| tools.attach.data.source | Attach Data Source | stub |
+| tools.automatic.resize | Automatic Resize | stub |
+| tools.automatic.resize.always.fit.to.contents | Automatic Resize Always Fit To Contents | stub |
+| tools.automatic.resize.expand.as.needed | Automatic Resize Expand As Needed | stub |
+| tools.automatic.resize.none | Automatic Resize None | stub |
+| tools.background.color | Background Color | stub |
+| tools.backgrounds | Backgrounds | stub |
+| tools.bevel.shape | Bevel Shape | stub |
+| tools.bevel_options_3d | 3 D Bevel Options Dialog | stub |
+| tools.blank.page.insert | Blank Page Insert | stub |
+| tools.blank.page.insert.visio | Blank Page Insert Visio | stub |
+| tools.borders.and.titles | Borders And Titles | stub |
+| tools.button.group.cloud.services | Button Group Cloud Services | stub |
+| tools.button.group.item.save.cloud.services | Button Group Item Save Cloud Services | stub |
+| tools.button.group.item.save.local.services | Button Group Item Save Local Services | stub |
+| tools.button.group.local.services | Button Group Local Services | stub |
+| tools.button.group.recent.documents | Button Group Recent Documents | stub |
+| tools.button.groups.save | Button Groups Save | stub |
+| tools.button.open.browse | Button Open Browse | stub |
+| tools.cad.drawing | Cad Drawing | stub |
+| tools.change.case.dialog.classic | Change Case Dialog Classic | stub |
+| tools.chart.insert | Chart Insert | stub |
+| tools.clear.icon.colors | Clear Icon Colors | stub |
+| tools.commenting | Commenting | stub |
+| tools.comments.pane | Comments Pane Split | stub |
+| tools.connection | Connection Point Tool | stub |
+| tools.connection.point | Connection Point | stub |
+| tools.connection.points | Connection Points | stub |
+| tools.contact.us | Contact Us | stub |
+| tools.control.properties | Control Properties | stub |
+| tools.controls | Controls | stub |
+| tools.crop | Crop Tool | stub |
+| tools.cust.prop | Prop | stub |
+| tools.cust.prop.define | Define | stub |
+| tools.custom.property.sets | Sets | stub |
+| tools.design.mode | Design Mode | stub |
+| tools.detect.and.repair | Repair | stub |
+| tools.dlg.custom.fit | Fit | stub |
+| tools.dv.export.vtpx | Dv Export Vtpx | stub |
+| tools.dv.open.data.source | Dv Open Data Source | stub |
+| tools.dv.relink.data.source | Dv Relink Data Source | stub |
+| tools.embellishment | Embellishment | stub |
+| tools.event.monitor | Event Monitor | stub |
+| tools.external.data.window | External Data Window | stub |
+| tools.fill.dialog | Fill Dialog | stub |
+| tools.find.dialog | Find Dialog | stub |
+| tools.finger.painting.mode | Finger Painting Mode | stub |
+| tools.flyout.anchor.insert.pictures | Flyout Anchor Insert Pictures | stub |
+| tools.format_painter | Format Painter | stub |
+| tools.freeform | Freeform | stub |
+| tools.glows.more.options | Glows More Options | stub |
+| tools.hyperlink.hier | Hier | stub |
+| tools.hyperlink.insert | Hyperlink Insert | stub |
+| tools.hyperlink.list | List | stub |
+| tools.icons.and.details | Icons And Details | stub |
+| tools.icons.and.names | Icons And Names | stub |
+| tools.icons.only | Icons Only | stub |
+| tools.import.flow.as.visio.bpmn.diagram | Import Flow As Visio Bpmn Diagram | stub |
+| tools.inet.add.to.favorites | Favorites | stub |
+| tools.inet.copy.hyperlink | Hyperlink | stub |
+| tools.inet.delete.hlink | Hlink | stub |
+| tools.inet.diagramming.resources | Resources | stub |
+| tools.inet.edit.hyperlink | Hyperlink | stub |
+| tools.inet.go.back | Back | stub |
+| tools.inet.go.forward | Forward | stub |
+| tools.inet.knowledge.base | Base | stub |
+| tools.inet.open.h.link | Link | stub |
+| tools.inet.open.h.link.new.wnd | Wnd | stub |
+| tools.inet.paste.as.hyperlink | Paste As Hyperlink | stub |
+| tools.inet.user.search.page | Page | stub |
+| tools.inet.visio.home.page | Page | stub |
+| tools.inet.visio.on.the.web | Web | stub |
+| tools.inet.visio.solutions.library | Library | stub |
+| tools.ink.auto.create.shapes | Ink Auto Create Shapes | stub |
+| tools.ink.ballpoint.pen | Ink Ballpoint Pen | stub |
+| tools.ink.color.picker | Ink Color Picker | stub |
+| tools.ink.covert.to.geometry | Ink Covert To Geometry | stub |
+| tools.ink.covert.to.text.visio | Ink Covert To Text Visio | stub |
+| tools.ink.eraser | Ink Eraser | stub |
+| tools.ink.highlighter | Ink Highlighter | stub |
+| tools.ink.review.pen | Pen | stub |
+| tools.ink.shape.close | Ink Shape Close | stub |
+| tools.ink.stock.pen0 | Pen0 | stub |
+| tools.ink.stock.pen1 | Pen1 | stub |
+| tools.ink.tool | Ink | stub |
+| tools.insights | Insights | stub |
+| tools.inventory | Inventory | stub |
+| tools.language.commands | Language Commands | stub |
+| tools.language.preferences.dlg | Language Preferences | stub |
+| tools.lasso.select.visio | Lasso Select Visio | stub |
+| tools.layers | Layers | stub |
+| tools.layout.shapes.dlg | Dlg | stub |
+| tools.left.button.icon.transparent | Left Button Icon Transparent | stub |
+| tools.legacy.mode | Legacy Mode | stub |
+| tools.line.arrows | Line Arrows | stub |
+| tools.line.dialog | Line Dialog | stub |
+| tools.line.styles.dialog | Line Styles Dialog | stub |
+| tools.line.thickness | Line Thickness | stub |
+| tools.manage.privacy | Manage Privacy | stub |
+| tools.more.data.graphics | More Data Graphics | stub |
+| tools.more.page.sizes | More Page Sizes | stub |
+| tools.mso.auto.correct | Correct | stub |
+| tools.mso.auto.correct.dlg | Dlg | stub |
+| tools.mso.auto.format | Format | stub |
+| tools.mso.custom.item | Item | stub |
+| tools.mso.insert.equation | Equation | stub |
+| tools.mso.insert.symbol | Symbol Insert | stub |
+| tools.mso.insert.symbol.dlg | Dlg | stub |
+| tools.mso.media.gallery | Gallery | stub |
+| tools.names.only | Names Only | stub |
+| tools.objects.add.to | Objects Add To | stub |
+| tools.objects.convert.to | Objects Convert To | stub |
+| tools.objects.remove.from | Objects Remove From | stub |
+| tools.objects.ungroup | Objects Ungroup | stub |
+| tools.ole.objectct.insert | Ole Objectct Insert | stub |
+| tools.operations | Operations | stub |
+| tools.options.color.palette.dlg | Dlg | stub |
+| tools.options.edit.background | Background | stub |
+| tools.options.edit.drawing | Drawing | stub |
+| tools.options.go.to.drawing | Drawing | stub |
+| tools.options.new.page | Page | stub |
+| tools.options.page.setup | Setup | stub |
+| tools.options.preferences | Preferences | stub |
+| tools.options.protect.document | Document | stub |
+| tools.options.reorder.pages | Pages | stub |
+| tools.org.chart.change.style | Org Chart Change Style | stub |
+| tools.org.chart.copy.create | Org Chart Copy Create | stub |
+| tools.org.chart.data.compare | Org Chart Data Compare | stub |
+| tools.org.chart.data.export | Org Chart Data Export | stub |
+| tools.org.chart.data.import | Org Chart Data Import | stub |
+| tools.org.chart.fit.to.page | Org Chart Fit To Page | stub |
+| tools.org.chart.increase.height | Org Chart Increase Height | stub |
+| tools.org.chart.increase.width | Org Chart Increase Width | stub |
+| tools.org.chart.layout | Org Chart Layout | stub |
+| tools.org.chart.picture.change | Org Chart Picture Change | stub |
+| tools.org.chart.picture.delete | Org Chart Picture Delete | stub |
+| tools.org.chart.picture.hide | Org Chart Picture Hide | stub |
+| tools.org.chart.picture.insert | Org Chart Picture Insert | stub |
+| tools.org.chart.picture.insert.multiple | Org Chart Picture Insert Multiple | stub |
+| tools.org.chart.picture.insert.one | Org Chart Picture Insert One | stub |
+| tools.org.chart.position.type.change | Org Chart Position Type Change | stub |
+| tools.org.chart.reduce.height | Org Chart Reduce Height | stub |
+| tools.org.chart.reduce.width | Org Chart Reduce Width | stub |
+| tools.org.chart.relayout | Org Chart Relayout | stub |
+| tools.org.chart.report.move.closer | Org Chart Report Move Closer | stub |
+| tools.org.chart.report.move.further | Org Chart Report Move Further | stub |
+| tools.org.chart.report.move.left | Org Chart Report Move Left | stub |
+| tools.org.chart.report.move.right | Org Chart Report Move Right | stub |
+| tools.org.chart.subordinates.expand | Org Chart Subordinates Expand | stub |
+| tools.org.chart.subordinates.show.hide | Org Chart Subordinates Show Hide | stub |
+| tools.org.chart.synchronize | Org Chart Synchronize | stub |
+| tools.outline.weight | Outline Weight | stub |
+| tools.pen.add.favorite | Pen Add Favorite | stub |
+| tools.pen.pressure | Pen Pressure | stub |
+| tools.pencil | Pencil Tool | stub |
+| tools.pens | Pens | stub |
+| tools.persistent.events | Persistent Events | stub |
+| tools.picture.auto.balance | Picture Auto Balance | stub |
+| tools.picture.brightness | Picture Brightness | stub |
+| tools.picture.compress | Picture Compress | stub |
+| tools.picture.contrast | Picture Contrast | stub |
+| tools.picture.corrections.dialog | Picture Corrections Dialog | stub |
+| tools.picture.insert.from.file | Picture Insert From File | stub |
+| tools.pointer.mode.options | Pointer Mode Options | stub |
+| tools.prepare.visio.diagram.for.export.to.flow | Prepare Visio Diagram For Export To Flow | stub |
+| tools.quick.connector | Quick Connector | stub |
+| tools.recorder.resume | Recorder Resume | stub |
+| tools.recorder.stop.visio | Recorder Stop Visio | stub |
+| tools.reflection | Reflection | stub |
+| tools.reflections.more.options | Reflections More Options | stub |
+| tools.refresh.diagram | Refresh Diagram | stub |
+| tools.rotate | Rotate Tool | stub |
+| tools.rotation_3d | 3 D Rotation | stub |
+| tools.rotation_3d_options | 3 D Rotation Options Dialog | stub |
+| tools.rules.import.from | Rules Import From | stub |
+| tools.rules.to.check | Rules To Check | stub |
+| tools.run.vbe | Vbe | stub |
+| tools.screen.tip | Screen Tip | stub |
+| tools.selection.mode.extend | Extend | stub |
+| tools.selection.mode.lasso | Lasso | stub |
+| tools.selection.mode.rect | Rect | stub |
+| tools.shadow.options.dialog | Shadow Options Dialog | stub |
+| tools.share.point.workflow.export | Share Point Workflow Export | stub |
+| tools.share.point.workflow.import | Share Point Workflow Import | stub |
+| tools.snap_glue_setup | Snap & Glue | stub |
+| tools.soft.edges.more.options | Soft Edges More Options | stub |
+| tools.spelling | Spelling | stub |
+| tools.stencil.close | Stencil Close | stub |
+| tools.stencil.explorer | Stencil Explorer | stub |
+| tools.stop.ignoring.this.issue | Stop Ignoring This Issue | stub |
+| tools.stop.ignoring.validation.rule | Stop Ignoring Rule | stub |
+| tools.strikethrough | Strikethrough | stub |
+| tools.subprocess.browse.to.other.document | Subprocess Browse To Other Document | stub |
+| tools.subprocess.create.from.selection | Subprocess Create From Selection | stub |
+| tools.subprocess.create.new | Subprocess Create New | stub |
+| tools.subprocess.edit.link | Subprocess Edit Link | stub |
+| tools.subprocess.link.to.existing | Subprocess Link To Existing | stub |
+| tools.symbols.dialog | Symbols Dialog | stub |
+| tools.text_block | Text Block Tool | stub |
+| tools.theme.colors.gallery.visio | Theme Colors Gallery Visio | stub |
+| tools.theme.connectors | Theme Connectors | stub |
+| tools.theme.effects.gallery.visio | Theme Effects Gallery Visio | stub |
+| tools.theme.variants | Theme Variants | stub |
+| tools.themes.gallery.visio | Themes Gallery Visio | stub |
+| tools.themes.gallery.visio.legacy | Themes Gallery Visio Legacy | stub |
+| tools.tool.snap.lines | Lines | stub |
+| tools.trace.back | Trace Back | stub |
+| tools.trace.dependent.cells | Trace Dependent Cells | stub |
+| tools.trace.forward | Trace Forward | stub |
+| tools.trace.precedent.cells | Trace Precedent Cells | stub |
+| tools.translate.options | Options | stub |
+| tools.turn.to.next.page | Page | stub |
+| tools.turn.to.prev.page | Page | stub |
+| tools.usage.permissions | Usage Permissions | stub |
+| tools.visio.to.power.point | Visio To Power Point | stub |
+| tools.visio.to.word | Visio To Word | stub |
+| tools.visual.basic | Visual Basic | stub |
+| tools.whats.new.recent.updates | Whats New Recent Updates | stub |
+| tools.windows.arrange.all | Windows Arrange All | stub |
+| tools.windows.cascade | Windows Cascade | stub |
+| tools.writeback.visio.diagram.to.excel.source | Writeback Visio Diagram To Excel Source | stub |
+| view.cascade_all | Cascade All | stub |
+| view.center.drawing | Drawing | stub |
+| view.collapse.shapes.window | Window | stub |
+| view.connections | Connections | stub |
+| view.custom | Custom | stub |
+| view.direction.toggle | Direction | stub |
+| view.first.tile | Tile | stub |
+| view.fit.container.to.contents | Fit To Contents | stub |
+| view.fit.curve | Curve | stub |
+| view.fit.in.window | Window | stub |
+| view.full.screen.view | Full Screen View | stub |
+| view.full_screen_mode | Full Screen | stub |
+| view.go.to.page.toolbar | Toolbar | stub |
+| view.grid | Show Grid | stub |
+| view.guides | Show Guides | stub |
+| view.hide.all.toolbars | Toolbars | stub |
+| view.hide.document.stencil | Document Stencil | stub |
+| view.hide.more.shapes | Shapes | stub |
+| view.last | Last | stub |
+| view.last.tile | Tile | stub |
+| view.left.to.right | Direction Left To Right | stub |
+| view.list.insert.after | After | stub |
+| view.list.insert.before | Before | stub |
+| view.next.comment.markup | Markup | stub |
+| view.next.markup | Markup | stub |
+| view.next.tile | Tile | stub |
+| view.next.window | Window | stub |
+| view.page.breaks | Breaks | stub |
+| view.pan.object | Object | stub |
+| view.pan.zoom | Pan And Zoom Window | stub |
+| view.previous.comment.markup | Markup | stub |
+| view.previous.markup | Markup | stub |
+| view.previous.tile | Tile | stub |
+| view.right.to.left | Left | stub |
+| view.rul.sub | Sub | stub |
+| view.ruler.grid.dlg | Dlg | stub |
+| view.show.comments | Show Comments | stub |
+| view.show.formula.tracing.window | Show Formula Tracing Window | stub |
+| view.show.ignored.issues.toggle | Show Ignored Issues | stub |
+| view.show.line.jumps.toggle | Toggle | stub |
+| view.show.page.breaks | Show Page Breaks | stub |
+| view.show.shape.sheet.document | Show Shape Sheet Document | stub |
+| view.show.shape.sheet.page | Show Shape Sheet Page | stub |
+| view.show.shape.sheet.shape | Shape Sheet Show Formulas | stub |
+| view.show.tags | Show Tags | stub |
+| view.show.training | Show Training | stub |
+| view.ss.window.add.section | Section | stub |
+| view.ss.window.change.row.type | Type | stub |
+| view.ss.window.collapse | Collapse | stub |
+| view.ss.window.deselect | Deselect | stub |
+| view.ss.window.expand | Expand | stub |
+| view.ss.window.paste.function | Function | stub |
+| view.ss.window.paste.name | Name | stub |
+| view.ss.window.select | Select | stub |
+| view.ss.window.show.section | Section | stub |
+| view.ss.window.show.trace.window | Window | stub |
+| view.status.bar | Bar | stub |
+| view.task.pane | Pane | stub |
+| view.task.pane.data.graphic | Graphic | stub |
+| view.task.pane.document.management | Management | stub |
+| view.task.pane.research | Research | stub |
+| view.task.pane.reviewer | Reviewer | stub |
+| view.task.panes.menu.visio | Task Panes Menu Visio | stub |
+| view.task.toggle.preview.size | Size | stub |
+| view.tile_all | Tile All | stub |
+| view.toggle.document.stencil | Stencil | stub |
+| view.toggle.visio.flow.placeholders | Toggle Visio Flow Placeholders | stub |
+| view.toggle_guides | Toggle Guides | stub |
+| view.toolbars.dlg | Dlg | stub |
+| view.view100 | View100 | stub |
+| view.view150 | View150 | stub |
+| view.view200 | View200 | stub |
+| view.view400 | View400 | stub |
+| view.view50 | View50 | stub |
+| view.view75 | View75 | stub |
+| view.visual.basic.code | Visual Basic Code | stub |
+| view.window.more.windows.dialog | Window More Windows Dialog | stub |
+| view.window.new.window | Window New | stub |
+| view.window.show.draw.page | Page | stub |
+| view.window.show.master.objects | Objects | stub |
+| view.window.show.shape.sheet | Sheet | stub |
+| view.window.switch.windows.menu.word | Window Switch Windows Menu Word | stub |
+| view.zoom.area | Area | stub |
+| view.zoom.dialog | Zoom Dialog | stub |
+| view.zoom.in.ignore.sel | Sel | stub |
+| view.zoom.last | Last | stub |
+| view.zoom.out.ignore.sel | Sel | stub |
+| view.zoom.page.width | Zoom Page Width Visio | stub |
+| view.zoom.pt | Pt | stub |
+| view.zoom.single.tile | Tile | stub |
+| data.link.data.to.shapes | Link Data To Shapes | out-of-scope |
+| developer.record.new.macro | Macro Record | out-of-scope |
+| file.save.as.macro.drawing | Drawing | out-of-scope |
+| tools.com.add.ins.dialog | Com Add Ins Dialog | out-of-scope |
+| tools.macro.dlg | Dlg | out-of-scope |
+| tools.macro.play | Macro Play | out-of-scope |
+| tools.macro.recorder.pause | Macro Recorder Pause | out-of-scope |
+| tools.macro.security | Macro Security | out-of-scope |
+| tools.pause.recording.macro | Macro | out-of-scope |
+| tools.quick.data.link.data.to.shapes | Quick Data Link Data To Shapes | out-of-scope |
+| tools.resume.recording.macro | Macro | out-of-scope |
+| tools.start.recording.macro | Macro | out-of-scope |
+| tools.stop.recording.macro | Macro | out-of-scope |
