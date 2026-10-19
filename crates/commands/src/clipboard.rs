@@ -38,6 +38,12 @@ pub struct ClipboardContent {
 pub struct Clipboard {
     /// The copied fragment, or `None` when the clipboard is empty.
     pub content: Option<ClipboardContent>,
+    /// How many offset pastes this payload has had (task P5-09). The
+    /// first paste lands at the recorded position offset by
+    /// `(0.1 in, -0.1 in)`, the next by twice that, and so on
+    /// (ADR 0047). A copy resets the counter. A paste at the pointer
+    /// (`x`/`y`) does not advance it.
+    pub pastes: u32,
 }
 
 impl Clipboard {
@@ -61,6 +67,7 @@ mod tests {
         let clipboard = Clipboard::new();
         assert!(clipboard.is_empty());
         assert_eq!(clipboard.content, None);
+        assert_eq!(clipboard.pastes, 0);
         let content = ClipboardContent {
             kind: ClipboardKind::Shapes,
             shapes: Vec::new(),
@@ -69,7 +76,9 @@ mod tests {
         };
         let clipboard = Clipboard {
             content: Some(content),
+            pastes: 2,
         };
         assert!(!clipboard.is_empty());
+        assert_eq!(clipboard.pastes, 2);
     }
 }
