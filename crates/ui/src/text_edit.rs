@@ -1,17 +1,38 @@
 //! In-place text editing on shapes (ADR 0044).
 //!
 //! The editor is an egui text field over the shape's text block (the
-//! canvas places it from the scene's `TextNode` bounds). On commit the
-//! buffer is written as one text run ([`TextContent`], ADR 0019): run and
+//! canvas places it with [`editor_rect`]). On commit the buffer is
+//! written as one text run ([`TextContent`], ADR 0019): run and
 //! paragraph markers collapse to the first row's `IX`, which is the
 //! documented Phase 5 limit until a run-aware editor lands (ADR 0044).
 //! While editing, the shortcut scope is `Text` (ADR 0036). Task P5-07
 //! implements the bodies.
+//!
+//! The editor state is deliberately independent of the command registry:
+//! `crates/commands` (L4) cannot depend on egui (L6). The UI tool opens
+//! the editor, and on commit dispatches `shape.set.text`; the
+//! `text.begin`/`text.commit`/`text.cancel` commands validate and
+//! announce the same transition for headless callers.
 
+use egui::{Id, Ui};
 use ferrogram_commands::AppCtx;
-use ferrogram_model::{ShapeId, TextContent};
+use ferrogram_geom::{Point, Rect as GeoRect, Transform};
+use ferrogram_model::{ShapeId, TextContent, TextPart};
+use ferrogram_render::scene::{Node, Shape as SceneShape};
+use ferrogram_render::{Scene, node_bounds};
 
 use crate::UiError;
+
+/// The first-row markers a buffer keeps when it is written back ADR 0044.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct RunMarkers {
+    /// The text had a `Character` run marker.
+    character: bool,
+    /// The text had a `Paragraph` run marker.
+    paragraph: bool,
+    /// The text had a `Tabs` run marker.
+    tabs: bool,
+}
 
 /// The in-place text editor state (ADR 0044).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -20,6 +41,12 @@ pub struct TextEditor {
     pub shape: Option<ShapeId>,
     /// The editable buffer (plain text, ADR 0044).
     pub buffer: String,
+    /// The buffer as the edit started (unchanged-buffer detection).
+    original: String,
+    /// The run marker kinds of the original text (collapse rule).
+    markers: RunMarkers,
+    /// Whether the text field still needs focus on its first frame.
+    focus_requested: bool,
 }
 
 impl TextEditor {
@@ -35,18 +62,47 @@ impl TextEditor {
 
     /// Opens the editor on `shape` with its current text (ADR 0044).
     ///
-    /// Fails when the shape has no text sheet or the id is stale. Task
-    /// P5-07 implements the body.
+    /// The UI reads the shape's text (and rejects a stale id) before it
+    /// calls this method; `crates/ui`'s tool owns that read. The editor
+    /// keeps the plain buffer and the first-row marker kinds, so a commit
+    /// can collapse a multi-run text predictably.
     pub fn begin(&mut self, shape: ShapeId, text: &TextContent) -> Result<(), UiError> {
-        let _ = (shape, text);
-        Err(UiError::NotImplemented)
+        self.shape = Some(shape);
+        self.buffer = plain_text(text);
+        self.original = self.buffer.clone();
+        self.markers = RunMarkers {
+            character: text
+                .parts
+                .iter()
+                .any(|part| matches!(part, TextPart::CharRun { .. })),
+            paragraph: text
+                .parts
+                .iter()
+                .any(|part| matches!(part, TextPart::ParaRun { .. })),
+            tabs: text
+                .parts
+                .iter()
+                .any(|part| matches!(part, TextPart::TabsRun { .. })),
+        };
+        self.focus_requested = true;
+        Ok(())
     }
 
     /// Finishes the edit and returns the text to write (one run, ADR
-    /// 0044), or `None` when the buffer is unchanged. Task P5-07
-    /// implements the body.
+    /// 0044), or `None` when the buffer is unchanged.
+    ///
+    /// The editor always returns to idle, including on the unchanged and
+    /// empty-buffer cases.
     pub fn finish(&mut self) -> Result<Option<TextContent>, UiError> {
-        Err(UiError::NotImplemented)
+        if !self.is_active() {
+            return Err(UiError::Command(ferrogram_commands::CommandError::failed(
+                "no text edit is active",
+            )));
+        }
+        let changed = self.buffer != self.original;
+        let text = one_run(&self.buffer, self.markers);
+        *self = Self::new();
+        if changed { Ok(Some(text)) } else { Ok(None) }
     }
 
     /// Abandons the edit without writing anything.
@@ -55,36 +111,547 @@ impl TextEditor {
     }
 
     /// The shape's text as the editor started with it (unchanged-buffer
-    /// detection). Task P5-07 implements the body.
+    /// detection). A stale shape or a missing document is an error.
     pub fn original_text(&self, ctx: &AppCtx) -> Result<Option<TextContent>, UiError> {
-        let _ = ctx;
-        Err(UiError::NotImplemented)
+        let Some(shape) = self.shape else {
+            return Ok(None);
+        };
+        let Some(session) = ctx.active_document() else {
+            return Err(UiError::Command(ferrogram_commands::CommandError::failed(
+                "no open document",
+            )));
+        };
+        let entry = session.document.shape(shape).ok_or_else(|| {
+            UiError::Command(ferrogram_commands::CommandError::failed(format!(
+                "unknown shape id {}",
+                shape.index
+            )))
+        })?;
+        Ok(entry.text.clone())
     }
+
+    /// Draws the editor over `rect` (the shape's text block in screen
+    /// points) and reports a commit.
+    ///
+    /// Escape and a click outside the block commit, matching the common
+    /// Visio behaviour (ADR 0044); the `text.cancel` command is the
+    /// explicit discard path. The first frame requests keyboard focus so
+    /// egui's `Text` shortcut scope becomes active (ADR 0036).
+    pub fn show(&mut self, ui: &mut Ui, rect: egui::Rect) -> EditorAction {
+        if !self.is_active() {
+            return EditorAction::Pending;
+        }
+        let rect = if finite_rect(rect) {
+            rect
+        } else {
+            egui::Rect::from_min_size(ui.ctx().viewport_rect().min, egui::vec2(160.0, 40.0))
+        };
+        let request_focus = self.focus_requested;
+        let mut commit = false;
+        egui::Area::new(editor_id(self.shape))
+            .order(egui::Order::Foreground)
+            .fixed_pos(rect.min)
+            .show(ui.ctx(), |ui| {
+                ui.set_min_width(rect.width().max(80.0));
+                let output = egui::TextEdit::multiline(&mut self.buffer)
+                    .desired_width(rect.width().max(80.0))
+                    .desired_rows(1)
+                    .hint_text("Text")
+                    .show(ui);
+                if request_focus {
+                    output.response.request_focus();
+                }
+                if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+                    commit = true;
+                }
+            });
+        if request_focus {
+            self.focus_requested = false;
+        }
+        let outside_click = ui.input(|input| {
+            input.pointer.any_pressed()
+                && input
+                    .pointer
+                    .interact_pos()
+                    .is_some_and(|pos| !rect.contains(pos))
+        });
+        if commit || outside_click {
+            return match self.finish() {
+                Ok(text) => EditorAction::Committed(text),
+                // `finish` only fails when the editor is inactive, which
+                // the `is_active` guard above excludes.
+                Err(_) => EditorAction::Pending,
+            };
+        }
+        EditorAction::Pending
+    }
+}
+
+/// What one editor frame produced (ADR 0044).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum EditorAction {
+    /// The edit is still in progress.
+    Pending,
+    /// The edit ended; the payload is the text to write, or `None` when
+    /// the buffer did not change.
+    Committed(Option<TextContent>),
+}
+
+/// The stable egui id of the editor area for one shape.
+fn editor_id(shape: Option<ShapeId>) -> Id {
+    Id::unique(("ferrogram-text-editor", shape.map(|shape| shape.index)))
+}
+
+/// The plain text of a [`TextContent`]: literal parts concatenated, field
+/// markers dropped (their cached display text follows as a literal).
+fn plain_text(text: &TextContent) -> String {
+    let mut buffer = String::new();
+    for part in &text.parts {
+        if let TextPart::Text(literal) = part {
+            buffer.push_str(literal);
+        }
+    }
+    buffer
+}
+
+/// The one-run content ADR 0044 writes: the first-row markers the
+/// original text had, then the literal buffer. An empty buffer is an
+/// empty text (no markers).
+fn one_run(buffer: &str, markers: RunMarkers) -> TextContent {
+    if buffer.is_empty() {
+        return TextContent::new();
+    }
+    let mut parts = Vec::new();
+    if markers.character {
+        parts.push(TextPart::CharRun { ix: 0 });
+    }
+    if markers.paragraph {
+        parts.push(TextPart::ParaRun { ix: 0 });
+    }
+    if markers.tabs {
+        parts.push(TextPart::TabsRun { ix: 0 });
+    }
+    parts.push(TextPart::Text(buffer.to_owned()));
+    TextContent { parts }
+}
+
+/// The screen rectangle of a shape's text block (or its shape bounds for
+/// an empty shape such as a fresh text box), or `None` when the shape is
+/// not in the scene or the view values are unusable.
+///
+/// The canvas passes its viewport, pan and zoom. Text is laid out in the
+/// block box, so the editor sits exactly over the text; the block's
+/// rotation is not applied to the egui field (egui text edits are
+/// axis-aligned), whose rectangle is the axis-aligned bounds of the
+/// rotated block.
+pub fn editor_rect(
+    scene: &Scene,
+    shape: ShapeId,
+    viewport: egui::Rect,
+    pan: Point,
+    zoom: f64,
+) -> Option<egui::Rect> {
+    if !zoom.is_finite() || zoom <= 0.0 || !finite_rect(viewport) {
+        return None;
+    }
+    let (path, node, transform) = find_shape(
+        &scene.nodes,
+        shape,
+        &Default::default(),
+        Transform::identity(),
+        0,
+    )?;
+    let page = node
+        .text
+        .as_ref()
+        .and_then(|text| text_block_bounds(text, transform))
+        .or_else(|| node_bounds(scene, &path).ok())?;
+    let k = 96.0 * zoom;
+    let min = egui::pos2(
+        viewport.min.x + ((pan.x + page.min.x) * k) as f32,
+        viewport.min.y + ((pan.y + scene.height - page.max.y) * k) as f32,
+    );
+    let max = egui::pos2(
+        viewport.min.x + ((pan.x + page.max.x) * k) as f32,
+        viewport.min.y + ((pan.y + scene.height - page.min.y) * k) as f32,
+    );
+    if !min.x.is_finite() || !min.y.is_finite() || !max.x.is_finite() || !max.y.is_finite() {
+        return None;
+    }
+    Some(egui::Rect::from_min_max(min, max))
+}
+
+/// Finds one model shape's node, turning its ancestor transforms into
+/// the shape-local to page transform.
+fn find_shape<'a>(
+    nodes: &'a [Node],
+    shape: ShapeId,
+    path: &ferrogram_render::NodePath,
+    parent: Transform,
+    depth: usize,
+) -> Option<(ferrogram_render::NodePath, &'a SceneShape, Transform)> {
+    const MAX_DEPTH: usize = 128;
+    if depth >= MAX_DEPTH {
+        return None;
+    }
+    for (index, node) in nodes.iter().enumerate() {
+        let child = path.child(index);
+        match node {
+            Node::Group(group) => {
+                if let Some(found) = find_shape(
+                    &group.children,
+                    shape,
+                    &child,
+                    group.transform.then(parent),
+                    depth + 1,
+                ) {
+                    return Some(found);
+                }
+            }
+            Node::Shape(candidate) if candidate.shape_id == Some(shape) => {
+                return Some((child, candidate, candidate.transform.then(parent)));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The text block's bounds in page inches: the layout box turned about
+/// its centre and placed at [`ferrogram_render::scene::TextNode::origin`]
+/// (`origin + (x, -y)`), then mapped through the shape transform.
+fn text_block_bounds(
+    text: &ferrogram_render::scene::TextNode,
+    transform: Transform,
+) -> Option<GeoRect> {
+    let width = text.layout.width;
+    let height = text.layout.height;
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let origin = text.origin;
+    if !origin.x.is_finite() || !origin.y.is_finite() {
+        return None;
+    }
+    let (sin, cos) = text.layout.rotation.radians().sin_cos();
+    if !sin.is_finite() || !cos.is_finite() {
+        return None;
+    }
+    let (cx, cy) = (width / 2.0, height / 2.0);
+    let corners = [
+        Point::new(0.0, 0.0),
+        Point::new(width, 0.0),
+        Point::new(width, height),
+        Point::new(0.0, height),
+    ];
+    let mut bounds: Option<GeoRect> = None;
+    for corner in corners {
+        let (dx, dy) = (corner.x - cx, corner.y - cy);
+        let local = Point::new(
+            origin.x + cx + dx * cos - dy * sin,
+            origin.y - (cy + dx * sin + dy * cos),
+        );
+        let page = transform.apply(local);
+        if !page.x.is_finite() || !page.y.is_finite() {
+            return None;
+        }
+        let point = GeoRect::new(page, page);
+        bounds = Some(match bounds {
+            Some(bounds) => bounds.union(point),
+            None => point,
+        });
+    }
+    bounds
+}
+
+/// True when every side of the rectangle is finite.
+fn finite_rect(rect: egui::Rect) -> bool {
+    rect.min.x.is_finite()
+        && rect.min.y.is_finite()
+        && rect.max.x.is_finite()
+        && rect.max.y.is_finite()
+        && rect.width() >= 0.0
+        && rect.height() >= 0.0
 }
 
 #[cfg(test)]
 mod tests {
-    //! Stub contract (P5-01); replace with real tests when implementing.
     use super::*;
     use ferrogram_commands::Settings;
+    use ferrogram_geom::Angle;
+    use ferrogram_render::Rgba;
+    use ferrogram_render::scene::{Group, Shape as SceneShape, TextNode};
+
+    fn text(parts: Vec<TextPart>) -> TextContent {
+        TextContent { parts }
+    }
+
+    fn document_with(text: Option<TextContent>) -> (AppCtx, ShapeId) {
+        use ferrogram_model::Document;
+        let mut doc = Document::new();
+        let page = doc.add_page("Page-1").expect("page");
+        let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 1);
+        shape.text = text.clone();
+        let shape = doc.insert_shape(page, shape, None).expect("shape");
+        if let Some(text) = text {
+            doc.set_shape_text(shape, text).expect("text");
+        }
+        let mut app = AppCtx::new(Settings::default());
+        app.open_document(ferrogram_commands::DocumentSession::new(doc, None));
+        (app, shape)
+    }
 
     #[test]
-    fn the_text_editor_is_a_not_implemented_stub() {
+    fn begin_plain_text_and_finish_a_changed_buffer() {
         let mut editor = TextEditor::new();
-        assert!(!editor.is_active());
-        assert!(matches!(
-            editor.begin(ShapeId { index: 0 }, &TextContent::default()),
-            Err(UiError::NotImplemented)
-        ));
-        assert!(matches!(editor.finish(), Err(UiError::NotImplemented)));
-        let ctx = AppCtx::new(Settings::default());
-        assert!(matches!(
-            editor.original_text(&ctx),
-            Err(UiError::NotImplemented)
-        ));
-        editor.shape = Some(ShapeId { index: 1 });
+        let content = text(vec![
+            TextPart::CharRun { ix: 3 },
+            TextPart::Text("a".to_owned()),
+            TextPart::ParaRun { ix: 2 },
+            TextPart::Text("b".to_owned()),
+            TextPart::TabsRun { ix: 1 },
+            TextPart::Text("c".to_owned()),
+        ]);
+        editor.begin(ShapeId { index: 4 }, &content).expect("begin");
         assert!(editor.is_active());
+        assert_eq!(editor.buffer, "abc");
+        editor.buffer.push('!');
+        let written = editor.finish().expect("finish").expect("changed");
+        assert_eq!(
+            written.parts,
+            vec![
+                TextPart::CharRun { ix: 0 },
+                TextPart::ParaRun { ix: 0 },
+                TextPart::TabsRun { ix: 0 },
+                TextPart::Text("abc!".to_owned()),
+            ]
+        );
+        assert!(!editor.is_active());
+        assert_eq!(editor, TextEditor::new());
+    }
+
+    #[test]
+    fn an_unchanged_buffer_writes_nothing_and_cancel_discards() {
+        let mut editor = TextEditor::new();
+        editor
+            .begin(
+                ShapeId { index: 0 },
+                &text(vec![TextPart::Text("same".to_owned())]),
+            )
+            .expect("begin");
+        assert_eq!(editor.finish().expect("finish"), None);
+        assert!(!editor.is_active());
+
+        editor
+            .begin(
+                ShapeId { index: 0 },
+                &text(vec![TextPart::Text("old".to_owned())]),
+            )
+            .expect("begin");
+        editor.buffer = "new".to_owned();
         editor.cancel();
         assert_eq!(editor, TextEditor::new());
+    }
+
+    #[test]
+    fn finish_requires_an_active_edit() {
+        let mut editor = TextEditor::new();
+        assert!(matches!(
+            editor.finish(),
+            Err(UiError::Command(
+                ferrogram_commands::CommandError::Failed { .. }
+            ))
+        ));
+    }
+
+    #[test]
+    fn an_empty_buffer_writes_an_empty_text() {
+        let mut editor = TextEditor::new();
+        editor
+            .begin(
+                ShapeId { index: 0 },
+                &text(vec![
+                    TextPart::CharRun { ix: 0 },
+                    TextPart::Text("gone".to_owned()),
+                ]),
+            )
+            .expect("begin");
+        editor.buffer.clear();
+        let written = editor.finish().expect("finish").expect("changed");
+        assert!(written.is_empty());
+    }
+
+    #[test]
+    fn original_text_reads_the_model_and_rejects_stale_ids() {
+        let (app, shape) = document_with(Some(text(vec![TextPart::Text("old".to_owned())])));
+        let mut editor = TextEditor::new();
+        assert_eq!(editor.original_text(&app).expect("idle"), None);
+        editor
+            .begin(shape, &text(vec![TextPart::Text("old".to_owned())]))
+            .expect("begin");
+        assert_eq!(
+            editor.original_text(&app).expect("text"),
+            Some(text(vec![TextPart::Text("old".to_owned())]))
+        );
+
+        let mut stale = TextEditor::new();
+        stale
+            .begin(ShapeId { index: 99 }, &TextContent::new())
+            .expect("begin");
+        assert!(matches!(
+            stale.original_text(&app),
+            Err(UiError::Command(
+                ferrogram_commands::CommandError::Failed { .. }
+            ))
+        ));
+
+        let mut no_document = TextEditor::new();
+        no_document
+            .begin(ShapeId { index: 0 }, &TextContent::new())
+            .expect("begin");
+        assert!(matches!(
+            no_document.original_text(&AppCtx::new(Settings::default())),
+            Err(UiError::Command(
+                ferrogram_commands::CommandError::Failed { .. }
+            ))
+        ));
+    }
+
+    #[test]
+    fn plain_text_drops_markers_and_keeps_field_display_text() {
+        let content = text(vec![
+            TextPart::CharRun { ix: 1 },
+            TextPart::Text("left".to_owned()),
+            TextPart::Field { ix: 4 },
+            TextPart::Text("42".to_owned()),
+            TextPart::Text(" right".to_owned()),
+        ]);
+        assert_eq!(plain_text(&content), "left42 right");
+    }
+
+    #[test]
+    fn a_scene_text_block_maps_to_a_screen_rectangle() {
+        let mut scene = Scene::new(8.5, 11.0);
+        let mut node = SceneShape {
+            shape_id: Some(ShapeId { index: 2 }),
+            transform: Transform::identity(),
+            path: Default::default(),
+            fill: None,
+            stroke: None,
+            shadow: None,
+            clip: None,
+            text: None,
+        };
+        let mut text_node = TextNode {
+            fonts: Vec::new(),
+            runs: Vec::new(),
+            layout: Default::default(),
+            color: Rgba::opaque(0, 0, 0),
+            origin: Point::new(1.0, 3.0),
+        };
+        text_node.layout.width = 2.0;
+        text_node.layout.height = 1.0;
+        node.text = Some(text_node);
+        scene.nodes.push(Node::Shape(Box::new(node)));
+        let viewport = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(800.0, 600.0));
+        let rect = editor_rect(
+            &scene,
+            ShapeId { index: 2 },
+            viewport,
+            Point::new(0.0, 0.0),
+            1.0,
+        )
+        .expect("rect");
+        // origin (1, 3), block 2 x 1 in: page y 2..3 maps down, x 1..3.
+        assert!((rect.min.x - 106.0).abs() < 0.01, "{rect:?}");
+        assert!((rect.min.y - (20.0 + 8.0 * 96.0)).abs() < 0.01, "{rect:?}");
+        assert!((rect.width() - 192.0).abs() < 0.01, "{rect:?}");
+        assert!((rect.height() - 96.0).abs() < 0.01, "{rect:?}");
+    }
+
+    #[test]
+    fn editor_rect_handles_groups_missing_shapes_and_bad_views() {
+        let scene = Scene::new(8.5, 11.0);
+        let viewport = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+        assert_eq!(
+            editor_rect(
+                &scene,
+                ShapeId { index: 0 },
+                viewport,
+                Point::new(0.0, 0.0),
+                1.0
+            ),
+            None
+        );
+        assert_eq!(
+            editor_rect(
+                &scene,
+                ShapeId { index: 0 },
+                viewport,
+                Point::new(0.0, 0.0),
+                0.0
+            ),
+            None
+        );
+
+        let mut nested = Scene::new(8.5, 11.0);
+        let group = Group {
+            transform: Transform::translate(Point::new(1.0, 1.0)),
+            clip: None,
+            children: vec![Node::Shape(Box::new(SceneShape {
+                shape_id: Some(ShapeId { index: 7 }),
+                transform: Transform::identity(),
+                path: Default::default(),
+                fill: None,
+                stroke: None,
+                shadow: None,
+                clip: None,
+                text: None,
+            }))],
+        };
+        nested.nodes.push(Node::Group(group));
+        let rect = editor_rect(
+            &nested,
+            ShapeId { index: 7 },
+            viewport,
+            Point::new(0.0, 0.0),
+            1.0,
+        )
+        .expect("grouped shape");
+        assert!(rect.width() >= 0.0 && rect.height() >= 0.0);
+    }
+
+    #[test]
+    fn text_block_bounds_reject_bad_boxes_and_rotation() {
+        let mut node = TextNode {
+            fonts: Vec::new(),
+            runs: Vec::new(),
+            layout: Default::default(),
+            color: Rgba::opaque(0, 0, 0),
+            origin: Point::new(0.0, 0.0),
+        };
+        assert_eq!(text_block_bounds(&node, Transform::identity()), None);
+        node.layout.width = 1.0;
+        node.layout.height = 1.0;
+        assert!(text_block_bounds(&node, Transform::identity()).is_some());
+        node.layout.rotation = Angle::from_radians(f64::NAN);
+        assert_eq!(text_block_bounds(&node, Transform::identity()), None);
+        node.layout.rotation = Angle::from_radians(0.0);
+        node.origin = Point::new(f64::INFINITY, 0.0);
+        assert_eq!(text_block_bounds(&node, Transform::identity()), None);
+    }
+
+    #[test]
+    fn editor_id_is_stable_per_shape() {
+        assert_eq!(
+            editor_id(Some(ShapeId { index: 3 })),
+            editor_id(Some(ShapeId { index: 3 }))
+        );
+        assert_ne!(
+            editor_id(Some(ShapeId { index: 3 })),
+            editor_id(Some(ShapeId { index: 4 }))
+        );
+        assert_ne!(editor_id(None), editor_id(Some(ShapeId { index: 3 })));
     }
 }

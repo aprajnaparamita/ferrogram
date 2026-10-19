@@ -12,6 +12,7 @@
 
 mod pointer;
 mod snap;
+mod text;
 
 use std::cell::RefCell;
 use std::rc::Rc;

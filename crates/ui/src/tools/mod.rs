@@ -183,11 +183,10 @@ mod tests {
         let effect = machine.handle(event.clone(), &ctx).expect("pointer");
         assert!(effect.intents.is_empty());
 
-        let tools: [(Handler, Anchor); 4] = [
+        let tools: [(Handler, Anchor); 3] = [
             (draw::handle, draw::anchor),
             (connector::handle, connector::anchor),
             (stencil::handle, stencil::anchor),
-            (text::handle, text::anchor),
         ];
         for (handle, anchor) in tools {
             assert!(matches!(
@@ -196,6 +195,11 @@ mod tests {
             ));
             assert_eq!(anchor(&machine), None);
         }
+        // P5-07 implemented the text tool: with no document its events are
+        // a no-op (and it has no drag anchor).
+        let effect = text::handle(&mut machine, &event, &ctx).expect("text tool");
+        assert!(effect.intents.is_empty());
+        assert_eq!(text::anchor(&machine), None);
         assert_eq!(ToolEffect::new(), ToolEffect::default());
         assert_eq!(Modifiers::none(), Modifiers::default());
     }
