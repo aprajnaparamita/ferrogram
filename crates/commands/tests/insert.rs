@@ -611,3 +611,166 @@ fn malformed_arguments_are_invalid_without_a_shape() {
 
     assert_eq!(page_shapes(&ctx, page).len(), before);
 }
+
+#[test]
+fn a_drop_onto_an_overflowing_target_point_never_glues() {
+    let (mut ctx, registry, _session, page, _target) = fixture();
+    let huge = {
+        let document = &mut ctx.active_document_mut().expect("document").document;
+        let mut shape = target_shape();
+        for cell in &mut shape.sheet.cells {
+            if cell.name.as_str() == "PinX" {
+                cell.value = Some(CellValue::Number(1.7e308));
+            }
+        }
+        for section in &mut shape.sheet.sections {
+            if section.name.as_str() == "Connection"
+                && let Some(row) = section.rows.first_mut()
+                && let Some(cell) = row.cells.first_mut()
+            {
+                cell.value = Some(CellValue::Number(1.7e308));
+            }
+        }
+        document.insert_shape(page, shape, None).expect("huge")
+    };
+    let huge_visio = ctx
+        .active_document()
+        .expect("document")
+        .document
+        .shape(huge)
+        .expect("huge")
+        .visio_id;
+    let before = page_shapes(&ctx, page).len();
+    let mut args = drop_args("Rectangle");
+    args.set("glue_to", ArgValue::Integer(i64::from(huge_visio)));
+    let error = dispatch(&mut ctx, &registry, "insert.shape", args).expect_err("no finite point");
+    assert!(
+        error.to_string().contains("no finite connection point"),
+        "{error}"
+    );
+    assert_eq!(
+        page_shapes(&ctx, page).len(),
+        before,
+        "the failed glue rolled the drop back"
+    );
+}
+
+#[test]
+fn a_stale_active_page_is_named_before_any_shape_is_inserted() {
+    let (mut ctx, registry, _session, page, _target) = fixture();
+    let before = page_shapes(&ctx, page).len();
+    ctx.active_document_mut().expect("document").active_page = Some(PageId { index: 9 });
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "insert.drawing.rectangle",
+        drawing_args(1.0, 1.0, 1.0, 1.0),
+    )
+    .expect_err("stale page");
+    assert!(error.to_string().contains("unknown page id 9"), "{error}");
+    assert_eq!(page_shapes(&ctx, page).len(), before);
+
+    let error = dispatch(&mut ctx, &registry, "insert.shape", drop_args("Rectangle"))
+        .expect_err("stale page");
+    assert!(error.to_string().contains("unknown page id 9"), "{error}");
+    assert_eq!(page_shapes(&ctx, page).len(), before);
+}
+
+#[test]
+fn out_of_range_glue_ids_and_rows_are_invalid() {
+    let (mut ctx, registry, _session, page, _target) = fixture();
+    let before = page_shapes(&ctx, page).len();
+    let mut args = drop_args("Rectangle");
+    args.set("glue_to", ArgValue::Integer(i64::MAX));
+    let error = dispatch(&mut ctx, &registry, "insert.shape", args).expect_err("id range");
+    assert!(
+        error.to_string().contains("glue_to is out of range"),
+        "{error}"
+    );
+
+    let mut args = drop_args("Rectangle");
+    args.set("glue_to", ArgValue::Integer(1));
+    args.set("glue_point", ArgValue::Integer(-1));
+    let error = dispatch(&mut ctx, &registry, "insert.shape", args).expect_err("negative row");
+    assert!(
+        error.to_string().contains("non-negative row index"),
+        "{error}"
+    );
+    assert_eq!(page_shapes(&ctx, page).len(), before);
+}
+
+#[test]
+fn every_insert_number_names_the_argument_it_rejects() {
+    let (mut ctx, registry, _session, _page, _target) = fixture();
+    let mut bad = |id: &str, set: &[(&str, f64)], want: &str| {
+        let mut args = drawing_args(1.0, 1.0, 1.0, 1.0);
+        if id == "insert.shape" {
+            args = drop_args("Rectangle");
+        }
+        for (name, value) in set {
+            args.set(*name, ArgValue::Number(*value));
+        }
+        let error = dispatch(&mut ctx, &registry, id, args).expect_err(id);
+        assert!(error.to_string().contains(want), "{id}: {error}");
+    };
+    bad("insert.shape", &[("x", f64::NAN)], "x must be finite");
+    bad("insert.shape", &[("y", f64::INFINITY)], "y must be finite");
+    bad(
+        "insert.shape",
+        &[("width", f64::INFINITY)],
+        "width must be finite",
+    );
+    bad(
+        "insert.shape",
+        &[("height", f64::NEG_INFINITY)],
+        "height must be finite",
+    );
+    bad(
+        "insert.drawing.rectangle",
+        &[("x", f64::NAN)],
+        "x must be finite",
+    );
+    bad(
+        "insert.drawing.rectangle",
+        &[("y", f64::INFINITY)],
+        "y must be finite",
+    );
+    bad(
+        "insert.drawing.rectangle",
+        &[("width", f64::INFINITY)],
+        "width must be finite",
+    );
+    bad(
+        "insert.drawing.rectangle",
+        &[("height", f64::NAN)],
+        "height must be finite",
+    );
+    bad(
+        "insert.drawing.line",
+        &[("width", f64::INFINITY)],
+        "width must be finite",
+    );
+    bad(
+        "insert.drawing.line",
+        &[("height", f64::NAN)],
+        "height must be finite",
+    );
+}
+
+#[test]
+fn an_insert_without_an_active_page_is_an_error() {
+    let (mut ctx, registry, _session, page, _target) = fixture();
+    let before = page_shapes(&ctx, page).len();
+    ctx.active_document_mut().expect("document").active_page = None;
+    for (id, args) in [
+        ("insert.shape", drop_args("Rectangle")),
+        ("insert.drawing.ellipse", drawing_args(1.0, 1.0, 1.0, 1.0)),
+    ] {
+        let error = dispatch(&mut ctx, &registry, id, args).expect_err(id);
+        assert!(
+            error.to_string().contains("no active page"),
+            "{id}: {error}"
+        );
+    }
+    assert_eq!(page_shapes(&ctx, page).len(), before);
+}

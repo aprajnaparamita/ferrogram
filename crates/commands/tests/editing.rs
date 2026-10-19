@@ -1057,3 +1057,192 @@ fn deleting_the_entered_group_exits_it() {
     );
     assert!(ctx.selection.is_empty());
 }
+
+#[test]
+fn a_non_text_select_mode_is_invalid_and_leaves_the_selection_alone() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(2);
+    select(&mut ctx, page, &shapes);
+    let before = ctx.selection.clone();
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        Args::new().with("mode", ArgValue::Integer(1)),
+    )
+    .expect_err("mode kind");
+    assert!(matches!(error, CommandError::InvalidArgs { .. }));
+    assert_eq!(
+        error.to_string(),
+        "bad arguments: mode must be replace, add or toggle"
+    );
+    assert_eq!(ctx.selection, before);
+}
+
+#[test]
+fn deleting_without_an_active_page_still_removes_the_selection() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(2);
+    select(&mut ctx, page, &shapes);
+    ctx.active_document_mut().expect("document").active_page = None;
+    let outcome = dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete");
+    assert_eq!(outcome.message.as_deref(), Some("Deleted 2 shapes"));
+    assert!(outcome.warnings.is_empty());
+    let doc = &ctx.active_document().expect("document").document;
+    assert!(doc.page_of(shapes[0]).is_none());
+    assert!(doc.page_of(shapes[1]).is_none());
+}
+
+#[test]
+fn deleting_with_a_stale_page_context_skips_the_glue_warning_pass() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(1);
+    select(&mut ctx, page, &shapes);
+    ctx.active_document_mut().expect("document").active_page = Some(PageId { index: 9 });
+    let outcome = dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete");
+    assert_eq!(outcome.message.as_deref(), Some("Deleted shape"));
+    assert!(outcome.warnings.is_empty());
+    assert!(
+        ctx.active_document()
+            .expect("document")
+            .document
+            .page_of(shapes[0])
+            .is_none()
+    );
+}
+
+#[test]
+fn an_all_stale_selection_is_a_named_failure_for_every_edit() {
+    let (mut ctx, registry, _session, page, _shapes) = fixture(1);
+    let stale = ShapeId { index: 999 };
+    select(&mut ctx, page, &[stale]);
+    for id in ["edit.delete", "shape.move", "shape.resize", "shape.rotate"] {
+        let error = match id {
+            "shape.move" => {
+                dispatch(&mut ctx, &registry, id, args(&[("dx", 1.0), ("dy", 1.0)])).expect_err(id)
+            }
+            "shape.resize" => dispatch(
+                &mut ctx,
+                &registry,
+                id,
+                args(&[("width", 2.0), ("height", 2.0)]),
+            )
+            .expect_err(id),
+            "shape.rotate" => {
+                dispatch(&mut ctx, &registry, id, args(&[("angle", 1.0)])).expect_err(id)
+            }
+            _ => dispatch(&mut ctx, &registry, id, Args::new()).expect_err(id),
+        };
+        assert!(
+            error.to_string().contains("no selected shape to edit"),
+            "{id}: {error}"
+        );
+    }
+}
+
+#[test]
+fn deleting_the_anchor_keeps_the_surviving_selection() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(2);
+    select(&mut ctx, page, &[shapes[0], shapes[1]]);
+    ctx.selection.anchor = Some(shapes[0]);
+    dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete");
+    assert_eq!(ctx.selection.shapes, vec![]);
+    assert_eq!(ctx.selection.anchor, None);
+    assert!(ctx.selection.is_empty());
+    let _ = shapes;
+}
+
+#[test]
+fn undo_of_a_delete_after_its_page_is_gone_reports_the_lost_page() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(1);
+    select(&mut ctx, page, &shapes);
+    dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete");
+    ctx.active_document_mut()
+        .expect("document")
+        .document
+        .pages
+        .clear();
+    let error = dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect_err("undo");
+    assert!(!error.to_string().is_empty(), "{error}");
+}
+
+#[test]
+fn select_and_select_all_need_an_active_page() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(2);
+    select(&mut ctx, page, &shapes);
+    ctx.active_document_mut().expect("document").active_page = None;
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &["1"]),
+    )
+    .expect_err("select without a page");
+    assert!(error.to_string().contains("no active page"), "{error}");
+    let error = dispatch(&mut ctx, &registry, "edit.select_all", Args::new())
+        .expect_err("select all without a page");
+    assert!(error.to_string().contains("no active page"), "{error}");
+}
+
+#[test]
+fn selecting_an_empty_list_clears_the_entered_group() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(1);
+    select(&mut ctx, page, &shapes);
+    ctx.selection.entered = Some(shapes[0]);
+    let outcome = dispatch(
+        &mut ctx,
+        &registry,
+        "edit.select",
+        select_args("replace", &[]),
+    )
+    .expect("clear");
+    assert_eq!(outcome.message.as_deref(), Some("Selected 0 shapes"));
+    assert_eq!(ctx.selection.entered, None);
+    assert_eq!(ctx.selection.page, None);
+}
+
+#[test]
+fn panel_commands_need_a_document_and_a_live_anchor() {
+    // A selection without any open document reaches the handler.
+    let mut ctx = AppCtx::new(Settings::default());
+    ctx.selection.shapes = vec![ShapeId { index: 0 }];
+    ctx.selection.anchor = Some(ShapeId { index: 0 });
+    let registry = registry().expect("registry");
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "shape.set.pin",
+        args(&[("x", 1.0), ("y", 2.0)]),
+    )
+    .expect_err("no document");
+    assert!(error.to_string().contains("no open document"), "{error}");
+
+    // A stale anchor in an open document is named.
+    let (mut ctx, registry, _session, _page, _shapes) = fixture(1);
+    ctx.selection.shapes = vec![ShapeId { index: 999 }];
+    ctx.selection.anchor = Some(ShapeId { index: 999 });
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "shape.set.width",
+        args(&[("width", 2.0)]),
+    )
+    .expect_err("stale anchor");
+    assert!(
+        error.to_string().contains("is no longer on a page"),
+        "{error}"
+    );
+}
+
+#[test]
+fn exit_group_reports_a_missing_document_and_a_stale_group() {
+    let mut ctx = AppCtx::new(Settings::default());
+    ctx.selection.entered = Some(ShapeId { index: 0 });
+    let registry = registry().expect("registry");
+    let error =
+        dispatch(&mut ctx, &registry, "shape.exit_group", Args::new()).expect_err("no document");
+    assert!(error.to_string().contains("no open document"), "{error}");
+
+    let (mut ctx, registry, _session, _page, _shapes) = fixture(1);
+    ctx.selection.entered = Some(ShapeId { index: 999 });
+    let error =
+        dispatch(&mut ctx, &registry, "shape.exit_group", Args::new()).expect_err("stale group");
+    assert!(error.to_string().contains("no longer exists"), "{error}");
+}

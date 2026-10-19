@@ -666,3 +666,52 @@ fn a_cyclic_or_overflowing_target_degrades_to_a_warning() {
         ctx.warnings
     );
 }
+
+#[test]
+fn malformed_connector_and_target_arguments_are_named() {
+    let (mut ctx, registry, _page) = flow();
+    let overflow = Args::new()
+        .with("connector", ArgValue::Integer(i64::MAX))
+        .with("target", ArgValue::Integer(1));
+    let error = dispatch(&mut ctx, &registry, "connector.glue_begin", overflow).expect_err("range");
+    assert!(error.to_string().contains("whole number"), "{error}");
+
+    for name in ["connector", "target"] {
+        let mut args = Args::new().with("connector", ArgValue::Integer(11));
+        args.set(name, ArgValue::Flag(true));
+        let error = dispatch(&mut ctx, &registry, "connector.glue_begin", args).expect_err(name);
+        assert!(
+            error.to_string().contains("whole number"),
+            "{name}: {error}"
+        );
+    }
+
+    let unglue = Args::new().with("connector", ArgValue::Flag(true));
+    let error = dispatch(&mut ctx, &registry, "connector.unglue", unglue).expect_err("connector");
+    assert!(error.to_string().contains("whole number"), "{error}");
+}
+
+#[test]
+fn connector_commands_need_an_active_page_and_a_whole_point() {
+    let (mut ctx, registry, _page) = flow();
+    ctx.active_document_mut().expect("session").active_page = None;
+    let error =
+        dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect_err("no page");
+    assert!(error.to_string().contains("no active page"), "{error}");
+    let error = dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        glue_args(11, 1, 0),
+    )
+    .expect_err("no page");
+    assert!(error.to_string().contains("no active page"), "{error}");
+
+    let (mut ctx, registry, _page) = flow();
+    let args = Args::new()
+        .with("connector", ArgValue::Integer(11))
+        .with("target", ArgValue::Integer(1))
+        .with("point", ArgValue::Flag(true));
+    let error = dispatch(&mut ctx, &registry, "connector.glue_begin", args).expect_err("point");
+    assert!(error.to_string().contains("whole number"), "{error}");
+}
