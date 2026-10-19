@@ -1440,7 +1440,10 @@ fn an_ungroup_undo_restores_the_group_its_connects_and_its_slot() {
         "the group, its slot and its Connects come back"
     );
     rewind(&mut ctx, &registry, "edit.redo");
-    assert!(same(&document(&ctx), &after), "the redo is the exact inverse");
+    assert!(
+        same(&document(&ctx), &after),
+        "the redo is the exact inverse"
+    );
 }
 
 /// Deleting one child of a group restores it into the group's child
@@ -1466,7 +1469,10 @@ fn deleting_a_group_child_restores_it_into_the_group() {
         "the child is back inside its group"
     );
     rewind(&mut ctx, &registry, "edit.redo");
-    assert!(same(&document(&ctx), &after), "the redo is the exact inverse");
+    assert!(
+        same(&document(&ctx), &after),
+        "the redo is the exact inverse"
+    );
 }
 
 /// The skip warnings of the arrange commands (task P5-11): a selection
@@ -1484,8 +1490,8 @@ fn a_partly_eligible_selection_is_skipped_with_one_warning() {
     ctx.selection.shapes = vec![top, plain];
     ctx.selection.anchor = Some(plain);
     ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
-    let outcome = dispatch(&mut ctx, &registry, "arrange.bring_to_front", Args::new())
-        .expect("z-order");
+    let outcome =
+        dispatch(&mut ctx, &registry, "arrange.bring_to_front", Args::new()).expect("z-order");
     assert!(
         outcome
             .warnings
@@ -1499,8 +1505,7 @@ fn a_partly_eligible_selection_is_skipped_with_one_warning() {
     ctx.selection.shapes = vec![group, plain];
     ctx.selection.anchor = Some(plain);
     ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
-    let outcome =
-        dispatch(&mut ctx, &registry, "arrange.ungroup", Args::new()).expect("ungroup");
+    let outcome = dispatch(&mut ctx, &registry, "arrange.ungroup", Args::new()).expect("ungroup");
     assert!(
         outcome
             .warnings
@@ -1519,8 +1524,13 @@ fn the_thin_selection_shapes_run_cleanly() {
 
     // A one-shape distribute and align (the "nothing to space" path).
     select_tops(&mut ctx, 1);
-    dispatch(&mut ctx, &registry, "arrange.distribute.horizontal", Args::new())
-        .expect("distribute one");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "arrange.distribute.horizontal",
+        Args::new(),
+    )
+    .expect("distribute one");
     dispatch(&mut ctx, &registry, "arrange.align.left", Args::new()).expect("align one");
 
     // A group copy and duplicate (the descendants path).

@@ -1164,5 +1164,8 @@ fn a_draw_with_one_glued_end_routes_the_free_end_to_its_point() {
     let points = path(&ctx, drawn);
     assert_eq!(points.len(), 2, "two routed endpoints");
     let end = points.last().expect("end");
-    assert!((end.x - 5.0).abs() < 1e-9 && (end.y - 1.0).abs() < 1e-9, "{end:?}");
+    assert!(
+        (end.x - 5.0).abs() < 1e-9 && (end.y - 1.0).abs() < 1e-9,
+        "{end:?}"
+    );
 }

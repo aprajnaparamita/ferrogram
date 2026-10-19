@@ -51,12 +51,7 @@ fn numbers(pairs: &[(&str, f64)]) -> Args {
 
 /// The first shape's Visio `ID` (the fixture has one).
 fn selected(ctx: &mut AppCtx) {
-    let shape = ctx
-        .active_document()
-        .expect("document")
-        .document
-        .pages[0]
-        .shapes[0];
+    let shape = ctx.active_document().expect("document").document.pages[0].shapes[0];
     ctx.selection.shapes = vec![shape];
     ctx.selection.anchor = Some(shape);
     ctx.selection.page = Some(PageId { index: 0 });
@@ -135,7 +130,10 @@ fn a_page_index_out_of_range_is_an_invalid_argument() {
         Args::new().with("to", ArgValue::Integer(1)),
     )
     .expect_err("missing from");
-    assert!(matches!(missing, CommandError::NeedsInput(_)), "{missing:?}");
+    assert!(
+        matches!(missing, CommandError::NeedsInput(_)),
+        "{missing:?}"
+    );
 }
 
 /// The selection and page edges behind the editing commands.
@@ -152,7 +150,10 @@ fn the_selection_and_page_edges_name_their_reason() {
         numbers(&[("width", 800.0), ("height", 600.0)]),
     )
     .expect_err("pages");
-    assert!(error.to_string().contains("the document has no pages"), "{error}");
+    assert!(
+        error.to_string().contains("the document has no pages"),
+        "{error}"
+    );
 
     // `edit.select` with an unknown mode.
     let (mut ctx, registry) = fixture();
