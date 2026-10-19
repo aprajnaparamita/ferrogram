@@ -21,10 +21,10 @@
 
 use egui::{Context, PointerButton, Ui};
 use ferrogram_commands::{
-    AppCtx, ArgValue, CommandError, CommandId, Invocation, NeededInput, Outcome, PathPurpose,
-    Payload, Registry, SessionId, Source, UiRequest,
+    ActiveTool, AppCtx, ArgValue, CommandError, CommandId, Invocation, NeededInput, Outcome,
+    PathPurpose, Payload, Registry, SessionId, Source, UiRequest,
 };
-use ferrogram_model::PageId;
+use ferrogram_model::{PageId, ShapeId, TextContent, TextPart};
 use ferrogram_render::Overlay;
 use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
 
@@ -37,7 +37,8 @@ use crate::ribbon::Ribbon;
 use crate::settings;
 use crate::shapes_window::ShapesWindow;
 use crate::shortcuts::{self, ShortcutMap};
-use crate::tools::ToolMachine;
+use crate::text_edit::{EditorAction, TextEditor};
+use crate::tools::{Tool, ToolMachine, stencil};
 use crate::{Intent, UiError};
 
 /// The File menu items (registry ids, in order).
@@ -72,6 +73,20 @@ const OPEN_EXTENSIONS: &[&str] = &["vsdx", "vssx", "vstx"];
 /// The default file name of a save dialog for a never-saved document.
 const DEFAULT_SAVE_NAME: &str = "drawing.vsdx";
 
+/// Maps the commands-layer active tool to the UI's [`Tool`] (L4 cannot
+/// depend on L6, so the enum lives on both sides; task P5-17).
+fn tool_for(active: ActiveTool) -> Tool {
+    match active {
+        ActiveTool::Pointer => Tool::Pointer,
+        ActiveTool::Rectangle => Tool::Rectangle,
+        ActiveTool::Ellipse => Tool::Ellipse,
+        ActiveTool::Line => Tool::Line,
+        ActiveTool::Connector => Tool::Connector,
+        ActiveTool::Text => Tool::Text,
+        _ => Tool::Pointer,
+    }
+}
+
 /// The application shell (one per window, single window in Phase 4).
 pub struct Shell {
     /// The command registry every intent dispatches through (ADR 0028).
@@ -103,6 +118,15 @@ pub struct Shell {
     last_page: Option<(SessionId, Option<PageId>)>,
     /// The pointer tool state machine (ADR 0042).
     tools: ToolMachine,
+    /// The in-place text editor (ADR 0044, task P5-17).
+    editor: TextEditor,
+    /// Whether a synthetic `PointerDown` reached the stencil tool for the
+    /// current Shapes-window drag.
+    stencil_down: bool,
+    /// Escape was pressed this frame while the editor or a stencil drag
+    /// owns it (the shell consumes it before the shortcut table, whose
+    /// `Esc` binding would otherwise win; ADR 0044).
+    escape_pressed: bool,
     /// The transient overlay marks drawn over the cached raster.
     overlay: Overlay,
     /// The ribbon strip of the previous frame (focus tracking).
@@ -157,6 +181,9 @@ impl Shell {
             last_page: None,
             ribbon_rect: None,
             tools: ToolMachine::new(),
+            editor: TextEditor::new(),
+            stencil_down: false,
+            escape_pressed: false,
             overlay: Overlay::new(),
             pending: None,
             status: String::new(),
@@ -190,6 +217,17 @@ impl Shell {
     /// The last command message (the title strip shows it).
     pub fn status(&self) -> &str {
         &self.status
+    }
+
+    /// The canvas area of the previous frame (tests and the editor
+    /// placement; task P5-17).
+    pub fn canvas_rect(&self) -> Option<egui::Rect> {
+        self.canvas_rect
+    }
+
+    /// The commands-layer active tool (task P5-17).
+    pub fn active_tool(&self) -> ActiveTool {
+        self.app.active_tool
     }
 
     /// The status line shown in the title strip: the chords typed so
@@ -282,6 +320,8 @@ impl Shell {
         let mut intents = Vec::new();
         self.clear_selection_on_page_switch();
         self.finish_pick();
+        self.sync_active_tool();
+        self.capture_escape(ui.ctx());
         if self.quit_requested {
             self.quit_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -292,6 +332,11 @@ impl Shell {
         // intents and runs through `Shell::dispatch` like any other
         // (`Source::Shortcut`).
         self.note_pointer_focus(ui.ctx());
+        if self.editor.is_active() {
+            // The in-place editor keeps the `Text` scope active until it
+            // closes (ADR 0036, ADR 0044).
+            self.focus = ShortcutScope::Text;
+        }
         match shortcuts::dispatch(ui.ctx(), &mut self.shortcuts, &self.app, self.focus) {
             Ok(produced) => intents.extend(produced),
             Err(error) => self.note_error(error.to_string()),
@@ -346,6 +391,10 @@ impl Shell {
                     // Picking a stencil inserts a shape in Phase 5;
                     // the Shapes window keeps the selection itself.
                 }
+                if let Some(pick) = self.shapes.take_drag_started() {
+                    stencil::begin_drag(&mut self.tools, pick.stencil, pick.master);
+                    self.stencil_down = false;
+                }
             });
         egui::Panel::right("shell-panels")
             .resizable(true)
@@ -395,6 +444,7 @@ impl Shell {
                 }
             } else {
                 self.show_canvas_area(ui, &mut intents);
+                self.show_editor(ui, &mut intents);
             }
         });
 
@@ -440,20 +490,24 @@ impl Shell {
             }
         }
         let had_events = !events.is_empty();
-        for event in events {
-            match self.tools.handle(event, &self.app) {
-                Ok(effect) => {
-                    self.overlay = effect.overlay;
-                    produced.extend(effect.intents);
+        if stencil::is_dragging(&self.tools) {
+            self.route_stencil_drag(ui, &mut produced, &mut errors);
+        } else {
+            for event in events {
+                match self.tools.handle(event, &self.app) {
+                    Ok(effect) => {
+                        self.overlay = effect.overlay;
+                        produced.extend(effect.intents);
+                    }
+                    // A tool module that has not landed yet (P5-06..P5-08)
+                    // reports its stub; the pointer tool's events never
+                    // reach it while the pointer tool is active.
+                    Err(UiError::NotImplemented) => {}
+                    Err(error) => errors.push(error.to_string()),
                 }
-                // A tool module that has not landed yet (P5-06..P5-08)
-                // reports its stub; the pointer tool's events never
-                // reach it while the pointer tool is active.
-                Err(UiError::NotImplemented) => {}
-                Err(error) => errors.push(error.to_string()),
             }
         }
-        if !had_events {
+        if !had_events && !stencil::is_dragging(&self.tools) {
             match self.tools.idle_overlay(&self.app) {
                 Ok(Some(overlay)) => self.overlay = overlay,
                 Ok(None) => {}
@@ -474,6 +528,219 @@ impl Shell {
             self.note_error(error);
         }
         intents.extend(produced);
+    }
+
+    /// Consumes Escape while the text editor or a stencil drag owns it
+    /// (ADR 0044, task P5-17 Goal 3 and 5). The committed shortcut table
+    /// binds `Esc` to full-screen mode; the editor and the drag must see
+    /// it first.
+    fn capture_escape(&mut self, egui_ctx: &Context) {
+        let escape = egui_ctx.input(|input| input.key_pressed(egui::Key::Escape));
+        self.escape_pressed =
+            escape && (self.editor.is_active() || stencil::is_dragging(&self.tools));
+        if self.escape_pressed {
+            egui_ctx.input_mut(|input| {
+                input.events.retain(|event| {
+                    !matches!(
+                        event,
+                        egui::Event::Key {
+                            key: egui::Key::Escape,
+                            pressed: true,
+                            ..
+                        }
+                    )
+                });
+            });
+        }
+    }
+
+    /// Mirrors [`AppCtx::active_tool`] into the [`ToolMachine`] (task
+    /// P5-17). A tool change cancels any drag in flight by replacing the
+    /// machine (ADR 0042).
+    fn sync_active_tool(&mut self) {
+        let wanted = tool_for(self.app.active_tool());
+        if self.tools.tool != wanted {
+            self.tools = ToolMachine::new();
+            self.tools.tool = wanted;
+            self.stencil_down = false;
+        }
+    }
+
+    /// Feeds a Shapes-window drag to the stencil tool (task P5-17,
+    /// Goal 3). The drag may have started outside the canvas (on a row),
+    /// so the first move inside it synthesizes the `PointerDown`. Escape
+    /// and a release outside the canvas cancel the drag.
+    fn route_stencil_drag(&mut self, ui: &Ui, intents: &mut Vec<Intent>, errors: &mut Vec<String>) {
+        let Some(rect) = self.canvas_rect else {
+            return;
+        };
+        let (pos, down, released, modifiers) = ui.input(|input| {
+            (
+                input.pointer.interact_pos(),
+                input.pointer.primary_down(),
+                input.pointer.button_released(PointerButton::Primary),
+                input.modifiers,
+            )
+        });
+        let escape = self.escape_pressed;
+        let modifiers = crate::tools::Modifiers {
+            shift: modifiers.shift,
+            ctrl: modifiers.ctrl || modifiers.command,
+            alt: modifiers.alt,
+        };
+        let mut send = |event: crate::tools::ToolEvent| match stencil::handle(
+            &mut self.tools,
+            &event,
+            &self.app,
+        ) {
+            Ok(effect) => {
+                self.overlay = effect.overlay;
+                intents.extend(effect.intents);
+            }
+            Err(UiError::NotImplemented) => {}
+            Err(error) => errors.push(error.to_string()),
+        };
+        if escape {
+            send(crate::tools::ToolEvent::Cancel);
+            self.stencil_down = false;
+            return;
+        }
+        let Some(screen) = pos else {
+            return;
+        };
+        let page = self
+            .app
+            .active_document()
+            .and_then(|session| canvas::page_position(rect, session, screen));
+        if !self.stencil_down {
+            match page {
+                Some(page) if down => {
+                    send(crate::tools::ToolEvent::PointerDown {
+                        pos: page,
+                        modifiers,
+                    });
+                    self.stencil_down = true;
+                }
+                _ if released => {
+                    send(crate::tools::ToolEvent::Cancel);
+                    return;
+                }
+                _ => return,
+            }
+        }
+        match page {
+            Some(page) if released => {
+                send(crate::tools::ToolEvent::PointerUp {
+                    pos: page,
+                    modifiers,
+                });
+                self.stencil_down = false;
+            }
+            Some(page) if down => {
+                send(crate::tools::ToolEvent::PointerMove {
+                    pos: page,
+                    modifiers,
+                });
+            }
+            Some(_) => {}
+            None if released => {
+                // Released outside the canvas: cancel.
+                send(crate::tools::ToolEvent::Cancel);
+                self.stencil_down = false;
+            }
+            // Outside the canvas while still dragging: keep the drag
+            // until the pointer comes back or is released.
+            None => {}
+        }
+    }
+
+    /// Shows the in-place editor over the canvas and dispatches its
+    /// commit (ADR 0044, task P5-17 Goal 5). Escape and an outside click
+    /// commit; an unchanged buffer dispatches nothing.
+    fn show_editor(&mut self, ui: &mut Ui, intents: &mut Vec<Intent>) {
+        let Some(rect) = self.canvas_rect else {
+            return;
+        };
+        if !self.editor.is_active() {
+            return;
+        }
+        let shape = self.editor.shape;
+        let action = if self.escape_pressed {
+            // Escape commits (ADR 0044). The shell took it from the
+            // shortcut table before the editor's own input saw it.
+            match self.editor.finish() {
+                Ok(text) => Ok(EditorAction::Committed(text)),
+                Err(error) => Err(error),
+            }
+        } else {
+            let Some(session) = self.app.active_document() else {
+                self.editor.cancel();
+                return;
+            };
+            canvas::show_text_editor(ui, session, rect, &mut self.editor)
+        };
+        match action {
+            Ok(EditorAction::Pending) => {}
+            Ok(EditorAction::Committed(Some(text))) => {
+                if let Some(mut produced) = self.text_commit_intents(shape, &text) {
+                    intents.append(&mut produced);
+                }
+            }
+            Ok(EditorAction::Committed(None)) => {}
+            Err(error) => self.note_error(error.to_string()),
+        }
+    }
+
+    /// Presses the editor's shape, then writes its text: one command
+    /// pair so the selection cannot drift before the write (the editor
+    /// closes on a click that may select another shape).
+    fn text_commit_intents(
+        &self,
+        shape: Option<ShapeId>,
+        text: &TextContent,
+    ) -> Option<Vec<Intent>> {
+        let shape = shape?;
+        let session = self.app.active_document()?;
+        let visio_id = session.document.shape(shape)?.visio_id;
+        let literal: String = text
+            .parts
+            .iter()
+            .filter_map(|part| match part {
+                TextPart::Text(part) => Some(part.as_str()),
+                _ => None,
+            })
+            .collect();
+        let mut args = ferrogram_commands::Args::new();
+        args.set("shapes", ArgValue::List(vec![visio_id.to_string()]));
+        args.set("mode", ArgValue::Text("replace".to_owned()));
+        let command = CommandId::parse("edit.select").ok()?;
+        let select = Intent::new(command, Invocation::new(args, Source::Ui));
+        let mut args = ferrogram_commands::Args::new();
+        args.set("text", ArgValue::Text(literal));
+        let command = CommandId::parse("shape.set.text").ok()?;
+        let write = Intent::new(command, Invocation::new(args, Source::Ui));
+        Some(vec![select, write])
+    }
+
+    /// Opens the editor after a successful `text.begin` (task P5-17).
+    fn begin_text_editor(&mut self) {
+        let Some(shape) = self
+            .app
+            .selection
+            .anchor
+            .or_else(|| self.app.selection.shapes.last().copied())
+        else {
+            return;
+        };
+        let text = self
+            .app
+            .active_document()
+            .and_then(|session| session.document.shape(shape))
+            .and_then(|entry| entry.text.clone())
+            .unwrap_or_default();
+        if let Err(error) = self.editor.begin(shape, &text) {
+            self.note_error(error.to_string());
+        }
     }
 
     /// The modal windows: View/Options, About and the close
@@ -710,6 +977,11 @@ impl Shell {
             Err(error) => return Err(error),
         };
         self.apply_outcome(&outcome, source)?;
+        if intent.command.as_str() == "text.begin" {
+            self.begin_text_editor();
+        } else if intent.command.as_str() == "text.cancel" {
+            self.editor.cancel();
+        }
         Ok(Ok(outcome))
     }
 
