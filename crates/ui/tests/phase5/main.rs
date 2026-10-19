@@ -10,6 +10,7 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod draw;
 mod pointer;
 mod snap;
 
