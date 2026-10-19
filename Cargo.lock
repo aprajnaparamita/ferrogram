@@ -1357,6 +1357,7 @@ dependencies = [
  "eframe",
  "egui_kittest",
  "ferrogram-commands",
+ "ferrogram-model",
  "ferrogram-render",
  "ferrogram-ui",
  "ferrogram-ui-spec",

@@ -37,6 +37,9 @@ egui_kittest = "0.37"
 # The exit-criterion test compares the canvas raster with
 # `render_raster` of the same page (ADR 0033, ADR 0037).
 ferrogram-render = { path = "../../crates/render" }
+# The exit-criterion flowchart test asserts the ADR 0048 model equality
+# of the saved and reopened documents (ADR 0049, task P5-10).
+ferrogram-model = { path = "../../crates/model" }
 
 [lints]
 workspace = true
