@@ -24,7 +24,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-08](tasks/P5-08.md) | implementer | P5-05, P5-16 | D | merged `91124b0` (routing, glue commands, re-route hook, connector tool; master fixed the re-route document lookup) | — |
 | [P5-09](tasks/P5-09.md) | implementer | P5-05 | D | merged (clipboard, arrange, pages, recent files, page-tab menu) | — |
 | [P5-17](tasks/P5-17.md) | implementer | P5-06, P5-07, P5-08 | D2 | ready (tool commands, Shapes-window drag, text editor, indexed glue, connector free end) | — |
-| [P5-18](tasks/P5-18.md) | test-engineer | P5-08 | D2 | ready (commands coverage 97.9% back to 98.1%, tests only) | — |
+| [P5-18](tasks/P5-18.md) | test-engineer | P5-08 | D2 | ready (commands coverage, 97.8% after P5-09, back to 98.1%; tests only) | — |
 | [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09, P5-16..P5-18 | E | waiting | — |
 | [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | waiting | — |
 | [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | waiting | — |
