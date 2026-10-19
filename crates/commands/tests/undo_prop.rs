@@ -1351,3 +1351,201 @@ fn known_undo_differences_stay_outside_the_reachable_state() {
         "the first catalog drop leaves its master behind, unused"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Exact-inverse regressions for the fixes this task made (task P5-11)
+// ---------------------------------------------------------------------------
+
+/// The first top-level group of the active page (the fixture's raw
+/// group).
+fn first_group(ctx: &AppCtx) -> ShapeId {
+    top_level(ctx)
+        .into_iter()
+        .find(|shape| {
+            ctx.active_document()
+                .and_then(|state| state.document.shape(*shape))
+                .is_some_and(|entry| !entry.children.is_empty())
+        })
+        .expect("a group on the page")
+}
+
+/// A nested group's undo is the exact inverse too (task P5-11): the
+/// members go back into their **parent's** list at their old positions,
+/// not onto the page.
+#[test]
+fn a_nested_group_undo_restores_the_members_in_their_parent() {
+    let (mut ctx, registry, _page) = fixture();
+    let seed = document(&ctx);
+
+    // One outer group of the first two boxes, then one inner group of
+    // the outer group's two children.
+    run_group(&mut ctx, &registry, "arrange.group", 0);
+    let outer = *top_level(&ctx).last().expect("the outer group");
+    let children = ctx
+        .active_document()
+        .and_then(|state| state.document.shape(outer))
+        .map(|entry| entry.children.clone())
+        .unwrap_or_default();
+    assert_eq!(children.len(), 2, "the outer group has two members");
+    ctx.selection.shapes = children.clone();
+    ctx.selection.anchor = children.last().copied();
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    dispatch(&mut ctx, &registry, "arrange.group", Args::new()).expect("inner group");
+    let pushed = undo_len(&ctx);
+    assert_eq!(pushed, 2, "two group commands, two undo steps");
+    let post = document(&ctx);
+
+    for _ in 0..pushed {
+        rewind(&mut ctx, &registry, "edit.undo");
+    }
+    assert!(
+        same(&document(&ctx), &seed),
+        "both groups undo back to the seed"
+    );
+    for _ in 0..pushed {
+        rewind(&mut ctx, &registry, "edit.redo");
+    }
+    assert!(same(&document(&ctx), &post), "both groups redo exactly");
+}
+
+/// Undoing an ungroup restores the group's own shape, its position and
+/// the `Connects` records that name it (task P5-11).
+#[test]
+fn an_ungroup_undo_restores_the_group_its_connects_and_its_slot() {
+    let (mut ctx, registry, _page) = fixture();
+    let group = first_group(&ctx);
+    let group_visio = visio_of(&ctx, group);
+    // One record naming the group itself: glue the first shape's begin
+    // to it (a connector end by the ADR 0045 rule).
+    let connector_visio = visio_of(&ctx, top_level(&ctx)[0]);
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        Args::new()
+            .with("connector", ArgValue::Integer(i64::from(connector_visio)))
+            .with("target", ArgValue::Integer(i64::from(group_visio))),
+    )
+    .expect("glue to the group");
+    let before = document(&ctx);
+
+    run_ungroup(&mut ctx, &registry, "arrange.ungroup", 0);
+    let after = document(&ctx);
+    assert!(undo_len(&ctx) >= 2, "the glue and the ungroup are undoable");
+
+    // One undo step: the ungroup (the glue step stays applied).
+    rewind(&mut ctx, &registry, "edit.undo");
+    assert!(
+        same(&document(&ctx), &before),
+        "the group, its slot and its Connects come back"
+    );
+    rewind(&mut ctx, &registry, "edit.redo");
+    assert!(same(&document(&ctx), &after), "the redo is the exact inverse");
+}
+
+/// Deleting one child of a group restores it into the group's child
+/// list (task P5-11: `restore_shapes` for a nested root).
+#[test]
+fn deleting_a_group_child_restores_it_into_the_group() {
+    let (mut ctx, registry, _page) = fixture();
+    let group = first_group(&ctx);
+    let before = document(&ctx);
+    let child = ctx
+        .active_document()
+        .and_then(|state| state.document.shape(group))
+        .and_then(|entry| entry.children.first().copied())
+        .expect("a child");
+    ctx.selection.shapes = vec![child];
+    ctx.selection.anchor = Some(child);
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete the child");
+    let after = document(&ctx);
+    rewind(&mut ctx, &registry, "edit.undo");
+    assert!(
+        same(&document(&ctx), &before),
+        "the child is back inside its group"
+    );
+    rewind(&mut ctx, &registry, "edit.redo");
+    assert!(same(&document(&ctx), &after), "the redo is the exact inverse");
+}
+
+/// The skip warnings of the arrange commands (task P5-11): a selection
+/// that is only partly a group or only partly top-level is processed
+/// with one line per skipped shape.
+#[test]
+fn a_partly_eligible_selection_is_skipped_with_one_warning() {
+    let (mut ctx, registry, _page) = fixture();
+    let group = first_group(&ctx);
+    let plain = *top_level(&ctx).first().expect("a box");
+
+    // Z-order with a shape that cannot move (already on top) in the
+    // selection.
+    let top = *top_level(&ctx).last().expect("the top shape");
+    ctx.selection.shapes = vec![top, plain];
+    ctx.selection.anchor = Some(plain);
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    let outcome = dispatch(&mut ctx, &registry, "arrange.bring_to_front", Args::new())
+        .expect("z-order");
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|line| line.contains("not top-level on the active page; skipped")),
+        "{:?}",
+        outcome.warnings
+    );
+
+    // Ungroup with a mixed selection: the group and one plain box.
+    ctx.selection.shapes = vec![group, plain];
+    ctx.selection.anchor = Some(plain);
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    let outcome =
+        dispatch(&mut ctx, &registry, "arrange.ungroup", Args::new()).expect("ungroup");
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|line| line.contains("is not a group; skipped")),
+        "{:?}",
+        outcome.warnings
+    );
+}
+
+/// The thin selection shapes of the arrange and clipboard commands
+/// (task P5-11): one shape, a group copy, a nested cut.
+#[test]
+fn the_thin_selection_shapes_run_cleanly() {
+    let (mut ctx, registry, _page) = fixture();
+
+    // A one-shape distribute and align (the "nothing to space" path).
+    select_tops(&mut ctx, 1);
+    dispatch(&mut ctx, &registry, "arrange.distribute.horizontal", Args::new())
+        .expect("distribute one");
+    dispatch(&mut ctx, &registry, "arrange.align.left", Args::new()).expect("align one");
+
+    // A group copy and duplicate (the descendants path).
+    let group = first_group(&ctx);
+    ctx.selection.shapes = vec![group];
+    ctx.selection.anchor = Some(group);
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    dispatch(&mut ctx, &registry, "edit.copy", Args::new()).expect("copy the group");
+    dispatch(
+        &mut ctx,
+        &registry,
+        "edit.paste",
+        numbers(&[("x", 6.0), ("y", 6.0)]),
+    )
+    .expect("paste the group");
+    dispatch(&mut ctx, &registry, "edit.duplicate", Args::new()).expect("duplicate the group");
+
+    // A nested cut (a child leaves its group in one step).
+    let child = ctx
+        .active_document()
+        .and_then(|state| state.document.shape(group))
+        .and_then(|entry| entry.children.first().copied())
+        .expect("a child");
+    ctx.selection.shapes = vec![child];
+    ctx.selection.anchor = Some(child);
+    ctx.selection.page = ctx.active_document().and_then(|state| state.active_page);
+    dispatch(&mut ctx, &registry, "edit.cut", Args::new()).expect("cut the child");
+}

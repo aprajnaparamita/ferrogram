@@ -1062,3 +1062,107 @@ fn a_duplicated_connector_leaves_the_page_re_route_stable() {
         "the command's own re-route was the last word"
     );
 }
+
+/// `connector.draw` with glued ends (ADR 0045 rule 2): the insert, the
+/// endpoint glues and the routed path land in one undo step, and undo
+/// restores all three (task P5-11's coverage of the glue-on-draw path).
+#[test]
+fn a_draw_with_glued_ends_is_one_undo_step() {
+    let (mut ctx, registry, page) = flow();
+    let before = connects(&ctx, page);
+    let undo_before = ctx.active_document().expect("session").undo.len();
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.draw",
+        Args::new()
+            .with("stencil", ArgValue::Text("Basic Flowchart".to_owned()))
+            .with("master", ArgValue::Text("Connector".to_owned()))
+            .with("x", ArgValue::Number(2.0))
+            .with("y", ArgValue::Number(6.25))
+            .with("begin_target", ArgValue::Integer(1))
+            .with("begin_point", ArgValue::Integer(1))
+            .with("end_target", ArgValue::Integer(2))
+            .with("end_point", ArgValue::Integer(0)),
+    )
+    .expect("draw a glued connector");
+    assert_eq!(
+        ctx.active_document().expect("session").undo.len(),
+        undo_before + 1,
+        "the draw is one undoable edit"
+    );
+    let after = connects(&ctx, page);
+    assert_eq!(after.len(), before.len() + 2, "two glues on the new shape");
+    let routed = after
+        .iter()
+        .filter(|record| !before.contains(record))
+        .map(|record| record.from_sheet)
+        .collect::<Vec<i32>>();
+    assert_eq!(routed.len(), 2, "both records name the new connector");
+    assert!(path(&ctx, routed[0]).len() >= 2, "the path is routed");
+
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
+    assert_eq!(connects(&ctx, page), before, "one undo restores the page");
+    dispatch(&mut ctx, &registry, "edit.redo", Args::new()).expect("redo");
+    assert_eq!(connects(&ctx, page), after, "one redo re-does the draw");
+}
+
+/// A drop with an explicit glue point (ADR 0046's `glue_point`): the
+/// record names the target's connection row (task P5-11).
+#[test]
+fn a_drop_with_an_explicit_glue_point_names_the_row() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(
+        &mut ctx,
+        &registry,
+        "insert.shape",
+        Args::new()
+            .with("stencil", ArgValue::Text("Basic Shapes".to_owned()))
+            .with("master", ArgValue::Text("Rectangle".to_owned()))
+            .with("x", ArgValue::Number(6.0))
+            .with("y", ArgValue::Number(6.0))
+            .with("glue_to", ArgValue::Integer(1))
+            .with("glue_point", ArgValue::Integer(1)),
+    )
+    .expect("drop with glue point");
+    let records = connects(&ctx, page);
+    let record = records
+        .iter()
+        .find(|record| record.to_sheet == 1 && record.to_cell.starts_with("Connections."))
+        .expect("a point glue record");
+    assert_eq!(record.to_cell, "Connections.X2", "the row's one-based cell");
+    assert_eq!(
+        record.to_part,
+        ferrogram_model::mutate::VIS_CONNECTION_POINT + 1,
+        "the row's VisToParts value"
+    );
+}
+
+/// `connector.draw` with one glued end and one free end (task P5-11:
+/// `resolved_end` mixes both kinds).
+#[test]
+fn a_draw_with_one_glued_end_routes_the_free_end_to_its_point() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.draw",
+        Args::new()
+            .with("stencil", ArgValue::Text("Basic Flowchart".to_owned()))
+            .with("master", ArgValue::Text("Connector".to_owned()))
+            .with("x", ArgValue::Number(2.0))
+            .with("y", ArgValue::Number(6.25))
+            .with("begin_target", ArgValue::Integer(1))
+            .with("begin_point", ArgValue::Integer(1))
+            .with("end_x", ArgValue::Number(5.0))
+            .with("end_y", ArgValue::Number(1.0)),
+    )
+    .expect("draw a half-glued connector");
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 1, "one glue on the new shape");
+    let drawn = records.first().expect("record").from_sheet;
+    let points = path(&ctx, drawn);
+    assert_eq!(points.len(), 2, "two routed endpoints");
+    let end = points.last().expect("end");
+    assert!((end.x - 5.0).abs() < 1e-9 && (end.y - 1.0).abs() < 1e-9, "{end:?}");
+}
