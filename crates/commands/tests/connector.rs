@@ -328,6 +328,16 @@ fn a_right_angle_style_applies_to_every_selected_connector() {
     }
 }
 
+/// The Visio `ID` of one shape.
+fn visio(ctx: &AppCtx, shape: ShapeId) -> i32 {
+    ctx.active_document()
+        .expect("session")
+        .document
+        .shape(shape)
+        .expect("shape")
+        .visio_id
+}
+
 fn connector_shape_id(ctx: &AppCtx, visio_id: i32) -> ShapeId {
     ctx.active_document()
         .expect("session")
@@ -714,4 +724,302 @@ fn connector_commands_need_an_active_page_and_a_whole_point() {
         .with("point", ArgValue::Flag(true));
     let error = dispatch(&mut ctx, &registry, "connector.glue_begin", args).expect_err("point");
     assert!(error.to_string().contains("whole number"), "{error}");
+}
+
+// ---------------------------------------------------------------------------
+// Glue kinds, replacement, unglue and drop-on-detached (task P5-11,
+// ADR 0045 rule 1)
+// ---------------------------------------------------------------------------
+
+/// The `Connect` records of one page, in file order.
+fn connects(ctx: &AppCtx, page: PageId) -> Vec<ferrogram_model::Connect> {
+    ctx.active_document()
+        .expect("session")
+        .document
+        .page(page)
+        .expect("page")
+        .connects
+        .clone()
+}
+
+/// Glue without a `point` is dynamic glue: the record names the target
+/// shape's pin cells and the whole-shape part, and the re-route picks
+/// the nearest outline point of the shape's bounds (ADR 0045 rule 1).
+#[test]
+fn a_glue_without_a_point_binds_the_shape_outline() {
+    let (mut ctx, registry, page) = flow();
+    let outcome = dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        Args::new()
+            .with("connector", ArgValue::Integer(11))
+            .with("target", ArgValue::Integer(1)),
+    )
+    .expect("outline glue");
+    assert_eq!(
+        outcome.message.as_deref(),
+        Some("Connector begin glued to shape 1")
+    );
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 1, "one glue record");
+    let record = records.first().expect("record");
+    assert_eq!(record.from_sheet, 11, "from the connector");
+    assert_eq!(record.from_cell, "BeginX");
+    assert_eq!(
+        record.from_part,
+        ferrogram_model::mutate::VIS_BEGIN,
+        "the begin end (VisFromParts, ADR 0045)"
+    );
+    assert_eq!(record.to_sheet, 1, "to box 1");
+    assert_eq!(record.to_cell, "PinX", "dynamic glue names the pin cells");
+    assert_eq!(
+        record.to_part,
+        ferrogram_model::mutate::VIS_WHOLE_SHAPE,
+        "the whole-shape part (VisToParts, ADR 0045)"
+    );
+    // The routed begin is the nearest outline point of box 1: its bottom
+    // edge midpoint (the connection-point glue test pins the same point).
+    assert_eq!(path(&ctx, 11).first().map(|p| p.y), Some(6.625));
+}
+
+/// Glue is one record per end (ADR 0039 invariant 5): a second glue on
+/// the same end replaces the old record and one undo restores it.
+#[test]
+fn a_new_glue_replaces_the_old_record_on_the_same_end() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("first glue");
+    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 3, 0)).expect("second glue");
+
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 1, "the end holds one record, not two");
+    let record = records.first().expect("record");
+    assert_eq!(record.to_sheet, 3, "the second glue wins");
+    assert_eq!(record.from_cell, "EndX");
+
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 1, "still one record after undo");
+    let record = records.first().expect("record");
+    assert_eq!(record.to_sheet, 2, "undo restores the replaced glue");
+}
+
+/// `connector.unglue` removes both ends' records and leaves the free
+/// endpoints where they were: the path keeps its routed coordinates and
+/// a later re-route does not move them (ADR 0045 rule 3).
+#[test]
+fn unglue_removes_both_end_records_and_keeps_the_free_endpoints() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(&mut ctx, &registry, "connector.glue_begin", glue_args(11, 1, 1)).expect("glue begin");
+    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("glue end");
+    let routed = path(&ctx, 11);
+    assert_eq!(routed.len(), 2, "two routed endpoints");
+
+    for end in ["begin", "end"] {
+        let outcome = dispatch(
+            &mut ctx,
+            &registry,
+            "connector.unglue",
+            Args::new()
+                .with("connector", ArgValue::Integer(11))
+                .with("end", ArgValue::Text(end.to_owned())),
+        )
+        .expect("unglue");
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some(format!("Connector {end} unglued").as_str())
+        );
+    }
+    assert!(connects(&ctx, page).is_empty(), "no glue records left");
+    let ends = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .connects_of(page, connector_shape_id(&ctx, 11))
+        .expect("ends");
+    assert!(ends.iter().all(Option::is_none), "both ends are free");
+
+    // The free endpoints stay put across a re-route.
+    dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("reroute");
+    assert_eq!(path(&ctx, 11), routed, "unglued ends keep their path");
+}
+
+/// Deleting the glue target detaches it: the dangling record goes with
+/// the deleted shapes (it is part of the same undoable step), and undo
+/// restores both the shape and its glue. The warning path for a record
+/// that is already dangling at re-route time is covered by
+/// `stale_and_detached_glue_records_are_dropped` above (ADR 0045 rule 3).
+#[test]
+fn deleting_the_target_drops_its_glue_and_undo_restores_it() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(&mut ctx, &registry, "connector.glue_begin", glue_args(11, 1, 1)).expect("glue begin");
+    dispatch(&mut ctx, &registry, "connector.glue_end", glue_args(11, 2, 0)).expect("glue end");
+
+    let box_one = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .shape_by_visio_id(page, 1)
+        .expect("box 1");
+    ctx.selection.shapes = vec![box_one];
+    ctx.selection.anchor = Some(box_one);
+    ctx.selection.page = Some(page);
+    dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete box 1");
+
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 1, "only the end glue survives");
+    assert_eq!(
+        records.first().expect("record").from_cell,
+        "EndX",
+        "the begin glue was dropped with its target"
+    );
+
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
+    let records = connects(&ctx, page);
+    assert_eq!(records.len(), 2, "undo restores the dropped glue record");
+    assert!(
+        records
+            .iter()
+            .any(|record| record.from_cell == "BeginX" && record.to_sheet == 1),
+        "{records:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Re-route stability regressions (task P5-11's product fixes)
+// ---------------------------------------------------------------------------
+
+/// The `Geometry` rows of one shape (the literal path rows).
+fn geometry_rows(ctx: &AppCtx, connector: i32) -> Vec<ferrogram_model::Row> {
+    let doc = &ctx.active_document().expect("session").document;
+    let shape = doc
+        .shape_by_visio_id(PageId { index: 0 }, connector)
+        .expect("shape");
+    doc.shape(shape)
+        .expect("shape")
+        .sheet
+        .sections
+        .iter()
+        .find(|section| section.name.as_str() == "Geometry")
+        .map(|section| section.rows.clone())
+        .unwrap_or_default()
+}
+
+/// A glue-on-drop is shape-to-shape glue (ADR 0046), not a connector
+/// end: the re-route pass leaves the dropped instance's geometry alone
+/// (task P5-11: `is_connector_end`).
+#[test]
+fn a_drop_glued_instance_keeps_its_geometry() {
+    let (mut ctx, registry, page) = flow();
+    let target = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .shape_by_visio_id(page, 1)
+        .expect("box 1");
+    let target_visio = visio(&ctx, target);
+    dispatch(
+        &mut ctx,
+        &registry,
+        "insert.shape",
+        Args::new()
+            .with("stencil", ArgValue::Text("Basic Shapes".to_owned()))
+            .with("master", ArgValue::Text("Rectangle".to_owned()))
+            .with("x", ArgValue::Number(6.0))
+            .with("y", ArgValue::Number(6.0))
+            .with("glue_to", ArgValue::Integer(i64::from(target_visio))),
+    )
+    .expect("drop with glue");
+    let tops = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .page(page)
+        .expect("page")
+        .shapes
+        .clone();
+    let instance = *tops.last().expect("the dropped instance");
+    let instance_visio = visio(&ctx, instance);
+    let before = geometry_rows(&ctx, instance_visio);
+    dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("reroute");
+    assert_eq!(
+        geometry_rows(&ctx, instance_visio),
+        before,
+        "the drop glue must not turn the instance into a routed path"
+    );
+}
+
+/// A connector inside a group routes through its parents (task P5-11:
+/// `write_path`), so a re-route is idempotent instead of drifting one
+/// mapping per pass.
+#[test]
+fn a_grouped_connector_re_route_is_idempotent() {
+    let (mut ctx, registry, page) = flow();
+    dispatch(
+        &mut ctx,
+        &registry,
+        "connector.glue_begin",
+        glue_args(11, 1, 1),
+    )
+    .expect("glue begin");
+    let connector = connector_shape_id(&ctx, 11);
+    let box_one = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .shape_by_visio_id(page, 1)
+        .expect("box 1");
+    ctx.selection.shapes = vec![connector, box_one];
+    ctx.selection.anchor = Some(box_one);
+    ctx.selection.page = Some(page);
+    dispatch(&mut ctx, &registry, "arrange.group", Args::new()).expect("group");
+
+    dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("first reroute");
+    let first = geometry_rows(&ctx, 11);
+    assert!(!first.is_empty(), "the glued connector has a routed path");
+    dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("second reroute");
+    assert_eq!(
+        geometry_rows(&ctx, 11),
+        first,
+        "a second re-route must not move the path"
+    );
+}
+
+/// A paste or duplicate of a glued connector leaves the page
+/// re-route-stable (task P5-11: the copies carry their copied glue and
+/// the hook runs after the command, ADR 0045 rule 3).
+#[test]
+fn a_duplicated_connector_leaves_the_page_re_route_stable() {
+    let (mut ctx, registry, page) = flow();
+    for (end, args) in [("connector.glue_begin", glue_args(11, 1, 1)), ("connector.glue_end", glue_args(11, 2, 0))] {
+        dispatch(&mut ctx, &registry, end, args).expect("glue");
+    }
+    let connector = connector_shape_id(&ctx, 11);
+    ctx.selection.shapes = vec![connector];
+    ctx.selection.anchor = Some(connector);
+    ctx.selection.page = Some(page);
+    dispatch(&mut ctx, &registry, "edit.duplicate", Args::new()).expect("duplicate");
+
+    let tops = ctx
+        .active_document()
+        .expect("session")
+        .document
+        .page(page)
+        .expect("page")
+        .shapes
+        .clone();
+    let ids: Vec<i32> = tops
+        .iter()
+        .map(|shape| visio(&ctx, *shape))
+        .collect();
+    let before: Vec<(i32, Vec<ferrogram_model::Row>)> = ids
+        .iter()
+        .map(|id| (*id, geometry_rows(&ctx, *id)))
+        .collect();
+    dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("reroute");
+    let after: Vec<(i32, Vec<ferrogram_model::Row>)> = ids
+        .iter()
+        .map(|id| (*id, geometry_rows(&ctx, *id)))
+        .collect();
+    assert_eq!(after, before, "the command's own re-route was the last word");
 }
