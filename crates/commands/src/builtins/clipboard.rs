@@ -51,23 +51,6 @@ fn can_paste(ctx: &AppCtx) -> crate::Enabled {
     has_pages(ctx)
 }
 
-/// The active page, when one exists (the re-route hook's argument).
-fn active_page(ctx: &AppCtx) -> Option<ferrogram_model::PageId> {
-    ctx.active_document()
-        .and_then(|session| session.active_page)
-}
-
-/// Re-routes the page's glued connectors after a paste or duplicate:
-/// the copies land at new positions carrying their copied glue (ADR
-/// 0045 rule 3, task P5-11).
-fn reroute(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
-    if let Some(page) = page
-        && let Err(error) = super::connector::reroute_after_edit(ctx, page)
-    {
-        ctx.record_warning(format!("connectors were not re-routed: {error}"));
-    }
-}
-
 /// `edit.copy`: copies the selection into the internal clipboard.
 pub(super) fn run_copy(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
     let (content, warnings) = content_from_selection(ctx)?;
@@ -132,7 +115,7 @@ pub(super) fn run_paste(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, C
         ctx.clipboard.pastes = ctx.clipboard.pastes.saturating_add(1);
     }
     select_shapes(ctx, page, &roots);
-    reroute(ctx, active_page(ctx));
+    super::connector::reroute_quietly(ctx);
     Ok(edit_outcome(
         format!("Pasted {count} shapes"),
         warnings,
@@ -160,7 +143,7 @@ pub(super) fn run_duplicate(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outco
     )?;
     warnings.extend(paste_warnings);
     select_shapes(ctx, page, &roots);
-    reroute(ctx, active_page(ctx));
+    super::connector::reroute_quietly(ctx);
     Ok(edit_outcome(
         format!("Duplicated {count} shapes"),
         warnings,

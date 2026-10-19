@@ -919,6 +919,23 @@ pub(crate) fn reroute_after_edit(ctx: &mut AppCtx, page: PageId) -> Result<usize
     Ok(count)
 }
 
+/// Re-routes the active page's glued connectors after an editing
+/// command that moved, deleted or glued shapes (ADR 0045 rule 3).
+///
+/// One pass after the edit, and one warning line when the pass cannot
+/// run: the edit itself already succeeded and stays applied (the
+/// [`reroute_after_edit`] contract).
+pub(crate) fn reroute_quietly(ctx: &mut AppCtx) {
+    let page = ctx
+        .active_document()
+        .and_then(|session| session.active_page);
+    if let Some(page) = page
+        && let Err(error) = reroute_after_edit(ctx, page)
+    {
+        ctx.record_warning(format!("connectors were not re-routed: {error}"));
+    }
+}
+
 /// The re-route pass over one document.
 fn reroute_document(
     doc: &mut Document,

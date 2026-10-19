@@ -30,29 +30,12 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
-use super::connector::reroute_after_edit;
+use super::connector::reroute_quietly;
 use super::edit::{
     CellEdit, PageKey, count_label, document_mut, number_literal, page_key, resolve_page,
     selection_targets,
 };
 use super::{CommandTable, edit_outcome, has_selection, model_error, warning_line};
-
-/// The active page, when one exists (the re-route hook's argument).
-fn active_page(ctx: &AppCtx) -> Option<PageId> {
-    ctx.active_document()
-        .and_then(|session| session.active_page)
-}
-
-/// Re-routes the page's glued connectors after a command that moved or
-/// regrouped shapes (ADR 0045 rule 3: every editing command that moves
-/// a shape calls the one hook).
-fn reroute(ctx: &mut AppCtx, page: Option<PageId>) {
-    if let Some(page) = page
-        && let Err(error) = reroute_after_edit(ctx, page)
-    {
-        ctx.record_warning(format!("connectors were not re-routed: {error}"));
-    }
-}
 
 /// The implemented arrangement commands.
 pub(crate) const TABLE: CommandTable = &[
@@ -221,7 +204,7 @@ fn align(ctx: &mut AppCtx, align: Align) -> Result<Outcome, CommandError> {
         }
     }
     edit.apply(ctx)?;
-    reroute(ctx, active_page(ctx));
+    reroute_quietly(ctx);
     Ok(edit_outcome(
         align.label(targets.len()),
         warnings,
@@ -318,7 +301,7 @@ fn distribute(ctx: &mut AppCtx, axis: Axis) -> Result<Outcome, CommandError> {
         }
     }
     edit.apply(ctx)?;
-    reroute(ctx, active_page(ctx));
+    reroute_quietly(ctx);
     Ok(edit_outcome(label, warnings, Box::new(edit)))
 }
 
@@ -454,7 +437,7 @@ fn run_group(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandErro
     let key = page_key(doc, page)?;
     let mut edit = GroupEdit::new(session, key, targets.clone());
     edit.apply(ctx)?;
-    reroute(ctx, active_page(ctx));
+    reroute_quietly(ctx);
     let group = edit.group;
     if let Some(group) = group {
         select(ctx, session, page, &[group]);
@@ -718,7 +701,7 @@ fn run_ungroup(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandEr
     if edit.is_empty() {
         return Err(CommandError::failed("no selected group to ungroup"));
     }
-    reroute(ctx, active_page(ctx));
+    reroute_quietly(ctx);
     select(ctx, session, page, &children);
     Ok(edit_outcome(
         count_label("Ungroup", edit.len()),

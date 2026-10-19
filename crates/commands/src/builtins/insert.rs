@@ -124,9 +124,7 @@ pub(super) fn run_insert_shape(
     if glue_to.is_some() {
         // Glue-on-drop: "any glued connector endpoints on the page
         // re-route" (ADR 0046).
-        if let Err(error) = super::connector::reroute_after_edit(ctx, page) {
-            ctx.record_warning(format!("connectors were not re-routed: {error}"));
-        }
+        super::connector::reroute_quietly(ctx);
     }
     select_new(ctx, session, page, shape)?;
     ctx.touch_session(session);
