@@ -14,6 +14,7 @@ use ferrogram_commands::AppCtx;
 use ferrogram_geom::{Point, SnapKind, SnapResult, snap_axis, snap_grid};
 use ferrogram_model::ShapeId;
 use ferrogram_render::node_bounds;
+use ferrogram_render::scene::Scene;
 
 use crate::UiError;
 use crate::handles::{is_within, node_entries, rect_center, scene_for, selection_frame};
@@ -62,10 +63,14 @@ impl Snapper {
     /// are kept, ADR 0043).
     ///
     /// `zoom` converts the pixel snap distance to inches. `alt_held`
-    /// disables snapping for this call (ADR 0043).
+    /// disables snapping for this call (ADR 0043). `scene` is the
+    /// caller's page scene (the pointer tool caches one per change
+    /// counter); `None` builds one (task P5-11: building it per drag
+    /// frame blew the ADR 0042 budget on a 1000-shape page).
     pub fn snap_move(
         &self,
         ctx: &AppCtx,
+        scene: Option<&Scene>,
         moving: &[ShapeId],
         delta: Point,
         zoom: f64,
@@ -77,10 +82,18 @@ impl Snapper {
         let Some(max_distance) = self.max_distance(zoom) else {
             return Ok(SnapResult::none(delta));
         };
-        let Some(scene) = scene_for(ctx)? else {
-            return Ok(SnapResult::none(delta));
+        let built;
+        let scene: &Scene = match scene {
+            Some(scene) => scene,
+            None => {
+                built = scene_for(ctx)?;
+                match &built {
+                    Some(scene) => scene,
+                    None => return Ok(SnapResult::none(delta)),
+                }
+            }
         };
-        let Some((bounds, _angle)) = selection_frame(ctx)? else {
+        let Some((bounds, _angle)) = selection_frame(ctx, Some(scene))? else {
             return Ok(SnapResult::none(delta));
         };
         let Some(session) = ctx.active_document() else {
@@ -131,14 +144,17 @@ impl Snapper {
         }
 
         // Connection points of the moving shapes can also land on a
-        // stationary connection point.
+        // stationary connection point. The moving points are read once
+        // (task P5-11: recomputing them per stationary shape made the
+        // pass O(n * c * m * c) and blew the ADR 0042 frame budget).
         if self.settings.to_connection_points {
+            let moving_points: Vec<_> = moving_entries
+                .iter()
+                .flat_map(|entry| connection_points(doc, entry))
+                .collect();
             for entry in &stationary {
                 for target in connection_points(doc, entry) {
-                    for source in moving_entries
-                        .iter()
-                        .flat_map(|entry| connection_points(doc, entry))
-                    {
+                    for source in &moving_points {
                         x_candidates.push((SnapKind::ConnectionPoint, target.x - source.x));
                         y_candidates.push((SnapKind::ConnectionPoint, target.y - source.y));
                     }
@@ -170,9 +186,13 @@ impl Snapper {
     }
 
     /// Snaps one point (drawing tools, connector endpoints, drops).
+    ///
+    /// `scene` is the caller's page scene or `None` to build one (the
+    /// same rule as [`Snapper::snap_move`]).
     pub fn snap_point(
         &self,
         ctx: &AppCtx,
+        scene: Option<&Scene>,
         point: Point,
         zoom: f64,
         alt_held: bool,
@@ -183,8 +203,16 @@ impl Snapper {
         let Some(max_distance) = self.max_distance(zoom) else {
             return Ok(SnapResult::none(point));
         };
-        let Some(scene) = scene_for(ctx)? else {
-            return Ok(SnapResult::none(point));
+        let built;
+        let scene: &Scene = match scene {
+            Some(scene) => scene,
+            None => {
+                built = scene_for(ctx)?;
+                match &built {
+                    Some(scene) => scene,
+                    None => return Ok(SnapResult::none(point)),
+                }
+            }
         };
         let Some(session) = ctx.active_document() else {
             return Ok(SnapResult::none(point));
@@ -371,11 +399,11 @@ mod tests {
         let (app, first, _) = fixture();
         let snapper = Snapper::default();
         let result = snapper
-            .snap_move(&app, &[first], Point::new(0.01, 0.0), 1.0, true)
+            .snap_move(&app, None, &[first], Point::new(0.01, 0.0), 1.0, true)
             .expect("no error");
         assert_eq!(result, SnapResult::none(Point::new(0.01, 0.0)));
         let point = snapper
-            .snap_point(&app, Point::new(0.01, 0.01), 1.0, true)
+            .snap_point(&app, None, Point::new(0.01, 0.01), 1.0, true)
             .expect("no error");
         assert_eq!(point, SnapResult::none(Point::new(0.01, 0.01)));
     }
@@ -389,7 +417,7 @@ mod tests {
             ..SnapSettings::default()
         });
         let result = snapper
-            .snap_move(&app, &[first], Point::new(0.01, 0.0), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(0.01, 0.0), 1.0, false)
             .expect("no error");
         assert_eq!(result.point, Point::new(0.0, 0.0));
         assert_eq!(result.kind, Some(SnapKind::Grid));
@@ -412,14 +440,14 @@ mod tests {
         // The second shape's left edge is at 6; the first shape's right
         // edge is at 3, so a delta of 3 aligns them exactly.
         let result = snapper
-            .snap_move(&app, &[first], Point::new(3.001, 0.0), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(3.001, 0.0), 1.0, false)
             .expect("no error");
         assert!((result.point.x - 3.0).abs() < 1.0e-9, "{result:?}");
         assert_eq!(result.kind, Some(SnapKind::Alignment));
 
         // Its centre connection point at 7 is nearer to a delta of 5.99.
         let result = snapper
-            .snap_move(&app, &[first], Point::new(5.99, 0.0), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(5.99, 0.0), 1.0, false)
             .expect("no error");
         assert!((result.point.x - 6.0).abs() < 1.0e-9, "{result:?}");
         assert_eq!(result.kind, Some(SnapKind::ConnectionPoint));
@@ -430,7 +458,7 @@ mod tests {
         let (app, _first, _second) = fixture();
         let snapper = Snapper::default();
         let result = snapper
-            .snap_point(&app, Point::new(0.01, 0.01), 1.0, false)
+            .snap_point(&app, None, Point::new(0.01, 0.01), 1.0, false)
             .expect("no error");
         assert_eq!(result.point, Point::new(0.0, 0.0));
         assert_eq!(result.kind, Some(SnapKind::Grid));
@@ -446,7 +474,7 @@ mod tests {
             ..SnapSettings::default()
         });
         let result = snapper
-            .snap_move(&app, &[first], Point::new(0.01, 0.01), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(0.01, 0.01), 1.0, false)
             .expect("no error");
         assert_eq!(result, SnapResult::none(Point::new(0.01, 0.01)));
     }
@@ -458,13 +486,13 @@ mod tests {
         let delta = Point::new(0.01, 0.01);
         assert_eq!(
             snapper
-                .snap_move(&ctx, &[], delta, 1.0, false)
+                .snap_move(&ctx, None, &[], delta, 1.0, false)
                 .expect("no error"),
             SnapResult::none(delta)
         );
         assert_eq!(
             snapper
-                .snap_point(&ctx, delta, 1.0, false)
+                .snap_point(&ctx, None, delta, 1.0, false)
                 .expect("no error"),
             SnapResult::none(delta)
         );
@@ -478,7 +506,7 @@ mod tests {
         let delta = Point::new(0.01, 0.01);
         assert_eq!(
             snapper
-                .snap_move(&app, &[], delta, 1.0, false)
+                .snap_move(&app, None, &[], delta, 1.0, false)
                 .expect("no error"),
             SnapResult::none(delta)
         );
@@ -501,7 +529,7 @@ mod tests {
         // The first shape's connection point at (2, 2) lands on the
         // second's at (7, 2): delta 5.
         let result = snapper
-            .snap_move(&app, &[first], Point::new(5.01, 0.0), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(5.01, 0.0), 1.0, false)
             .expect("no error");
         assert!((result.point.x - 5.0).abs() < 1.0e-9, "{result:?}");
         assert_eq!(result.kind, Some(SnapKind::ConnectionPoint));
@@ -564,16 +592,16 @@ mod tests {
         let (app, first, _) = fixture();
         let snapper = Snapper::default();
         let result = snapper
-            .snap_move(&app, &[first], Point::new(f64::NAN, 0.0), 1.0, false)
+            .snap_move(&app, None, &[first], Point::new(f64::NAN, 0.0), 1.0, false)
             .expect("no error");
         assert_eq!(result.kind, None);
         for zoom in [f64::NAN, 0.0, -1.0] {
             let result = snapper
-                .snap_move(&app, &[first], Point::new(0.01, 0.01), zoom, false)
+                .snap_move(&app, None, &[first], Point::new(0.01, 0.01), zoom, false)
                 .expect("no error");
             assert!(result.point.x.is_finite() && result.point.y.is_finite());
             let result = snapper
-                .snap_point(&app, Point::new(0.01, 0.01), zoom, false)
+                .snap_point(&app, None, Point::new(0.01, 0.01), zoom, false)
                 .expect("no error");
             assert!(result.point.x.is_finite() && result.point.y.is_finite());
         }

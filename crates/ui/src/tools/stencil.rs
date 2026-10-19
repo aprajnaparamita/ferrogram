@@ -129,7 +129,7 @@ fn down(
         machine.stencil.drag = Some(drag);
         return Ok(effect);
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, zoom, modifiers.alt)?;
     drag.current = snapped.point;
     drag.anchor = if modifiers.shift {
         Some(snapped.point)
@@ -159,7 +159,7 @@ fn moved(
         machine.stencil.drag = Some(drag);
         return Ok(effect);
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     effect.overlay = preview(&drag);
     machine.stencil.drag = Some(drag);
@@ -182,7 +182,7 @@ fn up(
     if !finite(pos) {
         return Ok(effect);
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     let Some(intent) = drop_intent(ctx, page, &drag, drag.zoom)? else {
         return Ok(effect);
