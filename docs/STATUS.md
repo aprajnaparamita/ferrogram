@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group D: P5-09, P5-17, P5-18)
+- Current phase: **5 in progress** (group D: P5-17, P5-18)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -22,7 +22,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-07](tasks/P5-07.md) | implementer | P5-05 | D | merged `aba6efd` (shape.set.text, text.* commands, TextEditor, text tool; editor not yet shown, see P5-17) | — |
 | [P5-16](tasks/P5-16.md) | implementer | P5-05 | D | merged (`edit.select`, `Document::connection_points`) | — |
 | [P5-08](tasks/P5-08.md) | implementer | P5-05, P5-16 | D | merged `91124b0` (routing, glue commands, re-route hook, connector tool; master fixed the re-route document lookup) | — |
-| [P5-09](tasks/P5-09.md) | implementer | P5-05 | D | ready | — |
+| [P5-09](tasks/P5-09.md) | implementer | P5-05 | D | merged (clipboard, arrange, pages, recent files, page-tab menu) | — |
 | [P5-17](tasks/P5-17.md) | implementer | P5-06, P5-07, P5-08 | D2 | ready (tool commands, Shapes-window drag, text editor, indexed glue, connector free end) | — |
 | [P5-18](tasks/P5-18.md) | test-engineer | P5-08 | D2 | ready (commands coverage 97.9% back to 98.1%, tests only) | — |
 | [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09, P5-16..P5-18 | E | waiting | — |
@@ -207,3 +207,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P5-06 (open): undoing the first drop of a catalog master leaves the materialised master in the document (needs a master-removal mutation). Glue records use `Connections.X<n>` and connection-point parts; compare 2D glue cell spelling with Visio in a black-box check. Master fix: the draw and stencil drags moved from address-keyed thread-locals into `ToolMachine` fields (`882e7b1`). Tool picking, the Shapes-window drag and indexed connection points moved to P5-17.
 - P5-07 (open): the editor commits one run. Field text becomes literal, and multi-run formatting markers collapse to the first run. The editor box is axis-aligned for rotated text. A new text box is a fixed 2 x 0.5 in, our own size. Black-box checks: whether Escape or a click outside commits, the default box size, and where the caret starts. Master fix at merge: the text-tool test now uses P5-06's real `insert.drawing.text_box`. Showing the editor in the app moved to P5-17.
 - P5-08 (open): the tool finds the connector through `insert.shape`'s selection and the Basic Flowchart "Connector" master name. Outline glue uses page-aligned bounds, not the rotated outline. A connector inside a group writes its path without the parent transform. `connector.reroute_all` bumps `changes` even when no path changes. Re-routing rewrites every glued connector on the page, so the first edit of a Visio-routed file replaces Visio's paths with ours (ADR 0045 accepts this). One-end unglue edits `Page::connects` directly, not through the model's mutation API. Master fix at merge: `reroute_after_edit` acts on the active document only. Indexed glue and the connector free end moved to P5-17. Merge gate after P5-08: `ferrogram-commands` coverage 97.9% < 98.1% ratchet (P5-08 handed off at exactly 98.1%; the P5-07 and P5-08 merges together fell under it). P5-18 restores it; main is red on that step only.
+- P5-09 (open): align and distribute ignore `Angle`; check Visio's rotated behavior in a black-box check. `arrange.align.center` (the Fluent row) is not implemented; `arrange.align.center_x` is. Group, ungroup and insert undo leave detached arena entries, so the P5-11 undo property must compare reachable state, not `Document` equality (or an arena-compaction ADR). Page undo snapshots the whole page list. Cross-document paste keeps a `Master` link the target may lack; the writer needs a dangling-master rule before that ships. The shortcut extractor drops "open the page tab context menu" (no mapped action).
