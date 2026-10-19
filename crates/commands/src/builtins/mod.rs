@@ -20,6 +20,7 @@ mod insert;
 mod page;
 mod shape;
 mod text;
+mod tools;
 mod view;
 
 pub use view::{ZOOM_MAX, ZOOM_MIN};
@@ -60,6 +61,7 @@ pub(crate) const STUB_TABLES: &[CommandTable] = &[
     page::TABLE,
     shape::TABLE,
     text::TABLE,
+    tools::TABLE,
 ];
 
 /// One registered command: metadata plus its two function pointers.

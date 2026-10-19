@@ -1230,6 +1230,11 @@
   mapping_confidence: unknown
   visuicmd: visCmdDynConnReroute
 - fluent_ids: []
+  id: connector.draw
+  label: Draw Connector
+  mapping_confidence: unknown
+  visuicmd: null
+- fluent_ids: []
   id: connector.glue_begin
   label: Glue Begin
   mapping_confidence: unknown

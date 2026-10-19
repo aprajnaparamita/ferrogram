@@ -14,8 +14,10 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 |----|------|-------|------|--------|
 | AlignLeft | toggleButton | AlignLeft | tab/TabHome/GroupParagraph | implemented |
 | AlignRight | toggleButton | AlignRight | tab/TabHome/GroupParagraph | implemented |
+| ConnectorTool | toggleButton | ConnectorTool | tab/TabHome/GroupTools | implemented |
 | Copy | button | Copy | tab/TabIconEditor/GroupIconEditClipboard | implemented |
 | Cut | button | Cut | tab/TabIconEditor/GroupIconEditClipboard | implemented |
+| EllipseTool | toggleButton | EllipseTool | tab/TabDeveloper/GroupShapeDesign | implemented |
 | FileNewDefault | button | FileNewDefault | qat | implemented |
 | FileOpenUsingBackstage | button | FileOpenUsingBackstage | qat | implemented |
 | FileSave | button | FileSave | qat | implemented |
@@ -27,9 +29,12 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | ObjectSendToBackMenu | splitButton | ObjectSendToBackMenu | tab/TabPictureToolsFormat/GroupPictureToolArrange | implemented |
 | Paste | button | Paste | tab/TabIconEditor/GroupIconEditClipboard | implemented |
 | PasteMenu | splitButton | PasteMenu | tab/TabHome/GroupClipboard | implemented |
+| PointerTool | toggleButton | PointerTool | tab/TabInkToolsPens/GroupInkTools | implemented |
+| RectangleTool | toggleButton | RectangleTool | tab/TabDeveloper/GroupShapeDesign | implemented |
 | SelectAll | button | SelectAll | tab/TabIconEditor/GroupIconEditSelect | implemented |
 | ShowGrid | checkBox | ShowGrid | tab/TabView/GroupViewShowHide | implemented |
 | ShowRulerVisio | checkBox | ShowRulerVisio | tab/TabView/GroupViewShowHide | implemented |
+| TextTool | toggleButton | TextTool | tab/TabHome/GroupTools | implemented |
 | Undo | gallery | Undo | qat | implemented |
 | ZoomFitToWindowVisio | button | ZoomFitToWindowVisio | tab/TabView/GroupZoom | implemented |
 | AccessibilityChecker | button | AccessibilityChecker | tab/TabReviewWord/GroupAccessibility | stub |
@@ -89,7 +94,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | ConnectorRightAngle | toggleButton | ConnectorRightAngle | tab/TabDesignVisio/GroupLayoutRouting | stub |
 | ConnectorShowLineJumps | toggleButton | ConnectorShowLineJumps | tab/TabDesignVisio/GroupLayoutRouting | stub |
 | ConnectorStraightLines | toggleButton | ConnectorStraightLines | tab/TabDesignVisio/GroupLayoutRouting | stub |
-| ConnectorTool | toggleButton | ConnectorTool | tab/TabHome/GroupTools | stub |
 | ConnectorsGallery | menu | ConnectorsGallery | tab/TabDesignVisio/GroupLayoutRouting | stub |
 | ContactUs | button | ContactUs | tab/HelpTab/GroupHelpAndSupport | stub |
 | ContainerDisband | button | ContainerDisband | tab/TabFormat/GroupMembership | stub |
@@ -180,7 +184,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | DynamicGrid | checkBox | DynamicGrid | tab/TabView/GroupVisualAids | stub |
 | EditIcon | button | EditIcon | tab/TabStencil/GroupStencilMasterShape | stub |
 | EditMaster | button | EditMaster | tab/TabStencil/GroupStencilMasterShape | stub |
-| EllipseTool | toggleButton | EllipseTool | tab/TabDeveloper/GroupShapeDesign | stub |
 | EmbellishmentGallery | gallery | EmbellishmentGallery | tab/TabDesignVisio/GroupThemeVariants | stub |
 | EventMonitor | button | EventMonitor | tab/TabDeveloper/GroupSdkTools | stub |
 | ExternalDataWindow | checkBox | ExternalDataWindow | tab/TabData/GroupDataShowHide | stub |
@@ -515,7 +518,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | PinnableGroupCloudGettingStartedOpenMRUPlacesOrNavSlab | group | PinnableGroupCloudGettingStartedOpenMRUPlacesOrNavSlab | backstage/TabRecent | stub |
 | PlaceTabHome | tab | PlaceTabHome | backstage/PlaceTabHome | stub |
 | PointerModeOptions | gallery | PointerModeOptions | qat | stub |
-| PointerTool | toggleButton | PointerTool | tab/TabInkToolsPens/GroupInkTools | stub |
 | PositionMenu | gallery | PositionMenu | tab/TabHome/GroupArrange | stub |
 | PrepareVisioDiagramForExportToFlow | button | PrepareVisioDiagramForExportToFlow | tab/TabProcess/GroupFlow | stub |
 | PrintShapeSheet | button | PrintShapeSheet | tab/TabDeveloper/GroupSdkTools | stub |
@@ -524,7 +526,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | QuickConnectorTool | toggleButton | QuickConnectorTool | tab/TabInsert/GroupDiagramParts | stub |
 | RecorderResume | button | RecorderResume | tab/TabDeveloper/GroupCode | stub |
 | RecorderStopVisio | button | RecorderStopVisio | tab/TabDeveloper/GroupCode | stub |
-| RectangleTool | toggleButton | RectangleTool | tab/TabDeveloper/GroupShapeDesign | stub |
 | RedoOrRepeat | button | RedoOrRepeat | qat | stub |
 | ReflectionGallery | gallery | ReflectionGallery | tab/TabHome/GroupShapeStyles | stub |
 | ReflectionsMoreOptions | button | ReflectionsMoreOptions | tab/TabHome/GroupShapeStyles | stub |
@@ -662,7 +663,6 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 | TextNormalCase | toggleButton | TextNormalCase | tab/TabHome/GroupFont | stub |
 | TextRotate90Degrees | button | TextRotate90Degrees | tab/TabHome/GroupParagraph | stub |
 | TextSmallCaps | toggleButton | TextSmallCaps | tab/TabHome/GroupFont | stub |
-| TextTool | toggleButton | TextTool | tab/TabHome/GroupTools | stub |
 | ThemeApplyToNewShapes | toggleButton | ThemeApplyToNewShapes | tab/TabDesignVisio/GroupThemesVisio | stub |
 | ThemeColorsCreateNewVisio | button | ThemeColorsCreateNewVisio | tab/TabDesignVisio/GroupThemeVariants | stub |
 | ThemeColorsGalleryVisio | gallery | ThemeColorsGalleryVisio | tab/TabDesignVisio/GroupThemeVariants | stub |

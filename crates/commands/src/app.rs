@@ -312,6 +312,43 @@ pub trait SettingsStore: Send {
     fn save(&mut self, settings: &Settings) -> Result<(), SettingsError>;
 }
 
+/// The active interaction tool (task P5-17, ADR 0042).
+///
+/// `crates/ui` maps this to its own `Tool`; `commands` cannot depend on
+/// the egui crates (ADR 0002). Choosing a tool is a command, not an
+/// edit: it adds no undo step and does not bump the change counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum ActiveTool {
+    /// Select, move, resize and rotate (the default).
+    #[default]
+    Pointer,
+    /// Draw a rectangle.
+    Rectangle,
+    /// Draw an ellipse.
+    Ellipse,
+    /// Draw a line.
+    Line,
+    /// Draw a dynamic connector.
+    Connector,
+    /// Draw a text box or edit text.
+    Text,
+}
+
+impl ActiveTool {
+    /// The tool's name as a user sees it.
+    pub fn name(self) -> &'static str {
+        match self {
+            ActiveTool::Pointer => "Pointer",
+            ActiveTool::Rectangle => "Rectangle",
+            ActiveTool::Ellipse => "Ellipse",
+            ActiveTool::Line => "Line",
+            ActiveTool::Connector => "Connector",
+            ActiveTool::Text => "Text",
+        }
+    }
+}
+
 /// The application state every command sees (ADR 0029).
 #[derive(Debug)]
 pub struct AppCtx {
@@ -327,6 +364,9 @@ pub struct AppCtx {
     pub warnings: Vec<String>,
     /// The internal clipboard (ADR 0047).
     pub clipboard: crate::clipboard::Clipboard,
+    /// The active interaction tool (task P5-17; `ui` mirrors it into
+    /// its `ToolMachine` each frame).
+    pub active_tool: ActiveTool,
     /// The undo-recording gate (ADR 0040 rule 2): set while an
     /// [`Edit`]'s `apply`/`revert` runs. While it is set,
     /// [`AppCtx::push_edit`] drops the edit and warns instead of
@@ -348,6 +388,7 @@ impl AppCtx {
             settings,
             warnings: Vec::new(),
             clipboard: Clipboard::new(),
+            active_tool: ActiveTool::Pointer,
             undo_suspended: false,
         }
     }
@@ -360,6 +401,11 @@ impl AppCtx {
     /// The active document, mutably.
     pub fn active_document_mut(&mut self) -> Option<&mut DocumentSession> {
         self.active.and_then(|index| self.documents.get_mut(index))
+    }
+
+    /// The active interaction tool (task P5-17).
+    pub fn active_tool(&self) -> ActiveTool {
+        self.active_tool
     }
 
     /// Opens a session and makes it active; returns its index.

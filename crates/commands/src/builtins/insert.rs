@@ -164,9 +164,6 @@ fn insert_drawing(
             need_finite(&inv.args, "height", "height in inches")?,
         ),
     };
-    if !width.is_finite() || !height.is_finite() {
-        return Err(CommandError::invalid_args("the shape size must be finite"));
-    }
     if drawing == Drawing::Line && width == 0.0 && height == 0.0 {
         return Err(CommandError::invalid_args("the line has zero length"));
     }
@@ -408,13 +405,13 @@ fn add_drop_glue(
                 "unknown glue target {target_visio_id} on the active page"
             ))
         })?;
-    let target_points = doc.connection_points(target);
+    let target_points = doc.connection_points_indexed(target);
     if target_points.is_empty() {
         return Err(CommandError::failed(
             "the glue target has no connection points",
         ));
     }
-    let source_points = doc.connection_points(shape);
+    let source_points = doc.connection_points_indexed(shape);
     if source_points.is_empty() {
         return Err(CommandError::failed(
             "the dropped master has no connection points to glue",
@@ -423,7 +420,13 @@ fn add_drop_glue(
     let target_transform = shape_transform(doc, target);
     let source_transform = shape_transform(doc, shape);
     let target_ix = match glue_point {
-        Some(ix) if ix < target_points.len() => ix,
+        Some(ix)
+            if target_points
+                .iter()
+                .any(|(row, _)| *row == i32::try_from(ix).unwrap_or(-1)) =>
+        {
+            ix
+        }
         Some(ix) => {
             return Err(CommandError::invalid_args(format!(
                 "the glue target has no connection point {ix}"
@@ -438,8 +441,10 @@ fn add_drop_glue(
         .ok_or_else(|| CommandError::failed("no finite connection point to glue"))?,
     };
     let target_page = target_transform.apply(
-        *target_points
-            .get(target_ix)
+        target_points
+            .iter()
+            .find(|(row, _)| *row == i32::try_from(target_ix).unwrap_or(-1))
+            .map(|(_, point)| *point)
             .ok_or_else(|| CommandError::failed("the glue target point is missing"))?,
     );
     let source_ix = nearest_source_index(&source_points, source_transform, target_page)
@@ -468,24 +473,25 @@ fn add_drop_glue(
 /// The target connection point nearest to any source connection point
 /// (both in page inches).
 fn nearest_target_index(
-    target_points: &[Point],
+    target_points: &[(i32, Point)],
     target_transform: Transform,
-    source_points: &[Point],
+    source_points: &[(i32, Point)],
     source_transform: Transform,
 ) -> Option<usize> {
     let mut best: Option<(usize, f64)> = None;
-    for (t_ix, t_point) in target_points.iter().enumerate() {
+    for (t_ix, t_point) in target_points {
         let t_page = target_transform.apply(*t_point);
         if !t_page.x.is_finite() || !t_page.y.is_finite() {
             continue;
         }
-        for s_point in source_points {
+        for (_, s_point) in source_points {
             let s_page = source_transform.apply(*s_point);
             if !s_page.x.is_finite() || !s_page.y.is_finite() {
                 continue;
             }
             let delta = s_page.sub(t_page);
             let distance = delta.x.hypot(delta.y);
+            let t_ix = usize::try_from(*t_ix).unwrap_or(usize::MAX);
             if distance.is_finite() && best.is_none_or(|(_, best)| distance < best) {
                 best = Some((t_ix, distance));
             }
@@ -496,18 +502,19 @@ fn nearest_target_index(
 
 /// The source connection point nearest to `target_page`.
 fn nearest_source_index(
-    source_points: &[Point],
+    source_points: &[(i32, Point)],
     source_transform: Transform,
     target_page: Point,
 ) -> Option<usize> {
     let mut best: Option<(usize, f64)> = None;
-    for (ix, point) in source_points.iter().enumerate() {
+    for (ix, point) in source_points {
         let page = source_transform.apply(*point);
         if !page.x.is_finite() || !page.y.is_finite() {
             continue;
         }
         let delta = page.sub(target_page);
         let distance = delta.x.hypot(delta.y);
+        let ix = usize::try_from(*ix).unwrap_or(usize::MAX);
         if distance.is_finite() && best.is_none_or(|(_, best)| distance < best) {
             best = Some((ix, distance));
         }
@@ -560,19 +567,10 @@ fn active_page(ctx: &AppCtx) -> Result<(SessionId, ferrogram_model::PageId), Com
 /// tool, owns the selection; ADR 0041).
 fn select_new(
     ctx: &mut AppCtx,
-    session: SessionId,
+    _session: SessionId,
     page: ferrogram_model::PageId,
     shape: ShapeId,
 ) -> Result<(), CommandError> {
-    let still_there = ctx
-        .documents
-        .iter()
-        .find(|slot| slot.id == session)
-        .and_then(|slot| slot.document.shape(shape))
-        .is_some();
-    if !still_there {
-        return Err(CommandError::failed("the new shape vanished"));
-    }
     ctx.selection.shapes = vec![shape];
     ctx.selection.anchor = Some(shape);
     ctx.selection.page = Some(page);
