@@ -135,18 +135,23 @@ fn detach_takes_the_connects_and_restore_puts_them_back() {
         .expect("b");
     doc.add_connect(page, end(connector, &doc, other))
         .expect("e");
+    let before = doc.page(page).expect("page").connects.clone();
     let detached = doc.detach_shape(connector).expect("detach");
     assert_eq!(detached.connects.len(), 2);
     assert!(doc.page(page).expect("page").connects.is_empty());
     let restored = doc.restore_shapes(detached).expect("restore");
     assert_eq!(restored, connector);
     assert_eq!(doc.page(page).expect("page").connects.len(), 2);
-    // Detaching the target takes only the record naming it.
+    // The records come back at the exact list positions they held
+    // (task P5-11: undo is the inverse, order included).
+    assert_eq!(doc.page(page).expect("page").connects, before);
+    // Detaching the target takes only the record naming it, and the
+    // restore puts it back at its own position, not at the end.
     let detached = doc.detach_shape(target).expect("detach");
     assert_eq!(detached.connects.len(), 1);
     assert_eq!(doc.page(page).expect("page").connects.len(), 1);
     doc.restore_shapes(detached).expect("restore");
-    assert_eq!(doc.page(page).expect("page").connects.len(), 2);
+    assert_eq!(doc.page(page).expect("page").connects, before);
 }
 
 #[test]
