@@ -129,6 +129,8 @@ pub struct ToolMachine {
     /// The opaque tool state (drag anchors, draw previews); only the
     /// owning tool module reads it.
     pub(crate) state: pointer::PointerState,
+    /// The connector tool's drag state (P5-08).
+    pub(crate) connector: connector::ConnectorState,
 }
 
 impl ToolMachine {
@@ -183,9 +185,8 @@ mod tests {
         let effect = machine.handle(event.clone(), &ctx).expect("pointer");
         assert!(effect.intents.is_empty());
 
-        let tools: [(Handler, Anchor); 4] = [
+        let tools: [(Handler, Anchor); 3] = [
             (draw::handle, draw::anchor),
-            (connector::handle, connector::anchor),
             (stencil::handle, stencil::anchor),
             (text::handle, text::anchor),
         ];
@@ -196,6 +197,11 @@ mod tests {
             ));
             assert_eq!(anchor(&machine), None);
         }
+        // The connector tool is implemented (P5-08): without a document
+        // it is a no-op, never the stub error.
+        let effect = connector::handle(&mut machine, &event, &ctx).expect("connector");
+        assert!(effect.intents.is_empty());
+        assert_eq!(connector::anchor(&machine), None);
         assert_eq!(ToolEffect::new(), ToolEffect::default());
         assert_eq!(Modifiers::none(), Modifiers::default());
     }
