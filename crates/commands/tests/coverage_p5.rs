@@ -9,13 +9,15 @@
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
+use ferrogram_commands::builtins::{
+    PageSummary, Summary, kind_text, registry, shape_count, sheet_text, value_text, warning_line,
+};
 use ferrogram_commands::{
     ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
 };
 use ferrogram_model::{
-    Cell, CellName, CellValue, Connect, Document, PageId, Preserved, Row, Section, SectionName,
-    Shape, ShapeId,
+    Cell, CellName, CellValue, CellWarning, Color, Connect, Document, DocumentKind, PageId,
+    Preserved, Row, Section, SectionName, Shape, ShapeId, SheetRef, WarningKind,
 };
 
 fn number_cell(name: &str, value: f64) -> Cell {
@@ -370,4 +372,109 @@ fn zoom_fit_names_a_missing_or_stale_active_page() {
     ctx.active_document_mut().expect("session").active_page = Some(PageId { index: 9 });
     let error = dispatch(&mut ctx, &registry, "view.zoom.fit", args()).expect_err("stale page");
     assert!(error.to_string().contains("no active page"), "{error}");
+}
+
+fn warning(sheet: SheetRef, kind: WarningKind, substituted: CellValue) -> CellWarning {
+    CellWarning {
+        sheet,
+        cell: CellName::new("LineColor"),
+        kind,
+        substituted,
+    }
+}
+
+#[test]
+fn shape_count_skips_stale_and_repeated_ids() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+    let shape = doc
+        .insert_shape(page, box_shape(1, 1.0), None)
+        .expect("shape");
+    {
+        let page = doc.pages.get_mut(page.index as usize).expect("page");
+        page.shapes.push(ShapeId { index: 999 });
+        page.shapes.push(shape);
+        page.shapes.push(shape);
+    }
+    assert_eq!(shape_count(&doc, doc.page(page).expect("page")), 1);
+}
+
+#[test]
+fn warning_lines_name_error_and_theme_substitutions() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+    let shape = doc
+        .insert_shape(page, box_shape(1, 1.0), None)
+        .expect("shape");
+    let first = warning(
+        SheetRef::Shape(shape),
+        WarningKind::ErrorValue("#DIV/0!".to_owned()),
+        CellValue::Number(1.0),
+    );
+    let line = warning_line(&doc, &first);
+    assert!(line.contains("cached error"), "{line}");
+    assert!(line.contains("shape 1"), "{line}");
+
+    let second = warning(
+        SheetRef::Shape(shape),
+        WarningKind::UnresolvedTheme,
+        CellValue::Number(2.0),
+    );
+    let line = warning_line(&doc, &second);
+    assert!(line.contains("theme cannot supply it"), "{line}");
+}
+
+#[test]
+fn sheet_text_names_stale_shapes_and_pages() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+    let shape = doc
+        .insert_shape(page, box_shape(1, 1.0), None)
+        .expect("shape");
+    assert_eq!(sheet_text(&doc, SheetRef::Shape(shape)), "shape 1");
+    assert_eq!(
+        sheet_text(&doc, SheetRef::Shape(ShapeId { index: 99 })),
+        "shape #99"
+    );
+    assert_eq!(sheet_text(&doc, SheetRef::Page(page)), "page 1");
+    assert_eq!(
+        sheet_text(&doc, SheetRef::Page(PageId { index: 9 })),
+        "page #9"
+    );
+}
+
+#[test]
+fn value_text_formats_every_cell_kind() {
+    assert_eq!(value_text(&CellValue::Number(1.5)), "1.5");
+    assert_eq!(value_text(&CellValue::Str("text".to_owned())), "text");
+    assert_eq!(value_text(&CellValue::Bool(true)), "true");
+    let color = CellValue::Color(Color { r: 1, g: 2, b: 255 });
+    assert_eq!(value_text(&color), "#0102FF");
+    assert_eq!(value_text(&CellValue::List("1;2".to_owned())), "1;2");
+    assert_eq!(
+        value_text(&CellValue::Error("#VALUE!".to_owned())),
+        "#VALUE!"
+    );
+}
+
+#[test]
+fn summary_text_names_an_unnamed_page() {
+    assert_eq!(kind_text(DocumentKind::Stencil), "stencil");
+    assert_eq!(kind_text(DocumentKind::Template), "template");
+    let summary = Summary {
+        kind: kind_text(DocumentKind::Drawing),
+        pages: vec![PageSummary {
+            index: 0,
+            name: String::new(),
+            width: 8.5,
+            height: 11.0,
+            shapes: 0,
+            warnings: 0,
+        }],
+        masters: 0,
+        styles: 0,
+        themes: 0,
+    };
+    let text = summary.text();
+    assert!(text.contains("(unnamed)"), "{text}");
 }
