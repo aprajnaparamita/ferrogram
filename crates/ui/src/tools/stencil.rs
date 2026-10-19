@@ -2,13 +2,8 @@
 //!
 //! Task P5-06 implements the tool: the drop dispatches `insert.shape` with the pointer position as `PinX`/`PinY`, the master size (the P4-06 deferred item), snapping while dragging, and the optional glue arguments of ADR 0046. The Shapes window starts the drag (`crate::shapes_window`).
 //!
-//! The state lives in a thread-local slot keyed by the [`ToolMachine`]
-//! address, the same seam the drawing tools use: `ToolMachine` owns only
-//! the pointer tool's state and `crates/ui/src/tools/mod.rs` is outside
-//! this task's lane. The Shapes-window drag wiring is requested in the
-//! task Result.
-
-use std::cell::RefCell;
+//! The drag lives in [`ToolMachine`]'s `stencil` field; only this module
+//! reads it.
 
 use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
 use ferrogram_geom::{Angle, Point, Rect};
@@ -29,8 +24,6 @@ const MIN_SIZE_IN: f64 = 1.0 / 96.0;
 /// One stencil drag.
 #[derive(Debug, Clone, PartialEq)]
 struct Drag {
-    /// The machine that owns the drag.
-    machine: usize,
     /// The stencil display name.
     stencil: String,
     /// The master's `NameU`.
@@ -47,23 +40,10 @@ struct Drag {
     zoom: f64,
 }
 
-#[derive(Debug, Default)]
-struct State {
+/// The stencil tool's state inside a [`ToolMachine`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct State {
     drag: Option<Drag>,
-}
-
-thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
-}
-
-/// Runs `f` with the per-thread stencil state.
-fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
-    STATE.with(|cell| f(&mut cell.borrow_mut()))
-}
-
-/// The stable key of one machine for the thread-local state.
-fn machine_key(state: &ToolMachine) -> usize {
-    state as *const ToolMachine as usize
 }
 
 /// Starts a drag of one catalog master (the Shapes window's drag start).
@@ -73,25 +53,20 @@ fn machine_key(state: &ToolMachine) -> usize {
 /// starts (the ghost falls back to a 1 inch box) and the release reports
 /// the command error, never a panic.
 pub fn begin_drag(state: &mut ToolMachine, stencil: &str, master: &str) {
-    let machine = machine_key(state);
-    with_state(|state| {
-        state.drag = Some(Drag {
-            machine,
-            stencil: stencil.to_owned(),
-            master: master.to_owned(),
-            anchor: None,
-            current: Point::new(0.0, 0.0),
-            session: None,
-            page: None,
-            zoom: 1.0,
-        });
+    state.stencil.drag = Some(Drag {
+        stencil: stencil.to_owned(),
+        master: master.to_owned(),
+        anchor: None,
+        current: Point::new(0.0, 0.0),
+        session: None,
+        page: None,
+        zoom: 1.0,
     });
 }
 
 /// Whether `machine` has a stencil drag in flight.
 pub fn is_dragging(state: &ToolMachine) -> bool {
-    let key = machine_key(state);
-    with_state(|state| state.drag.as_ref().is_some_and(|drag| drag.machine == key))
+    state.stencil.drag.is_some()
 }
 
 /// Handles one event for this tool (owner: P5-06, ADR 0042).
@@ -100,13 +75,12 @@ pub fn handle(
     event: &ToolEvent,
     ctx: &ferrogram_commands::AppCtx,
 ) -> Result<super::ToolEffect, UiError> {
-    let key = machine_key(state);
     let Some(session) = ctx.active_document() else {
-        clear_machine(state);
+        state.stencil.drag = None;
         return Ok(ToolEffect::new());
     };
     let Some(page) = session.active_page else {
-        clear_machine(state);
+        state.stencil.drag = None;
         return Ok(ToolEffect::new());
     };
     let zoom = if session.view.zoom.is_finite() && session.view.zoom > 0.0 {
@@ -116,17 +90,17 @@ pub fn handle(
     };
     match event {
         ToolEvent::PointerDown { pos, modifiers } => {
-            down(state, ctx, key, session.id, page, *pos, *modifiers, zoom)
+            down(state, ctx, session.id, page, *pos, *modifiers, zoom)
         }
         ToolEvent::PointerMove { pos, modifiers } => {
-            moved(state, ctx, key, session.id, page, *pos, *modifiers)
+            moved(state, ctx, session.id, page, *pos, *modifiers)
         }
         ToolEvent::PointerUp { pos, modifiers } => {
-            up(state, ctx, key, session.id, page, *pos, *modifiers)
+            up(state, ctx, session.id, page, *pos, *modifiers)
         }
         ToolEvent::DoubleClick { .. } => Ok(ToolEffect::new()),
         ToolEvent::Cancel => {
-            clear_machine(state);
+            state.stencil.drag = None;
             Ok(ToolEffect::new())
         }
     }
@@ -134,31 +108,13 @@ pub fn handle(
 
 /// The drag anchor, in page inches (the preview's start).
 pub fn anchor(state: &ToolMachine) -> Option<Point> {
-    let key = machine_key(state);
-    with_state(|state| {
-        state
-            .drag
-            .as_ref()
-            .filter(|drag| drag.machine == key)
-            .map(|drag| drag.current)
-    })
-}
-
-/// Drops the thread-local drag of `machine`.
-fn clear_machine(machine: &ToolMachine) {
-    let key = machine_key(machine);
-    with_state(|state| {
-        if state.drag.as_ref().is_some_and(|drag| drag.machine == key) {
-            state.drag = None;
-        }
-    });
+    state.stencil.drag.as_ref().map(|drag| drag.current)
 }
 
 #[allow(clippy::too_many_arguments)] // one event seam
 fn down(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     session: SessionId,
     page: PageId,
     pos: Point,
@@ -166,11 +122,11 @@ fn down(
     zoom: f64,
 ) -> Result<ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
-    let Some(mut drag) = take_matching(machine, key, session, page) else {
+    let Some(mut drag) = take_matching(machine, session, page) else {
         return Ok(effect);
     };
     if !finite(pos) {
-        with_state(|state| state.drag = Some(drag));
+        machine.stencil.drag = Some(drag);
         return Ok(effect);
     }
     let snapped = Snapper::default().snap_point(ctx, pos, zoom, modifiers.alt)?;
@@ -182,7 +138,7 @@ fn down(
     };
     drag.zoom = zoom;
     effect.overlay = preview(&drag);
-    with_state(|state| state.drag = Some(drag));
+    machine.stencil.drag = Some(drag);
     Ok(effect)
 }
 
@@ -190,24 +146,23 @@ fn down(
 fn moved(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     session: SessionId,
     page: PageId,
     pos: Point,
     modifiers: Modifiers,
 ) -> Result<ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
-    let Some(mut drag) = take_matching(machine, key, session, page) else {
+    let Some(mut drag) = take_matching(machine, session, page) else {
         return Ok(effect);
     };
     if !finite(pos) {
-        with_state(|state| state.drag = Some(drag));
+        machine.stencil.drag = Some(drag);
         return Ok(effect);
     }
     let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     effect.overlay = preview(&drag);
-    with_state(|state| state.drag = Some(drag));
+    machine.stencil.drag = Some(drag);
     Ok(effect)
 }
 
@@ -215,14 +170,13 @@ fn moved(
 fn up(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     session: SessionId,
     page: PageId,
     pos: Point,
     modifiers: Modifiers,
 ) -> Result<ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
-    let Some(mut drag) = take_matching(machine, key, session, page) else {
+    let Some(mut drag) = take_matching(machine, session, page) else {
         return Ok(effect);
     };
     if !finite(pos) {
@@ -237,29 +191,19 @@ fn up(
     Ok(effect)
 }
 
-/// Takes the drag when it belongs to this machine, session and page.
-fn take_matching(
-    machine: &ToolMachine,
-    key: usize,
-    session: SessionId,
-    page: PageId,
-) -> Option<Drag> {
-    let _ = machine;
-    with_state(|state| {
-        let matches = state.drag.as_ref().is_some_and(|drag| {
-            drag.machine == key
-                && drag.session.is_none_or(|value| value == session)
-                && drag.page.is_none_or(|value| value == page)
-        });
-        if matches {
-            let mut drag = state.drag.take()?;
-            drag.session = Some(session);
-            drag.page = Some(page);
-            Some(drag)
-        } else {
-            None
-        }
-    })
+/// Takes the drag when it belongs to this session and page.
+fn take_matching(machine: &mut ToolMachine, session: SessionId, page: PageId) -> Option<Drag> {
+    let matches = machine.stencil.drag.as_ref().is_some_and(|drag| {
+        drag.session.is_none_or(|value| value == session)
+            && drag.page.is_none_or(|value| value == page)
+    });
+    if !matches {
+        return None;
+    }
+    let mut drag = machine.stencil.drag.take()?;
+    drag.session = Some(session);
+    drag.page = Some(page);
+    Some(drag)
 }
 
 /// The preview marks of one stencil drag.
@@ -643,7 +587,6 @@ mod tests {
     #[test]
     fn the_master_size_of_a_known_pick_is_the_catalog_size() {
         let drag = Drag {
-            machine: 1,
             stencil: "Basic Shapes".to_owned(),
             master: "Rectangle".to_owned(),
             anchor: None,

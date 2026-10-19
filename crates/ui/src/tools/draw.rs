@@ -4,14 +4,8 @@
 //! overlay and commits one `insert.drawing.*` intent (undoable, ADR 0040)
 //! with snapping applied (ADR 0043).
 //!
-//! The tool keeps its drag anchor in a thread-local slot keyed by the
-//! [`ToolMachine`] address. `ToolMachine` owns the pointer tool's state
-//! only (`crates/ui/src/tools/mod.rs` is outside this task's lane), so the
-//! drawing tools cannot add a field to it; a UI process has one machine
-//! and one pointer, which the key keeps honest across test threads. The
-//! shell wiring for the tool buttons is requested in the task Result.
-
-use std::cell::RefCell;
+//! The drag anchor lives in [`ToolMachine`]'s `draw` field; only this
+//! module reads it.
 
 use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
 use ferrogram_geom::{Point, Rect};
@@ -29,9 +23,6 @@ const MIN_SIZE_IN: f64 = 1.0 / 96.0;
 /// One drawing drag.
 #[derive(Debug, Clone, PartialEq)]
 struct Drag {
-    /// The machine that owns the drag (the thread-local state is shared
-    /// by every machine on one thread).
-    machine: usize,
     /// The active drawing tool.
     tool: Tool,
     /// The snapped drag anchor, in page inches.
@@ -48,23 +39,10 @@ struct Drag {
     alt: bool,
 }
 
-#[derive(Debug, Default)]
-struct State {
+/// The drawing tools' state inside a [`ToolMachine`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct State {
     drag: Option<Drag>,
-}
-
-thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
-}
-
-/// Runs `f` with the per-thread drawing state.
-fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
-    STATE.with(|cell| f(&mut cell.borrow_mut()))
-}
-
-/// The stable key of one machine for the thread-local state.
-fn machine_key(state: &ToolMachine) -> usize {
-    state as *const ToolMachine as usize
 }
 
 /// Handles one event for the active drawing tool (owner: P5-06, ADR 0042).
@@ -75,16 +53,23 @@ pub fn handle(
 ) -> Result<super::ToolEffect, UiError> {
     let tool = state.tool;
     if !matches!(tool, Tool::Rectangle | Tool::Ellipse | Tool::Line) {
-        clear_machine(state);
+        state.draw.drag = None;
         return Ok(ToolEffect::new());
     }
-    clear_other_tool(state, tool);
+    if state
+        .draw
+        .drag
+        .as_ref()
+        .is_some_and(|drag| drag.tool != tool)
+    {
+        state.draw.drag = None;
+    }
     let Some(session) = ctx.active_document() else {
-        clear_machine(state);
+        state.draw.drag = None;
         return Ok(ToolEffect::new());
     };
     let Some(page) = session.active_page else {
-        clear_machine(state);
+        state.draw.drag = None;
         return Ok(ToolEffect::new());
     };
     let zoom = if session.view.zoom.is_finite() && session.view.zoom > 0.0 {
@@ -92,20 +77,19 @@ pub fn handle(
     } else {
         1.0
     };
-    let key = machine_key(state);
     match event {
-        ToolEvent::PointerDown { pos, modifiers } => down(
-            state, ctx, key, tool, session.id, page, *pos, *modifiers, zoom,
-        ),
+        ToolEvent::PointerDown { pos, modifiers } => {
+            down(state, ctx, tool, session.id, page, *pos, *modifiers, zoom)
+        }
         ToolEvent::PointerMove { pos, modifiers } => {
-            moved(state, ctx, key, tool, session.id, page, *pos, *modifiers)
+            moved(state, ctx, tool, session.id, page, *pos, *modifiers)
         }
         ToolEvent::PointerUp { pos, modifiers } => {
-            up(state, ctx, key, tool, session.id, page, *pos, *modifiers)
+            up(state, ctx, tool, session.id, page, *pos, *modifiers)
         }
         ToolEvent::DoubleClick { .. } => Ok(ToolEffect::new()),
         ToolEvent::Cancel => {
-            clear_machine(state);
+            state.draw.drag = None;
             Ok(ToolEffect::new())
         }
     }
@@ -113,45 +97,13 @@ pub fn handle(
 
 /// The drag anchor, in page inches (the preview's first corner).
 pub fn anchor(state: &ToolMachine) -> Option<Point> {
-    let key = machine_key(state);
-    with_state(|state| {
-        state
-            .drag
-            .as_ref()
-            .filter(|drag| drag.machine == key)
-            .map(|drag| drag.start)
-    })
-}
-
-/// Drops a drag left over from another drawing tool.
-fn clear_other_tool(machine: &ToolMachine, tool: Tool) {
-    let key = machine_key(machine);
-    with_state(|state| {
-        if state
-            .drag
-            .as_ref()
-            .is_some_and(|drag| drag.machine == key && drag.tool != tool)
-        {
-            state.drag = None;
-        }
-    });
-}
-
-/// Drops the thread-local drag of `machine`.
-fn clear_machine(machine: &ToolMachine) {
-    let key = machine_key(machine);
-    with_state(|state| {
-        if state.drag.as_ref().is_some_and(|drag| drag.machine == key) {
-            state.drag = None;
-        }
-    });
+    state.draw.drag.as_ref().map(|drag| drag.start)
 }
 
 #[allow(clippy::too_many_arguments)] // one event seam
 fn down(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     tool: Tool,
     session: SessionId,
     page: PageId,
@@ -160,12 +112,11 @@ fn down(
     zoom: f64,
 ) -> Result<ToolEffect, UiError> {
     if !finite(pos) {
-        clear_machine(machine);
+        machine.draw.drag = None;
         return Ok(ToolEffect::new());
     }
     let snapped = Snapper::default().snap_point(ctx, pos, zoom, modifiers.alt)?;
     let drag = Drag {
-        machine: key,
         tool,
         start: snapped.point,
         current: snapped.point,
@@ -175,7 +126,7 @@ fn down(
         alt: modifiers.alt,
     };
     let overlay = preview(&drag);
-    with_state(|state| state.drag = Some(drag));
+    machine.draw.drag = Some(drag);
     Ok(ToolEffect {
         intents: Vec::new(),
         overlay,
@@ -186,7 +137,6 @@ fn down(
 fn moved(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     tool: Tool,
     session: SessionId,
     page: PageId,
@@ -194,17 +144,17 @@ fn moved(
     modifiers: Modifiers,
 ) -> Result<ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
-    let Some(mut drag) = take_matching(machine, key, tool, session, page) else {
+    let Some(mut drag) = take_matching(machine, tool, session, page) else {
         return Ok(effect);
     };
     if !finite(pos) {
-        with_state(|state| state.drag = Some(drag));
+        machine.draw.drag = Some(drag);
         return Ok(effect);
     }
     let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     effect.overlay = preview(&drag);
-    with_state(|state| state.drag = Some(drag));
+    machine.draw.drag = Some(drag);
     Ok(effect)
 }
 
@@ -212,7 +162,6 @@ fn moved(
 fn up(
     machine: &mut ToolMachine,
     ctx: &AppCtx,
-    key: usize,
     tool: Tool,
     session: SessionId,
     page: PageId,
@@ -220,7 +169,7 @@ fn up(
     modifiers: Modifiers,
 ) -> Result<ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
-    let Some(mut drag) = take_matching(machine, key, tool, session, page) else {
+    let Some(mut drag) = take_matching(machine, tool, session, page) else {
         return Ok(effect);
     };
     if !finite(pos) {
@@ -238,21 +187,23 @@ fn up(
     Ok(effect)
 }
 
-/// Takes the drag when it belongs to this machine, tool, session and page.
+/// Takes the drag when it belongs to this tool, session and page.
 fn take_matching(
-    machine: &ToolMachine,
-    key: usize,
+    machine: &mut ToolMachine,
     tool: Tool,
     session: SessionId,
     page: PageId,
 ) -> Option<Drag> {
-    let _ = machine;
-    with_state(|state| {
-        let matches = state.drag.as_ref().is_some_and(|drag| {
-            drag.machine == key && drag.tool == tool && drag.session == session && drag.page == page
-        });
-        if matches { state.drag.take() } else { None }
-    })
+    let matches = machine
+        .draw
+        .drag
+        .as_ref()
+        .is_some_and(|drag| drag.tool == tool && drag.session == session && drag.page == page);
+    if matches {
+        machine.draw.drag.take()
+    } else {
+        None
+    }
 }
 
 /// The preview marks of one drag (ADR 0042).

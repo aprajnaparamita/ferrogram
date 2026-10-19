@@ -129,6 +129,10 @@ pub struct ToolMachine {
     /// The opaque tool state (drag anchors, draw previews); only the
     /// owning tool module reads it.
     pub(crate) state: pointer::PointerState,
+    /// The drawing tools' drag (owner: `draw`).
+    pub(crate) draw: draw::State,
+    /// The stencil drag from the Shapes window (owner: `stencil`).
+    pub(crate) stencil: stencil::State,
 }
 
 impl ToolMachine {
