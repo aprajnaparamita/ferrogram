@@ -204,3 +204,43 @@ fn a_zero_or_missing_master_size_does_not_scale_that_axis() {
         "a master without sizes is unscaled"
     );
 }
+
+#[test]
+fn a_malformed_middle_row_keeps_the_indexes_of_the_good_rows() {
+    let mut document = Document::new();
+    let mut first = row(Some(1.0), Some(2.0));
+    first.ix = Some(0);
+    let mut malformed = row(Some(f64::NAN), Some(3.0));
+    malformed.ix = Some(1);
+    let mut last = row(Some(4.0), Some(5.0));
+    last.ix = Some(2);
+    let id = on_a_page(
+        &mut document,
+        shape(&[], vec![connection_section(vec![first, malformed, last])]),
+    );
+    assert_eq!(
+        document.connection_points_indexed(id),
+        vec![(0, Point::new(1.0, 2.0)), (2, Point::new(4.0, 5.0))],
+        "the skipped row does not renumber the good ones"
+    );
+    assert_eq!(document.connection_points(id).len(), 2);
+}
+
+#[test]
+fn rows_without_an_ix_are_named_by_position() {
+    let mut document = Document::new();
+    let id = on_a_page(
+        &mut document,
+        shape(
+            &[],
+            vec![connection_section(vec![
+                row(Some(1.0), Some(2.0)),
+                row(Some(3.0), Some(4.0)),
+            ])],
+        ),
+    );
+    assert_eq!(
+        document.connection_points_indexed(id),
+        vec![(0, Point::new(1.0, 2.0)), (1, Point::new(3.0, 4.0))]
+    );
+}
