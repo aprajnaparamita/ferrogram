@@ -291,11 +291,26 @@ pub(super) fn run_open(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
             }
         },
     };
+    let recent = path.clone();
     let mut session = DocumentSession::new(document, path).with_preserve(package);
     session.view = ViewState::from_settings(&ctx.settings);
     ctx.open_document(session);
+    if let Some(path) = recent {
+        remember_recent(&mut ctx.settings, path);
+    }
     Ok(outcome(format!("Opened {label}"), Vec::new()))
 }
+
+/// Records a recently opened file: most recent first, de-duplicated and
+/// capped at [`RECENT_FILES_MAX`] entries (P4-02, task P5-09).
+fn remember_recent(settings: &mut crate::Settings, path: PathBuf) {
+    settings.recent_files.retain(|entry| entry != &path);
+    settings.recent_files.insert(0, path);
+    settings.recent_files.truncate(RECENT_FILES_MAX);
+}
+
+/// How many recently opened files the settings keep.
+const RECENT_FILES_MAX: usize = 10;
 
 /// `file.save`: writes the active document to its `path`.
 ///
@@ -320,6 +335,13 @@ fn save_document(
     set_path: bool,
 ) -> Result<Outcome, CommandError> {
     let arg_path = inv.args.path("path").map(PathBuf::from);
+    // On wasm there is no file system: a `path` argument still hands
+    // the package back for the browser download (P4-02, task P5-09)
+    // instead of failing inside `std::fs::write`.
+    #[cfg(target_arch = "wasm32")]
+    if arg_path.is_some() {
+        return payload_save(ctx);
+    }
     let target = arg_path
         .clone()
         .or_else(|| ctx.active_document().and_then(|s| s.path.clone()));
@@ -780,6 +802,30 @@ mod tests {
         let message = error.to_string();
         assert!(message.starts_with("cannot write output:"), "{message}");
         assert!(!message.starts_with("render failed:"), "{message}");
+    }
+
+    #[test]
+    fn recent_files_are_most_recent_first_deduplicated_and_capped() {
+        let mut settings = crate::Settings::default();
+        remember_recent(&mut settings, PathBuf::from("/a.vsdx"));
+        remember_recent(&mut settings, PathBuf::from("/b.vsdx"));
+        remember_recent(&mut settings, PathBuf::from("/a.vsdx"));
+        assert_eq!(
+            settings.recent_files,
+            vec![PathBuf::from("/a.vsdx"), PathBuf::from("/b.vsdx")]
+        );
+        for index in 0..12 {
+            remember_recent(&mut settings, PathBuf::from(format!("/{index}.vsdx")));
+        }
+        assert_eq!(settings.recent_files.len(), RECENT_FILES_MAX);
+        assert_eq!(
+            settings.recent_files.first(),
+            Some(&PathBuf::from("/11.vsdx"))
+        );
+        let mut unique = settings.recent_files.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), settings.recent_files.len());
     }
 
     #[test]

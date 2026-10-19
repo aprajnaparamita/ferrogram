@@ -654,16 +654,29 @@ pub fn show_page_tabs(ui: &mut Ui, session: &mut DocumentSession) -> Result<Vec<
     let mut previous = false;
     let mut next = false;
     let mut clicked = None;
+    let mut context_action: Option<(PageId, &'static str)> = None;
     ui.horizontal_wrapped(|ui| {
         previous = ui.button("<").on_hover_text("Previous page").clicked();
         for (id, label) in &pages {
-            if ui
+            let response = ui
                 .selectable_label(active == Some(*id), label)
-                .on_hover_text("Show this page")
-                .clicked()
-            {
+                .on_hover_text("Show this page");
+            if response.clicked() {
                 clicked = Some(*id);
             }
+            response.context_menu(|ui| {
+                for (label, command) in [
+                    ("Rename Page", "page.rename"),
+                    ("Delete Page", "page.delete"),
+                    ("Move Page Left", "page.move_left"),
+                    ("Move Page Right", "page.move_right"),
+                ] {
+                    if ui.button(label).clicked() {
+                        context_action = Some((*id, command));
+                        ui.close();
+                    }
+                }
+            });
         }
         next = ui.button(">").on_hover_text("Next page").clicked();
     });
@@ -671,6 +684,10 @@ pub fn show_page_tabs(ui: &mut Ui, session: &mut DocumentSession) -> Result<Vec<
         session.active_page = Some(id);
     }
     let mut intents = Vec::new();
+    if let Some((id, command)) = context_action {
+        session.active_page = Some(id);
+        intents.push(intent(command)?);
+    }
     if previous {
         intents.push(intent("page.previous")?);
     }
