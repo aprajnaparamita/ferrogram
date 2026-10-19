@@ -870,8 +870,7 @@ impl Edit for PathEdit {
         let connector = self.connector;
         let points = self.points.clone();
         let doc = document_mut(ctx, session)?;
-        doc.write_connector_path(connector, &points)
-            .map_err(model_error)?;
+        write_path(doc, connector, &points)?;
         ctx.touch_session(session);
         Ok(())
     }
@@ -995,22 +994,38 @@ fn reroute_document(
         let points = route(start, end, &RouteOptions::new(style)).map_err(|error| {
             CommandError::failed(format!("cannot route connector {visio_id}: {error}"))
         })?;
-        doc.write_connector_path(connector, &points)
-            .map_err(model_error)?;
+        write_path(doc, connector, &points)?;
         routed = routed.saturating_add(1);
     }
     Ok(routed)
 }
 
+/// Whether one `Connect` record names a **connector end** (`VisFromParts`
+/// begin/end parts, ADR 0045), as opposed to a shape-to-shape glue such
+/// as the glue-on-drop of ADR 0046 (`Connections.X*` from a connection
+/// point): only connector ends are routed (task P5-11).
+fn is_connector_end(connect: &Connect) -> bool {
+    matches!(
+        connect.from_part,
+        mutate::VIS_BEGIN
+            | mutate::VIS_BEGIN_X
+            | mutate::VIS_BEGIN_Y
+            | mutate::VIS_END
+            | mutate::VIS_END_X
+            | mutate::VIS_END_Y
+    ) || connect.from_cell.starts_with("Begin")
+        || connect.from_cell.starts_with("End")
+}
+
 /// The distinct connector Visio ids named by the page's `Connect`
-/// records, in file order.
+/// records, in file order (connector ends only, [`is_connector_end`]).
 fn connector_visio_ids(doc: &Document, page: PageId) -> Result<Vec<i32>, CommandError> {
     let entity = doc
         .page(page)
         .ok_or_else(|| CommandError::failed(format!("unknown page id {}", page.index)))?;
     let mut ids = Vec::new();
     for connect in &entity.connects {
-        if !ids.contains(&connect.from_sheet) {
+        if is_connector_end(connect) && !ids.contains(&connect.from_sheet) {
             ids.push(connect.from_sheet);
         }
     }
@@ -1288,6 +1303,35 @@ fn row_point(row: &ferrogram_model::GeometryRow) -> Option<Point> {
         G::InfiniteLine { p1, .. } => Some(*p1),
         _ => None,
     }
+}
+
+/// Writes the connector's **page-space** path as its literal geometry
+/// rows (ADR 0045).
+///
+/// `Document::write_connector_path` maps page points into the shape's
+/// own local box; a connector inside a group is addressed through its
+/// parents, so the points are mapped into the parent's space first
+/// (task P5-11: `geometry_endpoints` reads them back through the same
+/// chain).
+fn write_path(
+    doc: &mut Document,
+    connector: ShapeId,
+    points: &[Point],
+) -> Result<(), CommandError> {
+    let parent = match doc
+        .shape(connector)
+        .ok_or_else(|| CommandError::failed("the connector is gone"))?
+        .parent
+    {
+        Some(parent) => page_transform(doc, parent)?,
+        None => Transform::identity(),
+    };
+    let inverse = parent
+        .invert()
+        .map_err(|_| CommandError::failed("singular parent transform"))?;
+    let local: Vec<Point> = points.iter().map(|point| inverse.apply(*point)).collect();
+    doc.write_connector_path(connector, &local)
+        .map_err(model_error)
 }
 
 #[cfg(test)]
