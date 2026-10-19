@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group D: P5-07, P5-08, P5-09; then P5-17)
+- Current phase: **5 in progress** (group D: P5-08, P5-09; then P5-17)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -19,11 +19,11 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-15](tasks/P5-15.md) | test-engineer | P5-02 | B | merged `22342d5` (model 97.70% to 99.62%, tests only) | — |
 | [P5-05](tasks/P5-05.md) | implementer | P5-03, P5-04 | C | merged `199132a` (pointer tool, handles, marquee, snapping; P4-05, P4-07, P4-14 closed) | — |
 | [P5-06](tasks/P5-06.md) | implementer | P5-05 | D | merged `73f0265` (insert.shape, drawing commands, draw and stencil tools; state moved into `ToolMachine` by the master) | — |
-| [P5-07](tasks/P5-07.md) | implementer | P5-05 | D | ready | — |
+| [P5-07](tasks/P5-07.md) | implementer | P5-05 | D | merged `aba6efd` (shape.set.text, text.* commands, TextEditor, text tool; editor not yet shown, see P5-17) | — |
 | [P5-16](tasks/P5-16.md) | implementer | P5-05 | D | merged (`edit.select`, `Document::connection_points`) | — |
 | [P5-08](tasks/P5-08.md) | implementer | P5-05, P5-16 | D | ready | — |
 | [P5-09](tasks/P5-09.md) | implementer | P5-05 | D | ready | — |
-| [P5-17](tasks/P5-17.md) | implementer | P5-06, P5-07, P5-08 | D2 | waiting (tool commands, Shapes-window drag, indexed connection points) | — |
+| [P5-17](tasks/P5-17.md) | implementer | P5-06, P5-07, P5-08 | D2 | waiting for P5-08 (tool commands, Shapes-window drag, text editor wiring, indexed connection points) | — |
 | [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09, P5-16, P5-17 | E | waiting | — |
 | [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | waiting | — |
 | [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | waiting | — |
@@ -204,3 +204,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P5-05 (open): the rotate handle sits 0.25 in above the shape, not a fixed screen distance (`handles_for` has no zoom). Editable panel fields take inches and degrees, not `Settings::units`. `builtins::view::page_size` is still private, so the panels keep their own page-size reader. Black-box checks: the rotate handle offset, the marquee intersection rule, Alt as the snap modifier. P5-11 can reuse `CanvasRig` (`crates/ui/tests/phase5/main.rs`) for the 8 ms drag budget. Selection through the registry and master connection points moved to P5-16.
 - P5-16 (open): `edit.select` has no explicit entered-group argument (callers map a hit to the entered group's child first). `Document::connection_points` takes the nearest master that has rows and scales by direct `Width`/`Height` cells only; inherited sizes without a cached value stay unscaled until the Phase 6 formula engine.
 - P5-06 (open): undoing the first drop of a catalog master leaves the materialised master in the document (needs a master-removal mutation). Glue records use `Connections.X<n>` and connection-point parts; compare 2D glue cell spelling with Visio in a black-box check. Master fix: the draw and stencil drags moved from address-keyed thread-locals into `ToolMachine` fields (`882e7b1`). Tool picking, the Shapes-window drag and indexed connection points moved to P5-17.
+- P5-07 (open): the editor commits one run. Field text becomes literal, and multi-run formatting markers collapse to the first run. The editor box is axis-aligned for rotated text. A new text box is a fixed 2 x 0.5 in, our own size. Black-box checks: whether Escape or a click outside commits, the default box size, and where the caret starts. Master fix at merge: the text-tool test now uses P5-06's real `insert.drawing.text_box`. Showing the editor in the app moved to P5-17.
