@@ -760,12 +760,15 @@ fn capture_group(
 
 /// Re-creates `group` from `snapshot` exactly (task P5-11): the group's
 /// own shape and position, its children's shapes and its `Connects`.
+/// Returns the arena id the group ended up at (its old slot, task P5-19
+/// review F9: the selection must name the restored group, not the
+/// discarded fresh slot).
 fn regroup_exact(
     doc: &mut Document,
     page: PageId,
     fresh: ShapeId,
     snapshot: &UngroupSnapshot,
-) -> Result<(), CommandError> {
+) -> Result<ShapeId, CommandError> {
     // The group comes back at its own arena slot (its old id), so edits
     // recorded against it keep their subject (task P5-11).
     let group = reuse_slot(doc, page, fresh, snapshot.shape.clone());
@@ -790,7 +793,7 @@ fn regroup_exact(
         }
     }
     place_at(doc, page, group, snapshot.index);
-    Ok(())
+    Ok(group)
 }
 
 /// One undoable ungroup: `apply` dissolves the group, `revert` puts the
@@ -852,12 +855,16 @@ impl Edit for UngroupEdit {
         let (page, group) = {
             let doc = document_mut(ctx, session)?;
             let page = resolve_page(doc, &self.page, PageId { index: 0 });
-            let group = doc
+            let fresh = doc
                 .group_shapes(page, &self.children)
                 .map_err(model_error)?;
-            if let Some(snapshot) = self.before.as_ref() {
-                regroup_exact(doc, page, group, snapshot)?;
-            }
+            // The restored group sits at its old arena slot; the
+            // selection must name that id, not the discarded fresh one
+            // (task P5-19 review F9).
+            let group = match self.before.as_ref() {
+                Some(snapshot) => regroup_exact(doc, page, fresh, snapshot)?,
+                None => fresh,
+            };
             (page, group)
         };
         self.group = Some(group);
@@ -1109,5 +1116,88 @@ mod tests {
         assert_ne!(other_id, session);
         select(&mut ctx, session, PageId { index: 0 }, &[id]);
         assert!(ctx.selection.is_empty());
+    }
+
+    /// Task P5-19 coverage: the two `CellEdit` staging `?` arms of
+    /// `move_cell_edit` (a shape that vanished between the stages).
+    #[test]
+    fn move_cell_edit_reports_a_stale_target() {
+        let (ctx, session, _page, _id) = context();
+        let doc = &ctx.active_document().expect("session").document;
+        let stale = Target {
+            id: ShapeId { index: 9 },
+            rect: Rect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
+            pin: Point::new(1.0, 2.0),
+        };
+        let Err(error) = move_cell_edit(doc, session, "Move", &stale, 1.0, 0.0) else {
+            panic!("stale x");
+        };
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+        let Err(error) = move_cell_edit(doc, session, "Move", &stale, 0.0, 1.0) else {
+            panic!("stale y");
+        };
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+    }
+
+    /// Task P5-19 review F9 coverage: `UngroupEdit::revert` before a
+    /// snapshot exists keeps the fresh group (nothing to restore yet).
+    #[test]
+    fn an_ungroup_revert_without_a_snapshot_keeps_the_fresh_group() {
+        let (mut ctx, session, page, id) = context();
+        let key = {
+            let doc = &ctx.active_document().expect("session").document;
+            page_key(doc, page).expect("key")
+        };
+        let mut ungroup = UngroupEdit::new(session, key, id);
+        ungroup.children = vec![id];
+        ungroup.revert(&mut ctx).expect("revert");
+    }
+
+    /// Task P5-19 coverage: the defensive list arms of `place_at`,
+    /// `reuse_slot` and `regroup_exact` (a stale owner, a stale slot or
+    /// a stale page).
+    #[test]
+    fn placement_helpers_tolerate_a_stale_owner_slot_or_page() {
+        let (mut ctx, _session, page, id) = context();
+        let doc = &mut ctx.active_document_mut().expect("session").document;
+        if let Some(entry) = doc.shape_mut(id) {
+            entry.parent = Some(ShapeId { index: 9 });
+        }
+        place_at(doc, page, id, 0);
+        if let Some(entry) = doc.shape_mut(id) {
+            entry.parent = None;
+        }
+        place_at(doc, PageId { index: 9 }, id, 0);
+
+        let made = doc.shape(id).expect("shape").clone();
+        let second = doc
+            .insert_shape(
+                page,
+                ferrogram_model::Shape::new(ShapeId { index: 0 }, 2),
+                None,
+            )
+            .expect("second");
+        assert_eq!(reuse_slot(doc, page, id, made.clone()), id, "same slot");
+        assert_eq!(
+            reuse_slot(doc, page, ShapeId { index: 9 }, made.clone()),
+            ShapeId { index: 9 },
+            "a stale fresh slot is returned as-is"
+        );
+        assert_eq!(
+            reuse_slot(doc, PageId { index: 9 }, second, made.clone()),
+            id,
+            "a stale page skips the list rewrite"
+        );
+
+        let snapshot = UngroupSnapshot {
+            shape: made.clone(),
+            index: 0,
+            connects: Vec::new(),
+            children: Vec::new(),
+        };
+        assert_eq!(
+            regroup_exact(doc, PageId { index: 9 }, id, &snapshot).expect("regroup"),
+            id
+        );
     }
 }

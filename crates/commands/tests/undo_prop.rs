@@ -49,13 +49,15 @@
 // these helpers are test code and use `expect`/`panic` freely.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use std::collections::{BTreeSet, HashMap};
 
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, CommandStatus, Invocation, Outcome, Registry, Source,
-};
+use ferrogram_commands::{ArgValue, Args, CommandId, CommandStatus, Invocation, Registry, Source};
 use ferrogram_model::{
     Cell, CellName, CellValue, Document, MasterId, PageId, Preserved, Row, Section, SectionName,
     Shape, ShapeId, Sheet, XmlChild, XmlNode,
@@ -214,35 +216,6 @@ fn fixture() -> (AppCtx, Registry, PageId) {
         session.undo.clear();
     }
     (ctx, registry, first)
-}
-
-// ---------------------------------------------------------------------------
-// Dispatch helpers
-// ---------------------------------------------------------------------------
-
-/// One command the way the shell dispatches it: the edit of a completed
-/// run is pushed onto the session the command ran against
-/// (`AppCtx::push_edit`, ADR 0040).
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|state| state.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|state| state.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
 }
 
 /// The number of undo entries of the active document.

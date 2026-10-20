@@ -103,9 +103,7 @@ mod tests {
             if self.fail {
                 return Err(CommandError::failed("apply failed"));
             }
-            if let Ok(mut log) = self.log.lock() {
-                log.push(self.mark);
-            }
+            self.log.lock().expect("log").push(self.mark);
             Ok(())
         }
 
@@ -113,9 +111,7 @@ mod tests {
             if self.fail {
                 return Err(CommandError::failed("revert failed"));
             }
-            if let Ok(mut log) = self.log.lock() {
-                log.retain(|c| c != self.mark);
-            }
+            self.log.lock().expect("log").retain(|c| c != self.mark);
             Ok(())
         }
     }

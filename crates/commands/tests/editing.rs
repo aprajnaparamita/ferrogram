@@ -20,11 +20,15 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
 use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, CommandStatus, Invocation, NeededInput, Outcome,
-    Registry, SessionId, Source,
+    ArgValue, Args, CommandError, CommandId, CommandStatus, Invocation, NeededInput, Registry,
+    SessionId, Source,
 };
 use ferrogram_model::{
     Cell, CellName, CellValue, Document, PageId, Preserved, Row, Section, SectionName, Shape,
@@ -134,31 +138,6 @@ fn select(ctx: &mut AppCtx, page: PageId, shapes: &[ShapeId]) {
     ctx.selection.shapes = shapes.to_vec();
     ctx.selection.anchor = shapes.last().copied();
     ctx.selection.page = Some(page);
-}
-
-/// Dispatches one command the way the shell's `dispatch_one` does: the
-/// edit of a completed run is pushed onto the session the command ran
-/// against (`AppCtx::push_edit`, ADR 0040).
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
 }
 
 fn args(pairs: &[(&str, f64)]) -> Args {
@@ -412,6 +391,122 @@ fn delete_is_one_undo_step_and_restores_the_shapes() {
     assert_eq!(document(&ctx), before);
     dispatch(&mut ctx, &registry, "edit.redo", Args::new()).expect("redo");
     assert_eq!(document(&ctx), after);
+}
+
+/// Review F1 (task P5-19): a selection that holds a group **and** one of
+/// its members deletes once, in either selection order. The nested
+/// target is skipped with one warning line; one undo step restores
+/// everything (before the fix the group-first order applied half the
+/// steps and errored with no undo step).
+#[test]
+fn delete_of_a_group_and_its_member_deletes_once_in_either_order() {
+    for first in [true, false] {
+        let (mut ctx, registry, _session, page, _shapes) = fixture(0);
+        let mut group = Shape::new(ShapeId { index: 0 }, 10);
+        group.sheet.cells.push(number_cell("PinX", 0.0));
+        let group = ctx
+            .active_document_mut()
+            .expect("document")
+            .document
+            .insert_shape(page, group, None)
+            .expect("group");
+        let mut member = Shape::new(ShapeId { index: 0 }, 11);
+        member.sheet.cells.push(number_cell("PinX", 1.0));
+        let member = ctx
+            .active_document_mut()
+            .expect("document")
+            .document
+            .insert_subshape(group, member, None)
+            .expect("member");
+        let order = if first {
+            [group, member]
+        } else {
+            [member, group]
+        };
+        select(&mut ctx, page, &order);
+        let before = document(&ctx);
+
+        let outcome = dispatch(&mut ctx, &registry, "edit.delete", Args::new())
+            .expect("the nested delete runs");
+        assert_eq!(outcome.message.as_deref(), Some("Deleted shape"));
+        assert!(
+            outcome
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("inside another selected shape; skipped")),
+            "{:?}",
+            outcome.warnings
+        );
+        let after = document(&ctx);
+        assert!(after.page_of(group).is_none(), "the group is gone");
+        assert!(after.page_of(member).is_none(), "the member went with it");
+        assert_eq!(
+            ctx.active_document().expect("document").undo.len(),
+            1,
+            "one subtree, one undo step"
+        );
+
+        dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
+        assert_eq!(document(&ctx), before, "one undo restores both");
+    }
+}
+
+/// A delete of a glued shape warns about the glue it takes with it (the
+/// user-visible half of undo-after-delete, ADR 0045): one line per lost
+/// glue record, and the records come back with the shape on undo.
+#[test]
+fn delete_warns_about_the_glue_it_drops_and_undo_restores_it() {
+    let (mut ctx, registry, _session, page, shapes) = fixture(1);
+    let target = shapes[0];
+    // A connector (Visio id 77) glued to the shape's outline.
+    let mut connector = Shape::new(ShapeId { index: 0 }, 77);
+    connector.sheet.cells.push(number_cell("PinX", 5.0));
+    let connector = ctx
+        .active_document_mut()
+        .expect("document")
+        .document
+        .insert_shape(page, connector, None)
+        .expect("connector");
+    let connector_visio = {
+        let doc = &ctx.active_document().expect("document").document;
+        doc.shape(connector).expect("connector").visio_id
+    };
+    {
+        let doc = &mut ctx.active_document_mut().expect("document").document;
+        for from_cell in ["BeginX", "EndX"] {
+            let mut connect = ferrogram_model::Connect::new();
+            connect.from_sheet = connector_visio;
+            connect.from_cell = from_cell.to_owned();
+            connect.to_sheet = 1;
+            connect.to_cell = "PinX".to_owned();
+            doc.add_connect(page, connect).expect("glue");
+        }
+    }
+    select(&mut ctx, page, &[target]);
+
+    let outcome = dispatch(&mut ctx, &registry, "edit.delete", Args::new()).expect("delete");
+    assert_eq!(
+        outcome
+            .warnings
+            .iter()
+            .filter(|warning| warning.contains("lost its glue to detached shape 1"))
+            .count(),
+        2,
+        "{:?}",
+        outcome.warnings
+    );
+    let doc = document(&ctx);
+    let entity = doc.page(page).expect("page");
+    assert!(entity.connects.is_empty(), "the records go with the shape");
+    assert!(doc.page_of(connector).is_some(), "the connector stays");
+
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
+    let doc = document(&ctx);
+    assert_eq!(
+        doc.page(page).expect("page").connects.len(),
+        2,
+        "undo brings the glue back"
+    );
 }
 
 #[test]

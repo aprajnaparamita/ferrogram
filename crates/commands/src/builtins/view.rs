@@ -15,7 +15,7 @@ use crate::app::AppCtx;
 use crate::error::CommandError;
 use crate::{Invocation, Outcome, UiRequest};
 
-use super::connector::reroute_after_edit;
+use super::connector::reroute_quietly_on;
 use super::{no_document, outcome};
 
 /// The zoom change of one `view.zoom.in` / `view.zoom.out` step.
@@ -63,10 +63,8 @@ pub(super) fn run_redo(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, C
 
 /// Re-routes the glued connectors after an undo or redo step (ADR 0045).
 fn reroute_after_step(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
-    if let Some(page) = page
-        && let Err(error) = reroute_after_edit(ctx, page)
-    {
-        ctx.record_warning(format!("connectors were not re-routed: {error}"));
+    if let Some(page) = page {
+        reroute_quietly_on(ctx, page);
     }
 }
 
@@ -324,9 +322,6 @@ pub(super) fn run_page_previous(
 fn move_page(ctx: &mut AppCtx, delta: i64) -> Result<Outcome, CommandError> {
     let session = ctx.active_document_mut().ok_or_else(no_document)?;
     let len = session.document.pages.len();
-    if len == 0 {
-        return Err(CommandError::failed("the document has no pages"));
-    }
     let current = session
         .active_page
         .and_then(|id| session.document.pages.iter().position(|page| page.id == id));
@@ -335,6 +330,8 @@ fn move_page(ctx: &mut AppCtx, delta: i64) -> Result<Outcome, CommandError> {
         None if delta >= 0 => 0,
         None => len.saturating_sub(1),
     };
+    // The one "no pages" check (task P5-19: the list lookup is the
+    // guard): with no pages `index` is 0 and the lookup misses.
     let Some(page) = session.document.pages.get(index) else {
         return Err(CommandError::failed("the document has no pages"));
     };

@@ -929,9 +929,16 @@ pub(crate) fn reroute_quietly(ctx: &mut AppCtx) {
     let page = ctx
         .active_document()
         .and_then(|session| session.active_page);
-    if let Some(page) = page
-        && let Err(error) = reroute_after_edit(ctx, page)
-    {
+    if let Some(page) = page {
+        reroute_quietly_on(ctx, page);
+    }
+}
+
+/// One re-route pass on `page`, with one warning line when the pass
+/// cannot run (task P5-19 coverage: the one helper and the one spelling
+/// of the "connectors were not re-routed" message).
+pub(crate) fn reroute_quietly_on(ctx: &mut AppCtx, page: PageId) {
+    if let Err(error) = reroute_after_edit(ctx, page) {
         ctx.record_warning(format!("connectors were not re-routed: {error}"));
     }
 }
@@ -2110,5 +2117,27 @@ mod tests {
             reroute_after_edit(&mut ctx, PageId { index: 0 }).expect("no document"),
             0
         );
+    }
+
+    /// Task P5-19 coverage: `PathEdit`'s label (nothing read it before)
+    /// and the two page-gone glue-drop guards.
+    #[test]
+    fn path_edit_labels_itself_and_the_page_gone_guards_are_no_ops() {
+        let mut doc = Document::new();
+        let page = doc.add_page("Page-1").expect("page");
+        let id = insert(&mut doc, page, shape_at(1, 0.0, 0.0, 1.0, 1.0));
+        let edit = PathEdit::new(
+            &doc,
+            DocumentSession::new(Document::new(), None).id,
+            id,
+            vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)],
+        )
+        .expect("edit");
+        assert_eq!(edit.label(), "Route connector");
+
+        let mut warnings = Vec::new();
+        drop_detached_targets(&mut doc, PageId { index: 9 }, 1, &mut warnings);
+        drop_all_for(&mut doc, PageId { index: 9 }, 1);
+        assert!(warnings.is_empty());
     }
 }

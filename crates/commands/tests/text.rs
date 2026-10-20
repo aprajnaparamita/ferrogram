@@ -9,11 +9,14 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
 use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, NeededInput, Outcome, Registry, SessionId,
-    Source,
+    ArgValue, Args, CommandError, CommandId, NeededInput, Registry, SessionId,
 };
 use ferrogram_model::{
     Document, PageId, Row, Section, SectionName, Shape, ShapeId, TextContent, TextPart,
@@ -45,28 +48,6 @@ fn fixture(old: Option<TextContent>, rows: bool) -> (AppCtx, Registry, SessionId
 }
 
 /// Dispatches one command and pushes its edit like the shell does.
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
-}
-
 fn document(ctx: &AppCtx) -> Document {
     ctx.active_document().expect("session").document.clone()
 }

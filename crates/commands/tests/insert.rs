@@ -10,11 +10,14 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
 use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, CommandStatus, Invocation, Outcome, Registry,
-    SessionId, Source,
+    ArgValue, Args, CommandError, CommandId, CommandStatus, Registry, SessionId,
 };
 use ferrogram_model::mutate::VIS_CONNECTION_POINT;
 use ferrogram_model::stencils;
@@ -119,28 +122,6 @@ fn fixture() -> (AppCtx, Registry, SessionId, PageId, ShapeId) {
 }
 
 /// Dispatches one command and pushes the edit like the shell does.
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
-}
-
 /// One drop invocation.
 fn drop_args(master: &str) -> Args {
     Args::new()
@@ -421,6 +402,66 @@ fn a_stale_glue_target_is_an_error_and_leaves_no_shape() {
         page_shapes(&ctx, page).len(),
         before,
         "the shape was rolled back"
+    );
+}
+
+/// Task P5-19 coverage (with the decision it pins): a drop of a
+/// document master with no `Connection` rows cannot make the glue the
+/// caller asked for, so the drop **fails** with the typed error and the
+/// shape is rolled back. The alternative (warn and skip the glue) would
+/// silently ignore the request; a foreign master with the catalog's
+/// `NameU` is exactly the read-file case of the audit.
+#[test]
+fn a_master_without_connection_rows_cannot_glue_on_drop() {
+    let (mut ctx, registry, _session, page, target) = fixture();
+    let name_u = stencils::catalog()
+        .into_iter()
+        .find(|entry| entry.name == "Basic Shapes")
+        .and_then(|entry| {
+            entry
+                .masters
+                .into_iter()
+                .find(|definition| definition.name == "Rectangle")
+        })
+        .map(|definition| definition.name_u)
+        .expect("catalog master");
+    {
+        let doc = &mut ctx.active_document_mut().expect("document").document;
+        let mut content = Shape::new(ShapeId { index: 0 }, 55);
+        content.name_u = name_u.to_owned();
+        content.sheet.cells = vec![
+            number_cell("Width", 1.0),
+            number_cell("Height", 1.0),
+            number_cell("PinX", 0.0),
+            number_cell("PinY", 0.0),
+        ];
+        let content = doc.add_shape(content);
+        let mut master = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 0);
+        master.name_u = name_u.to_owned();
+        master.shapes = vec![content];
+        doc.add_master(master).expect("master");
+    }
+    let before = page_shapes(&ctx, page).len();
+    let target_visio = ctx
+        .active_document()
+        .expect("document")
+        .document
+        .shape(target)
+        .expect("target")
+        .visio_id;
+    let mut args = drop_args("Rectangle");
+    args.set("glue_to", ArgValue::Integer(i64::from(target_visio)));
+    args.set("glue_point", ArgValue::Integer(0));
+    let error = dispatch(&mut ctx, &registry, "insert.shape", args)
+        .expect_err("no connection points to glue");
+    assert!(
+        error.to_string().contains("no connection points to glue"),
+        "{error}"
+    );
+    assert_eq!(
+        page_shapes(&ctx, page).len(),
+        before,
+        "the drop was rolled back"
     );
 }
 

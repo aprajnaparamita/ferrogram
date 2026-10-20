@@ -7,11 +7,13 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
-};
+use ferrogram_commands::{ArgValue, Args, CommandError, Registry};
 use ferrogram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Preserved, Row, Section, SectionName, Shape,
     ShapeId,
@@ -87,27 +89,6 @@ fn flow() -> (AppCtx, Registry, PageId) {
     let mut ctx = AppCtx::new(Settings::default());
     ctx.open_document(DocumentSession::new(doc, None));
     (ctx, registry().expect("registry"), page_id)
-}
-
-/// One command the way the shell dispatches it: push the edit.
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take()
-        && let Some(session) = ran_against.or_else(|| ctx.active_document().map(|s| s.id))
-    {
-        ctx.push_edit(session, edit)?;
-    }
-    Ok(outcome)
 }
 
 fn glue_args(connector: i32, target: i32, point: i32) -> Args {

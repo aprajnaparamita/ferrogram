@@ -7,10 +7,14 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
 use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, SessionId, Source,
+    ArgValue, Args, CommandError, CommandId, Invocation, Registry, SessionId, Source,
 };
 use ferrogram_geom::Unit;
 use ferrogram_model::{Cell, CellName, CellValue, Document, PageId, Preserved, Shape, ShapeId};
@@ -26,28 +30,6 @@ fn fixture(names: &[&str]) -> (AppCtx, Registry, SessionId, Vec<PageId>) {
     let index = ctx.open_document(DocumentSession::new(doc, None));
     let session = ctx.documents.get(index).expect("session").id;
     (ctx, registry().expect("registry"), session, pages)
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
 }
 
 fn names(ctx: &AppCtx) -> Vec<String> {

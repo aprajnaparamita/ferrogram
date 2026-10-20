@@ -8,13 +8,15 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::{
     PageSummary, Summary, kind_text, registry, shape_count, sheet_text, value_text, warning_line,
 };
-use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
-};
+use ferrogram_commands::{ArgValue, Args, Registry};
 use ferrogram_model::{
     Cell, CellName, CellValue, CellWarning, Color, Connect, Document, DocumentKind, PageId,
     Preserved, Row, Section, SectionName, Shape, ShapeId, SheetRef, WarningKind,
@@ -88,26 +90,6 @@ fn fixture() -> (AppCtx, Registry, PageId) {
     let mut ctx = AppCtx::new(Settings::default());
     ctx.open_document(DocumentSession::new(doc, None));
     (ctx, registry().expect("registry"), page)
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take()
-        && let Some(session) = ran_against.or_else(|| ctx.active_document().map(|s| s.id))
-    {
-        ctx.push_edit(session, edit)?;
-    }
-    Ok(outcome)
 }
 
 fn select(ctx: &mut AppCtx, page: PageId, visio_ids: &[i32]) {
@@ -295,6 +277,26 @@ fn an_edit_that_cannot_re_route_still_succeeds_with_one_warning() {
         ),
         Some(page),
         "undo restored the deleted shape"
+    );
+}
+
+#[test]
+fn a_paste_that_cannot_re_route_still_succeeds_with_one_warning() {
+    let (mut ctx, registry, page) = fixture();
+    dispatch(&mut ctx, &registry, "connector.glue_begin", glue_args(3, 1)).expect("glue");
+    corrupt_connector_transform(&mut ctx, page);
+    select(&mut ctx, page, &[2]);
+    dispatch(&mut ctx, &registry, "edit.copy", Args::new()).expect("copy");
+    let warnings_before = ctx.warnings.len();
+    dispatch(&mut ctx, &registry, "edit.paste", Args::new()).expect("paste still succeeds");
+    assert!(
+        ctx.warnings
+            .iter()
+            .skip(warnings_before)
+            .any(|warning| warning
+                .starts_with("connectors were not re-routed: cannot route connector 3:")),
+        "{:?}",
+        ctx.warnings
     );
 }
 

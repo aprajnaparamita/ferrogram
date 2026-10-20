@@ -9,11 +9,13 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
-};
+use ferrogram_commands::{ArgValue, Args, CommandError, Registry};
 use ferrogram_model::{Document, PageId, Shape, ShapeId};
 
 /// A document with two pages and one shape on the first.
@@ -26,19 +28,6 @@ fn fixture() -> (AppCtx, Registry) {
     let mut ctx = AppCtx::new(Settings::default());
     ctx.open_document(DocumentSession::new(doc, None));
     (ctx, registry().expect("registry"))
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )
 }
 
 fn numbers(pairs: &[(&str, f64)]) -> Args {
