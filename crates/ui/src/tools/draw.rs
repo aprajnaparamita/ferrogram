@@ -115,7 +115,7 @@ fn down(
         machine.draw.drag = None;
         return Ok(ToolEffect::new());
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, zoom, modifiers.alt)?;
     let drag = Drag {
         tool,
         start: snapped.point,
@@ -151,7 +151,7 @@ fn moved(
         machine.draw.drag = Some(drag);
         return Ok(effect);
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     effect.overlay = preview(&drag);
     machine.draw.drag = Some(drag);
@@ -175,7 +175,7 @@ fn up(
     if !finite(pos) {
         return Ok(effect);
     }
-    let snapped = Snapper::default().snap_point(ctx, pos, drag.zoom, modifiers.alt)?;
+    let snapped = Snapper::default().snap_point(ctx, None, pos, drag.zoom, modifiers.alt)?;
     drag.current = snapped.point;
     match drawing_intent(tool, drag.start, drag.current)? {
         Some(intent) => effect.intents.push(intent),

@@ -276,7 +276,7 @@ fn locate(
 
     let snapped = {
         let snapper = crate::snap::Snapper::default();
-        let result = snapper.snap_point(ctx, pos, zoom, false)?;
+        let result = snapper.snap_point(ctx, None, pos, zoom, false)?;
         result.point
     };
     let outline = entries.iter().rev().find(|entry| {

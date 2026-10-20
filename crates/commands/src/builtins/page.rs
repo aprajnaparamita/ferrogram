@@ -97,6 +97,12 @@ impl PagesEdit {
 
     /// Replaces the page list and active page, clears the selection when
     /// the active page changed, and bumps the change counter (ADR 0040).
+    ///
+    /// The pages' names and membership come from the snapshot, but a
+    /// page that is still open keeps its live `shapes` and `Connects`
+    /// lists (task P5-11): those belong to the edits that moved shapes
+    /// or changed glue, and a snapshot copy can name arena ids that a
+    /// re-done group or insert has replaced.
     fn restore(
         &self,
         ctx: &mut AppCtx,
@@ -105,7 +111,17 @@ impl PagesEdit {
     ) -> Result<(), CommandError> {
         let session = self.session;
         let doc = document_mut(ctx, session)?;
-        doc.pages = pages.to_vec();
+        let live = doc.pages.clone();
+        let mut restored: Vec<Page> = Vec::with_capacity(pages.len());
+        for wanted in pages {
+            let mut page = wanted.clone();
+            if let Some(current) = live.iter().find(|page| page.visio_id == wanted.visio_id) {
+                page.shapes = current.shapes.clone();
+                page.connects = current.connects.clone();
+            }
+            restored.push(page);
+        }
+        doc.pages = restored;
         let active_changed = {
             let slot = ctx
                 .documents

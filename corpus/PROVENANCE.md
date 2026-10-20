@@ -65,14 +65,16 @@ Two more malformed fixtures are generated at test time and never committed:
 stable across `flate2` versions) and `malformed-many-entries.vsdx` (8193
 boring zip entries). Same author and license as above.
 
-The files under `crates/vsdx/fuzz/corpus/` (task P2-09) are byte-identical
+The files under `crates/vsdx/fuzz/corpus/read_package/` (task P2-09; moved
+to the per-target directory in P5-11) are byte-identical
 copies of every committed fixture above, used as the seed corpus of the
 `read_package` fuzz target (ADR 0017 section 4). Same author and license
 (MIT); `fixtures/` stays the single source of truth and a copy that drifts is
 a bug.
 
 The seed corpus of the `render_document` fuzz target
-(`crates/render/fuzz/corpus/`, task P3-10, ADR 0027 section 6) holds
+(`crates/render/fuzz/corpus/render_document/`, task P3-10, ADR 0027 section
+6; moved to the per-target directory in P5-11) holds
 byte-identical copies of four committed fixtures above
 (`render-geometry-absolute.vsdx`, `render-fills.vsdx`, `render-text.vsdx`,
 `render-theme.vsdx`) plus three tiny hand-written junk files

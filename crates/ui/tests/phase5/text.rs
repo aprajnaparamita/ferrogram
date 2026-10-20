@@ -255,3 +255,70 @@ fn the_text_tool_emits_insert_then_begin_and_the_registry_selects_the_box() {
         .expect("begin");
     assert!(editor.is_active());
 }
+
+// ---------------------------------------------------------------------------
+// Commit and cancel through the real shell (task P5-11, P5-17's wiring)
+// ---------------------------------------------------------------------------
+
+/// One `text.begin` / `text.commit` / `text.cancel` dispatch through the
+/// shell (the way the menu, ribbon and shortcuts reach the editor).
+fn shell_dispatch(shell: &Rc<RefCell<ferrogram_ui::shell::Shell>>, id: &'static str) {
+    let command = CommandId::parse(id).expect("a valid command id");
+    let intent = ferrogram_ui::Intent::new(command, Invocation::empty(Source::Test));
+    let mut shell = shell.borrow_mut();
+    let mut results = shell.dispatch(&[intent]).expect("the intent dispatches");
+    let _ = results.pop().expect("one result per intent");
+}
+
+/// The text edit through the whole shell: `text.begin` opens the editor
+/// on the selection (P5-17), typing reaches it, `text.cancel` discards
+/// the buffer and Escape commits it (ADR 0044).
+#[test]
+fn the_text_edit_cancels_and_commits_through_the_shell() {
+    let (app, shape) = fixture();
+    let original = shape_text(&app, shape).expect("text");
+    let registry = ferrogram_commands::builtins::registry().expect("registry");
+    let sets = Loader::from_embedded().expect("layouts");
+    let shell = Rc::new(RefCell::new(ferrogram_ui::shell::Shell::new(
+        registry, sets, app,
+    )));
+    let harness_shell = Rc::clone(&shell);
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1600.0, 900.0))
+        .build_ui(move |ui| {
+            let mut shell = harness_shell.borrow_mut();
+            let intents = shell.show_in(ui).expect("the frame renders");
+            let _ = shell.dispatch(&intents).expect("the intents dispatch");
+        });
+    harness.run();
+
+    // Cancel: the typed text never reaches the shape.
+    shell_dispatch(&shell, "text.begin");
+    harness.run();
+    harness.event(egui::Event::Text("dropped".to_owned()));
+    harness.run();
+    shell_dispatch(&shell, "text.cancel");
+    harness.run();
+    assert_eq!(
+        shape_text(&shell.borrow().app, shape),
+        Some(original.clone()),
+        "text.cancel discards the buffer"
+    );
+
+    // Commit: Escape commits the buffer (ADR 0044).
+    shell_dispatch(&shell, "text.begin");
+    harness.run();
+    harness.event(egui::Event::Text("typed".to_owned()));
+    harness.run();
+    harness.event(key_event(egui::Key::Escape, egui::Modifiers::default()));
+    harness.run();
+    let written = shape_text(&shell.borrow().app, shape).expect("the commit wrote text");
+    assert!(
+        written
+            .parts
+            .iter()
+            .any(|part| matches!(part, TextPart::Text(text) if text.contains("typed"))),
+        "the typed text reached the shape: {written:?}"
+    );
+    assert_ne!(written, original, "the shape's text changed");
+}

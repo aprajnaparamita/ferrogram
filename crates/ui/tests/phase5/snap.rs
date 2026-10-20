@@ -53,7 +53,7 @@ fn a_resized_master_instance_snaps_to_its_scaled_connection_points() {
     // The instance's local (3, 1) point is page (4.5, 3.0) after the
     // 3 x 2 resize and the pin at (3, 3).
     let result = snapper
-        .snap_point(&app, Point::new(4.48, 2.98), 1.0, false)
+        .snap_point(&app, None, Point::new(4.48, 2.98), 1.0, false)
         .expect("no error");
     assert_eq!(result.point, Point::new(4.5, 3.0));
     assert_eq!(result.kind, Some(SnapKind::ConnectionPoint));

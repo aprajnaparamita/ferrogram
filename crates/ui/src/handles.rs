@@ -160,7 +160,7 @@ pub fn handles_for(bounds: Rect, angle: Angle) -> Result<Vec<(HandleKind, Point)
 /// [`UiError::Io`] naming the state; callers that accept an empty
 /// selection use the internal `selection_frame` helper.
 pub fn selection_bounds(ctx: &AppCtx) -> Result<Rect, UiError> {
-    match selection_frame(ctx)? {
+    match selection_frame(ctx, None)? {
         Some((bounds, _angle)) => Ok(bounds),
         None => Err(UiError::Io {
             message: "the selection has no bounds".to_owned(),
@@ -173,15 +173,28 @@ pub fn selection_bounds(ctx: &AppCtx) -> Result<Rect, UiError> {
 /// One selected shape gives its own rotated bounds; several give the
 /// axis-aligned union with a zero angle (the `build_selection_overlay`
 /// rule). `None` when the selection is empty or nothing is drawable.
-pub(crate) fn selection_frame(ctx: &AppCtx) -> Result<Option<(Rect, Angle)>, UiError> {
-    let Some(scene) = scene_for(ctx)? else {
-        return Ok(None);
+pub(crate) fn selection_frame(
+    ctx: &AppCtx,
+    scene: Option<&Scene>,
+) -> Result<Option<(Rect, Angle)>, UiError> {
+    // The caller's page scene when it has one (task P5-11: rebuilding
+    // the scene per drag frame blew the ADR 0042 budget).
+    let built;
+    let scene: &Scene = match scene {
+        Some(scene) => scene,
+        None => {
+            built = scene_for(ctx)?;
+            match &built {
+                Some(scene) => scene,
+                None => return Ok(None),
+            }
+        }
     };
-    let paths = paths_for_shapes(&scene, ctx, &ctx.selection.shapes)?;
+    let paths = paths_for_shapes(scene, ctx, &ctx.selection.shapes)?;
     if paths.is_empty() {
         return Ok(None);
     }
-    let overlay = build_selection_overlay(&scene, &paths).map_err(render_error)?;
+    let overlay = build_selection_overlay(scene, &paths).map_err(render_error)?;
     for mark in overlay.marks {
         if let OverlayMark::Handles { bounds, angle } = mark {
             return Ok(Some((bounds, angle)));
@@ -505,7 +518,7 @@ mod tests {
         let bounds = selection_bounds(&app).expect("bounds");
         assert!((bounds.width() - 2.0).abs() < 1.0e-9);
         assert!((bounds.height() - 1.0).abs() < 1.0e-9);
-        let (frame_bounds, angle) = selection_frame(&app).expect("frame").expect("some");
+        let (frame_bounds, angle) = selection_frame(&app, None).expect("frame").expect("some");
         assert_eq!(frame_bounds, bounds);
         assert_eq!(angle.radians(), 0.0);
     }
@@ -515,7 +528,7 @@ mod tests {
         let (mut app, _id) = shape_document(0.0);
         app.selection.clear();
         assert!(selection_bounds(&app).is_err());
-        assert_eq!(selection_frame(&app).expect("no error"), None);
+        assert_eq!(selection_frame(&app, None).expect("no error"), None);
         assert!(
             paths_for_shapes(&Scene::new(1.0, 1.0), &app, &[])
                 .expect("paths")
@@ -546,7 +559,7 @@ mod tests {
     fn an_empty_app_has_no_scene_or_frame() {
         let app = AppCtx::new(Settings::default());
         assert_eq!(scene_for(&app).expect("no error"), None);
-        assert_eq!(selection_frame(&app).expect("no error"), None);
+        assert_eq!(selection_frame(&app, None).expect("no error"), None);
         assert!(selection_bounds(&app).is_err());
         assert!(
             paths_for_shapes(&Scene::new(1.0, 1.0), &app, &[])

@@ -115,6 +115,7 @@ pub(super) fn run_paste(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, C
         ctx.clipboard.pastes = ctx.clipboard.pastes.saturating_add(1);
     }
     select_shapes(ctx, page, &roots);
+    super::connector::reroute_quietly(ctx);
     Ok(edit_outcome(
         format!("Pasted {count} shapes"),
         warnings,
@@ -142,6 +143,7 @@ pub(super) fn run_duplicate(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outco
     )?;
     warnings.extend(paste_warnings);
     select_shapes(ctx, page, &roots);
+    super::connector::reroute_quietly(ctx);
     Ok(edit_outcome(
         format!("Duplicated {count} shapes"),
         warnings,

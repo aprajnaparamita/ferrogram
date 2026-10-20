@@ -209,10 +209,15 @@ fn down(
         return Ok(effect);
     };
 
-    if !ctx.selection.is_empty()
-        && !modifiers.shift
-        && !modifiers.ctrl
-        && let Some((bounds, angle)) = selection_frame(ctx)?
+    let handle_frame = {
+        let scene = state.state.scene(ctx)?;
+        if !ctx.selection.is_empty() && !modifiers.shift && !modifiers.ctrl {
+            selection_frame(ctx, scene)?
+        } else {
+            None
+        }
+    };
+    if let Some((bounds, angle)) = handle_frame
         && let Some(kind) = handle_at(pos, bounds, angle, zoom)?
     {
         state.state.mode = Mode::Drag {
@@ -292,7 +297,11 @@ fn moved(
             if delta.x.hypot(delta.y) < threshold {
                 return Ok(effect);
             }
-            let Some((bounds, angle)) = selection_frame(ctx)? else {
+            let handle_frame = {
+                let scene = state.state.scene(ctx)?;
+                selection_frame(ctx, scene)?
+            };
+            let Some((bounds, angle)) = handle_frame else {
                 return Ok(effect);
             };
             state.state.mode = Mode::Drag {
@@ -415,12 +424,13 @@ fn up(
             let _ = modifiers;
             let _ = zoom;
             let alt = alt || modifiers.alt;
-            if let Some(intent) =
-                drag_intent(ctx, kind, start, pos, frame, &moving, alt, start_zoom)?
-            {
+            let scene = state.state.scene(ctx)?;
+            if let Some(intent) = drag_intent(
+                ctx, scene, kind, start, pos, frame, &moving, alt, start_zoom,
+            )? {
                 effect.intents.push(intent);
             }
-            let Some(scene) = state.state.scene(ctx)? else {
+            let Some(scene) = scene else {
                 return Ok(effect);
             };
             effect.overlay = overlay_for_shapes(ctx, scene, &moving)?;
@@ -533,8 +543,17 @@ fn drag_overlay(
             zoom,
         } => {
             let mut overlay = Overlay::new();
-            let (bounds, angle, snapped) =
-                preview_frame(ctx, *kind, *start, *current, *frame, moving, *alt, *zoom)?;
+            let (bounds, angle, snapped) = preview_frame(
+                ctx,
+                Some(scene),
+                *kind,
+                *start,
+                *current,
+                *frame,
+                moving,
+                *alt,
+                *zoom,
+            )?;
             overlay
                 .marks
                 .push(OverlayMark::SelectionOutline { bounds, angle });
@@ -562,6 +581,7 @@ fn drag_overlay(
 #[allow(clippy::too_many_arguments)] // one preview seam
 fn preview_frame(
     ctx: &AppCtx,
+    scene: Option<&Scene>,
     kind: HandleKind,
     start: Point,
     current: Point,
@@ -575,7 +595,7 @@ fn preview_frame(
     match kind {
         HandleKind::Move => {
             let delta = current.sub(start);
-            let result = snapper.snap_move(ctx, moving, delta, zoom, alt)?;
+            let result = snapper.snap_move(ctx, scene, moving, delta, zoom, alt)?;
             let moved = Rect::new(
                 Point::new(bounds.min.x + result.point.x, bounds.min.y + result.point.y),
                 Point::new(bounds.max.x + result.point.x, bounds.max.y + result.point.y),
@@ -583,7 +603,7 @@ fn preview_frame(
             Ok((moved, angle, result.kind))
         }
         HandleKind::Resize(edge) => {
-            let point = snapper.snap_point(ctx, current, zoom, alt)?;
+            let point = snapper.snap_point(ctx, scene, current, zoom, alt)?;
             let (width, height) = resized_size(bounds, start, point.point, edge);
             let center = rect_center(bounds);
             let resized = Rect::new(
@@ -625,6 +645,7 @@ fn resized_size(bounds: Rect, start: Point, current: Point, edge: ResizeEdge) ->
 #[allow(clippy::too_many_arguments)] // one drag commit seam
 fn drag_intent(
     ctx: &AppCtx,
+    scene: Option<&Scene>,
     kind: HandleKind,
     start: Point,
     current: Point,
@@ -640,7 +661,7 @@ fn drag_intent(
     match kind {
         HandleKind::Move => {
             let delta = current.sub(start);
-            let result = snapper.snap_move(ctx, moving, delta, zoom, alt)?;
+            let result = snapper.snap_move(ctx, scene, moving, delta, zoom, alt)?;
             if result.point.x == 0.0 && result.point.y == 0.0 {
                 return Ok(None);
             }
@@ -653,7 +674,7 @@ fn drag_intent(
             .map(Some)
         }
         HandleKind::Resize(edge) => {
-            let point = snapper.snap_point(ctx, current, zoom, alt)?;
+            let point = snapper.snap_point(ctx, scene, current, zoom, alt)?;
             let (width, height) = resized_size(frame.0, start, point.point, edge);
             if (width - frame.0.width()).abs() < f64::EPSILON
                 && (height - frame.0.height()).abs() < f64::EPSILON
@@ -1161,6 +1182,7 @@ mod tests {
         assert!(
             drag_intent(
                 &app,
+                None,
                 HandleKind::Move,
                 Point::new(3.0, 3.0),
                 Point::new(3.0, 3.0),
@@ -1175,6 +1197,7 @@ mod tests {
         assert!(
             drag_intent(
                 &app,
+                None,
                 HandleKind::Resize(ResizeEdge::East),
                 Point::new(4.0, 3.0),
                 Point::new(4.0, 3.0),
@@ -1189,6 +1212,7 @@ mod tests {
         assert!(
             drag_intent(
                 &app,
+                None,
                 HandleKind::Rotate,
                 Point::new(3.0, 3.75),
                 Point::new(3.0, 3.75),
@@ -1203,6 +1227,7 @@ mod tests {
         assert!(
             drag_intent(
                 &app,
+                None,
                 HandleKind::Move,
                 Point::new(3.0, 3.0),
                 Point::new(3.5, 3.0),

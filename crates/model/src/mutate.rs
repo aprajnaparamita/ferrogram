@@ -160,8 +160,10 @@ pub struct DetachedShapes {
     pub index: usize,
     /// The detached root first, then its descendants (arena order).
     pub shapes: Vec<Shape>,
-    /// The `Connects` records removed with the subtree.
-    pub connects: Vec<Connect>,
+    /// The `Connects` records removed with the subtree, each with the
+    /// list index it held (so [`Document::restore_shapes`] can put it
+    /// back exactly where it was, task P5-11).
+    pub connects: Vec<(usize, Connect)>,
 }
 
 /// The cells the documented-defaults table derives from `Width` or
@@ -767,9 +769,9 @@ impl Document {
         let mut connects = Vec::new();
         if let Some(entity) = self.pages.get_mut(page.index as usize) {
             let mut kept = Vec::with_capacity(entity.connects.len());
-            for connect in entity.connects.drain(..) {
+            for (at, connect) in entity.connects.drain(..).enumerate() {
                 if removed.contains(&connect.from_sheet) || removed.contains(&connect.to_sheet) {
-                    connects.push(connect);
+                    connects.push((at, connect));
                 } else {
                     kept.push(connect);
                 }
@@ -786,8 +788,8 @@ impl Document {
     }
 
     /// Puts a detached subtree back at its recorded page, parent and
-    /// index, and restores its `Connects`. Returns the root's new (old)
-    /// arena id.
+    /// index, and restores its `Connects` at their recorded list
+    /// positions. Returns the root's new (old) arena id.
     ///
     /// Keeps: the same invariants as [`Document::insert_shape`]; an index
     /// past the current list length clamps.
@@ -825,7 +827,14 @@ impl Document {
             }
         }
         if let Some(page) = self.pages.get_mut(detached.page.index as usize) {
-            page.connects.extend(detached.connects);
+            // Back at the list indices the records were removed from
+            // (ascending, so each index is still the right slot).
+            let mut restored = detached.connects;
+            restored.sort_by_key(|(at, _)| *at);
+            for (at, connect) in restored {
+                let at = at.min(page.connects.len());
+                page.connects.insert(at, connect);
+            }
         }
         Ok(root)
     }

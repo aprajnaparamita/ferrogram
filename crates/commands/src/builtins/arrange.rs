@@ -21,7 +21,7 @@
 
 use ferrogram_geom::{Point, Rect};
 use ferrogram_model::{
-    CellName, CellReader, CellValue, CellWrite, Document, PageId, ShapeId, SheetRef,
+    CellName, CellReader, CellValue, CellWrite, Connect, Document, PageId, Shape, ShapeId, SheetRef,
 };
 
 use crate::app::{AppCtx, SessionId};
@@ -30,6 +30,7 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
+use super::connector::reroute_quietly;
 use super::edit::{
     CellEdit, PageKey, count_label, document_mut, number_literal, page_key, resolve_page,
     selection_targets,
@@ -203,6 +204,7 @@ fn align(ctx: &mut AppCtx, align: Align) -> Result<Outcome, CommandError> {
         }
     }
     edit.apply(ctx)?;
+    reroute_quietly(ctx);
     Ok(edit_outcome(
         align.label(targets.len()),
         warnings,
@@ -299,6 +301,7 @@ fn distribute(ctx: &mut AppCtx, axis: Axis) -> Result<Outcome, CommandError> {
         }
     }
     edit.apply(ctx)?;
+    reroute_quietly(ctx);
     Ok(edit_outcome(label, warnings, Box::new(edit)))
 }
 
@@ -434,6 +437,7 @@ fn run_group(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandErro
     let key = page_key(doc, page)?;
     let mut edit = GroupEdit::new(session, key, targets.clone());
     edit.apply(ctx)?;
+    reroute_quietly(ctx);
     let group = edit.group;
     if let Some(group) = group {
         select(ctx, session, page, &[group]);
@@ -445,14 +449,140 @@ fn run_group(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandErro
     ))
 }
 
-/// One undoable group: `apply` groups the members, `revert` dissolves
-/// the group again.
+/// The shapes' snapshots with their list positions: the exact-inverse
+/// seam of the group edits (task P5-11: undo restores each member's
+/// sheet and its position, not just its existence).
+fn capture_shapes(doc: &Document, ids: &[ShapeId]) -> Result<Vec<(Shape, usize)>, CommandError> {
+    let mut out = Vec::with_capacity(ids.len());
+    for id in ids {
+        let entry = doc
+            .shape(*id)
+            .ok_or_else(|| CommandError::failed("a grouped shape is gone"))?;
+        let list: Vec<ShapeId> = match entry.parent {
+            Some(owner) => doc
+                .shape(owner)
+                .map(|owner| owner.children.clone())
+                .unwrap_or_default(),
+            None => doc
+                .page_of(*id)
+                .and_then(|page| doc.page(page))
+                .map(|page| page.shapes.clone())
+                .unwrap_or_default(),
+        };
+        let index = list.iter().position(|entry| entry == id).unwrap_or(0);
+        out.push((entry.clone(), index));
+    }
+    Ok(out)
+}
+
+/// Inserts `shape` at `index` of its page or parent list
+/// (`Document::set_z_order` is top-level only).
+fn place_at(doc: &mut Document, page: PageId, shape: ShapeId, index: usize) {
+    match doc.shape(shape).and_then(|entry| entry.parent) {
+        Some(owner) => {
+            if let Some(entity) = doc.shape_mut(owner) {
+                entity.children.retain(|id| *id != shape);
+                let at = index.min(entity.children.len());
+                entity.children.insert(at, shape);
+            }
+        }
+        None => {
+            if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+                entity.shapes.retain(|id| *id != shape);
+                let at = index.min(entity.shapes.len());
+                entity.shapes.insert(at, shape);
+            }
+        }
+    }
+}
+
+/// Re-creates a group at `made`'s arena slot instead of `fresh`.
+///
+/// An undo of a group detaches the group's slot, and a redo must reuse
+/// it (task P5-11): later edits can name the old arena id (a text edit
+/// on the group), and a fresh id would leave them without a subject.
+fn reuse_slot(doc: &mut Document, page: PageId, fresh: ShapeId, made: Shape) -> ShapeId {
+    let slot = made.id;
+    if slot == fresh || doc.shape(slot).is_none() || doc.shape(fresh).is_none() {
+        return fresh;
+    }
+    let children = doc
+        .shape(fresh)
+        .map(|entry| entry.children.clone())
+        .unwrap_or_default();
+    if let Some(entity) = doc.shape_mut(slot) {
+        *entity = made;
+    }
+    for child in &children {
+        if let Some(entity) = doc.shape_mut(*child) {
+            entity.parent = Some(slot);
+        }
+    }
+    if let Some(entity) = doc.shape_mut(fresh) {
+        entity.children.clear();
+    }
+    if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+        for id in &mut entity.shapes {
+            if *id == fresh {
+                *id = slot;
+            }
+        }
+    }
+    slot
+}
+
+/// Dissolves `group` and restores the members from `before` (their
+/// exact shapes and list positions).
+///
+/// `Document::ungroup_shape` re-bases the children's cells through the
+/// group's transform and leaves them at the group's slot; an undo step
+/// needs the exact inverse (task P5-11), which is the snapshots.
+fn dissolve(
+    doc: &mut Document,
+    page: PageId,
+    group: ShapeId,
+    before: &[(Shape, usize)],
+) -> Result<Vec<ShapeId>, CommandError> {
+    // The group leaves the page first (its own `Connects` go with it),
+    // with its children list emptied so only the group is detached.
+    if let Some(entity) = doc.shape_mut(group) {
+        entity.children.clear();
+    }
+    doc.detach_shape(group).map_err(model_error)?;
+    let mut children = Vec::with_capacity(before.len());
+    for (shape, _) in before {
+        if let Some(entity) = doc.shape_mut(shape.id) {
+            *entity = shape.clone();
+        }
+        children.push(shape.id);
+    }
+    // Back at their recorded positions (ascending, so every index is
+    // still the right slot).
+    let mut order: Vec<(usize, ShapeId)> = before
+        .iter()
+        .map(|(shape, index)| (*index, shape.id))
+        .collect();
+    order.sort_by_key(|(index, _)| *index);
+    for (index, id) in order {
+        place_at(doc, page, id, index);
+    }
+    Ok(children)
+}
+
+/// One undoable group: `apply` groups the members, `revert` puts them
+/// back exactly as they were (task P5-11).
 struct GroupEdit {
     session: SessionId,
     page: PageKey,
     members: Vec<ShapeId>,
     group: Option<ShapeId>,
     label: String,
+    /// The members' shapes and list positions before `apply` ran (a
+    /// redo re-captures them).
+    before: Vec<(Shape, usize)>,
+    /// The group `apply` created (a redo re-creates it at the same
+    /// arena slot, [`reuse_slot`]).
+    made: Option<Shape>,
 }
 
 impl GroupEdit {
@@ -463,6 +593,8 @@ impl GroupEdit {
             label: count_label("Group", members.len()),
             members,
             group: None,
+            before: Vec::new(),
+            made: None,
         }
     }
 }
@@ -477,7 +609,15 @@ impl Edit for GroupEdit {
         let (page, group) = {
             let doc = document_mut(ctx, session)?;
             let page = resolve_page(doc, &self.page, PageId { index: 0 });
-            let group = doc.group_shapes(page, &self.members).map_err(model_error)?;
+            self.before = capture_shapes(doc, &self.members)?;
+            let fresh = doc.group_shapes(page, &self.members).map_err(model_error)?;
+            let group = match self.made.clone() {
+                Some(made) => reuse_slot(doc, page, fresh, made),
+                None => {
+                    self.made = doc.shape(fresh).cloned();
+                    fresh
+                }
+            };
             (page, group)
         };
         self.group = Some(group);
@@ -496,7 +636,7 @@ impl Edit for GroupEdit {
             let group = group_for_members(doc, page, &self.members)
                 .or(self.group.filter(|group| doc.page_of(*group) == Some(page)))
                 .ok_or_else(|| CommandError::failed("nothing to ungroup"))?;
-            let children = doc.ungroup_shape(group).map_err(model_error)?;
+            let children = dissolve(doc, page, group, &self.before)?;
             (page, children)
         };
         self.group = None;
@@ -561,6 +701,7 @@ fn run_ungroup(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandEr
     if edit.is_empty() {
         return Err(CommandError::failed("no selected group to ungroup"));
     }
+    reroute_quietly(ctx);
     select(ctx, session, page, &children);
     Ok(edit_outcome(
         count_label("Ungroup", edit.len()),
@@ -569,13 +710,98 @@ fn run_ungroup(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandEr
     ))
 }
 
-/// One undoable ungroup: `apply` dissolves the group, `revert` groups
-/// the former children again.
+/// What one ungroup must put back (task P5-11): the group's exact
+/// shape, list position and `Connects`, and its children's shapes.
+struct UngroupSnapshot {
+    /// The group's shape.
+    shape: Shape,
+    /// The group's index in its page or parent list.
+    index: usize,
+    /// The `Connects` records naming the group, with their list indices.
+    connects: Vec<(usize, Connect)>,
+    /// The children's shapes, in the group's child order.
+    children: Vec<Shape>,
+}
+
+/// The snapshot `UngroupEdit::apply` takes before it dissolves a group.
+fn capture_group(
+    doc: &Document,
+    page: PageId,
+    group: ShapeId,
+) -> Result<UngroupSnapshot, CommandError> {
+    let (shape, index) = capture_shapes(doc, &[group])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| CommandError::failed("the group is gone"))?;
+    let visio_id = shape.visio_id;
+    let entity = doc
+        .page(page)
+        .ok_or_else(|| CommandError::failed("the page is gone"))?;
+    let connects = entity
+        .connects
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.from_sheet == visio_id || record.to_sheet == visio_id)
+        .map(|(at, record)| (at, record.clone()))
+        .collect();
+    let mut children = Vec::new();
+    for id in &shape.children {
+        if let Some(entry) = doc.shape(*id) {
+            children.push(entry.clone());
+        }
+    }
+    Ok(UngroupSnapshot {
+        shape,
+        index,
+        connects,
+        children,
+    })
+}
+
+/// Re-creates `group` from `snapshot` exactly (task P5-11): the group's
+/// own shape and position, its children's shapes and its `Connects`.
+fn regroup_exact(
+    doc: &mut Document,
+    page: PageId,
+    fresh: ShapeId,
+    snapshot: &UngroupSnapshot,
+) -> Result<(), CommandError> {
+    // The group comes back at its own arena slot (its old id), so edits
+    // recorded against it keep their subject (task P5-11).
+    let group = reuse_slot(doc, page, fresh, snapshot.shape.clone());
+    if let Some(entity) = doc.shape_mut(group) {
+        let mut restored = snapshot.shape.clone();
+        restored.id = group;
+        *entity = restored;
+    }
+    for child in &snapshot.children {
+        if let Some(entity) = doc.shape_mut(child.id) {
+            let mut restored = child.clone();
+            restored.parent = Some(group);
+            *entity = restored;
+        }
+    }
+    if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+        let mut restored = snapshot.connects.clone();
+        restored.sort_by_key(|(at, _)| *at);
+        for (at, record) in restored {
+            let at = at.min(entity.connects.len());
+            entity.connects.insert(at, record);
+        }
+    }
+    place_at(doc, page, group, snapshot.index);
+    Ok(())
+}
+
+/// One undoable ungroup: `apply` dissolves the group, `revert` puts the
+/// exact group back (task P5-11).
 struct UngroupEdit {
     session: SessionId,
     page: PageKey,
     group: Option<ShapeId>,
     children: Vec<ShapeId>,
+    /// What `apply` must put back (a redo re-captures it).
+    before: Option<UngroupSnapshot>,
 }
 
 impl UngroupEdit {
@@ -585,6 +811,7 @@ impl UngroupEdit {
             page,
             group: Some(group),
             children: Vec::new(),
+            before: None,
         }
     }
 }
@@ -606,6 +833,7 @@ impl Edit for UngroupEdit {
                 .filter(|group| doc.page_of(*group) == Some(page))
                 .or_else(|| group_for_members(doc, page, &self.children))
                 .ok_or_else(|| CommandError::failed("nothing to ungroup"))?;
+            self.before = Some(capture_group(doc, page, group)?);
             let children = doc.ungroup_shape(group).map_err(model_error)?;
             (page, children)
         };
@@ -627,6 +855,9 @@ impl Edit for UngroupEdit {
             let group = doc
                 .group_shapes(page, &self.children)
                 .map_err(model_error)?;
+            if let Some(snapshot) = self.before.as_ref() {
+                regroup_exact(doc, page, group, snapshot)?;
+            }
             (page, group)
         };
         self.group = Some(group);
@@ -738,6 +969,11 @@ fn z_order(ctx: &mut AppCtx, order: ZOrder) -> Result<Outcome, CommandError> {
 }
 
 /// One undoable z-order move.
+///
+/// `old` is the index the shape held when **this step's** `apply` ran:
+/// a z-order command moves several shapes in one [`CompositeEdit`], so
+/// the index it had before any of its siblings moved is stale by the
+/// time `revert` runs (task P5-11: undo is the exact inverse).
 struct ZOrderEdit {
     session: SessionId,
     page: PageKey,
@@ -757,6 +993,16 @@ impl ZOrderEdit {
         ctx.touch_session(session);
         Ok(())
     }
+
+    /// The shape's current index on its page list.
+    fn current_index(&self, ctx: &mut AppCtx) -> Result<usize, CommandError> {
+        let session = self.session;
+        let doc = document_mut(ctx, session)?;
+        let page = resolve_page(doc, &self.page, PageId { index: 0 });
+        doc.page(page)
+            .and_then(|entry| entry.shapes.iter().position(|id| *id == self.shape))
+            .ok_or_else(|| CommandError::failed("the shape is not top-level on its page"))
+    }
 }
 
 impl Edit for ZOrderEdit {
@@ -765,6 +1011,7 @@ impl Edit for ZOrderEdit {
     }
 
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+        self.old = self.current_index(ctx)?;
         self.move_to(ctx, self.target)
     }
 
