@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group G: P5-14)
+- Current phase: **5 in progress** (group H: P5-19 audit fixes)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -29,7 +29,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | merged `b4cf7f0` (undo property, glue tests, drag timing, per-target fuzz seeds; 8 product fixes) | — |
 | [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | merged `cb2c5cf` (approve with fixes: 0 blocker, 3 major, 7 minor; fixes go to one follow-up task after P5-13/14) | — |
 | [P5-13](tasks/P5-13.md) | coverage-auditor | P5-11 | G | merged `e9ba065` (all crates at threshold; commands 98.07 and render 98.39 pass the 98.1/98.4 ratchets only by rounding; fixes go to the follow-up task) | — |
-| [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | ready | — |
+| [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | merged `aecbf28` (pass with findings: 0 blocker, 0 major, 2 minor; both fixed by the master) | — |
 
 Tasks in one group run in parallel on disjoint files. Shared files: `crates/commands/src/builtins/mod.rs`, `crates/commands/src/app.rs` and `xtask/src/extract/commands.rs` belong to P5-04 (later tasks use their own `TABLE` modules); `crates/ui/src/{lib,shell,canvas}.rs` and `crates/ui/Cargo.toml` to P5-05 (later tasks request lines in their Results); `crates/model/src/mutate.rs` and the `vsdx` writer to P5-02. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
