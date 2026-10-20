@@ -515,15 +515,14 @@ mod tests {
         let (mut ctx, session, _page, _shape) = fixture();
         let doc = document_mut(&mut ctx, session).expect("doc");
         let stale = ShapeId { index: 9 };
-        let Err(error) = cell_edit(doc, session, "Move shape", stale, "PinX", 1.0) else {
-            panic!("stale");
-        };
+        let error = cell_edit(doc, session, "Move shape", stale, "PinX", 1.0)
+            .map(|_| ())
+            .expect_err("stale");
         assert!(error.to_string().contains("unknown shape id"), "{error}");
         let mut warnings = Vec::new();
-        let Err(error) = scale_edit(doc, session, stale, (1.0, 1.0), (2.0, 2.0), &mut warnings)
-        else {
-            panic!("stale");
-        };
+        let error = scale_edit(doc, session, stale, (1.0, 1.0), (2.0, 2.0), &mut warnings)
+            .map(|_| ())
+            .expect_err("stale");
         assert!(error.to_string().contains("unknown shape id"), "{error}");
     }
 

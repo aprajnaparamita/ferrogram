@@ -533,10 +533,9 @@ mod tests {
     fn paste_rejects_an_empty_fragment_and_warns_on_foreign_connects() {
         let (mut ctx, session, page) = context(true);
         let empty = content(Vec::new(), Vec::new());
-        let Err(error) = paste_content(&mut ctx, session, page, empty, Placement::Offset(0.0, 0.0))
-        else {
-            panic!("an empty fragment has no roots");
-        };
+        let error = paste_content(&mut ctx, session, page, empty, Placement::Offset(0.0, 0.0))
+            .map(|_| ())
+            .expect_err("an empty fragment has no roots");
         assert!(error.to_string().contains("no root shape"));
 
         let shape = Shape::new(ShapeId { index: 0 }, 1);
@@ -676,10 +675,9 @@ mod tests {
         ctx.selection.shapes = vec![shape];
         ctx.selection.anchor = Some(shape);
         ctx.selection.page = Some(page);
-        let Err(error) = run_duplicate(&mut ctx, &crate::Invocation::empty(crate::Source::Test))
-        else {
-            panic!("id exhaustion");
-        };
+        let error = run_duplicate(&mut ctx, &crate::Invocation::empty(crate::Source::Test))
+            .map(|_| ())
+            .expect_err("id exhaustion");
         assert!(error.to_string().contains("too many shapes"), "{error}");
     }
 }

@@ -1129,13 +1129,13 @@ mod tests {
             rect: Rect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
             pin: Point::new(1.0, 2.0),
         };
-        let Err(error) = move_cell_edit(doc, session, "Move", &stale, 1.0, 0.0) else {
-            panic!("stale x");
-        };
+        let error = move_cell_edit(doc, session, "Move", &stale, 1.0, 0.0)
+            .map(|_| ())
+            .expect_err("stale x");
         assert!(error.to_string().contains("unknown shape id"), "{error}");
-        let Err(error) = move_cell_edit(doc, session, "Move", &stale, 0.0, 1.0) else {
-            panic!("stale y");
-        };
+        let error = move_cell_edit(doc, session, "Move", &stale, 0.0, 1.0)
+            .map(|_| ())
+            .expect_err("stale y");
         assert!(error.to_string().contains("unknown shape id"), "{error}");
     }
 
