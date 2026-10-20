@@ -46,6 +46,8 @@ use crate::values::{CellReader, RowTarget, SheetRef};
 
 use ferrogram_geom::{Angle, Point, Size, Transform, Unit};
 
+use std::collections::{BTreeSet, HashSet};
+
 // ---------------------------------------------------------------------------
 // `VisFromParts` (Microsoft Learn, "VisFromParts enumeration (Visio)")
 // ---------------------------------------------------------------------------
@@ -197,7 +199,13 @@ fn derived_from(source: &str) -> Vec<(&'static str, String, f64)> {
 
 /// The literal spelling of a finite number (the formula of a literal
 /// cell, ADR 0038). `-0.0` folds to `"0"`.
-fn literal(value: f64) -> String {
+///
+/// This is the **one** number-spelling rule of the workspace (task
+/// P5-19 review F6): the model writes it and the command layer spells
+/// its `CellWrite` formulas with it (`builtins::edit::number_literal`),
+/// so an undo/redo replay can never write a different formula text than
+/// the first apply.
+pub fn literal(value: f64) -> String {
     if value == 0.0 {
         return "0".to_owned();
     }
@@ -335,13 +343,17 @@ fn deleted_row(ix: i32) -> Row {
 /// The unique spelling of `wanted` under the "append ` (n)`" rule (ADR
 /// 0039 invariant 4): `wanted` when free, else `wanted (2)`, `wanted
 /// (3)`, ...
-fn unique_name_u(wanted: &str, taken: &[String]) -> String {
-    if !taken.iter().any(|name| name == wanted) {
+///
+/// `taken` is the indexed set of the names already in use: the callers
+/// build one set per operation instead of cloning every existing `name_u`
+/// and scanning a `Vec` per candidate (task P5-19 review F10).
+fn unique_name_u(wanted: &str, taken: &BTreeSet<&str>) -> String {
+    if !taken.contains(wanted) {
         return wanted.to_owned();
     }
     for n in 2..10_000u32 {
         let candidate = format!("{wanted} ({n})");
-        if !taken.contains(&candidate) {
+        if !taken.contains(candidate.as_str()) {
             return candidate;
         }
     }
@@ -669,13 +681,19 @@ impl Document {
         let mut shape = shape;
         shape.parent = None;
         shape.visio_id = visio_id;
+        // The children are validated before the shape enters the arena
+        // (task P5-19 review F11): a stale child id must not leave an
+        // unnamed entry behind.
         let children = shape.children.clone();
+        for child in &children {
+            if self.shape(*child).is_none() {
+                return Err(Error::UnknownShape(*child));
+            }
+        }
         let id = self.add_shape(shape);
         for child in children {
             if let Some(entry) = self.shape_mut(child) {
                 entry.parent = Some(id);
-            } else {
-                return Err(Error::UnknownShape(child));
             }
         }
         if let Some(entity) = self.pages.get_mut(page.index as usize) {
@@ -705,13 +723,18 @@ impl Document {
         if let Some(page) = self.page_of(parent) {
             shape.visio_id = self.next_visio_id(page)?;
         }
+        // The same validate-first rule as `insert_shape` (task P5-19
+        // review F11).
         let children = shape.children.clone();
+        for child in &children {
+            if self.shape(*child).is_none() {
+                return Err(Error::UnknownShape(*child));
+            }
+        }
         let id = self.add_shape(shape);
         for child in children {
             if let Some(entry) = self.shape_mut(child) {
                 entry.parent = Some(id);
-            } else {
-                return Err(Error::UnknownShape(child));
             }
         }
         if let Some(entity) = self.shape_mut(parent) {
@@ -1073,7 +1096,7 @@ impl Document {
         }
         let index = u32::try_from(self.pages.len()).map_err(|_| Error::TooManyShapes)?;
         let visio_id = next_id_of(self.pages.iter().map(|page| page.visio_id))?;
-        let taken: Vec<String> = self.pages.iter().map(|page| page.name_u.clone()).collect();
+        let taken: BTreeSet<&str> = self.pages.iter().map(|page| page.name_u.as_str()).collect();
         let mut page = Page::new(PageId { index }, visio_id);
         page.name = name.to_owned();
         page.name_u = unique_name_u(name, &taken);
@@ -1118,16 +1141,19 @@ impl Document {
         if at >= self.pages.len() {
             return Err(Error::UnknownPage(page));
         }
-        let taken: Vec<String> = self
-            .pages
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| *index != at)
-            .map(|(_, entry)| entry.name_u.clone())
-            .collect();
+        let fresh = {
+            let taken: BTreeSet<&str> = self
+                .pages
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != at)
+                .map(|(_, entry)| entry.name_u.as_str())
+                .collect();
+            unique_name_u(name, &taken)
+        };
         if let Some(entity) = self.pages.get_mut(at) {
             entity.name = name.to_owned();
-            entity.name_u = unique_name_u(name, &taken);
+            entity.name_u = fresh;
         }
         Ok(())
     }
@@ -1191,10 +1217,10 @@ impl Document {
         if master.visio_id == 0 {
             master.visio_id = next_id_of(self.masters.iter().map(|entry| entry.visio_id))?;
         }
-        let taken: Vec<String> = self
+        let taken: BTreeSet<&str> = self
             .masters
             .iter()
-            .map(|entry| entry.name_u.clone())
+            .map(|entry| entry.name_u.as_str())
             .collect();
         master.name_u = unique_name_u(&master.name_u, &taken);
         let index = u32::try_from(self.masters.len()).map_err(|_| Error::TooManyShapes)?;
@@ -1243,10 +1269,12 @@ impl Document {
         let name_u = entity.name_u.clone();
         let mut shape = Shape::new(ShapeId { index: 0 }, 0);
         shape.name = name.clone();
-        let taken: Vec<String> = self
+        // The taken `NameU`s are indexed once per instance (task P5-19
+        // review F10: no per-drop clone of every arena `name_u`).
+        let taken: BTreeSet<&str> = self
             .shapes
             .iter()
-            .map(|entry| entry.name_u.clone())
+            .map(|entry| entry.name_u.as_str())
             .collect();
         shape.name_u = unique_name_u(&name_u, &taken);
         shape.master = Some(master);
@@ -1413,6 +1441,29 @@ impl Document {
         let width = (max.x - min.x).max(0.0);
         let height = (max.y - min.y).max(0.0);
         let center = Point::new(min.x + width * 0.5, min.y + height * 0.5);
+        // Every derived value is computed and checked before the first
+        // mutation (ADR 0039 amendment: a failed mutation changes
+        // nothing): extreme member pins make `max.x - min.x` overflow
+        // to infinity, and the group's cells and the members' re-based
+        // pins must never hold a non-finite number.
+        if !width.is_finite()
+            || !height.is_finite()
+            || !center.x.is_finite()
+            || !center.y.is_finite()
+        {
+            return Err(Error::BadCell("non-finite group extent"));
+        }
+        // The members' new pins (page position minus the box minimum),
+        // checked up front: the loop below only writes what this
+        // computed, so no write can fail and leave a half-built group.
+        let mut rebase: Vec<(ShapeId, Point)> = Vec::with_capacity(frames.len());
+        for (id, frame) in &frames {
+            let pin = Point::new(frame.pin.x - min.x, frame.pin.y - min.y);
+            if !pin.x.is_finite() || !pin.y.is_finite() {
+                return Err(Error::BadCell("non-finite member position"));
+            }
+            rebase.push((*id, pin));
+        }
 
         // The group's frame is the identity offset (its pin minus its
         // local pin is the box minimum), so a member's page position is
@@ -1441,7 +1492,7 @@ impl Document {
         // The group is inserted first, with the members still on the
         // page: the page's next free Visio `ID` must count them.
         let group = self.insert_shape(page, group, None)?;
-        for (id, frame) in &frames {
+        for (id, pin) in &rebase {
             self.unlist(*id);
             if let Some(entity) = self.shape_mut(*id) {
                 entity.parent = Some(group);
@@ -1449,17 +1500,18 @@ impl Document {
             if let Some(entity) = self.shape_mut(group) {
                 entity.children.push(*id);
             }
-            let pin = Point::new(frame.pin.x - min.x, frame.pin.y - min.y);
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("PinX"),
-                &CellWrite::new(literal(pin.x), CellValue::Number(pin.x)),
-            )?;
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("PinY"),
-                &CellWrite::new(literal(pin.y), CellValue::Number(pin.y)),
-            )?;
+            for (cell, write) in [
+                (
+                    "PinX",
+                    CellWrite::new(literal(pin.x), CellValue::Number(pin.x)),
+                ),
+                (
+                    "PinY",
+                    CellWrite::new(literal(pin.y), CellValue::Number(pin.y)),
+                ),
+            ] {
+                self.write_cell(SheetRef::Shape(*id), &CellName::from_static(cell), &write)?;
+            }
         }
         Ok(group)
     }
@@ -1484,42 +1536,61 @@ impl Document {
             frames
         };
         let group_frame = self.frame_of(group)?;
+        // Every derived value is computed and checked before the first
+        // mutation (ADR 0039 amendment: a failed mutation changes
+        // nothing): the writes below only repeat what this computed, so
+        // a mid-loop failure cannot leave some members re-based and the
+        // group intact.
+        let mut rebase: Vec<(ShapeId, f64, f64, f64, bool, bool)> =
+            Vec::with_capacity(frames.len());
         for (id, frame) in &frames {
             let pin = group_frame.transform().apply(frame.pin);
             let linear = group_frame.linear.compose(frame.linear);
-            let (pin_x, pin_y) = (literal(pin.x), literal(pin.y));
-            let (angle, flip_x, flip_y) = (linear.angle, linear.flip_x, linear.flip_y);
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("PinX"),
-                &CellWrite::new(pin_x, CellValue::Number(pin.x)),
-            )?;
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("PinY"),
-                &CellWrite::new(pin_y, CellValue::Number(pin.y)),
-            )?;
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("Angle"),
-                &CellWrite::new(literal(angle), CellValue::Number(angle)),
-            )?;
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("FlipX"),
-                &CellWrite::new(
-                    if flip_x { "TRUE" } else { "FALSE" },
-                    CellValue::Bool(flip_x),
+            if !pin.x.is_finite() || !pin.y.is_finite() || !linear.angle.is_finite() {
+                return Err(Error::BadCell("non-finite member transform"));
+            }
+            rebase.push((
+                *id,
+                pin.x,
+                pin.y,
+                linear.angle,
+                linear.flip_x,
+                linear.flip_y,
+            ));
+        }
+        for (id, pin_x, pin_y, angle, flip_x, flip_y) in &rebase {
+            let (pin_x, pin_y, angle) = (*pin_x, *pin_y, *angle);
+            let (flip_x, flip_y) = (*flip_x, *flip_y);
+            for (cell, write) in [
+                (
+                    "PinX",
+                    CellWrite::new(literal(pin_x), CellValue::Number(pin_x)),
                 ),
-            )?;
-            self.write_cell(
-                SheetRef::Shape(*id),
-                &CellName::from_static("FlipY"),
-                &CellWrite::new(
-                    if flip_y { "TRUE" } else { "FALSE" },
-                    CellValue::Bool(flip_y),
+                (
+                    "PinY",
+                    CellWrite::new(literal(pin_y), CellValue::Number(pin_y)),
                 ),
-            )?;
+                (
+                    "Angle",
+                    CellWrite::new(literal(angle), CellValue::Number(angle)),
+                ),
+                (
+                    "FlipX",
+                    CellWrite::new(
+                        if flip_x { "TRUE" } else { "FALSE" },
+                        CellValue::Bool(flip_x),
+                    ),
+                ),
+                (
+                    "FlipY",
+                    CellWrite::new(
+                        if flip_y { "TRUE" } else { "FALSE" },
+                        CellValue::Bool(flip_y),
+                    ),
+                ),
+            ] {
+                self.write_cell(SheetRef::Shape(*id), &CellName::from_static(cell), &write)?;
+            }
         }
         // The children leave the group first, so the detach only takes
         // the group itself (and only its own `Connects`) away.
@@ -1564,6 +1635,12 @@ impl Document {
     /// inverse of its shape transform) before they are written; the path
     /// lands in the shape's own `Geometry` section (the row union rules of
     /// ADR 0019).
+    ///
+    /// The routed path **replaces** the connector's geometry: the rows go
+    /// into the first `Geometry` section and any further `Geometry`
+    /// sections are dropped (task P5-19 review F7, recorded in ADR 0045).
+    /// A connector is one path; a stale second path must not survive a
+    /// re-route. A test pins the collapse.
     pub fn write_connector_path(
         &mut self,
         connector: ShapeId,
@@ -1618,12 +1695,11 @@ impl Document {
         let entity = self.page(page).ok_or(Error::UnknownPage(page))?;
         let mut ids = Vec::new();
         let mut stack: Vec<ShapeId> = entity.shapes.clone();
-        let mut seen = Vec::new();
+        let mut seen: HashSet<ShapeId> = HashSet::new();
         while let Some(id) = stack.pop() {
-            if seen.contains(&id) || seen.len() >= MAX_WALK {
+            if seen.len() >= MAX_WALK || !seen.insert(id) {
                 continue;
             }
-            seen.push(id);
             if let Some(shape) = self.shape(id) {
                 ids.push(shape.visio_id);
                 stack.extend(shape.children.iter().copied());
@@ -1699,19 +1775,20 @@ impl Document {
     }
 
     /// The root's arena ids: the root first, then its descendants
-    /// (arena order), bounded and cycle-safe.
+    /// (arena order), bounded and cycle-safe. The visited set is a
+    /// `HashSet` (task P5-19 review F10: a `Vec::contains` walk is
+    /// O(n²) in a big subtree).
     fn subtree_ids(&self, root: ShapeId) -> Vec<ShapeId> {
         let mut ids = vec![root];
         let mut stack = vec![root];
-        let mut seen = vec![root];
+        let mut seen: HashSet<ShapeId> = HashSet::from([root]);
         while let Some(id) = stack.pop() {
             if seen.len() >= MAX_WALK {
                 break;
             }
             if let Some(shape) = self.shape(id) {
                 for child in &shape.children {
-                    if !seen.contains(child) {
-                        seen.push(*child);
+                    if seen.insert(*child) {
                         ids.push(*child);
                         stack.push(*child);
                     }
@@ -1758,18 +1835,18 @@ impl Document {
 
     /// The position of `shape` in the page's depth-first draw order
     /// (bounded, cycle-safe), for the z-order rule of `group_shapes`.
+    /// The visited set is a `HashSet` (task P5-19 review F10).
     fn walk_position(&self, page: PageId, shape: ShapeId) -> usize {
         let Some(entity) = self.page(page) else {
             return usize::MAX;
         };
         let mut position = 0;
         let mut stack: Vec<ShapeId> = entity.shapes.iter().rev().copied().collect();
-        let mut seen = Vec::new();
+        let mut seen: HashSet<ShapeId> = HashSet::new();
         while let Some(id) = stack.pop() {
-            if seen.contains(&id) || seen.len() >= MAX_WALK {
+            if seen.len() >= MAX_WALK || !seen.insert(id) {
                 continue;
             }
-            seen.push(id);
             if id == shape {
                 return position;
             }
@@ -1818,14 +1895,29 @@ impl Document {
     }
 
     /// The size of a master's own shape (the `Width`/`Height` the master
-    /// documents, ADR 0034), or [`Error::BadCell`] when it has none.
+    /// documents, ADR 0034), or [`Error::BadCell`] when it has none or
+    /// documents a non-finite one.
+    ///
+    /// The non-finite check runs on the shape's own cached entries,
+    /// before the cached-value policy (ADR 0021) folds a NaN into `0`:
+    /// a master that documents a NaN size is an error, not a zero-sized
+    /// instance (task P5-19 coverage: the guard is reachable and has a
+    /// test).
     fn master_size(&self, master: MasterId) -> Result<Size, Error> {
         let shape = self
             .master(master)
             .and_then(|entity| entity.shapes.first().copied())
             .ok_or(Error::BadCell("master has no shapes"))?;
+        let documents_bad = self.shape(shape).is_some_and(|entity| {
+            ["Width", "Height"].iter().any(|name| {
+                entity.sheet.cells.iter().any(|cell| {
+                    cell.name.as_str() == *name
+                        && matches!(cell.value, Some(CellValue::Number(value)) if !value.is_finite())
+                })
+            })
+        });
         let frame = self.frame_of(shape)?;
-        if !frame.size.width.is_finite() || !frame.size.height.is_finite() {
+        if documents_bad || !frame.size.width.is_finite() || !frame.size.height.is_finite() {
             return Err(Error::BadCell("non-finite master size"));
         }
         Ok(frame.size)
@@ -2659,6 +2751,81 @@ mod tests {
         );
     }
 
+    /// Review F2 (task P5-19): two shapes whose cached pins sit near
+    /// ±1e308 make the bounding-box extent overflow to infinity. The
+    /// check fires **before** the first mutation (the ADR 0039
+    /// amendment "a failed mutation changes nothing"): one `BadCell`,
+    /// the document byte-identical.
+    #[test]
+    fn group_shapes_rejects_an_overflowing_extent_before_mutating() {
+        let (mut doc, page) = document();
+        let mut left = box_shape(2.0, 1.0);
+        left.sheet.cells = vec![
+            number_cell("Width", 2.0),
+            number_cell("Height", 1.0),
+            number_cell("PinX", -1e308),
+            number_cell("PinY", 0.0),
+        ];
+        let mut right = box_shape(2.0, 1.0);
+        right.sheet.cells = vec![
+            number_cell("Width", 2.0),
+            number_cell("Height", 1.0),
+            number_cell("PinX", 1e308),
+            number_cell("PinY", 0.0),
+        ];
+        let a = doc.insert_shape(page, left, None).expect("a");
+        let b = doc.insert_shape(page, right, None).expect("b");
+        let before = doc.clone();
+        let error = doc.group_shapes(page, &[a, b]).expect_err("overflow");
+        assert!(matches!(error, Error::BadCell(_)), "got {error:?}");
+        assert_eq!(doc, before, "a failed mutation changes nothing");
+    }
+
+    /// Review F2 (task P5-19) for `ungroup_shape`: the members'
+    /// re-based transforms are computed and checked before the first
+    /// write; a mid-loop failure cannot leave some members re-based and
+    /// the group intact.
+    #[test]
+    fn ungroup_rejects_an_overflowing_member_transform_before_mutating() {
+        let (mut doc, page) = document();
+        let mut group = box_shape(2.0, 1.0);
+        group.sheet.cells = vec![
+            number_cell("Width", 2.0),
+            number_cell("Height", 1.0),
+            number_cell("PinX", 1e308),
+            number_cell("PinY", 0.0),
+        ];
+        let group = doc.insert_shape(page, group, None).expect("g");
+        let mut member = box_shape(1.0, 1.0);
+        member.sheet.cells = vec![
+            number_cell("Width", 1.0),
+            number_cell("Height", 1.0),
+            number_cell("PinX", 1e308),
+            number_cell("PinY", 0.0),
+        ];
+        doc.insert_subshape(group, member, None).expect("m");
+        let before = doc.clone();
+        let error = doc.ungroup_shape(group).expect_err("overflow");
+        assert!(matches!(error, Error::BadCell(_)), "got {error:?}");
+        assert_eq!(doc, before, "a failed mutation changes nothing");
+    }
+
+    #[test]
+    fn master_size_rejects_a_non_finite_master_width() {
+        let (mut doc, page) = document();
+        let mut content = box_shape(1.0, 1.0);
+        content.sheet.cells = vec![number_cell("Width", f64::NAN), number_cell("Height", 1.0)];
+        let content = doc.insert_shape(page, content, None).expect("c");
+        let mut master = Master::new(MasterId { index: 0 }, 0);
+        master.name_u = "Bad".to_owned();
+        master.shapes.push(content);
+        let master = doc.add_master(master).expect("master");
+        let error = doc
+            .instantiate_master(master, page, Point::new(0.0, 0.0), None)
+            .expect_err("non-finite master size");
+        assert_eq!(error, Error::BadCell("non-finite master size"));
+    }
+
     #[test]
     fn write_connector_path_maps_page_points_into_the_local_box() {
         let (mut doc, page) = document();
@@ -2716,7 +2883,8 @@ mod tests {
 
     #[test]
     fn unique_names_append_the_counter() {
-        let taken = vec!["Box".to_owned(), "Box (2)".to_owned()];
+        let names = ["Box".to_owned(), "Box (2)".to_owned()];
+        let taken: BTreeSet<&str> = names.iter().map(String::as_str).collect();
         assert_eq!(unique_name_u("New", &taken), "New");
         assert_eq!(unique_name_u("Box", &taken), "Box (3)");
     }
@@ -3201,10 +3369,10 @@ mod tests {
 
     #[test]
     fn unique_name_u_falls_back_when_the_range_is_full() {
-        let mut taken = vec!["Box".to_owned()];
-        for n in 2..10_000u32 {
-            taken.push(format!("Box ({n})"));
-        }
+        let names: Vec<String> = std::iter::once("Box".to_owned())
+            .chain((2..10_000u32).map(|n| format!("Box ({n})")))
+            .collect();
+        let taken: BTreeSet<&str> = names.iter().map(String::as_str).collect();
         assert_eq!(unique_name_u("Box", &taken), "Box");
     }
 
@@ -3219,9 +3387,15 @@ mod tests {
         assert_eq!(doc.shape(id).expect("shape").children, vec![child]);
         let mut bad = box_shape(1.0, 1.0);
         bad.children = vec![ShapeId { index: 999 }];
+        let before = doc.shapes.len();
         assert_eq!(
             doc.insert_shape(page, bad, None),
             Err(Error::UnknownShape(ShapeId { index: 999 }))
+        );
+        assert_eq!(
+            doc.shapes.len(),
+            before,
+            "a stale child leaves no unnamed arena entry (task P5-19, F11)"
         );
     }
 

@@ -687,24 +687,6 @@ pub(crate) fn section_ix_of(section: &Section) -> Option<i32> {
         .and_then(|attribute| attribute.value.trim().parse::<i32>().ok())
 }
 
-/// The cell of one row of a repeated section, or of the section itself when
-/// `row` is `None` (a section-level cell like `NoFill`).
-fn repeated_cell<'a>(
-    section: &'a Section,
-    row: Option<usize>,
-    cell: &CellName,
-) -> Option<&'a Cell> {
-    match row {
-        None => section.cells.iter().find(|c| c.name == *cell),
-        Some(row) => section
-            .rows
-            .get(row)?
-            .cells
-            .iter()
-            .find(|c| c.name == *cell),
-    }
-}
-
 /// The cell of the row that matches a row at `row` with `IX` `row_ix`: by
 /// `IX` when both sides have one, else by position (ADR 0019 decision 5).
 ///
@@ -723,7 +705,9 @@ fn matched_row_cell<'a>(
     cell: &CellName,
 ) -> Option<&'a Cell> {
     let matched = match (row, row_ix) {
-        (None, None) => return repeated_cell(section, None, cell),
+        (None, None) => {
+            return section.cells.iter().find(|c| c.name == *cell);
+        }
         (None, Some(row_ix)) => section
             .rows
             .iter()

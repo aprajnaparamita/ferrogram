@@ -738,8 +738,9 @@ fn group_shapes_rejects_a_non_finite_bounding_box() {
 #[test]
 fn group_shapes_reports_a_non_finite_member_pin() {
     // The bounding box of the two members is finite but wider than the
-    // finite plane allows: the member pins leave the local box as `inf`
-    // and the cell write rejects them (ADR 0038 rule 1).
+    // finite plane allows: the extent overflows to `inf` and the check
+    // runs before the first mutation (ADR 0039 amendment: a failed
+    // mutation changes nothing, task P5-19 review F2).
     let (mut doc, page) = document();
     let first = doc
         .insert_shape(
@@ -755,10 +756,12 @@ fn group_shapes_reports_a_non_finite_member_pin() {
             None,
         )
         .expect("second");
+    let before = doc.clone();
     assert_eq!(
         doc.group_shapes(page, &[first, second]),
-        Err(Error::BadCell("non-finite number"))
+        Err(Error::BadCell("non-finite group extent"))
     );
+    assert_eq!(doc, before, "the document is unchanged");
 
     let (mut doc, page) = document();
     let first = doc
@@ -775,47 +778,57 @@ fn group_shapes_reports_a_non_finite_member_pin() {
             None,
         )
         .expect("second");
+    let before = doc.clone();
     assert_eq!(
         doc.group_shapes(page, &[first, second]),
-        Err(Error::BadCell("non-finite number"))
+        Err(Error::BadCell("non-finite group extent"))
     );
+    assert_eq!(doc, before, "the document is unchanged");
 }
 
 #[test]
 fn ungroup_reports_a_non_finite_pin_or_angle() {
-    // The dissolved group's transform sends the child's pin to `inf` in x.
+    // The dissolved group's transform sends the child's pin to `inf` in
+    // x: the member transforms are computed and checked before the
+    // first write (task P5-19 review F2).
     let (mut doc, page) = document();
     let child = doc.add_shape(framed_shape(1.7e308, 0.0, 0.5, 0.5, 0.0, 1.0, 1.0));
     let mut group = framed_shape(1.7e308, 0.0, -1.7e308, 0.5, 0.0, 1.0, 1.0);
     group.children = vec![child];
     let group = doc.insert_shape(page, group, None).expect("group");
+    let before = doc.clone();
     assert_eq!(
         doc.ungroup_shape(group),
-        Err(Error::BadCell("non-finite number"))
+        Err(Error::BadCell("non-finite member transform"))
     );
+    assert_eq!(doc, before, "the document is unchanged");
 
-    // The same overflow in y: the `PinX` write succeeds first.
+    // The same overflow in y.
     let (mut doc, page) = document();
     let child = doc.add_shape(framed_shape(0.0, 1.7e308, 0.5, 0.5, 0.0, 1.0, 1.0));
     let mut group = framed_shape(0.0, 1.7e308, 0.5, -1.7e308, 0.0, 1.0, 1.0);
     group.children = vec![child];
     let group = doc.insert_shape(page, group, None).expect("group");
+    let before = doc.clone();
     assert_eq!(
         doc.ungroup_shape(group),
-        Err(Error::BadCell("non-finite number"))
+        Err(Error::BadCell("non-finite member transform"))
     );
+    assert_eq!(doc, before, "the document is unchanged");
 
-    // Finite pins but an absorbed rotation that sums to `inf`: only the
-    // `Angle` write fails.
+    // Finite pins but an absorbed rotation that sums to `inf`: the
+    // angle is checked with the pins.
     let (mut doc, page) = document();
     let child = doc.add_shape(framed_shape(1.0, 1.0, 0.5, 0.5, 1.0e308, 1.0, 1.0));
     let mut group = framed_shape(0.0, 0.0, 0.5, 0.5, 1.0e308, 1.0, 1.0);
     group.children = vec![child];
     let group = doc.insert_shape(page, group, None).expect("group");
+    let before = doc.clone();
     assert_eq!(
         doc.ungroup_shape(group),
-        Err(Error::BadCell("non-finite number"))
+        Err(Error::BadCell("non-finite member transform"))
     );
+    assert_eq!(doc, before, "the document is unchanged");
 }
 
 #[test]
