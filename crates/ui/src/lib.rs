@@ -74,6 +74,12 @@ pub enum UiError {
         /// The formatted cause.
         message: String,
     },
+    /// Invalid geometry or snap math (task P5-19 review F8): nothing
+    /// did IO, the numbers could not be computed.
+    Geometry {
+        /// The formatted cause.
+        message: String,
+    },
     /// The operation is not implemented yet (a Phase 5 interface stub,
     /// task P5-01).
     NotImplemented,
@@ -86,6 +92,7 @@ impl fmt::Display for UiError {
             UiError::Layout(error) => write!(f, "ui-spec error: {error}"),
             UiError::Io { message } => write!(f, "io error: {message}"),
             UiError::Render { message } => write!(f, "render error: {message}"),
+            UiError::Geometry { message } => write!(f, "geometry error: {message}"),
             UiError::NotImplemented => write!(f, "not implemented yet"),
         }
     }

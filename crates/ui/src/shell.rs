@@ -1155,35 +1155,19 @@ fn with_choice(invocation: &Invocation, choice: FileChoice) -> Invocation {
 /// Dispatches one already-built invocation; the seam the CLI and the
 /// Phase 8 control channel reuse (ADR 0028).
 ///
-/// The command's undoable edit (when it produced one) is pushed onto
-/// the undo stack of the session the command ran against after a
-/// successful run (ADR 0028). That is the active session **before**
-/// the run, found by its [`DocumentSession::id`](ferrogram_commands::DocumentSession)
-/// (the `with_undo` way, P4-15 open issue 4): a command that opens a
-/// document must not leave its edit on the new document's stack. With
-/// no session before the run (the command opened the first document)
-/// the edit belongs to the session it opened.
+/// A thin wrapper over [`ferrogram_commands::dispatch`]:
+/// the run and the undo-step recording (the session the command ran
+/// against, ADR 0040 rule 2) live in `ferrogram_commands`, so every
+/// programmatic caller shares one rule (task P5-19 review F3).
 pub fn dispatch_one(
     registry: &Registry,
     app: &mut AppCtx,
     command: &CommandId,
     invocation: Invocation,
 ) -> Result<Outcome, UiError> {
-    let ran_against = app.active_document().map(|session| session.id);
-    let mut outcome = registry
-        .execute(command, app, invocation)
-        .map_err(UiError::Command)?;
-    if let Some(edit) = outcome.edit.take() {
-        // ADR 0040 rule 2: `push_edit` is the only push path. It finds
-        // the session by id (never by index) and applies the
-        // recording gate.
-        let target = ran_against.or_else(|| app.active_document().map(|session| session.id));
-        match target {
-            Some(id) => app.push_edit(id, edit).map_err(UiError::Command)?,
-            None => app.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
+    Ok(ferrogram_commands::dispatch(
+        registry, app, command, invocation,
+    )?)
 }
 
 #[cfg(test)]
