@@ -98,3 +98,13 @@ migration (ADR 0038 rule 4).
 - **Re-route lazily on render only.** Rejected: the written file would
   carry stale geometry; our exit criterion says saved files re-open
   identically.
+
+## Amendment 2026-10-20 (task P5-19): one routed path per connector
+
+Review F7: `Document::write_connector_path` writes the routed path into
+the connector's first `Geometry` section and **drops** the connector's
+other `Geometry` sections. A connector is one routed path; a second path
+would be stale after every re-route and nothing in Phase 5 draws or
+reads it. The collapse is documented in the method's doc comment and
+pinned by `write_connector_path_replaces_the_extra_geometry_sections`
+(`crates/model/tests/mutate.rs`, P5-11).
