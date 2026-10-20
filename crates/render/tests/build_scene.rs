@@ -1221,3 +1221,279 @@ fn color_boxes_renders_filled_and_stroked_shapes() {
     assert!(filled > 0, "no filled shape in the scene");
     assert!(stroked > 0, "no stroked shape in the scene");
 }
+
+// --- builder fallbacks (task P5-20) ---------------------------------
+
+#[test]
+fn a_scale_that_is_not_positive_falls_back_to_the_default() {
+    // `BuildOptions::scale` that is zero, negative or not finite becomes
+    // `DEFAULT_SCALE` (the flattening tolerance must stay positive).
+    let (mut doc, page, shape) = document_with_shape();
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![
+            grow("MoveTo", &[("X", 0.0), ("Y", 0.0)]),
+            grow("ArcTo", &[("X", 1.0), ("Y", 0.0), ("A", 0.2)]),
+        ],
+    );
+    for scale in [0.0, -3.0, f64::NAN, f64::INFINITY] {
+        let options = BuildOptions {
+            background: true,
+            scale,
+        };
+        let scene = build_scene(&doc, page, &options).expect("builds");
+        assert!(!scene.nodes.is_empty(), "scale {scale}");
+    }
+}
+
+#[test]
+fn a_background_page_the_document_lacks_draws_an_empty_group() {
+    // A `BackPage` that names a page the document does not hold degrades
+    // to an empty background group, never an error and never a panic.
+    let (mut doc, page, shape) = document_with_shape();
+    if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+        entity.background = Some(PageId { index: 9 });
+    }
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+    );
+    let scene = build(&doc);
+    match scene.nodes.first() {
+        Some(Node::Group(group)) => assert!(group.children.is_empty(), "{group:?}"),
+        other => panic!("expected the empty background group, got {other:?}"),
+    }
+    assert_eq!(scene.nodes.len(), 2, "the page's own shape follows it");
+}
+
+#[test]
+fn a_degenerate_infinite_line_row_draws_no_segment() {
+    // `clip_infinite_line` degrades to "no segment": a line that misses
+    // the page and a zero-length direction both draw nothing instead of
+    // poisoning the path with NaN points.
+    let cases: [[(&str, f64); 4]; 3] = [
+        // Parallel above the page: the line never crosses it.
+        [("X", 0.0), ("Y", 50.0), ("A", 1.0), ("B", 50.0)],
+        // Diagonal above the page: the clip window is empty.
+        [("X", 0.0), ("Y", 50.0), ("A", 1.0), ("B", 51.0)],
+        // One point twice: no direction at all.
+        [("X", 1.0), ("Y", 1.0), ("A", 1.0), ("B", 1.0)],
+    ];
+    for cells in cases {
+        let (mut doc, _page, shape) = document_with_shape();
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.sheet.cells = vec![
+                number_cell("Width", 2.0),
+                number_cell("Height", 1.0),
+                number_cell("PinX", 1.0),
+                number_cell("PinY", 0.5),
+            ];
+        }
+        with_geometry(
+            &mut doc,
+            shape,
+            vec![
+                grow("MoveTo", &[("X", 0.0), ("Y", 0.0)]),
+                grow("InfiniteLine", &cells),
+            ],
+        );
+        let scene = build(&doc);
+        assert_eq!(
+            first_path(&scene),
+            vec![Segment::MoveTo(Point::new(0.0, 0.0))],
+            "the row draws nothing: {cells:?}"
+        );
+    }
+}
+
+#[test]
+fn a_field_marker_draws_no_run_of_its_own() {
+    // The `fld` marker maps to nothing (`TextPart::Field`'s empty arm);
+    // its cached display text follows as a literal.
+    let (mut doc, _page, shape) = document_with_shape();
+    {
+        let entity = doc.shape_mut(shape).expect("shape");
+        entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
+        entity.text = Some(TextContent {
+            parts: vec![
+                TextPart::Field { ix: 0 },
+                TextPart::Text("cached".to_owned()),
+            ],
+        });
+    }
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+    );
+    let scene = build(&doc);
+    let text = first_shape(&scene)
+        .expect("shape")
+        .text
+        .as_ref()
+        .expect("text");
+    assert_eq!(text.runs.len(), 1, "only the literal text is a run");
+}
+
+#[test]
+fn a_zero_character_size_still_lays_the_text_out() {
+    // A `Size` of zero is not a layout size: `run_style` substitutes
+    // `DEFAULT_SIZE_PT`, so `paragraph_of`'s "no first size" arm
+    // (`build.rs`'s line-spacing `else`) is unreachable. What stays
+    // pinned here is the outcome: a zero-size paragraph lays out.
+    let (mut doc, _page, shape) = document_with_shape();
+    {
+        let entity = doc.shape_mut(shape).expect("shape");
+        entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
+        let mut character = Section::new(SectionName::new("Character"));
+        let mut size = Row::new();
+        size.ix = Some(0);
+        size.cells = vec![number_cell("Size", 0.0)];
+        character.rows.push(size);
+        entity.sheet.sections.push(character);
+        let mut paragraph = Section::new(SectionName::new("Paragraph"));
+        let mut spacing = Row::new();
+        spacing.ix = Some(0);
+        spacing.cells = vec![number_cell("SpLine", 2.0)];
+        paragraph.rows.push(spacing);
+        entity.sheet.sections.push(paragraph);
+        entity.text = Some(TextContent {
+            parts: vec![
+                TextPart::CharRun { ix: 0 },
+                TextPart::ParaRun { ix: 0 },
+                TextPart::Text("Hi".to_owned()),
+            ],
+        });
+    }
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+    );
+    let scene = build(&doc);
+    let text = first_shape(&scene)
+        .expect("shape")
+        .text
+        .as_ref()
+        .expect("text");
+    assert!(
+        !text.layout.lines.is_empty(),
+        "the text still lays out at the fallback spacing"
+    );
+}
+
+#[test]
+fn a_tiled_fill_pattern_scales_the_unit_box_tile() {
+    // `FillPattern` 8 draws the dotted tile: the template's unit-box
+    // tile (curves and closes) scales by the pitch (`scale_path`).
+    let (mut doc, _page, shape) = document_with_shape();
+    {
+        let entity = doc.shape_mut(shape).expect("shape");
+        entity.sheet.cells = vec![
+            number_cell("Width", 2.0),
+            number_cell("Height", 1.0),
+            number_cell("FillPattern", 8.0),
+        ];
+    }
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![
+            grow("MoveTo", &[("X", 0.0), ("Y", 0.0)]),
+            grow("LineTo", &[("X", 2.0), ("Y", 0.0)]),
+            grow("LineTo", &[("X", 2.0), ("Y", 1.0)]),
+            grow("LineTo", &[("X", 0.0), ("Y", 1.0)]),
+            grow("LineTo", &[("X", 0.0), ("Y", 0.0)]),
+        ],
+    );
+    let scene = build(&doc);
+    match &first_shape(&scene).expect("shape").fill {
+        Some(Paint::Pattern(pattern)) => {
+            let segments = pattern.tile.segments();
+            assert!(
+                segments
+                    .iter()
+                    .any(|segment| matches!(segment, Segment::CubicTo { .. })),
+                "the tile carries its curves: {segments:?}"
+            );
+            assert!(
+                segments
+                    .iter()
+                    .any(|segment| matches!(segment, Segment::Close)),
+                "the tile carries its close: {segments:?}"
+            );
+        }
+        other => panic!("expected a pattern fill, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_second_spline_start_flushes_the_first_curve() {
+    // Two `SplineStart` rows in one section: the first pending curve is
+    // flushed when the second starts (a stray start is not lost).
+    let start = |x, y| {
+        grow(
+            "SplineStart",
+            &[
+                ("X", x),
+                ("Y", y),
+                ("A", 1.0),
+                ("B", 0.0),
+                ("C", 2.0),
+                ("D", 2.0),
+            ],
+        )
+    };
+    let (mut doc, _page, shape) = document_with_shape();
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![
+            grow("MoveTo", &[("X", 0.0), ("Y", 0.0)]),
+            start(1.0, 1.0),
+            start(3.0, 1.0),
+            grow("SplineKnot", &[("X", 4.0), ("Y", 0.0), ("A", 1.5)]),
+        ],
+    );
+    let path = first_path(&build(&doc));
+    let curves = path
+        .iter()
+        .filter(|segment| matches!(segment, Segment::CubicTo { .. }))
+        .count();
+    assert!(curves >= 2, "both splines flush: {path:?}");
+}
+
+#[test]
+fn a_background_page_chain_nests_its_groups() {
+    // A page whose background page has a background of its own: the
+    // chain renders as nested background groups, each page once (ADR
+    // 0020).
+    let (mut doc, page, shape) = document_with_shape();
+    with_geometry(
+        &mut doc,
+        shape,
+        vec![grow("MoveTo", &[("X", 0.0), ("Y", 0.0)])],
+    );
+    let outer = doc.add_page("Back-1").expect("page");
+    let inner = doc.add_page("Back-2").expect("page");
+    if let Some(entity) = doc.pages.get_mut(page.index as usize) {
+        entity.background = Some(outer);
+    }
+    if let Some(entity) = doc.pages.get_mut(outer.index as usize) {
+        entity.background = Some(inner);
+    }
+    let scene = build(&doc);
+    match scene.nodes.first() {
+        Some(Node::Group(group)) => assert!(
+            group
+                .children
+                .iter()
+                .any(|child| matches!(child, Node::Group(_))),
+            "the chain nests: {group:?}"
+        ),
+        other => panic!("expected the background group, got {other:?}"),
+    }
+}

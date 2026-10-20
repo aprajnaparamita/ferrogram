@@ -7,7 +7,9 @@
 
 use ferrogram_geom::{Path, Point, Segment, Transform};
 use ferrogram_render::scene::{LineCap, LineJoin, Node, Paint, Rgba, Shape, Stroke};
-use ferrogram_render::{Error, PngOptions, RasterOptions, Scene, render_png, render_raster};
+use ferrogram_render::{
+    Error, PngOptions, RasterOptions, Scene, SvgOptions, render_png, render_raster, render_svg,
+};
 
 /// A closed rectangle path in inches.
 fn path_rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Path {
@@ -179,5 +181,216 @@ fn both_backends_report_the_same_cap_errors() {
     assert_eq!(
         render_raster(&empty, &RasterOptions::new()).expect_err("degenerate"),
         Error::TooLarge
+    );
+}
+
+// --- backend fallbacks (task P5-20) ---------------------------------
+
+/// A text block with one glyph at (0.1, 0.1) indexing `font`/`glyph`,
+/// over a white rectangle.
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
+fn glyph_node(font: usize, glyph: u16) -> Node {
+    let stack = ferrogram_text::default_fonts();
+    let layout = ferrogram_text::Layout {
+        width: 1.0,
+        height: 0.2,
+        lines: vec![ferrogram_text::Line {
+            glyphs: vec![ferrogram_text::GlyphPos {
+                glyph: ferrogram_text::GlyphId(glyph),
+                font,
+                x: 0.1,
+                y: 0.1,
+                run: 0,
+                size: 12.0,
+            }],
+            baseline: 0.1,
+            width: 1.0,
+            paragraph: 0,
+        }],
+        ..ferrogram_text::Layout::default()
+    };
+    Node::Shape(Box::new(Shape {
+        shape_id: None,
+        transform: Transform::identity(),
+        path: path_rect(0.1, 0.1, 1.0, 1.0),
+        fill: Some(Paint::Solid(Rgba::opaque(255, 255, 255))),
+        stroke: None,
+        shadow: None,
+        clip: None,
+        text: Some(ferrogram_render::scene::TextNode {
+            fonts: stack.fonts().to_vec(),
+            runs: Vec::new(),
+            layout,
+            color: Rgba::opaque(0, 0, 0),
+            origin: Point::new(0.1, 0.1),
+        }),
+    }))
+}
+
+#[test]
+fn a_glyph_the_font_does_not_have_is_skipped_by_both_backends() {
+    // `Font::outline` has no such glyph: the glyph is skipped and both
+    // backends still draw the scene.
+    let mut scene = Scene::new(2.0, 1.5);
+    scene.nodes.push(glyph_node(0, u16::MAX));
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
+    );
+    assert!(
+        !render_svg(&scene, &SvgOptions::new())
+            .expect("svg")
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_font_the_block_does_not_have_is_skipped_by_both_backends() {
+    // The glyph names a font index the block does not carry: the glyph
+    // is skipped and both backends still draw the scene.
+    let mut scene = Scene::new(2.0, 1.5);
+    scene.nodes.push(glyph_node(usize::MAX, 3));
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
+    );
+    assert!(
+        !render_svg(&scene, &SvgOptions::new())
+            .expect("svg")
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_zero_sized_pattern_tile_transforms_by_the_identity() {
+    // A pattern tile of no size has no pixels to scale by: the tile
+    // transform is the identity and the fill still paints.
+    let tile = Paint::Pattern(ferrogram_render::scene::PatternPaint {
+        foreground: Rgba::opaque(0, 0, 0),
+        background: Rgba::opaque(255, 255, 255),
+        tile: Path::new(),
+        tile_size: ferrogram_geom::Size::new(0.0, 0.0),
+        filled: true,
+        tile_stroke_width: 0.0,
+    });
+    let mut scene = Scene::new(2.0, 1.5);
+    scene
+        .nodes
+        .push(shape(path_rect(0.1, 0.1, 1.0, 1.0), Some(tile), None));
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
+    );
+    assert!(
+        !render_svg(&scene, &SvgOptions::new())
+            .expect("svg")
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_clipped_shape_writes_its_clip_path() {
+    // A node clip becomes an SVG `clipPath` def and a `clip-path`
+    // attribute (and the raster clips without one).
+    let mut node = shape(
+        path_rect(0.1, 0.1, 1.0, 1.0),
+        Some(Paint::Solid(Rgba::opaque(255, 0, 0))),
+        None,
+    );
+    if let Node::Shape(shape) = &mut node {
+        shape.clip = Some(ferrogram_render::scene::Clip {
+            path: path_rect(0.2, 0.2, 0.6, 0.6),
+        });
+    }
+    let mut scene = Scene::new(2.0, 1.5);
+    scene.nodes.push(node);
+    let svg = render_svg(&scene, &SvgOptions::new()).expect("svg");
+    assert!(svg.contains("clipPath"), "{svg}");
+    assert!(svg.contains("clip-path"), "{svg}");
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_line_end_on_a_degenerate_path_draws_no_marker() {
+    // The path has no direction to aim a line end at (`endpoint`'s
+    // degenerate arms): the marker is skipped and the stroke still
+    // draws.
+    let arrow = ferrogram_render::scene::LineEnd {
+        shape: {
+            let mut path = Path::new();
+            path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
+            path.push(Segment::LineTo(Point::new(1.0, 0.5)));
+            path.push(Segment::LineTo(Point::new(0.0, 1.0)));
+            path.push(Segment::Close);
+            path
+        },
+        width: 0.1,
+        length: 0.1,
+        filled: true,
+        color: None,
+    };
+    let stroke = Stroke {
+        paint: Paint::Solid(Rgba::opaque(0, 0, 0)),
+        width: 0.05,
+        dash: Vec::new(),
+        cap: LineCap::Butt,
+        join: LineJoin::Miter,
+        miter_limit: 4.0,
+        start: Some(arrow),
+        end: Some(ferrogram_render::scene::LineEnd {
+            shape: Path::new(),
+            width: 0.1,
+            length: 0.1,
+            filled: true,
+            color: None,
+        }),
+    };
+    // `MoveTo` then `Close`: the start has no direction (`Close` is the
+    // first segment after the move); the end has none either.
+    let mut degenerate = Path::new();
+    degenerate.push(Segment::MoveTo(Point::new(0.5, 0.5)));
+    degenerate.push(Segment::Close);
+    let mut scene = Scene::new(2.0, 1.5);
+    scene.nodes.push(shape(degenerate, None, Some(stroke)));
+    let svg = render_svg(&scene, &SvgOptions::new()).expect("svg");
+    assert!(!svg.contains("marker"), "{svg}");
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_shadow_of_an_unstroked_shape_writes_its_path_alone() {
+    // A shadowed shape with no stroke: the shadow path carries no
+    // stroke attributes.
+    let mut node = shape(
+        path_rect(0.1, 0.1, 1.0, 1.0),
+        Some(Paint::Solid(Rgba::opaque(255, 0, 0))),
+        None,
+    );
+    if let Node::Shape(shape) = &mut node {
+        shape.shadow = Some(ferrogram_render::scene::Shadow {
+            color: Rgba::new(0, 0, 0, 128),
+            offset: Point::new(0.1, -0.1),
+            blur: 0.05,
+        });
+    }
+    let mut scene = Scene::new(2.0, 1.5);
+    scene.nodes.push(node);
+    let svg = render_svg(&scene, &SvgOptions::new()).expect("svg");
+    assert!(!svg.is_empty());
+    assert!(
+        !render_png(&scene, &PngOptions::default())
+            .expect("png")
+            .is_empty()
     );
 }
