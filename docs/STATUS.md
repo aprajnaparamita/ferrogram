@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group F: P5-11)
+- Current phase: **5 in progress** (group G: P5-12, P5-13, P5-14)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -26,10 +26,10 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-17](tasks/P5-17.md) | implementer | P5-06, P5-07, P5-08 | D2 | merged `b9fbb07` (tool commands, Shapes-window drag, text editor in the shell, indexed glue, `connector.draw`) | — |
 | [P5-18](tasks/P5-18.md) | test-engineer | P5-08 | D2 | merged `3c9da58` (tests only; commands coverage 98.1% on main, at the ratchet; merge gate green) | — |
 | [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09, P5-16..P5-18 | E | merged `2a749a0` (flowchart exit harness, parity commands table: 977 rows, 84 implemented / 880 stub / 13 out-of-scope) | — |
-| [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | ready (undo property, glue, UI interaction, drag timing, fuzz seeds) | — |
-| [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | waiting | — |
-| [P5-13](tasks/P5-13.md) | coverage-auditor | P5-11 | G | waiting | — |
-| [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | waiting | — |
+| [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | merged `b4cf7f0` (undo property, glue tests, drag timing, per-target fuzz seeds; 8 product fixes) | — |
+| [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | ready | — |
+| [P5-13](tasks/P5-13.md) | coverage-auditor | P5-11 | G | ready | — |
+| [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | ready | — |
 
 Tasks in one group run in parallel on disjoint files. Shared files: `crates/commands/src/builtins/mod.rs`, `crates/commands/src/app.rs` and `xtask/src/extract/commands.rs` belong to P5-04 (later tasks use their own `TABLE` modules); `crates/ui/src/{lib,shell,canvas}.rs` and `crates/ui/Cargo.toml` to P5-05 (later tasks request lines in their Results); `crates/model/src/mutate.rs` and the `vsdx` writer to P5-02. The master resolves `Cargo.lock`. Fix tasks follow the audits.
 
@@ -210,4 +210,5 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P5-17 (open): the registry has no checked-state seam, so tool commands cannot report themselves checked. Typing on a selected shape does not open the editor, and Escape does not return to the pointer tool (no binding; check in a black-box check). The tool choice is application-wide, not per document. A free connector end lives in the connector's local geometry and moves with it. The shell takes Escape from `view.full_screen_mode` while the editor or a stencil drag is active. `connector.draw` is a new Ferrogram-only id (977 rows). The worker also removed two unreachable checks in `insert.rs`. Commands coverage was still 97.9% after the rebase; P5-18 restores it.
 - P5-18 (closed): tests only, no bugs found. The branch measured 98.2% before P5-17; on main after both merges it is 98.1% (7491/7635), exactly at the ratchet, so the merge gate is green with no margin. The remaining uncovered lines are listed in its Result; most are `?` arms of constructors after validated ids.
 - P5-10 (open): the ADR 0048 comparison in the flowchart harness canonicalises `ShapeId`s and drops two reader artefacts. `crates/vsdx` keeps the writer's `U="BOOL"`/`U="STR"` kind spelling in `Cell::preserved`, and keeps the `<Rel>` child of a read `Page`/`Master` in `Preserved`; a reader fix would remove both rules (Phase 6 candidate). The out-of-scope match for command rows is case-insensitive, and a command whose every Fluent id is out of scope is out of scope too. Some `commands.yaml` labels are extractor artefacts (`tools.macro.dlg` "Dlg"). `file.new` makes a document with no pages; check Visio's new-drawing behavior in a black-box check. The `ferrogram-model` dev-dependency of `apps/ferrogram` was accepted with its `Cargo.lock` line.
+- P5-11 (open): tests found and fixed eight product bugs (`Connect` restore order, z-order and group undo, page snapshot restore, missing re-route after paste/duplicate/drop glue, grouped connector transform, drop glue treated as a connector, the 80–110 ms pointer drag frame now 0.6–1.6 ms). The draw, connector and stencil drags still rebuild the page scene per snap call. A pasted fragment's `Connect` records naming targets outside the copied set need a test. Routed-path comparisons fold to 12 significant digits because a free end drifts by an ulp per re-route pass.
 - P5-09 (open): align and distribute ignore `Angle`; check Visio's rotated behavior in a black-box check. `arrange.align.center` (the Fluent row) is not implemented; `arrange.align.center_x` is. Group, ungroup and insert undo leave detached arena entries, so the P5-11 undo property must compare reachable state, not `Document` equality (or an arena-compaction ADR). Page undo snapshots the whole page list. Cross-document paste keeps a `Master` link the target may lack; the writer needs a dangling-master rule before that ships. The shortcut extractor drops "open the page tab context menu" (no mapped action).
