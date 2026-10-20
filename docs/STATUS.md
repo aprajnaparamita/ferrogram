@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 in progress** (group G: P5-12, P5-13, P5-14)
+- Current phase: **5 in progress** (group G: P5-13, P5-14)
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -27,7 +27,7 @@ Task board. Only the master agent edits this file, on `main`.
 | [P5-18](tasks/P5-18.md) | test-engineer | P5-08 | D2 | merged `3c9da58` (tests only; commands coverage 98.1% on main, at the ratchet; merge gate green) | — |
 | [P5-10](tasks/P5-10.md) | implementer | P5-06..P5-09, P5-16..P5-18 | E | merged `2a749a0` (flowchart exit harness, parity commands table: 977 rows, 84 implemented / 880 stub / 13 out-of-scope) | — |
 | [P5-11](tasks/P5-11.md) | test-engineer | P5-10 | F | merged `b4cf7f0` (undo property, glue tests, drag timing, per-target fuzz seeds; 8 product fixes) | — |
-| [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | ready | — |
+| [P5-12](tasks/P5-12.md) | reviewer | P5-11 | G | merged `cb2c5cf` (approve with fixes: 0 blocker, 3 major, 7 minor; fixes go to one follow-up task after P5-13/14) | — |
 | [P5-13](tasks/P5-13.md) | coverage-auditor | P5-11 | G | ready | — |
 | [P5-14](tasks/P5-14.md) | cleanroom-auditor | P5-11 | G | ready | — |
 
