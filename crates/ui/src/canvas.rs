@@ -75,9 +75,9 @@ const ZOOM_PER_WHEEL_LINE: f64 = 1.1;
 /// AGENTS.md section 6).
 const MAX_RASTER_BYTES: u64 = 256 * 1024 * 1024;
 
-/// The page size when a page has no positive size (matches the scene
-/// builder's fallback).
-const FALLBACK_PAGE_SIZE: (f64, f64) = (8.5, 11.0);
+// The page size when a page has no positive size: the scene builder's
+// own fallback.
+use ferrogram_render::FALLBACK_PAGE_SIZE;
 
 /// The smallest raster scale in pixels per inch (keeps a raster of any
 /// zoomable page non-degenerate).

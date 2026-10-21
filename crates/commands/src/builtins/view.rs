@@ -28,10 +28,9 @@ pub const ZOOM_MIN: f64 = 0.05;
 /// The highest zoom (4000%) the view commands and the canvas allow.
 pub const ZOOM_MAX: f64 = 40.0;
 
-/// The page size of a sheet with no positive `PageWidth` or
-/// `PageHeight`: US Letter portrait, per axis (the same fallback the
-/// renderer applies in `ferrogram_render::build`).
-const FALLBACK_PAGE_SIZE: (f64, f64) = (8.5, 11.0);
+// The page size of a sheet with no positive `PageWidth` or
+// `PageHeight`: the renderer's own fallback.
+use ferrogram_render::FALLBACK_PAGE_SIZE;
 
 /// `edit.undo`: reverts the newest edit of the active document.
 pub(super) fn run_undo(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {

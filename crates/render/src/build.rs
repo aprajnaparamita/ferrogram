@@ -640,7 +640,8 @@ fn shape_content(
 /// The page size used when a page has no positive `PageWidth` or
 /// `PageHeight` (US Letter, portrait, in inches). Files without a page
 /// sheet exist in the corpus; a zero-size scene cannot be rasterized.
-const FALLBACK_PAGE_SIZE: (f64, f64) = (8.5, 11.0);
+/// The view commands and the canvas use the same value.
+pub const FALLBACK_PAGE_SIZE: (f64, f64) = (8.5, 11.0);
 
 /// The page size in inches. A missing, zero, negative or non-finite
 /// `PageWidth` or `PageHeight` takes the [`FALLBACK_PAGE_SIZE`] value (the

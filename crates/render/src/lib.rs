@@ -19,7 +19,7 @@ pub mod scene;
 pub mod styles;
 pub mod svg;
 
-pub use build::{BuildOptions, build_scene};
+pub use build::{BuildOptions, FALLBACK_PAGE_SIZE, build_scene};
 pub use error::Error;
 pub use hit::{
     Hit, HitKind, HitOptions, NodePath, hit_marquee, hit_test, node_bounds, scene_bounds,
