@@ -1,6 +1,6 @@
 # 0038: Editing without a formula engine
 
-- Status: accepted
+- Status: superseded by 0056 (Phase 6)
 - Date: 2026-10-18
 - Task: P5-01
 
@@ -84,3 +84,12 @@ behaviour changes with no data change, so no document version is needed.
 - **Flatten master geometry into every instance on edit.** Rejected: it
   breaks the master link semantics and the Phase 6 cross-check target
   (resized master-based shapes recompute geometry).
+
+## Superseded (Phase 6, task P6-01)
+
+ADR 0056 replaces this decision once the formula engine exists: rule 1
+(formula and cached value together) stays for edits recalc does not cover,
+rule 2 (dependents stay stale) becomes incremental recalculation, and
+rule 3 (`scale_geometry`) is retired in favour of recomputed geometry.
+Rule 4's promise held: the replacement changes no stored data, so no
+document migration was needed.

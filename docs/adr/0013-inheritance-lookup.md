@@ -139,3 +139,18 @@ further amendment.
   the common case is one call and provenance is still visible.
 - **Error on cycles.** Rejected: a cycle must not turn a readable file into a
   load failure; the file may still render most shapes correctly.
+
+## Amendments
+
+### Amended 2026-10-21, P6-01 (ADR 0054): the cached snapshot is the sheet's own value
+
+The Phase 2 note above ("its cached snapshot is not used as a fallback")
+is replaced, on corpus evidence (ADR 0054): a cell whose formula is `Inh`
+caches the value **for this sheet** — `corpus/vsdx/testfile1.vsdx`
+instances cache geometry at their own size, not the master's. The lookup
+now splits formula from value: `source` and `formula` come from the rung
+that defines them (`Inh` still defines nothing), while `value` prefers
+the local cell's cached value, snapshot included, and falls back to the
+defining rung's cached value. Provenance is unchanged, so a snapshot can
+no longer hide a resolution bug than it could before: it is pinned by a
+test in task P6-05.
