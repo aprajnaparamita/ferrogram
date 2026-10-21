@@ -17,6 +17,8 @@ publish = false
 ferrogram-geom = { path = "../geom" }
 ferrogram-model = { path = "../model" }
 ferrogram-render = { path = "../render" }
+# The recalc hook after an edit (ADR 0056) drives the ShapeSheet engine.
+ferrogram-shapesheet = { path = "../shapesheet" }
 ferrogram-ui-spec = { path = "../ui-spec" }
 ferrogram-vsdx = { path = "../vsdx" }
 serde = { version = "1", features = ["derive"] }

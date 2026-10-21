@@ -21,6 +21,7 @@ pub mod builtins;
 pub mod clipboard;
 pub mod edit;
 pub mod error;
+pub mod recalc;
 pub mod registry;
 pub mod undo;
 
@@ -33,6 +34,7 @@ pub use edit::CompositeEdit;
 pub use error::{
     CommandError, CommandIdError, NeededInput, PathPurpose, RegistryError, SettingsError,
 };
+pub use recalc::{RecalcReport, recalc_after_edit};
 pub use registry::{CommandMeta, CommandStatus, Registry, StubCommand, dispatch};
 pub use undo::{Edit, UndoStack};
 

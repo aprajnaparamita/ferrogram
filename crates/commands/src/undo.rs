@@ -9,6 +9,7 @@
 
 use crate::app::AppCtx;
 use crate::error::CommandError;
+use ferrogram_shapesheet::CellAddress;
 
 /// Runs `step` with the undo-recording gate closed (ADR 0040 rule 2).
 ///
@@ -45,6 +46,15 @@ pub trait Edit: Send {
 
     /// Reverses the step (undo).
     fn revert(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError>;
+
+    /// The cells this step writes, so the recalc pass after `apply` (and
+    /// after `revert`, ADR 0056) knows what is dirty.
+    ///
+    /// The default is an empty dirty set: a step that changes no cell
+    /// needs nothing recomputed. Task P6-07 fills the real edit types in.
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &[]
+    }
 }
 
 /// The undo stack of one document (ADR 0028, ADR 0029).
