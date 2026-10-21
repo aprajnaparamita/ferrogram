@@ -17,7 +17,7 @@ family, and what a disagreement is logged as.
 
 ### The harness
 
-`crates/shapesheet/tests/crosscheck.rs` runs over the 15 `corpus/vsdx`
+`crates/commands/tests/crosscheck.rs` runs over the 15 `corpus/vsdx`
 files (read through `ferrogram-vsdx` into a `Document`, like every other
 corpus test). With `FERROGRAM_REQUIRE_CORPUS=1` it is mandatory; without
 it, it skips when `corpus/vsdx` is absent. Determinism (ADR 0055) makes

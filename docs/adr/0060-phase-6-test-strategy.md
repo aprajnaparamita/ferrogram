@@ -89,8 +89,8 @@ formula cells (ADR 0058).
 ### Cross-check and exit criterion (`P6-10`)
 
 - The cross-check harness of ADR 0059, in
-  `crates/shapesheet/tests/crosscheck.rs`.
-- **The exit-criterion test** (`crates/shapesheet/tests/exit_resize.rs`):
+  `crates/commands/tests/crosscheck.rs`.
+- **The exit-criterion test** (`crates/commands/tests/exit_resize.rs`):
   read `corpus/vsdx/blue-box.vsdx` (and `qs-box.vsdx`), pick a master
   instance, write `Width`/`Height` through the model mutation API, run
   recalc, and assert the geometry rows equal the master's formulas
