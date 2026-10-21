@@ -8,6 +8,10 @@ license = "MIT"
 publish = false
 
 [dependencies]
+# The engine runs on the document model (ADR 0002: L2 operates on `model`)
+# and uses `geom` for the canonical units of ADR 0011.
+ferrogram-geom = { path = "../geom" }
+ferrogram-model = { path = "../model" }
 
 [lints]
 workspace = true
