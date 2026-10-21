@@ -2,12 +2,19 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **5 complete; paused at the checkpoint** (next: Phase 6, ShapeSheet engine, after the user's "continue")
+- Current phase: **6 (ShapeSheet engine), started 2026-10-21**
+- Phase 6 goal: ShapeSheet engine, core subset (KICKOFF.md). Exit: resizing master-based shapes from the corpus recomputes geometry correctly for supported functions; the phase report gives the agreement rate with cached values.
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 5 complete (2026-10-21, report: [progress/phase-5.md](progress/phase-5.md), tag `phase-5`).
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
+
+## Phase 6 task board
+
+| Task | Role | Depends on | Group | State | Branch |
+|---|---|---|---|---|---|
+| [P6-01](tasks/P6-01.md) | architect | Phase 5 | — | ready | — |
 
 ## Phase 5 task board
 
