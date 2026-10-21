@@ -10,12 +10,17 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use ferrogram_commands::app::AppCtx;
-use ferrogram_commands::{ActiveTool, builtins};
+use ferrogram_commands::{
+    ActiveTool, Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled, Invocation,
+    Outcome, Registry, builtins,
+};
 use ferrogram_ui::shell::Shell;
 use ferrogram_ui_spec::Loader;
 
@@ -32,12 +37,18 @@ struct ShellRig {
 }
 
 impl ShellRig {
-    fn new(mut app: AppCtx) -> Self {
+    fn new(app: AppCtx) -> Self {
+        Self::with_registry(builtins::registry().expect("registry"), app)
+    }
+
+    /// The same rig over a caller-chosen registry (the connector tests
+    /// replace `connector.draw`).
+    fn with_registry(registry: Registry, mut app: AppCtx) -> Self {
         if let Some(session) = app.active_document_mut() {
             session.view.zoom = SHELL_ZOOM;
         }
         let shell = Rc::new(RefCell::new(Shell::new(
-            builtins::registry().expect("registry"),
+            registry,
             Loader::from_embedded().expect("layouts"),
             app,
         )));
@@ -64,6 +75,20 @@ impl ShellRig {
 
     fn run(&mut self) {
         self.harness.run();
+    }
+
+    /// Dispatches one command by id between frames (the group-entry
+    /// commands of the entered-group walk).
+    fn dispatch(&self, id: &'static str) {
+        let command = CommandId::parse(id).expect("id");
+        let intent =
+            ferrogram_ui::Intent::new(command, Invocation::empty(ferrogram_commands::Source::Ui));
+        let mut shell = self.shell.borrow_mut();
+        let results = shell.dispatch(&[intent]).expect("dispatch");
+        for result in results {
+            let outcome = result.expect("the command runs");
+            let _ = outcome;
+        }
     }
 
     fn key(&mut self, modifiers: egui::Modifiers, key: egui::Key) {
@@ -295,4 +320,211 @@ fn a_double_click_on_a_group_still_enters_it() {
         "a group double click still enters it"
     );
     assert!(!shell.app.selection.is_empty(), "the group is selected");
+}
+
+// --- task P5-20: tool-state edge cases ------------------------------
+
+/// An app whose page carries one nested group over (5, 5): `outer` >
+/// `inner` > `member`. The groups draw nothing of their own (an empty
+/// sheet: the scene keeps them as group nodes only), so the only shape
+/// under the pointer is the member and every hit maps through the walk.
+fn app_with_nested_groups() -> (
+    AppCtx,
+    ferrogram_model::ShapeId,
+    ferrogram_model::ShapeId,
+    ferrogram_model::ShapeId,
+) {
+    let (mut app, _base) = app_with_one_shape();
+    let (outer, inner, member) = {
+        let session = app.active_document_mut().expect("session");
+        let member = session.document.add_shape(crate::shape(5.0, 5.0, 5));
+        let inner = session.document.add_shape(ferrogram_model::Shape::new(
+            ferrogram_model::ShapeId { index: 0 },
+            6,
+        ));
+        let outer = session.document.add_shape(ferrogram_model::Shape::new(
+            ferrogram_model::ShapeId { index: 0 },
+            7,
+        ));
+        for (child, parent) in [(member, inner), (inner, outer)] {
+            if let Some(entry) = session.document.shape_mut(child) {
+                entry.parent = Some(parent);
+            }
+            if let Some(entry) = session.document.shape_mut(parent) {
+                entry.children.push(child);
+            }
+        }
+        let page = session.active_page.expect("page");
+        if let Some(page) = session.document.pages.get_mut(page.index as usize) {
+            page.shapes.push(outer);
+        }
+        (outer, inner, member)
+    };
+    (app, outer, inner, member)
+}
+
+#[test]
+fn an_entered_group_never_traps_the_selection() {
+    // The pointer's entered-group hit walk (`tools/pointer.rs`
+    // `selectable_shape`): enter a nested group, click a member, click
+    // outside, and the selection climbs back out instead of staying
+    // stuck inside. The group-entry commands are dispatched directly
+    // (the double-click that runs them is covered by
+    // `a_double_click_on_a_group_still_enters_it`).
+    let (app, outer, inner, member) = app_with_nested_groups();
+    let mut rig = ShellRig::new(app);
+    let inside = rig.screen(5.0, 5.0);
+    let outside = rig.screen(1.0, 1.0);
+
+    // A click at page level maps the deepest hit to the top-level group
+    // (the parent climb).
+    rig.press_at(inside);
+    rig.release_at(inside);
+    {
+        let shell = rig.shell.borrow();
+        assert_eq!(shell.app.selection.shapes, vec![outer], "the climb");
+        assert_eq!(shell.app.selection.entered, None, "page level");
+    }
+
+    // Enter the outer group: the next click maps the hit to the outer
+    // group's direct child (the `entered == Some(parent)` return).
+    rig.dispatch("shape.enter_group");
+    rig.press_at(inside);
+    rig.release_at(inside);
+    {
+        let shell = rig.shell.borrow();
+        assert_eq!(shell.app.selection.shapes, vec![inner], "the outer's child");
+        assert_eq!(shell.app.selection.entered, Some(outer), "inside the outer");
+    }
+
+    // Enter the nested group: the next click selects the member and the
+    // entered group stays.
+    rig.dispatch("shape.enter_group");
+    rig.press_at(inside);
+    rig.release_at(inside);
+    {
+        let shell = rig.shell.borrow();
+        assert_eq!(shell.app.selection.shapes, vec![member], "the member");
+        assert_eq!(shell.app.selection.entered, Some(inner), "still inside");
+    }
+
+    // A click outside clears the selection and the entered group.
+    rig.press_at(outside);
+    rig.release_at(outside);
+    {
+        let shell = rig.shell.borrow();
+        assert!(shell.app.selection.is_empty(), "the click outside cleared");
+        assert_eq!(shell.app.selection.entered, None, "and left the group");
+    }
+
+    // The next click on the same member climbs to the top-level group:
+    // the selection is never stuck inside the nested group.
+    rig.press_at(inside);
+    rig.release_at(inside);
+    {
+        let shell = rig.shell.borrow();
+        assert_eq!(shell.app.selection.shapes, vec![outer], "the climb out");
+        assert_eq!(shell.app.selection.entered, None, "back at page level");
+    }
+}
+
+/// The message the connector tool raises when its master lookup finds
+/// nothing (`tools/connector.rs`).
+const MISSING_MASTER: &str = "the Basic Flowchart Connector master is missing";
+
+/// A `connector.draw` that reports the missing-master failure and counts
+/// its runs.
+struct MissingConnectorMaster(Arc<AtomicUsize>);
+
+impl Command for MissingConnectorMaster {
+    fn meta(&self) -> &CommandMeta {
+        use std::sync::OnceLock;
+        static META: OnceLock<CommandMeta> = OnceLock::new();
+        META.get_or_init(|| {
+            CommandMeta::new(
+                CommandId::parse("connector.draw").expect("id"),
+                "Draw Connector",
+                CommandStatus::Implemented,
+            )
+        })
+    }
+    fn enabled(&self, _ctx: &AppCtx) -> Enabled {
+        Enabled::yes()
+    }
+    fn execute(&self, _ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Err(CommandError::failed(MISSING_MASTER))
+    }
+}
+
+#[test]
+fn the_connector_master_missing_error_reaches_the_status_bar_as_one_line() {
+    // The connector tool raises `UiError::Io { message: MISSING_MASTER }`
+    // when its master lookup finds nothing. The lookup reads the static
+    // stencil catalog, which always ships the "Connector" master, so the
+    // arm cannot fire from a test (an Open issue of the P5-20 Result);
+    // this pins the contract at the seam the error feeds: the one-line
+    // message reaches the status bar and nothing is inserted.
+    let (mut app, _shape) = app_with_one_shape();
+    app.active_tool = ActiveTool::Connector;
+    let runs = Arc::new(AtomicUsize::new(0));
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(MissingConnectorMaster(Arc::clone(&runs))))
+        .expect("register");
+    let mut rig = ShellRig::with_registry(registry, app);
+    let before = rig.page_shape_count();
+
+    // A connector drag long enough to commit (`MIN_DRAG_IN`).
+    let from = rig.screen(2.0, 2.0);
+    let to = rig.screen(4.0, 2.0);
+    rig.drag(from, to);
+
+    assert_eq!(
+        runs.load(Ordering::SeqCst),
+        1,
+        "the drag reached the command"
+    );
+    assert_eq!(rig.page_shape_count(), before, "nothing was inserted");
+    assert_eq!(rig.undo_len(), 0, "nothing to undo");
+    let shell = rig.shell.borrow();
+    let warning = shell
+        .app
+        .warnings
+        .last()
+        .expect("the error reached the status bar");
+    assert!(
+        warning.contains(MISSING_MASTER),
+        "the status line carries the message: {warning}"
+    );
+    assert!(
+        !warning.contains('\n'),
+        "the error is one line: {warning:?}"
+    );
+}
+
+#[test]
+fn a_click_outside_the_text_editor_commits_it() {
+    // The black-box pin (P5-07's question): a click outside the editor
+    // commits the buffer, like Escape (ADR 0044, `TextEditor::show`).
+    let (app, shape) = app_with_one_shape();
+    let mut rig = ShellRig::new(app);
+    let pos = rig.screen(3.0, 3.0);
+    rig.double_click(pos);
+    rig.harness.event(egui::Event::Text("Hello".to_owned()));
+    rig.run();
+
+    // A click on empty page space, well outside the editor's rect.
+    let outside = rig.screen(7.0, 8.0);
+    rig.press_at(outside);
+    rig.release_at(outside);
+
+    assert_eq!(
+        shape_text(&rig.shell.borrow().app, shape).as_deref(),
+        Some("Hello"),
+        "the outside click committed the buffer"
+    );
+    let shell = rig.shell.borrow();
+    let session = shell.app.active_document().expect("session");
+    assert_eq!(session.undo.len(), 1, "one commit, one undo step");
 }

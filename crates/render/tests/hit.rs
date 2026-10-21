@@ -655,3 +655,83 @@ fn a_node_without_a_model_shape_keeps_none() {
     let hits = hit_test(&scene, Point::new(0.5, 0.5), &HitOptions::default()).expect("no error");
     assert_eq!(hits.first().map(|hit| hit.shape_id), Some(None));
 }
+
+// --- the hit-test fallback -----------------------------------------
+
+/// A one-page document with one shape whose only `Geometry` row is a row
+/// kind the builder does not map (`GeometryRow::Unknown`): the shape
+/// draws no path at all.
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
+fn document_with_unmapped_row() -> (Document, PageId, ShapeId) {
+    let mut doc = Document::new();
+    let shape = doc.add_shape(ModelShape::new(ShapeId { index: 0 }, 1));
+    let page = PageId { index: 0 };
+    let mut entity = Page::new(page, 1);
+    entity.shapes.push(shape);
+    doc.pages.push(entity);
+    let mut section = Section::new(SectionName::new("Geometry"));
+    let mut row = Row::new();
+    row.row_type = Some("Mystery".to_owned());
+    for (name, value) in [("X", 1.0), ("Y", 1.0)] {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Number(value));
+        row.cells.push(cell);
+    }
+    section.rows.push(row);
+    doc.shape_mut(shape)
+        .expect("shape")
+        .sheet
+        .sections
+        .push(section);
+    (doc, page, shape)
+}
+
+#[test]
+fn an_unmapped_geometry_row_kind_falls_back_to_the_origin_bounds() {
+    // The builder maps the row to `GeometryRow::Unknown` and warns: the
+    // shape draws no path at all and (with no text either) drops out of
+    // the scene (`build`'s "no drawable content" rule). Hit testing then
+    // has nothing to match: no hits, never an error and never a panic
+    // (`hit_test`'s degenerate-path contract), at any tolerance.
+    let (doc, page, _shape) = document_with_unmapped_row();
+    let scene = build_scene(&doc, page, &BuildOptions::new()).expect("builds");
+    assert!(
+        scene.nodes.is_empty(),
+        "the unmapped row kind draws no node: {:?}",
+        scene.nodes
+    );
+    let hits = hit_test(&scene, Point::new(1.0, 1.0), &HitOptions::new(10.0)).expect("no error");
+    assert!(hits.is_empty(), "{hits:?}");
+    assert_eq!(
+        scene_bounds(&scene).expect("no error"),
+        Rect::new(Point::new(0.0, 0.0), Point::new(0.0, 0.0)),
+        "a scene with nothing drawable measures the origin"
+    );
+
+    // The same fallback inside `render/src/hit.rs`: a node whose path has
+    // no measurable points (the `path_bounds` catch-all's "no points to
+    // measure" case) measures the zero rectangle at its transformed
+    // origin and never intersects a marquee.
+    let mut scene = Scene::new(8.5, 11.0);
+    scene.nodes.push(shape_node(
+        Some(ShapeId { index: 3 }),
+        Transform::identity(),
+        Path::new(),
+        true,
+        None,
+    ));
+    let hits = hit_test(&scene, Point::new(1.0, 1.0), &HitOptions::new(10.0)).expect("no error");
+    assert!(hits.is_empty(), "{hits:?}");
+    let bounds = node_bounds(&scene, &NodePath::new().child(0)).expect("no error");
+    assert_eq!(
+        bounds,
+        Rect::new(Point::new(0.0, 0.0), Point::new(0.0, 0.0)),
+        "a node that draws nothing measures its origin"
+    );
+    let hits = hit_marquee(
+        &scene,
+        Rect::new(Point::new(-1.0, -1.0), Point::new(3.0, 3.0)),
+    )
+    .expect("no error");
+    assert!(hits.is_empty(), "{hits:?}");
+}

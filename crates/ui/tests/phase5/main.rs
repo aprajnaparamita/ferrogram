@@ -12,6 +12,7 @@
 
 mod drag_timing;
 mod draw;
+mod pages;
 mod pointer;
 mod snap;
 mod text;
