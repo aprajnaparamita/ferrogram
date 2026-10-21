@@ -2,11 +2,11 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 5 of 8 in progress (Phases 0–4 complete).** The app opens, renders and saves `.vsdx` files, and the Phase 5 editing core is merged: you can draw, move, connect and type into shapes, and undo it. It is not ready for real work: formulas are not evaluated, `.vsd` import and the control channel are not built, and visual fidelity is approximate.
+> **Status: pre-alpha, Phase 5 of 8 complete.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. It is not ready for real work: formulas are not evaluated, `.vsd` import and the control channel are not built, and visual fidelity is approximate.
 
 ## Build status
 
-Last full gate on `main`: **green, 2026-10-20** (after the P5-10 merge, commit `2a749a0`). There is no public CI yet; the gate runs locally.
+Last full gate on `main`: **green, 2026-10-21** (Phase 5 close, commit `688cb8b`, 2531 tests). There is no public CI yet; the gate runs locally.
 
 | Step | Result |
 |---|---|
@@ -20,11 +20,11 @@ Line coverage per crate (`cargo xtask coverage`):
 
 | Crate | Coverage | Crate | Coverage |
 |---|---:|---|---:|
-| geom | 100.0% | text | 98.8% |
-| shapesheet | 100.0% | commands | 98.1% |
-| model | 99.6% | vsdx | 97.9% |
+| geom | 100.0% | text | 98.9% |
+| shapesheet | 100.0% | commands | 98.3% |
+| model | 99.7% | vsdx | 98.1% |
 | ui-spec | 99.4% | ferrogram-cli | 96.8% |
-| render | 98.4% | ui | 96.5% |
+| render | 98.5% | ui | 96.8% |
 | ferrogram (desktop) | 80.0% | ferrogram-web | 77.9% |
 
 `control` and `vsd-binary` have no code yet (Phases 8 and 7).
@@ -35,7 +35,7 @@ Line coverage per crate (`cargo xtask coverage`):
 - **Document model and `.vsdx` I/O** (Phase 2): pages, masters, shapes, styles and ShapeSheet cells; lossless read and write, with content the model does not cover kept in place. Every corpus file round-trips.
 - **Rendering and CLI** (Phase 3): pages render from cached cell values to PNG (`tiny-skia`) and SVG, with text shaping and bundled open fonts (Carlito, Selawik). `ferrogram-cli inspect`, `render` and `export`.
 - **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a ribbon generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the ribbon, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panels; original stencils; file open, save and export.
-- **Editing core** (Phase 5, in progress):
+- **Editing core** (Phase 5):
   - select, marquee, move, resize and rotate with handles and snapping;
   - pointer, rectangle, ellipse, line, text and connector tools, chosen through registry commands;
   - drag masters from the Shapes window onto the page;
@@ -44,11 +44,11 @@ Line coverage per crate (`cargo xtask coverage`):
   - cut, copy, paste, duplicate, group, align, distribute, z-order, and page add, delete, rename and reorder;
   - undo and redo for every edit.
 
-  The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). The Phase 5 test pass and audits are still open.
+  The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). Phase report: [docs/progress/phase-5.md](docs/progress/phase-5.md).
 
 ## Next
 
-Finish Phase 5 (test pass, review, coverage and clean-room audits), then Phase 6: the ShapeSheet formula engine.
+Phase 6: the ShapeSheet formula engine (core subset), so edits update dependent cells and files without cached values render.
 
 The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the ribbon is in [docs/parity/controls.md](docs/parity/controls.md).
 
@@ -65,7 +65,7 @@ The ShapeSheet formula engine (shapes whose cells have no cached values render b
 | 2 | Document model and .vsdx I/O (lossless round-trip) | done |
 | 3 | Rendering (PNG/SVG) and CLI | done |
 | 4 | App shell, switchable 2016/365 ribbon | done |
-| 5 | Editing core | in progress |
+| 5 | Editing core | done |
 | 6 | ShapeSheet engine (core subset) | planned |
 | 7 | Binary .vsd import (read-only) | planned |
 | 8 | Control channel and MCP | planned |
