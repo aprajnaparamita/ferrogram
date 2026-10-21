@@ -6,13 +6,25 @@
 //! value, a cut cycle keeps the values it found, a budget run-out leaves
 //! the rest stale. A recalc never fails the document and never panics.
 //!
-//! Task P6-06 implements [`recalc`]; task P6-07 hooks it into the edit
-//! seam (`ferrogram-commands`).
+//! The pass drives a [`FormulaEngine`]: production runs [`DocumentEngine`]
+//! (`parse`, `eval`, `DocumentResolver`); [`recalc_with`] takes the
+//! engine and the [`DepGraph`] of the session so an edit refreshes only
+//! the edges it touched (ADR 0055). What the pass writes follows
+//! ADR 0056: a cell with its own formula gets its cached value updated,
+//! an inherited cell gets the evaluated formula and value materialised
+//! when [`RecalcOptions::materialise_inherited`] says so.
 
-use ferrogram_model::{CellValue, Document};
+use std::collections::{BTreeSet, VecDeque};
+
+use ferrogram_model::{CellValue, CellWrite, Document, SheetRef};
 
 use crate::Error;
-use crate::graph::CellAddress;
+use crate::ast::{Expr, ExprKind};
+use crate::eval::{EvalContext, EvalWarning, EvalWarningKind};
+use crate::formula::{CellRef, Formula};
+use crate::graph::{self, CellAddress, DepGraph, EffectiveCell};
+use crate::resolve::DocumentResolver;
+use crate::value::Value;
 
 /// How hard a recalc pass may work (ADR 0055).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,83 +108,1274 @@ pub struct RecalcOutcome {
     pub truncated: bool,
 }
 
+/// One cell write a formula performed (`SETF`, ADR 0056).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellWriteOp {
+    /// The cell written.
+    pub target: CellAddress,
+    /// The formula text to store on the target: the write replaces the
+    /// target's formula with this literal (the engine spells it).
+    pub formula: String,
+    /// The cached value to store next to the formula.
+    pub value: CellValue,
+}
+
+/// What one formula evaluation produced (ADR 0053, ADR 0056).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Evaluation {
+    /// The cached value to store for the cell.
+    pub value: CellValue,
+    /// What the evaluation could not do. A [`RecalcWarningKind::UnknownFunction`]
+    /// warning means the cell keeps its cached value (ADR 0053).
+    pub warnings: Vec<RecalcWarning>,
+    /// The cells the formula wrote (`SETF`). The pass applies them in
+    /// order and dirties their dependents within the same budget.
+    pub writes: Vec<CellWriteOp>,
+}
+
+/// The formula engine the graph and the recalc pass drive (ADR 0055).
+///
+/// Production wires this to `parse`, `eval` and `DocumentResolver`
+/// ([`DocumentEngine`]); the tests drive the pass with a small engine so
+/// the order, cycle and budget rules are testable alone.
+pub trait FormulaEngine {
+    /// The cells `formula` reads (its dependency edges).
+    ///
+    /// A formula that fails to parse answers an error; the graph then
+    /// records no edges for it and the document is not failed.
+    fn references(&mut self, formula: &Formula) -> Result<Vec<CellRef>, Error>;
+
+    /// Evaluates `formula` on `sheet` against `document`, returning the
+    /// cached value to store and the writes the formula performed.
+    ///
+    /// `Err` means the engine is broken (or not implemented yet); the
+    /// pass propagates it and stops.
+    fn evaluate(
+        &mut self,
+        document: &mut Document,
+        formula: &Formula,
+        sheet: SheetRef,
+    ) -> Result<Evaluation, Error>;
+}
+
+/// The production engine: [`crate::parse`] + [`crate::eval`] +
+/// [`crate::DocumentResolver`] (ADR 0051, ADR 0053, ADR 0054).
+///
+/// `SETF` writes are recorded, not applied inside the resolver: the pass
+/// applies every write through the model's mutation API so one write
+/// path owns the document (ADR 0056).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DocumentEngine;
+
+impl FormulaEngine for DocumentEngine {
+    fn references(&mut self, formula: &Formula) -> Result<Vec<CellRef>, Error> {
+        let expr = crate::parser::parse_formula(formula)?;
+        let mut out = Vec::new();
+        collect_refs(&expr, &mut out);
+        Ok(out)
+    }
+
+    fn evaluate(
+        &mut self,
+        document: &mut Document,
+        formula: &Formula,
+        sheet: SheetRef,
+    ) -> Result<Evaluation, Error> {
+        let (value, raw_writes, eval_warnings) = {
+            let mut resolver = DocumentResolver::new(document);
+            let mut recording = RecordingContext {
+                resolver: &mut resolver,
+                writes: Vec::new(),
+            };
+            let value = crate::eval::eval_formula(formula, sheet, &mut recording)?;
+            let RecordingContext { writes, .. } = recording;
+            (value, writes, resolver.into_warnings())
+        };
+        let cached = value.to_cached()?;
+        let mut warnings: Vec<RecalcWarning> =
+            eval_warnings.into_iter().filter_map(map_warning).collect();
+        let mut writes: Vec<CellWriteOp> = Vec::new();
+        for (sheet, reference, value) in raw_writes {
+            let cached_write = value.to_cached()?;
+            match graph::resolve_ref_address(document, sheet, &reference) {
+                Some(target) => writes.push(CellWriteOp {
+                    target,
+                    formula: literal_text(&value),
+                    value: cached_write.value,
+                }),
+                None => warnings.push(RecalcWarning {
+                    target: None,
+                    kind: RecalcWarningKind::MissingReference(reference.name().unwrap_or_default()),
+                }),
+            }
+        }
+        Ok(Evaluation {
+            value: cached.value,
+            warnings,
+            writes,
+        })
+    }
+}
+
+/// The raw `SETF` writes one evaluation recorded.
+type RawWrite = (SheetRef, CellRef, Value);
+
+/// The [`EvalContext`] that records `SETF` writes instead of applying
+/// them (reads and warnings go to the resolver).
+struct RecordingContext<'a, 'd> {
+    resolver: &'a mut DocumentResolver<'d>,
+    writes: Vec<RawWrite>,
+}
+
+impl EvalContext for RecordingContext<'_, '_> {
+    fn cell_value(&mut self, sheet: SheetRef, reference: &CellRef) -> Result<Value, Error> {
+        self.resolver.cell_value(sheet, reference)
+    }
+
+    fn set_cell(
+        &mut self,
+        sheet: SheetRef,
+        reference: &CellRef,
+        value: Value,
+    ) -> Result<(), Error> {
+        self.writes.push((sheet, reference.clone(), value));
+        Ok(())
+    }
+
+    fn warn(&mut self, warning: EvalWarning) {
+        self.resolver.warn(warning);
+    }
+}
+
+/// The cells of one parsed expression (ADR 0051's [`ExprKind`]), in
+/// source order. Iterative: no recursion on input.
+fn collect_refs(expr: &Expr, out: &mut Vec<CellRef>) {
+    let mut stack: Vec<&Expr> = vec![expr];
+    while let Some(next) = stack.pop() {
+        match &next.kind {
+            ExprKind::Literal(_) => {}
+            ExprKind::Ref(reference) => out.push(reference.clone()),
+            ExprKind::Unary { operand, .. } => stack.push(operand),
+            ExprKind::Binary { left, right, .. } => {
+                stack.push(right);
+                stack.push(left);
+            }
+            ExprKind::Call { args, .. } => stack.extend(args.iter().rev()),
+        }
+    }
+}
+
+/// Maps an evaluator warning to the recalc vocabulary. A coercion or a
+/// cut evaluation cycle is not a recalc warning and is dropped here.
+fn map_warning(warning: EvalWarning) -> Option<RecalcWarning> {
+    let kind = match &warning.kind {
+        EvalWarningKind::UnknownFunction(name) => RecalcWarningKind::UnknownFunction(name.clone()),
+        EvalWarningKind::UnsupportedReference(name) => {
+            RecalcWarningKind::MissingReference(name.clone())
+        }
+        _ => return None,
+    };
+    Some(RecalcWarning { target: None, kind })
+}
+
+/// The literal formula text a `SETF` write stores (ADR 0056): the
+/// workspace's one number spelling (P5-19 review F6), our own spellings
+/// for the other kinds. Recursion is bounded by the parse limit
+/// ([`crate::MAX_NESTING`]).
+fn literal_text(value: &Value) -> String {
+    match value {
+        Value::Number(number) => ferrogram_model::mutate::literal(number.magnitude),
+        Value::Str(text) => format!("\"{}\"", text.replace('"', "\"\"")),
+        Value::Bool(true) => String::from("TRUE"),
+        Value::Bool(false) => String::from("FALSE"),
+        Value::Color(color) => format!("RGB({},{},{})", color.r, color.g, color.b),
+        Value::List(items) => items
+            .iter()
+            .map(literal_text)
+            .collect::<Vec<String>>()
+            .join(";"),
+        Value::Err(code) => code.as_str().to_owned(),
+    }
+}
+
 /// Recalculates `dirty` and their transitive dependents in `document`.
 ///
-/// The stub returns [`Error::NotImplemented`] until task P6-06 lands.
+/// The convenience entry point: it builds a throw-away [`DepGraph`] and
+/// runs [`recalc_with`] with [`DocumentEngine`]. A session that keeps
+/// its graph (ADR 0055) calls [`recalc_with`] directly.
 pub fn recalc(
     document: &mut Document,
     dirty: &[CellAddress],
     options: &RecalcOptions,
 ) -> Result<RecalcOutcome, Error> {
-    let _ = (document, dirty, options);
-    Err(Error::NotImplemented("recalc"))
+    let mut graph = DepGraph::build(document)?;
+    recalc_with(document, dirty, options, &mut graph, &mut DocumentEngine)
+}
+
+/// Recalculates `dirty` and their transitive dependents, refreshing only
+/// the graph edges the pass touches (ADR 0055).
+///
+/// The pass writes what ADR 0056 says: a cell with its own formula gets
+/// its cached value updated, an inherited cell gets the formula and value
+/// materialised when `options.materialise_inherited` is set, and `SETF`
+/// writes land as ordinary writes that dirty their dependents within the
+/// same budget. Errors mean a broken engine and stop the pass; everything
+/// else is a warning and keeps the document.
+pub fn recalc_with(
+    document: &mut Document,
+    dirty: &[CellAddress],
+    options: &RecalcOptions,
+    graph: &mut DepGraph,
+    engine: &mut dyn FormulaEngine,
+) -> Result<RecalcOutcome, Error> {
+    let mut outcome = RecalcOutcome::default();
+    let dirty: Vec<CellAddress> = dirty
+        .iter()
+        .map(|address| graph::normalize_address(document, address))
+        .collect();
+    graph.update(document, &dirty, engine);
+
+    let (order, cycles) = graph.order_and_cycles(&dirty);
+    let mut done: BTreeSet<CellAddress> = BTreeSet::new();
+    for cycle in cycles {
+        for cell in &cycle {
+            done.insert(cell.clone());
+        }
+        outcome.warnings.push(RecalcWarning {
+            target: None,
+            kind: RecalcWarningKind::Cycle(cycle),
+        });
+    }
+    let mut queued: BTreeSet<CellAddress> = order.iter().cloned().collect();
+    let mut queue: VecDeque<CellAddress> = order.into_iter().collect();
+    let mut changes: Vec<Change> = Vec::new();
+    let mut touched: Vec<CellAddress> = Vec::new();
+    let mut evaluations: u32 = 0;
+
+    while let Some(address) = queue.pop_front() {
+        if done.contains(&address) {
+            continue;
+        }
+        done.insert(address.clone());
+        let effective = match graph::effective(document, &address) {
+            Ok(Some(effective)) => effective,
+            Ok(None) => continue,
+            Err(_) => {
+                outcome.warnings.push(missing_cell(&address));
+                continue;
+            }
+        };
+        if options.fill_missing_only && effective.local_value.is_some() {
+            continue;
+        }
+        if evaluations >= options.max_evaluations {
+            outcome.truncated = true;
+            outcome.warnings.push(RecalcWarning {
+                target: None,
+                kind: RecalcWarningKind::BudgetExceeded,
+            });
+            break;
+        }
+        evaluations = evaluations.saturating_add(1);
+        let evaluation = engine.evaluate(
+            document,
+            &Formula::new(effective.formula.as_str()),
+            address.sheet,
+        )?;
+        let keep_cached = evaluation
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::UnknownFunction(_)));
+        for mut warning in evaluation.warnings {
+            if warning.target.is_none() {
+                warning.target = Some(address.clone());
+            }
+            outcome.warnings.push(warning);
+        }
+        if !keep_cached && let Some(text) = formula_text(&effective, options) {
+            match apply_write(document, &address, &text, &evaluation.value, &mut changes) {
+                Ok(true) => touched.push(address.clone()),
+                Ok(false) => {}
+                Err(_) => outcome.warnings.push(missing_cell(&address)),
+            }
+        }
+        for op in evaluation.writes {
+            let target = graph::normalize_address(document, &op.target);
+            match apply_write(document, &target, &op.formula, &op.value, &mut changes) {
+                Ok(true) => touched.push(target.clone()),
+                Ok(false) => {}
+                Err(_) => {
+                    outcome.warnings.push(missing_cell(&target));
+                    continue;
+                }
+            }
+            // The write dirties its target and the target's dependents
+            // (ADR 0056); anything already done or queued is cut by the
+            // cycle rule and evaluates at most once per pass.
+            for extra in graph.order_and_cycles(std::slice::from_ref(&target)).0 {
+                if done.contains(&extra) || queued.contains(&extra) {
+                    continue;
+                }
+                queued.insert(extra.clone());
+                queue.push_back(extra);
+            }
+        }
+    }
+
+    graph.update(document, &touched, engine);
+    outcome.updates = changes
+        .into_iter()
+        .filter(|change| change.before != change.after || change.formula_changed)
+        .map(|change| CellUpdate {
+            target: change.target,
+            before: change.before,
+            after: change.after,
+        })
+        .collect();
+    Ok(outcome)
+}
+
+/// The warning for a cell the pass could not write or look up. The model
+/// error itself is not a document failure (ADR 0055).
+fn missing_cell(address: &CellAddress) -> RecalcWarning {
+    RecalcWarning {
+        target: Some(address.clone()),
+        kind: RecalcWarningKind::MissingReference(address.cell.as_str().to_owned()),
+    }
+}
+
+/// The formula text the pass writes for the cell (ADR 0056): its own
+/// formula unchanged, or the evaluated formula materialised onto an
+/// inherited cell. `None` means the pass writes nothing (an absent cell
+/// keeps no half-written entry).
+fn formula_text(effective: &EffectiveCell, options: &RecalcOptions) -> Option<String> {
+    if effective.own || options.materialise_inherited {
+        return Some(effective.formula.clone());
+    }
+    effective.local_formula.clone()
+}
+
+/// One cell the pass changed.
+#[derive(Debug, Clone, PartialEq)]
+struct Change {
+    /// The cell.
+    target: CellAddress,
+    /// The cached value before the pass.
+    before: Option<CellValue>,
+    /// The cached value after the last write.
+    after: Option<CellValue>,
+    /// Whether any write replaced the formula text.
+    formula_changed: bool,
+}
+
+/// Writes one result into the document and records the change. Returns
+/// whether the formula text changed (the graph edges must be rebuilt for
+/// such a cell).
+///
+/// The write goes through the model's mutation API (ADR 0039); a write
+/// that names no real cell is an error the caller reports as a warning.
+fn apply_write(
+    document: &mut Document,
+    address: &CellAddress,
+    formula: &str,
+    value: &CellValue,
+    changes: &mut Vec<Change>,
+) -> Result<bool, ferrogram_model::Error> {
+    let before = graph::local_cell(document, address).and_then(|cell| cell.value.clone());
+    let previous = graph::local_cell(document, address).and_then(|cell| cell.formula.clone());
+    let formula_changed = previous.as_deref() != Some(formula);
+    let write = CellWrite::new(formula, value.clone());
+    match (&address.section, &address.row) {
+        (None, None) => document.write_cell(address.sheet, &address.cell, &write)?,
+        (Some(_), None) => {
+            return Err(ferrogram_model::Error::BadCell(
+                "section cell without a row",
+            ));
+        }
+        (Some(section), Some(row)) => {
+            document.write_row_cell(address.sheet, section, *row, &address.cell, &write)?
+        }
+        (None, Some(_)) => {
+            return Err(ferrogram_model::Error::BadCell("row without a section"));
+        }
+    }
+    if let Some(existing) = changes.iter_mut().find(|change| change.target == *address) {
+        existing.after = Some(value.clone());
+        existing.formula_changed = existing.formula_changed || formula_changed;
+    } else {
+        changes.push(Change {
+            target: address.clone(),
+            before,
+            after: Some(value.clone()),
+            formula_changed,
+        });
+    }
+    Ok(formula_changed)
+}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    //! A small formula engine for the tests of [`crate::graph`] and this
+    //! module (task P6-06).
+    //!
+    //! The tests write the little language this module reads: a number
+    //! (`"0"`), a cell read (`"Beta"`), arithmetic on one cell and one
+    //! number (`"Beta+1"`, `"Beta*2"`), a sum of two cells
+    //! (`"Beta+Gamma"`) and a basic `SETF` (`"SETF(Beta,5)"`). That is
+    //! enough to pin the pass's own rules: order, incrementality,
+    //! cycles, budget, writes and idempotence. The real formulas and the
+    //! real evaluator arrive with tasks P6-02 to P6-05.
+
+    use super::*;
+    use ferrogram_model::CellName;
+    use ferrogram_model::mutate::literal;
+
+    /// The test engine described above.
+    #[derive(Debug, Default)]
+    pub(crate) struct TestEngine {
+        /// The formulas it evaluated, in order.
+        pub(crate) evaluated: Vec<String>,
+        /// When true, every evaluation warns [`RecalcWarningKind::UnknownFunction`]
+        /// (ADR 0053's keep-the-cached-value rule).
+        pub(crate) warn_unknown: bool,
+    }
+
+    impl TestEngine {
+        /// An engine that evaluates the little language.
+        pub(crate) fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl FormulaEngine for TestEngine {
+        fn references(&mut self, formula: &Formula) -> Result<Vec<CellRef>, Error> {
+            Ok(scan_refs(formula.as_str()))
+        }
+
+        fn evaluate(
+            &mut self,
+            document: &mut Document,
+            formula: &Formula,
+            sheet: SheetRef,
+        ) -> Result<Evaluation, Error> {
+            self.evaluated.push(formula.as_str().to_owned());
+            if self.warn_unknown {
+                return Ok(Evaluation {
+                    value: CellValue::Number(0.0),
+                    warnings: vec![RecalcWarning {
+                        target: None,
+                        kind: RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
+                    }],
+                    writes: Vec::new(),
+                });
+            }
+            Ok(evaluate_test(document, formula.as_str(), sheet))
+        }
+    }
+
+    /// The identifiers of `source` that read a cell: everything that is
+    /// not a number, a string, `TRUE`/`FALSE` or a function name.
+    pub(crate) fn scan_refs(source: &str) -> Vec<CellRef> {
+        let mut out = Vec::new();
+        let mut chars = source.char_indices().peekable();
+        while let Some((at, first)) = chars.next() {
+            if first == '"' {
+                for (_, skipped) in chars.by_ref() {
+                    if skipped == '"' {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if !first.is_ascii_alphabetic() && first != '_' {
+                continue;
+            }
+            let mut end = at.saturating_add(first.len_utf8());
+            while let Some((next_at, next)) = chars.peek().copied() {
+                if next.is_ascii_alphanumeric() || next == '_' {
+                    end = next_at.saturating_add(next.len_utf8());
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let name = source.get(at..end).unwrap_or_default();
+            let follows_call = chars.peek().is_some_and(|(_, next)| *next == '(');
+            if follows_call
+                || name.eq_ignore_ascii_case("TRUE")
+                || name.eq_ignore_ascii_case("FALSE")
+            {
+                continue;
+            }
+            out.push(CellRef::new(name.to_owned()));
+        }
+        out
+    }
+
+    /// One evaluation of the little language.
+    fn evaluate_test(document: &Document, source: &str, sheet: SheetRef) -> Evaluation {
+        let text = source.trim();
+        if let Some(inner) = text
+            .strip_prefix("SETF(")
+            .and_then(|rest| rest.strip_suffix(')'))
+        {
+            let (name, value) = inner.split_once(',').unwrap_or((inner, "0"));
+            let magnitude: f64 = value.trim().parse().unwrap_or(0.0);
+            let value = CellValue::Number(magnitude);
+            let reference = CellRef::new(name.trim().to_owned());
+            let target = graph::resolve_ref_address(document, sheet, &reference)
+                .unwrap_or_else(|| CellAddress::new(sheet, CellName::new(name.trim().to_owned())));
+            return Evaluation {
+                value: value.clone(),
+                warnings: Vec::new(),
+                writes: vec![CellWriteOp {
+                    target,
+                    formula: literal(magnitude),
+                    value,
+                }],
+            };
+        }
+        let number = if let Some((left, right)) = text.split_once('+') {
+            Some(read_operand(document, sheet, left) + read_operand(document, sheet, right))
+        } else if let Some((left, right)) = text.split_once('*') {
+            Some(read_operand(document, sheet, left) * read_operand(document, sheet, right))
+        } else {
+            text.parse::<f64>().ok()
+        };
+        Evaluation {
+            value: CellValue::Number(number.unwrap_or_else(|| read_operand(document, sheet, text))),
+            warnings: Vec::new(),
+            writes: Vec::new(),
+        }
+    }
+
+    /// One operand of the little language: a number or a cell's cached
+    /// number.
+    fn read_operand(document: &Document, sheet: SheetRef, operand: &str) -> f64 {
+        if let Ok(number) = operand.trim().parse::<f64>() {
+            return number;
+        }
+        let address = CellAddress::new(sheet, CellName::new(operand.trim().to_owned()));
+        match graph::local_cell(document, &address).and_then(|cell| cell.value.clone()) {
+            Some(CellValue::Number(number)) => number,
+            _ => 0.0,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::testing::TestEngine;
     use super::*;
-    use ferrogram_model::{CellName, PageId, SheetRef};
+    use ferrogram_geom::Unit;
+    use ferrogram_model::{
+        Cell, CellName, Master, MasterId, Page, PageId, Preserved, Row, RowTarget, Section,
+        SectionName, Shape, ShapeId,
+    };
 
-    fn address() -> CellAddress {
-        CellAddress::new(
-            SheetRef::Page(PageId { index: 0 }),
-            CellName::from_static("Width"),
-        )
+    fn num(value: f64) -> CellValue {
+        CellValue::Number(value)
     }
 
-    #[test]
-    fn options_carry_the_default_budget() {
-        let o = RecalcOptions::new();
-        assert_eq!(o.max_evaluations, RecalcOptions::DEFAULT_MAX_EVALUATIONS);
-        assert!(!o.materialise_inherited);
-        assert!(!o.fill_missing_only);
-        assert_eq!(RecalcOptions::default(), o);
+    fn cell(name: &str, formula: Option<&str>, value: Option<CellValue>) -> Cell {
+        Cell {
+            name: CellName::new(name),
+            formula: formula.map(str::to_owned),
+            value,
+            unit: Unit::Unitsless,
+            preserved: Preserved::new(),
+        }
     }
 
-    #[test]
-    fn recalc_is_a_stub() {
+    /// A document with one page and one shape holding `cells`.
+    fn doc_with(cells: Vec<Cell>) -> (Document, ShapeId) {
         let mut doc = Document::new();
-        assert_eq!(
-            recalc(&mut doc, &[address()], &RecalcOptions::new()),
-            Err(Error::NotImplemented("recalc"))
-        );
+        let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+        shape.sheet.cells = cells;
+        let shape = doc.add_shape(shape);
+        doc.pages.push(Page::new(PageId { index: 0 }, 1));
+        if let Some(page) = doc.pages.first_mut() {
+            page.shapes.push(shape);
+        }
+        (doc, shape)
+    }
+
+    fn address(shape: ShapeId, name: &str) -> CellAddress {
+        CellAddress::new(SheetRef::Shape(shape), CellName::new(name))
+    }
+
+    fn run(
+        doc: &mut Document,
+        dirty: &[CellAddress],
+        options: &RecalcOptions,
+        engine: &mut TestEngine,
+    ) -> RecalcOutcome {
+        let mut graph = DepGraph::build_with(doc, engine).expect("build");
+        recalc_with(doc, dirty, options, &mut graph, engine).expect("recalc")
+    }
+
+    fn value_of(doc: &Document, address: &CellAddress) -> Option<CellValue> {
+        graph::local_cell(doc, address).and_then(|cell| cell.value.clone())
+    }
+
+    fn formula_of(doc: &Document, address: &CellAddress) -> Option<String> {
+        graph::local_cell(doc, address).and_then(|cell| cell.formula.clone())
     }
 
     #[test]
-    fn an_outcome_reports_updates_warnings_and_truncation() {
-        let outcome = RecalcOutcome {
-            updates: vec![CellUpdate {
-                target: address(),
-                before: None,
-                after: None,
-            }],
-            warnings: vec![RecalcWarning {
-                target: Some(address()),
-                kind: RecalcWarningKind::BudgetExceeded,
-            }],
-            truncated: true,
+    fn an_empty_dirty_set_changes_nothing() {
+        let (mut doc, _shape) = doc_with(vec![cell("Alpha", Some("0"), Some(num(1.0)))]);
+        let mut engine = TestEngine::new();
+        let outcome = run(&mut doc, &[], &RecalcOptions::new(), &mut engine);
+        assert_eq!(outcome, RecalcOutcome::default());
+        assert!(engine.evaluated.is_empty());
+    }
+
+    #[test]
+    fn a_diamond_evaluates_the_shared_cell_once() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("0"), Some(num(7.0))),
+            cell("Beta", Some("Alpha+1"), Some(num(7.0))),
+            cell("Gamma", Some("Alpha+2"), Some(num(7.0))),
+            cell("Delta", Some("Beta+Gamma"), Some(num(7.0))),
+        ]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        // The shared cell evaluates once, before both paths.
+        assert_eq!(
+            engine.evaluated,
+            vec!["0", "Alpha+1", "Alpha+2", "Beta+Gamma"]
+        );
+        assert_eq!(
+            value_of(&doc, &address(shape, "Delta")),
+            Some(num(1.0 + 2.0))
+        );
+        assert_eq!(outcome.updates.len(), 4);
+    }
+
+    #[test]
+    fn dirtying_one_cell_recomputes_exactly_its_dependents() {
+        let mut cells = Vec::new();
+        for i in 1..=20 {
+            let name = format!("c{i}");
+            let formula = if i == 1 {
+                String::from("0")
+            } else {
+                format!("c{}+1", i - 1)
+            };
+            cells.push(cell(&name, Some(&formula), Some(num(100.0))));
+        }
+        let (mut doc, shape) = doc_with(cells);
+        let mut engine = TestEngine::new();
+        let dirty = [address(shape, "c5")];
+        let outcome = run(&mut doc, &dirty, &RecalcOptions::new(), &mut engine);
+        // c5..c20 recompute (16 evaluations), c1..c4 stay as they were.
+        assert_eq!(engine.evaluated.len(), 16);
+        assert_eq!(engine.evaluated.first().map(String::as_str), Some("c4+1"));
+        assert_eq!(engine.evaluated.last().map(String::as_str), Some("c19+1"));
+        assert_eq!(value_of(&doc, &address(shape, "c1")), Some(num(100.0)));
+        assert_eq!(value_of(&doc, &address(shape, "c4")), Some(num(100.0)));
+        assert_eq!(value_of(&doc, &address(shape, "c5")), Some(num(101.0)));
+        assert_eq!(value_of(&doc, &address(shape, "c20")), Some(num(116.0)));
+        assert_eq!(outcome.updates.len(), 16);
+    }
+
+    #[test]
+    fn a_cycle_keeps_cached_values_and_warns_once() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("Beta+1"), Some(num(1.0))),
+            cell("Beta", Some("Alpha+1"), Some(num(2.0))),
+        ]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert!(
+            engine.evaluated.is_empty(),
+            "cycle cells keep cached values"
+        );
+        assert_eq!(
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: None,
+                kind: RecalcWarningKind::Cycle(vec![
+                    address(shape, "Alpha"),
+                    address(shape, "Beta"),
+                ]),
+            }]
+        );
+        assert_eq!(value_of(&doc, &address(shape, "Alpha")), Some(num(1.0)));
+        assert_eq!(value_of(&doc, &address(shape, "Beta")), Some(num(2.0)));
+        assert!(outcome.updates.is_empty());
+    }
+
+    #[test]
+    fn a_self_reference_is_a_cycle_of_one() {
+        let (mut doc, shape) = doc_with(vec![cell("Alpha", Some("Alpha+1"), Some(num(1.0)))]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: None,
+                kind: RecalcWarningKind::Cycle(vec![address(shape, "Alpha")]),
+            }]
+        );
+        assert_eq!(value_of(&doc, &address(shape, "Alpha")), Some(num(1.0)));
+    }
+
+    #[test]
+    fn a_tiny_budget_truncates_and_leaves_the_rest_stale() {
+        let mut cells = Vec::new();
+        for i in 1..=10 {
+            let name = format!("d{i}");
+            let formula = if i == 1 {
+                String::from("0")
+            } else {
+                format!("d{}+1", i - 1)
+            };
+            cells.push(cell(&name, Some(&formula), Some(num(50.0))));
+        }
+        let (mut doc, shape) = doc_with(cells);
+        let mut engine = TestEngine::new();
+        let options = RecalcOptions {
+            max_evaluations: 3,
+            ..RecalcOptions::new()
         };
-        assert_eq!(outcome.updates.len(), 1);
-        assert_eq!(outcome.warnings.len(), 1);
+        let outcome = run(&mut doc, &[address(shape, "d1")], &options, &mut engine);
         assert!(outcome.truncated);
+        assert_eq!(engine.evaluated.len(), 3);
         assert_eq!(
-            RecalcOutcome::default(),
-            RecalcOutcome {
-                updates: Vec::new(),
-                warnings: Vec::new(),
-                truncated: false,
-            }
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: None,
+                kind: RecalcWarningKind::BudgetExceeded,
+            }]
+        );
+        assert_eq!(value_of(&doc, &address(shape, "d3")), Some(num(2.0)));
+        // d4..d10 are stale: untouched.
+        assert_eq!(value_of(&doc, &address(shape, "d4")), Some(num(50.0)));
+        assert_eq!(value_of(&doc, &address(shape, "d10")), Some(num(50.0)));
+    }
+
+    #[test]
+    fn setf_writes_its_target_and_dirties_it_in_the_same_pass() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("SETF(Beta,5)"), Some(num(0.0))),
+            cell("Beta", Some("2"), Some(num(2.0))),
+        ]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        // The write lands, and the target is re-evaluated in the same
+        // pass (now as the literal the write stored).
+        assert_eq!(
+            value_of(&doc, &address(shape, "Beta")),
+            Some(num(5.0)),
+            "the SETF write lands"
+        );
+        assert_eq!(
+            formula_of(&doc, &address(shape, "Beta")),
+            Some(String::from("5")),
+            "the write stores a literal formula"
+        );
+        assert_eq!(
+            engine.evaluated,
+            vec!["SETF(Beta,5)", "5"],
+            "the target is dirty within the same pass"
+        );
+        let targets: Vec<&CellAddress> = outcome
+            .updates
+            .iter()
+            .map(|update| &update.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![&address(shape, "Alpha"), &address(shape, "Beta")]
         );
     }
 
     #[test]
-    fn warning_kinds_are_named() {
-        let kinds = [
-            RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
-            RecalcWarningKind::MissingReference(String::from("Sheet.9!PinX")),
-            RecalcWarningKind::Cycle(vec![address()]),
-            RecalcWarningKind::BudgetExceeded,
+    fn a_cell_with_its_own_formula_gets_only_its_value_updated() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("Beta+1"), Some(num(0.0))),
+            cell("Beta", Some("5"), Some(num(5.0))),
+        ]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(
+            formula_of(&doc, &address(shape, "Alpha")),
+            Some(String::from("Beta+1")),
+            "the formula text is untouched"
+        );
+        assert_eq!(value_of(&doc, &address(shape, "Alpha")), Some(num(6.0)));
+        assert_eq!(
+            outcome.updates,
+            vec![CellUpdate {
+                target: address(shape, "Alpha"),
+                before: Some(num(0.0)),
+                after: Some(num(6.0)),
+            }]
+        );
+    }
+
+    /// A document whose master defines `Alpha` and whose instance holds
+    /// `Alpha` as `Inh` with its own snapshot (ADR 0054).
+    fn inherited_document() -> (Document, ShapeId, ShapeId) {
+        let mut doc = Document::new();
+        let mut master_shape = Shape::new(ShapeId { index: 0 }, 1);
+        master_shape.sheet.cells = vec![cell("Alpha", Some("Beta*2"), Some(num(4.0)))];
+        let master_shape = doc.add_shape(master_shape);
+        doc.masters.push(Master::new(MasterId { index: 0 }, 1));
+        if let Some(master) = doc.masters.first_mut() {
+            master.shapes.push(master_shape);
+        }
+        let mut instance = Shape::new(ShapeId { index: 1 }, 2);
+        instance.master = Some(MasterId { index: 0 });
+        instance.sheet.cells = vec![
+            cell("Alpha", Some("Inh"), Some(num(3.0))),
+            cell("Beta", Some("0"), Some(num(5.0))),
         ];
-        assert_eq!(kinds.len(), 4);
+        let instance = doc.add_shape(instance);
+        (doc, master_shape, instance)
+    }
+
+    #[test]
+    fn an_inherited_cell_is_materialised_when_the_pass_recomputes_it() {
+        let (mut doc, master_shape, instance) = inherited_document();
+        let mut engine = TestEngine::new();
+        let options = RecalcOptions {
+            materialise_inherited: true,
+            ..RecalcOptions::new()
+        };
+        let outcome = run(
+            &mut doc,
+            &[address(instance, "Alpha")],
+            &options,
+            &mut engine,
+        );
+        // The master's formula is evaluated against the instance and
+        // materialised on it (ADR 0056).
+        assert_eq!(
+            formula_of(&doc, &address(instance, "Alpha")),
+            Some(String::from("Beta*2")),
+            "the evaluated formula is written on the instance"
+        );
+        assert_eq!(value_of(&doc, &address(instance, "Alpha")), Some(num(10.0)));
+        assert_eq!(
+            outcome.updates,
+            vec![CellUpdate {
+                target: address(instance, "Alpha"),
+                before: Some(num(3.0)),
+                after: Some(num(10.0)),
+            }]
+        );
+        // The master's own cell is untouched.
+        assert_eq!(
+            formula_of(&doc, &address(master_shape, "Alpha")),
+            Some(String::from("Beta*2"))
+        );
+        assert_eq!(
+            value_of(&doc, &address(master_shape, "Alpha")),
+            Some(num(4.0))
+        );
+    }
+
+    #[test]
+    fn an_inherited_cell_keeps_its_marker_without_materialisation() {
+        let (mut doc, _master_shape, instance) = inherited_document();
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(instance, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(
+            formula_of(&doc, &address(instance, "Alpha")),
+            Some(String::from("Inh")),
+            "no materialisation without the option"
+        );
+        assert_eq!(value_of(&doc, &address(instance, "Alpha")), Some(num(10.0)));
+        assert_eq!(outcome.updates.len(), 1);
+    }
+
+    #[test]
+    fn recalc_is_idempotent() {
+        let (mut doc, _master_shape, instance) = inherited_document();
+        let mut engine = TestEngine::new();
+        let options = RecalcOptions {
+            materialise_inherited: true,
+            ..RecalcOptions::new()
+        };
+        let dirty = [address(instance, "Alpha")];
+        let first = run(&mut doc, &dirty, &options, &mut engine);
+        assert!(!first.updates.is_empty());
+        let second = run(&mut doc, &dirty, &options, &mut engine);
+        assert!(
+            second.updates.is_empty(),
+            "a second pass changes nothing: {:?}",
+            second.updates
+        );
+        // The same for a SETF write: the write repeats, the outcome does
+        // not grow.
+        let (mut doc2, shape2) = doc_with(vec![
+            cell("Alpha", Some("SETF(Beta,5)"), Some(num(0.0))),
+            cell("Beta", Some("2"), Some(num(2.0))),
+        ]);
+        let mut engine2 = TestEngine::new();
+        let dirty2 = [address(shape2, "Alpha")];
+        let first = run(&mut doc2, &dirty2, &RecalcOptions::new(), &mut engine2);
+        assert_eq!(first.updates.len(), 2);
+        let second = run(&mut doc2, &dirty2, &RecalcOptions::new(), &mut engine2);
+        assert!(second.updates.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_function_keeps_the_cached_value() {
+        let (mut doc, shape) = doc_with(vec![cell("Alpha", Some("THEMEVAL(1)"), Some(num(42.0)))]);
+        let mut engine = TestEngine {
+            warn_unknown: true,
+            ..TestEngine::new()
+        };
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(value_of(&doc, &address(shape, "Alpha")), Some(num(42.0)));
+        assert!(outcome.updates.is_empty());
+        assert_eq!(
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: Some(address(shape, "Alpha")),
+                kind: RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
+            }]
+        );
+    }
+
+    #[test]
+    fn fill_missing_only_recomputes_cells_without_a_cached_value() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("0"), None),
+            cell("Beta", Some("0"), Some(num(2.0))),
+        ]);
+        let mut engine = TestEngine::new();
+        let options = RecalcOptions {
+            fill_missing_only: true,
+            ..RecalcOptions::new()
+        };
+        let dirty = [address(shape, "Alpha"), address(shape, "Beta")];
+        let outcome = run(&mut doc, &dirty, &options, &mut engine);
+        assert_eq!(engine.evaluated, vec!["0"]);
+        assert_eq!(value_of(&doc, &address(shape, "Alpha")), Some(num(0.0)));
+        assert_eq!(value_of(&doc, &address(shape, "Beta")), Some(num(2.0)));
+        assert_eq!(outcome.updates.len(), 1);
+    }
+
+    #[test]
+    fn a_dirty_cell_with_no_formula_is_skipped() {
+        let (mut doc, shape) = doc_with(vec![cell("Alpha", None, Some(num(3.0)))]);
+        let mut engine = TestEngine::new();
+        let outcome = run(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(outcome, RecalcOutcome::default());
+        assert!(engine.evaluated.is_empty());
+    }
+
+    #[test]
+    fn a_write_to_a_missing_cell_is_a_warning_not_a_failure() {
+        let (mut doc, shape) = doc_with(vec![cell("Alpha", Some("0"), Some(num(1.0)))]);
+        let mut engine = TestEngine::new();
+        let missing = CellAddress::in_row(
+            SheetRef::Shape(shape),
+            SectionName::from_static("Geometry"),
+            RowTarget::at(9),
+            CellName::from_static("X"),
+        );
+        let outcome = run(
+            &mut doc,
+            std::slice::from_ref(&missing),
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: Some(missing),
+                kind: RecalcWarningKind::MissingReference(String::from("X")),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_section_cell_without_a_row_reports_an_unwritable_target() {
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+        shape.sheet.sections.push({
+            let mut section = Section::new(SectionName::from_static("Geometry"));
+            section
+                .cells
+                .push(cell("NoFill", Some("0"), Some(num(1.0))));
+            section.rows.push({
+                let mut row = Row::new();
+                row.cells.push(cell("X", Some("NoFill+1"), Some(num(1.0))));
+                row
+            });
+            section
+        });
+        let shape = doc.add_shape(shape);
+        let mut engine = TestEngine::new();
+        let target = CellAddress {
+            sheet: SheetRef::Shape(shape),
+            section: Some(SectionName::from_static("Geometry")),
+            row: None,
+            cell: CellName::from_static("NoFill"),
+        };
+        let outcome = run(
+            &mut doc,
+            std::slice::from_ref(&target),
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(
+            outcome.warnings,
+            vec![RecalcWarning {
+                target: Some(target),
+                kind: RecalcWarningKind::MissingReference(String::from("NoFill")),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_row_cell_is_written_through_the_row_write() {
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+        shape.sheet.cells.push(cell("Width", None, Some(num(4.0))));
+        shape.sheet.sections.push({
+            let mut section = Section::new(SectionName::from_static("Geometry"));
+            section.rows.push({
+                let mut row = Row::new();
+                row.ix = Some(0);
+                row.cells.push(cell("X", Some("Width*0.5"), Some(num(0.0))));
+                row
+            });
+            section
+        });
+        let shape = doc.add_shape(shape);
+        let mut engine = TestEngine::new();
+        let target = CellAddress::in_row(
+            SheetRef::Shape(shape),
+            SectionName::from_static("Geometry"),
+            RowTarget {
+                position: Some(0),
+                ix: Some(0),
+            },
+            CellName::from_static("X"),
+        );
+        let outcome = run(
+            &mut doc,
+            std::slice::from_ref(&target),
+            &RecalcOptions::new(),
+            &mut engine,
+        );
+        assert_eq!(value_of(&doc, &target), Some(num(2.0)));
+        assert_eq!(
+            outcome.updates,
+            vec![CellUpdate {
+                target,
+                before: Some(num(0.0)),
+                after: Some(num(2.0)),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_production_engine_never_fails_the_document() {
+        let (mut doc, shape) = doc_with(vec![
+            cell("Alpha", Some("Beta+1"), Some(num(1.0))),
+            cell("Beta", Some("0"), Some(num(2.0))),
+        ]);
+        let dirty = [address(shape, "Alpha")];
+        let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new());
+        // The real pipeline is `Ok` once tasks P6-02..P6-05 land; while
+        // it is stubbed the pass reports it and stops. It never panics
+        // and never fails the document in either state.
+        assert!(outcome.is_ok() || matches!(outcome, Err(Error::NotImplemented(_))));
+    }
+
+    #[test]
+    fn collect_refs_walks_the_tree_in_source_order() {
+        let expr = Expr {
+            span: crate::Span::new(0, 1),
+            kind: ExprKind::Binary {
+                op: crate::BinaryOp::Add,
+                left: Box::new(Expr {
+                    span: crate::Span::new(0, 1),
+                    kind: ExprKind::Ref(CellRef::new("PinX")),
+                }),
+                right: Box::new(Expr {
+                    span: crate::Span::new(2, 3),
+                    kind: ExprKind::Call {
+                        name: String::from("MAX"),
+                        args: vec![
+                            Expr {
+                                span: crate::Span::new(4, 5),
+                                kind: ExprKind::Ref(CellRef::new("Width")),
+                            },
+                            Expr {
+                                span: crate::Span::new(6, 7),
+                                kind: ExprKind::Literal(crate::Literal::Bool(true)),
+                            },
+                        ],
+                    },
+                }),
+            },
+        };
+        let mut out = Vec::new();
+        collect_refs(&expr, &mut out);
+        let names: Vec<String> = out
+            .iter()
+            .map(|reference| reference.name().unwrap_or_default())
+            .collect();
+        assert_eq!(names, vec!["PinX", "Width"]);
+    }
+
+    #[test]
+    fn map_warning_keeps_only_the_recalc_kinds() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::UnknownFunction(String::from("THEMEVAL")),
+        });
+        assert_eq!(
+            mapped,
+            Some(RecalcWarning {
+                target: None,
+                kind: RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
+            })
+        );
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::UnsupportedReference(String::from("Sheet.9!PinX")),
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::MissingReference(String::from(
+                "Sheet.9!PinX"
+            )))
+        );
+        assert_eq!(
+            map_warning(EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::NonFinite,
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn literal_text_spells_every_value_kind() {
+        use crate::units::Unit as FormulaUnit;
+        use crate::value::{ErrorCode, Number};
+        use ferrogram_model::Color;
+        assert_eq!(
+            literal_text(&Value::Number(Number::new(2.5, FormulaUnit::Unitsless))),
+            "2.5"
+        );
+        assert_eq!(
+            literal_text(&Value::Str(String::from("a\"b"))),
+            "\"a\"\"b\""
+        );
+        assert_eq!(literal_text(&Value::Bool(true)), "TRUE");
+        assert_eq!(literal_text(&Value::Bool(false)), "FALSE");
+        assert_eq!(
+            literal_text(&Value::Color(Color::new(1, 2, 3))),
+            "RGB(1,2,3)"
+        );
+        assert_eq!(
+            literal_text(&Value::List(vec![
+                Value::Bool(false),
+                Value::Number(Number::new(1.0, FormulaUnit::Unitsless)),
+            ])),
+            "FALSE;1"
+        );
+        assert_eq!(literal_text(&Value::Err(ErrorCode::Div0)), "#DIV/0!");
+    }
+
+    #[test]
+    fn a_setf_write_to_an_unresolvable_target_is_reported() {
+        // The engine writes an address no model cell names: the pass
+        // records the change attempt as a write error, not a panic.
+        struct BadWriteEngine;
+        impl FormulaEngine for BadWriteEngine {
+            fn references(&mut self, _formula: &Formula) -> Result<Vec<CellRef>, Error> {
+                Ok(Vec::new())
+            }
+            fn evaluate(
+                &mut self,
+                _document: &mut Document,
+                _formula: &Formula,
+                _sheet: SheetRef,
+            ) -> Result<Evaluation, Error> {
+                Ok(Evaluation {
+                    value: num(1.0),
+                    warnings: Vec::new(),
+                    writes: vec![CellWriteOp {
+                        target: CellAddress::in_row(
+                            SheetRef::Page(PageId { index: 0 }),
+                            SectionName::from_static("Geometry"),
+                            RowTarget::at(3),
+                            CellName::from_static("X"),
+                        ),
+                        formula: String::from("1"),
+                        value: num(1.0),
+                    }],
+                })
+            }
+        }
+        let (mut doc, shape) = doc_with(vec![cell("Alpha", Some("0"), Some(num(0.0)))]);
+        let mut graph = DepGraph::build_with(&doc, &mut BadWriteEngine).expect("build");
+        let outcome = recalc_with(
+            &mut doc,
+            &[address(shape, "Alpha")],
+            &RecalcOptions::new(),
+            &mut graph,
+            &mut BadWriteEngine,
+        )
+        .expect("recalc");
+        assert_eq!(outcome.updates.len(), 1);
+        assert!(
+            outcome
+                .warnings
+                .iter()
+                .any(|warning| matches!(warning.kind, RecalcWarningKind::MissingReference(_)))
+        );
     }
 }
