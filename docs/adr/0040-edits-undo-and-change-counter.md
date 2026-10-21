@@ -103,3 +103,23 @@ over a small seeded document (task P5-11).
 - **Snapshot-based undo (clone the whole document per step).** Rejected:
   O(document) memory per drag step; `DetachedShapes` and `CellWrite`
   snapshots are the minimal inverse.
+
+## Amendment 2026-10-20 (task P5-19): the selection an undo step leaves
+
+Review F9: `Edit::apply`/`revert` mutate the selection as a side effect.
+That behaviour is now a written rule:
+
+- A group or ungroup step **selects the shapes it affected**: the new
+  group on a group (and on a redo of an ungroup), its members on an
+  ungroup (and on an undo of a group). The ids it selects are the arena
+  ids the shapes ended up at — an undo of an ungroup selects the
+  restored group at its old arena slot, never the discarded fresh one.
+- A page restore (the `page.*` edits) **clears** the selection when the
+  active page changed: the selected ids would be stale on the restored
+  page.
+- A delete step leaves the removed shapes out of the selection (the
+  detached ids name shapes no page reaches).
+
+The rule is pinned by
+`undo_steps_select_their_shapes_and_a_page_restore_clears_the_selection`
+(`crates/commands/tests/arrange.rs`).

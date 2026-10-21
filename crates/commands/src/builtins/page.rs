@@ -8,7 +8,7 @@
 //! active page is part of the snapshot and a page switch clears the
 //! selection (ADR 0041).
 
-use ferrogram_model::{Document, Page, PageId};
+use ferrogram_model::{Page, PageId};
 
 use crate::app::{AppCtx, SessionId};
 use crate::error::CommandError;
@@ -389,17 +389,10 @@ fn page_label(page: &Page, index: usize) -> String {
     }
 }
 
-/// A document with no pages cannot be rendered; the check is exposed for
-/// the writer's rule (ADR 0048) and keeps the handler's error path
-/// explicit.
-#[allow(dead_code)]
-fn document_pages(doc: &Document) -> usize {
-    doc.pages.len()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferrogram_model::Document;
 
     #[test]
     fn page_label_falls_back_to_the_number() {
@@ -407,7 +400,6 @@ mod tests {
         assert_eq!(page_label(&page, 0), "Page 1");
         page.name = "Flow".to_owned();
         assert_eq!(page_label(&page, 4), "Flow");
-        assert_eq!(document_pages(&Document::new()), 0);
     }
 
     #[test]

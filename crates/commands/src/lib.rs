@@ -33,7 +33,7 @@ pub use edit::CompositeEdit;
 pub use error::{
     CommandError, CommandIdError, NeededInput, PathPurpose, RegistryError, SettingsError,
 };
-pub use registry::{CommandMeta, CommandStatus, Registry, StubCommand};
+pub use registry::{CommandMeta, CommandStatus, Registry, StubCommand, dispatch};
 pub use undo::{Edit, UndoStack};
 
 use std::collections::BTreeMap;
@@ -91,15 +91,13 @@ impl CommandId {
 
         static POOL: OnceLock<Mutex<Vec<&'static str>>> = OnceLock::new();
         let pool = POOL.get_or_init(|| Mutex::new(Vec::new()));
-        let mut guard = match pool.lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                return Err(CommandIdError {
-                    value: s.to_owned(),
-                    reason: "id pool lock is poisoned",
-                });
-            }
-        };
+        // The pool holds immutable leaked ids, so a poisoned lock holds
+        // no half-built value: recovery is safe (task P5-19 coverage:
+        // `PoisonError::into_inner` instead of an unreachable `Err`
+        // arm).
+        let mut guard = pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         intern_into(&mut guard, INTERN_CAP, s)
     }
 

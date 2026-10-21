@@ -6,11 +6,13 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{ActiveTool, AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
-};
+use ferrogram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Registry, Source};
 use ferrogram_geom::Point;
 use ferrogram_model::{
     Cell, CellName, CellValue, Connect, Document, Page, PageId, Preserved, Row, Section,
@@ -66,26 +68,6 @@ fn fixture() -> (AppCtx, Registry) {
 
 fn empty_ctx() -> AppCtx {
     AppCtx::new(Settings::default())
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take()
-        && let Some(session) = ran_against.or_else(|| ctx.active_document().map(|s| s.id))
-    {
-        ctx.push_edit(session, edit)?;
-    }
-    Ok(outcome)
 }
 
 #[test]

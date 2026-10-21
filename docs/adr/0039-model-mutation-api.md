@@ -98,3 +98,28 @@ allocation derived from input.
   stability promise ids in undo steps rely on.
 - **A `ShapeRef` guard type that panics on stale ids.** Rejected:
   "never crash" means stale ids are `Err`, not panics.
+
+## Amendment 2026-10-20 (task P5-19): a failed mutation changes nothing
+
+One rule closes review findings F2 and F11: **a failed mutation changes
+nothing**. A method of this API computes and checks every derived value
+before its first mutation and answers `Error::BadCell` early. Today that
+means:
+
+- `group_shapes` computes the bounding box, the box extent, the centre
+  and every member's re-based pin first (two shapes at extreme cached
+  pins overflow the extent to infinity — review F2) and rejects the
+  whole group before the group shape is inserted;
+- `ungroup_shape` computes every member's re-based pin, angle and flips
+  before the first cell write;
+- `insert_shape` and `insert_subshape` validate the child ids before the
+  shape enters the arena (review F11: no unnamed entry is left behind).
+
+A caller that stacks several mutations into one user action owns the
+same atomicity at its level: `edit.delete` drops a target whose ancestor
+is also a target up front (review F1: one subtree, one undo step, in
+either selection order), so its composite step can never apply half.
+
+A mutation that fails halfway would need rollback machinery per method;
+the validate-first shape keeps the rule cheap and testable
+(`crates/model/src/mutate.rs` tests pin the unchanged document).

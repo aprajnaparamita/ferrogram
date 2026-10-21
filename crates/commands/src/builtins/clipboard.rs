@@ -534,8 +534,8 @@ mod tests {
         let (mut ctx, session, page) = context(true);
         let empty = content(Vec::new(), Vec::new());
         let error = paste_content(&mut ctx, session, page, empty, Placement::Offset(0.0, 0.0))
-            .err()
-            .expect("an empty fragment has no roots");
+            .map(|_| ())
+            .expect_err("an empty fragment has no roots");
         assert!(error.to_string().contains("no root shape"));
 
         let shape = Shape::new(ShapeId { index: 0 }, 1);
@@ -642,5 +642,42 @@ mod tests {
             pointer_offset(&args).expect("negative y"),
             Some((1.0, -2.0))
         );
+    }
+
+    /// Task P5-19 coverage: the `?` of `paste_content` in `run_paste`
+    /// (a fragment with no root shape).
+    #[test]
+    fn run_paste_reports_a_fragment_with_no_roots() {
+        let (mut ctx, _session, _page) = context(true);
+        ctx.clipboard = Clipboard {
+            content: Some(content(Vec::new(), Vec::new())),
+            pastes: 0,
+        };
+        let error = run_paste(&mut ctx, &crate::Invocation::empty(crate::Source::Test))
+            .expect_err("no roots");
+        assert!(error.to_string().contains("no root shape"), "{error}");
+    }
+
+    /// Task P5-19 coverage: the `?` of `paste_content` in
+    /// `run_duplicate` (the copy succeeded but the paste step failed —
+    /// here the page's Visio ids are exhausted).
+    #[test]
+    fn run_duplicate_reports_a_failed_paste_step() {
+        let (mut ctx, _session, page) = context(true);
+        let shape = {
+            let doc = &mut ctx.active_document_mut().expect("session").document;
+            let id = doc
+                .insert_shape(page, Shape::new(ShapeId { index: 0 }, 0), None)
+                .expect("shape");
+            doc.shape_mut(id).expect("shape").visio_id = i32::MAX;
+            id
+        };
+        ctx.selection.shapes = vec![shape];
+        ctx.selection.anchor = Some(shape);
+        ctx.selection.page = Some(page);
+        let error = run_duplicate(&mut ctx, &crate::Invocation::empty(crate::Source::Test))
+            .map(|_| ())
+            .expect_err("id exhaustion");
+        assert!(error.to_string().contains("too many shapes"), "{error}");
     }
 }

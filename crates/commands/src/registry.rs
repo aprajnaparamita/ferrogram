@@ -243,6 +243,41 @@ impl Registry {
     }
 }
 
+/// Dispatches one already-built invocation and records its undo step:
+/// the seam every programmatic caller reuses (the shell, the CLI, the
+/// tests, the Phase 8 control channel). This is the **only** dispatcher
+/// of [`Outcome::edit`]; a caller that runs `Registry::execute` directly
+/// must not (it would drop the undo step, task P5-19 review F3).
+///
+/// Runs the command through [`Registry::execute`], then pushes the
+/// command's undoable edit (when it produced one) onto the undo stack of
+/// the session the command ran against: the active session **before**
+/// the run, found by its [`DocumentSession::id`](crate::DocumentSession)
+/// (the `with_undo` way, P4-15 open issue 4), so a command that opens a
+/// document does not leave its edit on the new document's stack. With no
+/// session before the run (the command opened the first document) the
+/// edit belongs to the session it opened. With no session at all the
+/// edit is dropped with one warning line (ADR 0040 rule 2:
+/// [`AppCtx::push_edit`](crate::AppCtx::push_edit) is the only push
+/// path).
+pub fn dispatch(
+    registry: &Registry,
+    ctx: &mut AppCtx,
+    id: &CommandId,
+    invocation: Invocation,
+) -> Result<Outcome, CommandError> {
+    let ran_against = ctx.active_document().map(|session| session.id);
+    let mut outcome = registry.execute(id, ctx, invocation)?;
+    if let Some(edit) = outcome.edit.take() {
+        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
+        match target {
+            Some(session) => ctx.push_edit(session, edit)?,
+            None => ctx.record_warning("an undoable edit with no open document was dropped"),
+        }
+    }
+    Ok(outcome)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

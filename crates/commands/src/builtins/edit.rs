@@ -32,7 +32,7 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
-use super::connector::reroute_after_edit;
+use super::connector::reroute_quietly_on;
 use super::{
     CommandTable, edit_outcome, has_pages, has_selection, model_error, no_document, outcome,
 };
@@ -57,13 +57,12 @@ pub(crate) fn document_mut(
 
 /// The literal formula of one number cell (ADR 0038): `0` for zero,
 /// the shortest round-trip spelling otherwise. `-0.0` folds to `"0"`.
-pub(crate) fn number_literal(value: f64) -> String {
-    if value == 0.0 {
-        "0".to_owned()
-    } else {
-        format!("{value}")
-    }
-}
+///
+/// The model's one spelling rule, exported by `ferrogram_model` (task
+/// P5-19 review F6: one spelling, one implementation — a local copy
+/// could diverge and make a redo write a different `F` than the first
+/// apply). Re-exported here under the command layer's name.
+pub(crate) use ferrogram_model::mutate::literal as number_literal;
 
 /// The exact cell entries a `Document::write_cell` of `cell` touches:
 /// the cell itself plus the cells the documented-defaults table derives
@@ -300,7 +299,6 @@ impl Edit for CellEdit {
 
 /// Which direction one [`StructuralEdit`] runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // `Insert` is reached through `StructuralEdit::insertion`.
 enum Polarity {
     /// `apply` detaches the subtree, `revert` restores it (delete).
     Remove,
@@ -344,12 +342,8 @@ impl StructuralEdit {
     /// The caller inserts the shape first (through the mutation API) and
     /// hands out this edit; `revert` captures the subtree and `apply`
     /// replays the capture. A first `apply` with nothing captured is an
-    /// error, never a panic.
-    ///
-    /// No P5-04 command inserts shapes: the `insert.*`, `edit.paste`
-    /// and `edit.duplicate` commands (P5-06..P5-08) use this constructor
-    /// (`#[allow(dead_code)]` until they land; the unit tests cover it).
-    #[allow(dead_code)]
+    /// error, never a panic. The `insert.*`, `edit.paste` and
+    /// `edit.duplicate` commands use it (P5-06..P5-08).
     pub(crate) fn insertion(
         doc: &Document,
         session: SessionId,
@@ -550,6 +544,23 @@ pub(super) fn selection_targets(
     Ok((session.id, targets, warnings))
 }
 
+/// Whether any shape of `targets` is a strict ancestor of `id`: such a
+/// target is deleted with its ancestor (one subtree, one undo step,
+/// task P5-19 review F1). The parent walk is bounded (AGENTS.md section
+/// 6), so a cyclic parent chain cannot loop.
+fn has_selected_ancestor(doc: &Document, id: ShapeId, targets: &[ShapeId]) -> bool {
+    const MAX_PARENT_WALK: usize = 1 << 16;
+    let mut current = id;
+    for _ in 0..MAX_PARENT_WALK {
+        match doc.shape(current).and_then(|entry| entry.parent) {
+            Some(parent) if targets.contains(&parent) => return true,
+            Some(parent) => current = parent,
+            None => return false,
+        }
+    }
+    false
+}
+
 /// "Delete shape" / "Delete 3 shapes": the undo label of one command
 /// (ADR 0040 rule 1).
 pub(crate) fn count_label(verb: &str, count: usize) -> String {
@@ -595,10 +606,30 @@ fn deleted_glue_warnings(ctx: &AppCtx, page: Option<PageId>, targets: &[ShapeId]
 
 /// `edit.delete`: detaches every selected shape (one undo step).
 ///
+/// A target whose ancestor is also a target goes with its ancestor and
+/// is dropped from the list with one warning line (task P5-19 review F1:
+/// a group plus its member is one subtree and one undo step, in either
+/// selection order).
+///
 /// The removed shapes leave the selection; an entered group that went
 /// with them is exited.
 pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
-    let (session, targets, mut warnings) = selection_targets(ctx)?;
+    let (session, selected, mut warnings) = selection_targets(ctx)?;
+    let targets: Vec<ShapeId> = {
+        let doc = &ctx.active_document().ok_or_else(no_document)?.document;
+        let mut kept = Vec::new();
+        for id in selected.iter().copied() {
+            if has_selected_ancestor(doc, id, &selected) {
+                warnings.push(format!(
+                    "shape {} is inside another selected shape; skipped",
+                    id.index
+                ));
+            } else {
+                kept.push(id);
+            }
+        }
+        kept
+    };
     let page = ctx
         .active_document()
         .and_then(|session| session.active_page);
@@ -617,10 +648,8 @@ pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
         }
     }
     edit.apply(ctx)?;
-    if let Some(page) = page
-        && let Err(error) = reroute_after_edit(ctx, page)
-    {
-        ctx.record_warning(format!("connectors were not re-routed: {error}"));
+    if let Some(page) = page {
+        reroute_quietly_on(ctx, page);
     }
 
     // The detached shapes (and anything inside them) leave the selection.
@@ -1102,6 +1131,17 @@ mod tests {
         );
     }
 
+    /// The two empty-input arms of the glue counter (task P5-19
+    /// coverage): no session, and no active page.
+    #[test]
+    fn deleted_glue_warnings_without_a_session_or_page_are_empty() {
+        let ctx = AppCtx::new(Settings::default());
+        assert!(deleted_glue_warnings(&ctx, Some(PageId { index: 0 }), &[]).is_empty());
+        let (ctx, _session, page, shapes) = fixture(1);
+        assert!(deleted_glue_warnings(&ctx, None, &shapes).is_empty());
+        assert!(deleted_glue_warnings(&ctx, Some(page), &shapes).is_empty());
+    }
+
     #[test]
     fn structural_edits_report_missing_state() {
         let (mut ctx, session, _page, shapes) = fixture(1);
@@ -1319,5 +1359,27 @@ mod tests {
         };
         let error = edit.apply(&mut ctx).expect_err("the model refuses");
         assert!(error.to_string().contains("non-finite"), "{error}");
+    }
+
+    /// Task P5-19 review F1: the ancestor walk is bounded — a cyclic
+    /// parent chain stops at the cap, it never loops.
+    #[test]
+    fn selected_ancestor_walk_stops_on_a_cycle() {
+        let (mut ctx, session, _page, shapes) = fixture(3);
+        {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            if let Some(entry) = doc.shape_mut(shapes[0]) {
+                entry.parent = Some(shapes[1]);
+            }
+            if let Some(entry) = doc.shape_mut(shapes[1]) {
+                entry.parent = Some(shapes[0]);
+            }
+        }
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        assert!(
+            !has_selected_ancestor(doc, shapes[0], &[shapes[2]]),
+            "the walk stops at the cap"
+        );
+        assert!(has_selected_ancestor(doc, shapes[0], &[shapes[1]]));
     }
 }

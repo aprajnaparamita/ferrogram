@@ -7,11 +7,13 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
-    Args, CommandError, CommandId, Invocation, Outcome, Registry, SessionId, Source,
-};
+use ferrogram_commands::{Args, CommandError, CommandId, Invocation, Registry, SessionId, Source};
 use ferrogram_geom::Unit;
 use ferrogram_model::{Cell, CellName, CellValue, Document, PageId, Preserved, Shape, ShapeId};
 
@@ -55,28 +57,6 @@ fn fixture(shapes: &[(f64, f64, f64, f64)]) -> (AppCtx, Registry, SessionId, Pag
     let index = ctx.open_document(DocumentSession::new(doc, None));
     let session = ctx.documents.get(index).expect("session").id;
     (ctx, registry().expect("registry"), session, page, ids)
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
 }
 
 fn select(ctx: &mut AppCtx, page: PageId, shapes: &[ShapeId]) {
@@ -284,6 +264,47 @@ fn group_and_ungroup_round_trip_positions_and_undo() {
     dispatch(&mut ctx, &registry, "edit.redo", Args::new()).expect("redo ungroup");
     assert_eq!(document(&ctx).pages[0].shapes.len(), 3);
     assert_eq!(pins(document(&ctx), &shapes), before);
+}
+
+/// The ADR 0040 selection rule (task P5-19 review F9, pinned): an undo
+/// or redo of a group/ungroup selects the shapes it affected (the new
+/// group on a group, its members on an ungroup), and a page restore
+/// clears a stale selection when the active page changed.
+#[test]
+fn undo_steps_select_their_shapes_and_a_page_restore_clears_the_selection() {
+    let (mut ctx, registry, _session, page, shapes) =
+        fixture(&[(2.0, 1.0, 0.0, 0.0), (2.0, 1.0, 3.0, 2.0)]);
+    select(&mut ctx, page, &shapes);
+    dispatch(&mut ctx, &registry, "arrange.group", Args::new()).expect("group");
+    let group = document(&ctx).pages[0].shapes[0];
+    assert_eq!(ctx.selection.shapes, vec![group], "the group is selected");
+
+    // Undo the group: the members are the affected shapes.
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo group");
+    assert_eq!(ctx.selection.shapes, shapes, "undo selects the members");
+
+    // Redo the group, then undo the ungroup path: the group is back.
+    dispatch(&mut ctx, &registry, "edit.redo", Args::new()).expect("redo group");
+    assert_eq!(ctx.selection.shapes, vec![group]);
+    dispatch(&mut ctx, &registry, "arrange.ungroup", Args::new()).expect("ungroup");
+    assert_eq!(ctx.selection.shapes, shapes);
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo ungroup");
+    assert_eq!(
+        ctx.selection.shapes,
+        vec![group],
+        "undo of an ungroup selects the group"
+    );
+
+    // A page restore that lands on another active page clears the
+    // selection: the ids would be stale on the restored page.
+    dispatch(&mut ctx, &registry, "page.add", Args::new()).expect("add");
+    select(&mut ctx, page, &[group]);
+    dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo page add");
+    assert!(
+        ctx.selection.is_empty(),
+        "the page restore cleared the stale selection: {:?}",
+        ctx.selection.shapes
+    );
 }
 
 #[test]

@@ -327,9 +327,10 @@ fn higher(a: Option<SnapKind>, b: Option<SnapKind>) -> Option<SnapKind> {
     }
 }
 
-/// A geom failure as a [`UiError`].
+/// A geom failure as a [`UiError`] (task P5-19 review F8: the geometry
+/// variant, never [`UiError::Io`] — no IO is involved).
 fn geom_error(error: ferrogram_geom::Error) -> UiError {
-    UiError::Io {
+    UiError::Geometry {
         message: format!("snap math failed: {error}"),
     }
 }
@@ -584,7 +585,7 @@ mod tests {
         );
         assert_eq!(higher(None, None), None);
         let error = geom_error(ferrogram_geom::Error::Singular);
-        assert!(matches!(error, UiError::Io { .. }));
+        assert!(matches!(error, UiError::Geometry { .. }));
     }
 
     #[test]

@@ -7,10 +7,14 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
+mod support;
+
+use support::dispatch;
+
 use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::builtins::registry;
 use ferrogram_commands::{
-    ArgValue, Args, CommandError, CommandId, Invocation, Outcome, Registry, SessionId, Source,
+    ArgValue, Args, CommandError, CommandId, Invocation, Registry, SessionId, Source,
 };
 use ferrogram_geom::{Point, Unit};
 use ferrogram_model::{
@@ -51,28 +55,6 @@ fn fixture() -> (AppCtx, Registry, SessionId, PageId) {
     let index = ctx.open_document(DocumentSession::new(doc, None));
     let session = ctx.documents.get(index).expect("session").id;
     (ctx, registry().expect("registry"), session, page)
-}
-
-fn dispatch(
-    ctx: &mut AppCtx,
-    registry: &Registry,
-    id: &str,
-    args: Args,
-) -> Result<Outcome, CommandError> {
-    let ran_against = ctx.active_document().map(|session| session.id);
-    let mut outcome = registry.execute(
-        &CommandId::intern(id).expect("id"),
-        ctx,
-        Invocation::new(args, Source::Test),
-    )?;
-    if let Some(edit) = outcome.edit.take() {
-        let target = ran_against.or_else(|| ctx.active_document().map(|session| session.id));
-        match target {
-            Some(session) => ctx.push_edit(session, edit)?,
-            None => ctx.record_warning("an undoable edit with no open document was dropped"),
-        }
-    }
-    Ok(outcome)
 }
 
 fn select(ctx: &mut AppCtx, page: PageId, shapes: &[ShapeId]) {
@@ -358,4 +340,79 @@ fn clipboard_argument_and_state_failures() {
     ctx.selection.clear();
     let error = dispatch(&mut ctx, &registry, "edit.copy", Args::new()).expect_err("no selection");
     assert!(matches!(error, CommandError::NotEnabled { .. }));
+}
+
+/// The P5-11 open item (task P5-19 coverage): a copied fragment whose
+/// `Connect` record names a shape outside the copied set.
+///
+/// The record is not copied (a fragment's glue needs both ends). The
+/// re-route pass of the paste drops the source's record that names a
+/// shape that is nowhere on the page, with one warning line, so the
+/// pasted connector carries no stale glue and the live glue stays.
+#[test]
+fn paste_of_a_fragment_with_a_connect_outside_the_copy_carries_no_stale_glue() {
+    let (mut ctx, registry, _session, page) = fixture();
+    let (connector, outside) = {
+        let doc = &mut ctx.active_document_mut().expect("session").document;
+        let outside = doc
+            .insert_shape(page, shape(1.0, 1.0, 0.0, 0.0), None)
+            .expect("outside");
+        let connector = doc
+            .insert_shape(page, shape(2.0, 1.0, 3.0, 0.0), None)
+            .expect("connector");
+        let outside_visio = doc.shape(outside).expect("shape").visio_id;
+        let connector_visio = doc.shape(connector).expect("shape").visio_id;
+        for (from_cell, to_sheet) in [("EndX", outside_visio), ("BeginX", 99i32)] {
+            doc.add_connect(
+                page,
+                Connect {
+                    from_sheet: connector_visio,
+                    from_cell: from_cell.to_owned(),
+                    from_part: ferrogram_model::mutate::VIS_BEGIN,
+                    to_sheet,
+                    to_cell: "PinX".to_owned(),
+                    to_part: ferrogram_model::mutate::VIS_WHOLE_SHAPE,
+                    ..Connect::new()
+                },
+            )
+            .expect("connect");
+        }
+        (connector, outside)
+    };
+    select(&mut ctx, page, &[connector]);
+    dispatch(&mut ctx, &registry, "edit.copy", Args::new()).expect("copy");
+    let content = ctx.clipboard.content.clone().expect("clipboard");
+    assert!(
+        content.connects.is_empty(),
+        "the outside glue is not copied"
+    );
+
+    dispatch(&mut ctx, &registry, "edit.paste", Args::new()).expect("paste");
+    let doc = document(&ctx);
+    let entity = doc.page(page).expect("page");
+    let pasted = *entity.shapes.last().expect("pasted");
+    let pasted_visio = doc.shape(pasted).expect("pasted").visio_id;
+    let source_visio = doc.shape(connector).expect("connector").visio_id;
+    let outside_visio = doc.shape(outside).expect("outside").visio_id;
+    assert!(
+        entity
+            .connects
+            .iter()
+            .all(|record| record.from_sheet != pasted_visio && record.to_sheet != pasted_visio),
+        "the pasted connector has no glue"
+    );
+    assert!(
+        entity
+            .connects
+            .iter()
+            .any(|record| record.from_sheet == source_visio && record.to_sheet == outside_visio),
+        "the live glue stays"
+    );
+    assert!(
+        ctx.warnings
+            .iter()
+            .any(|line| line.contains("lost its glue to detached shape 99")),
+        "{:?}",
+        ctx.warnings
+    );
 }

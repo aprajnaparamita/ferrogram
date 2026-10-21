@@ -31,7 +31,7 @@ use crate::error::CommandError;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
-use super::connector::reroute_after_edit;
+use super::connector::reroute_quietly_on;
 use super::edit::{
     CellEdit, GeometryEdit, count_label, document_mut, number_literal, read_cell_number,
     selection_targets,
@@ -86,10 +86,8 @@ fn active_page(ctx: &AppCtx) -> Option<ferrogram_model::PageId> {
 
 /// Re-routes the page's glued connectors after an editing command.
 fn reroute(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
-    if let Some(page) = page
-        && let Err(error) = reroute_after_edit(ctx, page)
-    {
-        ctx.record_warning(format!("connectors were not re-routed: {error}"));
+    if let Some(page) = page {
+        reroute_quietly_on(ctx, page);
     }
 }
 
@@ -508,5 +506,50 @@ mod tests {
             warnings[0].contains("geometry was not scaled"),
             "{warnings:?}"
         );
+    }
+
+    /// Task P5-19 coverage: the staging `?` arms of `cell_edit` and
+    /// `scale_edit` (a shape that vanished before the step is staged).
+    #[test]
+    fn edit_staging_reports_a_stale_shape() {
+        let (mut ctx, session, _page, _shape) = fixture();
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        let stale = ShapeId { index: 9 };
+        let error = cell_edit(doc, session, "Move shape", stale, "PinX", 1.0)
+            .map(|_| ())
+            .expect_err("stale");
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+        let mut warnings = Vec::new();
+        let error = scale_edit(doc, session, stale, (1.0, 1.0), (2.0, 2.0), &mut warnings)
+            .map(|_| ())
+            .expect_err("stale");
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+    }
+
+    /// Task P5-19 coverage: `run_move` stages `PinX` first and then
+    /// finds that `PinY` is not finite (the second staging `?`).
+    #[test]
+    fn move_reports_a_non_finite_pin_y() {
+        let (mut ctx, session, page, shape) = fixture();
+        {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            let entry = doc.shape_mut(shape).expect("shape");
+            for cell in &mut entry.sheet.cells {
+                if cell.name.as_str() == "PinY" {
+                    cell.value = Some(CellValue::Number(1.7e308));
+                }
+            }
+        }
+        ctx.selection.shapes = vec![shape];
+        ctx.selection.anchor = Some(shape);
+        ctx.selection.page = Some(page);
+        let inv = Invocation::new(
+            crate::Args::new()
+                .with("dx", crate::ArgValue::Number(1.0))
+                .with("dy", crate::ArgValue::Number(1.7e308)),
+            Source::Test,
+        );
+        let error = run_move(&mut ctx, &inv).expect_err("non-finite pin");
+        assert!(error.to_string().contains("not finite"), "{error}");
     }
 }
