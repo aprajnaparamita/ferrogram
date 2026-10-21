@@ -14,7 +14,22 @@ Task board. Only the master agent edits this file, on `main`.
 
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
-| [P6-01](tasks/P6-01.md) | architect | Phase 5 | — | ready | — |
+| [P6-01](tasks/P6-01.md) | architect | Phase 5 | — | merged `12ecf24` (ADRs 0051–0060, stubs, task files) | — |
+| [P6-02](tasks/P6-02.md) | implementer | P6-01 | A | ready (lexer, parser, AST, printer, fuzz target) | — |
+| [P6-03](tasks/P6-03.md) | implementer | P6-01 | A | ready (values, units, coercions) | — |
+| [P6-04](tasks/P6-04.md) | implementer | P6-01 | A | ready (function table, evaluator) | — |
+| [P6-05](tasks/P6-05.md) | implementer | P6-01 | A | ready (reference resolution, inheritance) | — |
+| [P6-06](tasks/P6-06.md) | implementer | P6-01 | A | ready (dependency graph, recalc) | — |
+| [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | waiting (edits with recalc and undo) | — |
+| [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | waiting (values on open, render, save) | — |
+| [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | waiting (typed panels) | — |
+| [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | waiting (cross-check, exit test) | — |
+| [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | waiting | — |
+| [P6-12](tasks/P6-12.md) | reviewer | P6-11 | E | waiting | — |
+| [P6-13](tasks/P6-13.md) | coverage-auditor | P6-11 | E | waiting | — |
+| [P6-14](tasks/P6-14.md) | cleanroom-auditor | P6-11 | E | waiting | — |
+
+Group A runs in parallel, one `crates/shapesheet` module set per task; `crates/shapesheet/src/lib.rs` belongs to no task and `error.rs` to P6-02. The `ferrogram-shapesheet` ratchet was reset from 100.0 (all stubs) to 85.0 when the plan was merged.
 
 ## Phase 5 task board
 
