@@ -6,8 +6,8 @@
 //! value, a cut cycle keeps the values it found, a budget run-out leaves
 //! the rest stale. A recalc never fails the document and never panics.
 //!
-//! The pass drives a [`FormulaEngine`]: production runs [`DocumentEngine`]
-//! (`parse`, `eval`, `DocumentResolver`); [`recalc_with`] takes the
+//! The pass drives a `FormulaEngine`: production runs `DocumentEngine`
+//! (`parse`, `eval`, `DocumentResolver`); `recalc_with` takes the
 //! engine and the [`DepGraph`] of the session so an edit refreshes only
 //! the edges it touched (ADR 0055). What the pass writes follows
 //! ADR 0056: a cell with its own formula gets its cached value updated,
@@ -136,7 +136,7 @@ pub struct Evaluation {
 /// The formula engine the graph and the recalc pass drive (ADR 0055).
 ///
 /// Production wires this to `parse`, `eval` and `DocumentResolver`
-/// ([`DocumentEngine`]); the tests drive the pass with a small engine so
+/// (`DocumentEngine`); the tests drive the pass with a small engine so
 /// the order, cycle and budget rules are testable alone.
 pub trait FormulaEngine {
     /// The cells `formula` reads (its dependency edges).
@@ -301,8 +301,8 @@ fn literal_text(value: &Value) -> String {
 /// Recalculates `dirty` and their transitive dependents in `document`.
 ///
 /// The convenience entry point: it builds a throw-away [`DepGraph`] and
-/// runs [`recalc_with`] with [`DocumentEngine`]. A session that keeps
-/// its graph (ADR 0055) calls [`recalc_with`] directly.
+/// runs `recalc_with` with `DocumentEngine`. A session that keeps
+/// its graph (ADR 0055) calls `recalc_with` directly.
 pub fn recalc(
     document: &mut Document,
     dirty: &[CellAddress],
@@ -515,7 +515,7 @@ fn apply_write(
 
 #[cfg(test)]
 pub(crate) mod testing {
-    //! A small formula engine for the tests of [`crate::graph`] and this
+    //! A small formula engine for the tests of `crate::graph` and this
     //! module (task P6-06).
     //!
     //! The tests write the little language this module reads: a number

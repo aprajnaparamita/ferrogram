@@ -154,7 +154,7 @@ impl DepGraph {
     /// `engine` (ADR 0055).
     ///
     /// This is the seam the tests drive with a small engine; the
-    /// production engine is [`crate::DocumentEngine`].
+    /// production engine is `DocumentEngine`.
     pub fn build_with(
         document: &Document,
         engine: &mut dyn FormulaEngine,
@@ -205,7 +205,7 @@ impl DepGraph {
     ///
     /// Cells that lie on a dependency cycle are **not** in the order:
     /// they keep their cached values and the caller reports them
-    /// ([`DepGraph::order_and_cycles`]). Ties break on the address order
+    /// (`DepGraph::order_and_cycles`). Ties break on the address order
     /// of [`CellAddress`], so the same input always gives the same
     /// order.
     pub fn evaluation_order(&self, dirty: &[CellAddress]) -> Result<Vec<CellAddress>, Error> {
