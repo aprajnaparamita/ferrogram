@@ -21,7 +21,7 @@
 //!
 //! Every other conversion falls back to the typed default of the target
 //! kind (`0`, `""`, `FALSE`, black, the empty list) and reports it on
-//! [`Coerced::defaulted`], so the caller records one
+//! the `defaulted` field of `Coerced`, so the caller records one
 //! [`crate::EvalWarningKind::Coercion`] warning (`5 * "sheep"` is `0`
 //! with a `Coercion` warning). Coercion never fails and never panics.
 //!
@@ -93,7 +93,7 @@ fn typed_default(kind: ValueKind) -> Value {
 
 /// Coerces `value` to `kind` (ADR 0052).
 ///
-/// The call always succeeds. It reports on [`Coerced::defaulted`] whether
+/// The call always succeeds. It reports on the `defaulted` field of `Coerced` whether
 /// the conversion expressed the value or fell back to the typed default;
 /// only the second case earns a `Coercion` warning.
 pub fn coerce(value: &Value, kind: ValueKind) -> Coerced {

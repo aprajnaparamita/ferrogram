@@ -375,7 +375,7 @@ impl Unit {
     ///
     /// The model has no didots, nautical miles, arc minutes or seconds,
     /// no compound, fractional or implicit spellings, and no durations or
-    /// dates (ADR 0052). [`Unit::to_cached`] falls back to the family's
+    /// dates (ADR 0052). [`crate::Value::to_cached`] falls back to the family's
     /// canonical unit for those; this function stays strict so a caller
     /// that needs the file's own spelling can say so.
     pub fn to_geom(self) -> Result<ferrogram_geom::Unit, Error> {
