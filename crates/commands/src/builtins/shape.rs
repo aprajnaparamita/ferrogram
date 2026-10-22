@@ -18,9 +18,13 @@
 //! [`CompositeEdit`] (one undo step, ADR 0040) and each step bumps
 //! `DocumentSession::changes` (ADR 0040 rule 3).
 //!
-//! Without a formula engine (ADR 0038) the numbers are read as cached
-//! values through the inheritance lookup, so a shape whose cells have
-//! no cached values anywhere moves to the delta and warns.
+//! The numbers are read as cached values through the inheritance
+//! lookup (ADR 0054), so a shape whose cells have no cached values
+//! anywhere moves to the delta and warns. Every write is an indirect
+//! programmatic write (ADR 0056): a `GUARD`-ed cell keeps its formula
+//! and warns once. A resize writes `Width`/`Height` and lets the recalc
+//! pass compute the geometry rows whose formulas compute (ADR 0056);
+//! [`GeometryEdit`] scales the constant rows beside it.
 
 use ferrogram_geom::Size;
 use ferrogram_model::{CellValue, CellWrite, ShapeId, SheetRef};
@@ -137,8 +141,9 @@ fn cell_edit(
     )?))
 }
 
-/// The geometry rescale step of a size change, when the current size
-/// can be scaled (`scale_geometry` needs a positive source box).
+/// The constant-geometry rescale step of a size change (ADR 0056), when
+/// the current size can be scaled (a scale factor needs a positive
+/// source box).
 fn scale_edit(
     doc: &ferrogram_model::Document,
     session: SessionId,
@@ -206,7 +211,8 @@ pub(super) fn run_move(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
 }
 
 /// `shape.resize`: gives every selected shape the size (`width`,
-/// `height`), scaling its geometry (ADR 0038 rule 3).
+/// `height`), scaling its constant geometry and letting recalc compute
+/// the rows with formulas (ADR 0056).
 pub(super) fn run_resize(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
     let width = need_size(&inv.args, "width", "new width in inches")?;
     let height = need_size(&inv.args, "height", "new height in inches")?;
@@ -287,13 +293,13 @@ pub(super) fn run_rotate(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
 }
 
 /// `shape.set.width`: sets the anchor shape's `Width` (inches) and
-/// scales its geometry.
+/// rescales its geometry (ADR 0056).
 pub(super) fn run_set_width(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
     set_size(ctx, inv, Axis::Width)
 }
 
 /// `shape.set.height`: sets the anchor shape's `Height` (inches) and
-/// scales its geometry.
+/// rescales its geometry (ADR 0056).
 pub(super) fn run_set_height(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError> {
     set_size(ctx, inv, Axis::Height)
 }

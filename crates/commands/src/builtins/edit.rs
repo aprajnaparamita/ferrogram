@@ -22,13 +22,15 @@
 
 use ferrogram_geom::Size;
 use ferrogram_model::{
-    Cell, CellName, CellReader, CellWrite, DetachedShapes, Document, DocumentedDefault, PageId,
-    Section, ShapeId, SheetRef, documented_default,
+    Cell, CellName, CellReader, CellValue, CellWrite, DetachedShapes, Document, DocumentedDefault,
+    PageId, Row, RowTarget, Section, ShapeId, SheetRef, documented_default,
 };
+use ferrogram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
 use crate::error::CommandError;
+use crate::recalc::{formula_is_guarded, literal_number, subtree_addresses};
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
@@ -218,13 +220,19 @@ pub(crate) fn resolve_page(doc: &Document, key: &PageKey, fallback: PageId) -> P
     }
 }
 
-/// One undoable sheet-cell write (ADR 0038): the exact prior entries of
-/// every cell the write touches, and the write to replay.
+/// One undoable sheet-cell write (ADR 0038, ADR 0056): the exact prior
+/// entries of every cell the write touches, and the write to replay.
 ///
 /// `apply` goes through [`Document::write_cell`] (the mutation API, ADR
 /// 0039), which also refreshes the derived cells; `revert` restores the
 /// captured entries exactly, so `revert(apply(x)) == x` holds for the
 /// model, not just for the lookups.
+///
+/// A write is **indirect** (a move, a resize, a style apply: a
+/// programmatic write) unless it comes from a direct user edit of the
+/// cell ([`CellEdit::direct`]). An indirect write is skipped for a
+/// `GUARD`-ed cell, which keeps its formula, with one `Guarded` warning
+/// line (ADR 0056); a direct edit replaces the formula, `GUARD` and all.
 #[derive(Debug)]
 pub(crate) struct CellEdit {
     session: SessionId,
@@ -235,12 +243,17 @@ pub(crate) struct CellEdit {
     old: Vec<(CellName, Option<Cell>)>,
     /// The write to replay.
     new: CellWrite,
+    /// Whether the user edited this cell directly (ADR 0056's `GUARD`
+    /// rule).
+    direct: bool,
+    /// The cells the write touches (the recalc pass's dirty set).
+    dirty: Vec<CellAddress>,
 }
 
 impl CellEdit {
-    /// Stages one write of `cell` on `sheet`, capturing the exact prior
-    /// entries it will overwrite (the target and the cells the
-    /// documented-defaults table derives from it).
+    /// Stages one indirect write of `cell` on `sheet`, capturing the
+    /// exact prior entries it will overwrite (the target and the cells
+    /// the documented-defaults table derives from it).
     pub(crate) fn new(
         doc: &Document,
         session: SessionId,
@@ -249,16 +262,50 @@ impl CellEdit {
         cell: &str,
         new: CellWrite,
     ) -> Result<Self, CommandError> {
+        Self::stage(doc, session, label, sheet, cell, new, false)
+    }
+
+    /// Stages a **direct** user edit of `cell`: the one write that
+    /// replaces a `GUARD`-ed formula (ADR 0056). Task P6-09's panel
+    /// edits are the first non-test callers.
+    #[allow(dead_code)]
+    pub(crate) fn direct(
+        doc: &Document,
+        session: SessionId,
+        label: impl Into<String>,
+        sheet: SheetRef,
+        cell: &str,
+        new: CellWrite,
+    ) -> Result<Self, CommandError> {
+        Self::stage(doc, session, label, sheet, cell, new, true)
+    }
+
+    /// The shared staging tail of [`CellEdit::new`] and
+    /// [`CellEdit::direct`].
+    fn stage(
+        doc: &Document,
+        session: SessionId,
+        label: impl Into<String>,
+        sheet: SheetRef,
+        cell: &str,
+        new: CellWrite,
+        direct: bool,
+    ) -> Result<Self, CommandError> {
+        let touched = touched_cells(cell);
         let cells = sheet_cells(doc, sheet)?;
-        let old = touched_cells(cell)
-            .into_iter()
+        let old = touched
+            .iter()
             .map(|name| {
                 let existing = cells
                     .iter()
                     .find(|entry| entry.name.as_str() == name.as_str())
                     .cloned();
-                (name, existing)
+                (name.clone(), existing)
             })
+            .collect();
+        let dirty = touched
+            .into_iter()
+            .map(|name| CellAddress::new(sheet, name))
             .collect();
         Ok(Self {
             session,
@@ -267,7 +314,21 @@ impl CellEdit {
             cell: CellName::new(cell),
             old,
             new,
+            direct,
+            dirty,
         })
+    }
+
+    /// Whether the cell's current formula is `GUARD`-ed (ADR 0056).
+    fn guarded(&self, doc: &Document) -> bool {
+        let Ok(cells) = sheet_cells(doc, self.sheet) else {
+            return false;
+        };
+        cells
+            .iter()
+            .find(|entry| entry.name.as_str() == self.cell.as_str())
+            .and_then(|entry| entry.formula.as_deref())
+            .is_some_and(formula_is_guarded)
     }
 }
 
@@ -276,8 +337,25 @@ impl Edit for CellEdit {
         &self.label
     }
 
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
+
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         let session = self.session;
+        if !self.direct {
+            let guarded = {
+                let doc = document_mut(ctx, session)?;
+                self.guarded(doc)
+            };
+            if guarded {
+                ctx.record_warning(format!(
+                    "Guarded: {} keeps its formula; the write was skipped",
+                    self.cell.as_str()
+                ));
+                return Ok(());
+            }
+        }
         let doc = document_mut(ctx, session)?;
         doc.write_cell(self.sheet, &self.cell, &self.new)
             .map_err(model_error)?;
@@ -322,6 +400,9 @@ pub(crate) struct StructuralEdit {
     page: PageKey,
     polarity: Polarity,
     snapshot: Option<DetachedShapes>,
+    /// Every cell of the subtree (ADR 0056: an insert or delete dirties
+    /// the cells it adds or removes).
+    dirty: Vec<CellAddress>,
 }
 
 impl StructuralEdit {
@@ -363,6 +444,7 @@ impl StructuralEdit {
         let page = doc.page_of(root).ok_or_else(|| {
             CommandError::failed(format!("shape {} is not on a page", root.index))
         })?;
+        let dirty = subtree_addresses(doc, root);
         Ok(Self {
             session,
             label: label.into(),
@@ -370,6 +452,7 @@ impl StructuralEdit {
             page: page_key(doc, page)?,
             polarity,
             snapshot: None,
+            dirty,
         })
     }
 
@@ -406,6 +489,10 @@ impl Edit for StructuralEdit {
         &self.label
     }
 
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
+
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         match self.polarity {
             Polarity::Remove => self.detach(ctx),
@@ -421,15 +508,18 @@ impl Edit for StructuralEdit {
     }
 }
 
-/// One undoable geometry rescale (ADR 0038 rule 3, the resize without a
-/// formula engine): [`Document::scale_geometry`] forward, the exact
-/// prior geometry sections back.
+/// One undoable rescale of a shape's **constant** geometry (ADR 0056).
 ///
-/// `CellEdit` cannot express this: a rescale rewrites whole geometry
-/// sections (it materialises inherited rows), so the inverse is the
-/// section list, not a cell write. (Task P5-04 deviation note: a third
-/// edit type, because the interface named only `CellEdit` and
-/// `StructuralEdit`.)
+/// A resize writes `Width`/`Height` and lets the recalc pass compute
+/// every geometry row whose formula computes (a master's formulas,
+/// materialised onto the instance). The rows nothing computes — a bare
+/// literal formula or a cached value with no formula — are constant
+/// geometry, and this step scales them with the box. The two writers
+/// never touch the same cell (the split of ADR 0056's connector rule),
+/// and this step never calls [`Document::scale_geometry`]: the model
+/// function is untouched (task P6-07 criterion 3).
+///
+/// `revert` restores the exact prior geometry sections.
 #[derive(Debug)]
 pub(crate) struct GeometryEdit {
     session: SessionId,
@@ -437,14 +527,20 @@ pub(crate) struct GeometryEdit {
     shape: ShapeId,
     from: Size,
     to: Size,
-    /// The shape's geometry sections before the first rescale.
+    /// The effective geometry rows at construction: the scale input, so
+    /// a redo re-scales the same rows instead of the scaled ones.
+    source: Vec<Section>,
+    /// The shape's own geometry sections before the first rescale.
     old_sections: Option<Vec<Section>>,
+    /// Every cell of the source rows (the recalc pass recomputes the
+    /// ones whose formulas compute).
+    dirty: Vec<CellAddress>,
 }
 
 impl GeometryEdit {
     /// The edit that rescales `shape` from the `from` box to the `to`
-    /// box (inches). The caller checks the sizes; the model rejects a
-    /// degenerate `from` and any non-finite value.
+    /// box (inches). The caller checks the sizes; [`check_sizes`] rejects
+    /// a degenerate `from` and any non-finite value.
     pub(crate) fn new(
         doc: &Document,
         session: SessionId,
@@ -459,14 +555,208 @@ impl GeometryEdit {
                 shape.index
             )));
         }
+        let source = geometry_source(doc, shape);
+        let mut dirty = Vec::new();
+        for section in &source {
+            for (at, row) in section.rows.iter().enumerate() {
+                let target = RowTarget {
+                    position: Some(at),
+                    ix: row.ix,
+                };
+                for cell in &row.cells {
+                    dirty.push(CellAddress::in_row(
+                        SheetRef::Shape(shape),
+                        section.name.clone(),
+                        target,
+                        cell.name.clone(),
+                    ));
+                }
+            }
+        }
         Ok(Self {
             session,
             label: label.into(),
             shape,
             from,
             to,
+            source,
             old_sections: None,
+            dirty,
         })
+    }
+}
+
+/// The size checks `Document::scale_geometry` applies (the model error
+/// texts are kept, so the command errors read the same).
+fn check_sizes(from: Size, to: Size) -> Result<(), CommandError> {
+    if !from.width.is_finite()
+        || !from.height.is_finite()
+        || from.width <= 0.0
+        || from.height <= 0.0
+    {
+        return Err(model_error(ferrogram_model::Error::BadCell(
+            "zero or non-finite source size",
+        )));
+    }
+    if !to.width.is_finite() || !to.height.is_finite() || to.width < 0.0 || to.height < 0.0 {
+        return Err(model_error(ferrogram_model::Error::BadCell(
+            "negative or non-finite target size",
+        )));
+    }
+    Ok(())
+}
+
+/// The geometry rows a rescale works on: the shape's own `Geometry` rows
+/// when they carry any, else the nearest master rung's rows (the ADR
+/// 0019 row union at the row granularity this step needs).
+///
+/// The master rung is the master's first shape that carries rows: the
+/// same approximation the dependency graph takes (P6-06 open issue 2),
+/// because the model's position rule of `master_shape` is not public.
+fn geometry_source(doc: &Document, shape: ShapeId) -> Vec<Section> {
+    const MAX_CHAIN: usize = 32;
+    let geometry = |entity: &ferrogram_model::Shape| -> Vec<Section> {
+        entity
+            .sheet
+            .sections
+            .iter()
+            .filter(|section| section.name.as_str() == "Geometry")
+            .cloned()
+            .collect()
+    };
+    let mut chained = None;
+    if let Some(entity) = doc.shape(shape) {
+        let own = geometry(entity);
+        if own.iter().any(|section| !section.rows.is_empty()) {
+            return own;
+        }
+        chained = entity.master;
+    }
+    let mut seen: Vec<ferrogram_model::MasterId> = Vec::new();
+    for _ in 0..MAX_CHAIN {
+        let Some(master) = chained else {
+            break;
+        };
+        if seen.contains(&master) {
+            break;
+        }
+        seen.push(master);
+        let mut next = None;
+        if let Some(entry) = doc.master(master) {
+            for rung in &entry.shapes {
+                if let Some(rung) = doc.shape(*rung) {
+                    let rows = geometry(rung);
+                    if rows.iter().any(|section| !section.rows.is_empty()) {
+                        return rows;
+                    }
+                    next = rung.master;
+                }
+            }
+        }
+        chained = next;
+    }
+    Vec::new()
+}
+
+/// The scaled copy of the source rows, and whether any constant cell
+/// changed (a shape whose geometry all computes needs no write here).
+struct ScaledSections {
+    /// The rows to write.
+    sections: Vec<Section>,
+    /// Whether a constant cell was scaled.
+    touched: bool,
+}
+
+/// Scales the constant cells of the source rows (the cells whose formula
+/// is a bare literal, or that carry no formula).
+fn scale_sections(source: &[Section], from: Size, to: Size) -> ScaledSections {
+    let sx = to.width / from.width;
+    let sy = to.height / from.height;
+    let mut touched = false;
+    let sections = source
+        .iter()
+        .cloned()
+        .map(|mut section| {
+            for row in &mut section.rows {
+                scale_row(row, sx, sy, &mut touched);
+            }
+            section
+        })
+        .collect();
+    ScaledSections { sections, touched }
+}
+
+/// Scales one row's constant cells. `X` scales by `sx` and `Y` by `sy`
+/// (never on a `Rel*` row), `A`/`B` of an `Ellipse`, `EllipticalArcTo`
+/// or `InfiniteLine` row and `C`/`D` of an `Ellipse` row with them. Arc
+/// bows, spline knots and elliptical ratios stay (the documented P5-02
+/// distortion of a non-uniform rescale).
+fn scale_row(row: &mut Row, sx: f64, sy: f64, touched: &mut bool) {
+    let kind = row.row_type.as_deref().unwrap_or("");
+    let relative = kind.starts_with("Rel");
+    for cell in &mut row.cells {
+        let factor = match (kind, cell.name.as_str()) {
+            (_, "X") if !relative => sx,
+            (_, "Y") if !relative => sy,
+            ("Ellipse" | "EllipticalArcTo" | "InfiniteLine", "A") => sx,
+            ("Ellipse" | "EllipticalArcTo" | "InfiniteLine", "B") => sy,
+            ("Ellipse", "C") => sx,
+            ("Ellipse", "D") => sy,
+            _ => continue,
+        };
+        if factor == 1.0 {
+            continue;
+        }
+        let Some(value) = literal_number(cell.formula.as_deref(), cell.value.as_ref()) else {
+            continue;
+        };
+        let fresh = value * factor;
+        if !fresh.is_finite() {
+            continue;
+        }
+        cell.value = Some(CellValue::Number(fresh));
+        cell.formula = Some(number_literal(fresh));
+        *touched = true;
+    }
+}
+
+/// Replaces the sheet's `Geometry` sections with `fresh`: existing
+/// sections keep their place (and their preserved content and section
+/// cells), trailing ones the new list does not cover are dropped and
+/// extra new sections land at the end. (The model's private
+/// `replace_geometry_sections` rule, mirrored here: `Document::
+/// scale_geometry` is not called any more.)
+fn replace_geometry_sections(sections: &mut Vec<Section>, fresh: Vec<Section>) {
+    let positions: Vec<usize> = sections
+        .iter()
+        .enumerate()
+        .filter(|(_, section)| section.name.as_str() == "Geometry")
+        .map(|(index, _)| index)
+        .collect();
+    let total = fresh.len();
+    let mut incoming = fresh.into_iter();
+    for (count, position) in positions.iter().enumerate() {
+        if count >= total {
+            break;
+        }
+        if let (Some(mut section), Some(slot)) = (incoming.next(), sections.get_mut(*position)) {
+            section.preserved = std::mem::take(&mut slot.preserved);
+            section.cells = std::mem::take(&mut slot.cells);
+            *slot = section;
+        }
+    }
+    for section in incoming {
+        sections.push(section);
+    }
+    if positions.len() > total {
+        let mut seen = 0;
+        sections.retain(|section| {
+            if section.name.as_str() != "Geometry" {
+                return true;
+            }
+            seen += 1;
+            seen <= total
+        });
     }
 }
 
@@ -475,17 +765,32 @@ impl Edit for GeometryEdit {
         &self.label
     }
 
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
+
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
+        check_sizes(self.from, self.to)?;
         let session = self.session;
-        let doc = document_mut(ctx, session)?;
+        let shape = self.shape;
         if self.old_sections.is_none() {
-            let entity = doc.shape_mut(self.shape).ok_or_else(|| {
-                CommandError::failed(format!("unknown shape id {}", self.shape.index))
-            })?;
+            let doc = document_mut(ctx, session)?;
+            let entity = doc
+                .shape_mut(shape)
+                .ok_or_else(|| CommandError::failed(format!("unknown shape id {}", shape.index)))?;
             self.old_sections = Some(entity.sheet.sections.clone());
         }
-        doc.scale_geometry(self.shape, self.from, self.to)
-            .map_err(model_error)?;
+        let scaled = scale_sections(&self.source, self.from, self.to);
+        if !scaled.touched {
+            // Every row computes from its formulas: the recalc pass owns
+            // them (ADR 0056) and this step writes nothing.
+            return Ok(());
+        }
+        let doc = document_mut(ctx, session)?;
+        let entity = doc
+            .shape_mut(shape)
+            .ok_or_else(|| CommandError::failed(format!("unknown shape id {}", shape.index)))?;
+        replace_geometry_sections(&mut entity.sheet.sections, scaled.sections);
         ctx.touch_session(session);
         Ok(())
     }
@@ -822,6 +1127,17 @@ mod tests {
     use super::*;
     use crate::app::{DocumentSession, Settings};
     use ferrogram_model::{CellValue, Preserved, Row, SectionName, Shape};
+
+    /// One numeric cell with a literal formula and its cached value.
+    fn number_cell(name: &str, value: f64) -> Cell {
+        Cell {
+            name: CellName::new(name),
+            formula: Some(number_literal(value)),
+            value: Some(CellValue::Number(value)),
+            unit: ferrogram_geom::Unit::Inches,
+            preserved: Preserved::new(),
+        }
+    }
 
     /// A document with one page and `count` numbered shapes, each 2x1
     /// at (n, 0).
@@ -1381,5 +1697,397 @@ mod tests {
             "the walk stops at the cap"
         );
         assert!(has_selected_ancestor(doc, shapes[0], &[shapes[1]]));
+    }
+
+    /// Criterion 6 (task P6-07): `dirty_cells` covers every edit type
+    /// that writes cells — a test per type. `CellEdit` first: the target
+    /// cell and the derived cells `Document::write_cell` refreshes.
+    #[test]
+    fn cell_edits_dirty_their_touched_cells() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::new(
+                doc,
+                session,
+                "Set Width",
+                SheetRef::Shape(shapes[0]),
+                "Width",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        let names: Vec<&str> = edit.dirty_cells().iter().map(|a| a.cell.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Width", "LocPinX", "TxtPinX", "TxtLocPinX", "TxtWidth"]
+        );
+        assert!(
+            edit.dirty_cells()
+                .iter()
+                .all(|address| address.sheet == SheetRef::Shape(shapes[0]))
+        );
+    }
+
+    /// `StructuralEdit` dirties every cell of the subtree it adds or
+    /// removes (ADR 0056).
+    #[test]
+    fn structural_edits_dirty_their_subtree_cells() {
+        let (mut ctx, session, _page, shapes) = fixture(2);
+        let edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            StructuralEdit::removal(doc, session, "Delete shape", shapes[0]).expect("removal")
+        };
+        let dirty = edit.dirty_cells();
+        // Four transform cells and three rows of two geometry cells.
+        assert_eq!(dirty.len(), 10, "{dirty:?}");
+        assert!(dirty.iter().all(|a| a.sheet == SheetRef::Shape(shapes[0])));
+        assert!(dirty.iter().any(|a| a.cell.as_str() == "PinX"));
+        assert!(dirty.iter().any(|a| a.row.is_some()));
+    }
+
+    /// `GeometryEdit` dirties the geometry row cells it writes (the
+    /// formula rows come back through the recalc pass).
+    #[test]
+    fn geometry_edits_dirty_their_row_cells() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            GeometryEdit::new(
+                doc,
+                session,
+                "Resize shape",
+                shapes[0],
+                Size::new(2.0, 1.0),
+                Size::new(4.0, 1.0),
+            )
+            .expect("geometry edit")
+        };
+        let dirty = edit.dirty_cells();
+        assert_eq!(dirty.len(), 6, "three rows of X and Y: {dirty:?}");
+        assert!(dirty.iter().all(|a| {
+            a.row.is_some()
+                && a.section
+                    .as_ref()
+                    .is_some_and(|name| name.as_str() == "Geometry")
+        }));
+    }
+
+    /// Criterion 4 (ADR 0056's `GUARD` rule): an indirect write is
+    /// skipped for a guarded cell with one `Guarded` warning and the
+    /// formula unchanged; a direct user edit replaces it.
+    #[test]
+    fn a_guarded_cell_survives_an_indirect_write_and_a_direct_edit_replaces_it() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let shape = shapes[0];
+        {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            let cells = sheet_cells_mut(doc, SheetRef::Shape(shape)).expect("cells");
+            if let Some(entry) = cells.iter_mut().find(|c| c.name.as_str() == "Width") {
+                entry.formula = Some(String::from("GUARD(2)"));
+                entry.value = Some(CellValue::Number(2.0));
+            }
+        }
+        let before = ctx.active_document().expect("doc").document.clone();
+        let mut indirect = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::new(
+                doc,
+                session,
+                "Set Width",
+                SheetRef::Shape(shape),
+                "Width",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        indirect.apply(&mut ctx).expect("apply");
+        let guarded = ctx.active_document().expect("doc").document.clone();
+        assert_eq!(guarded, before, "the indirect write is skipped entirely");
+        assert_eq!(ctx.warnings.len(), 1, "{:?}", ctx.warnings);
+        assert!(ctx.warnings[0].contains("Guarded"), "{:?}", ctx.warnings);
+        indirect.revert(&mut ctx).expect("revert");
+        assert_eq!(
+            ctx.active_document().expect("doc").document,
+            before,
+            "the skipped step reverts to the same document"
+        );
+
+        let mut direct = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::direct(
+                doc,
+                session,
+                "Set Width",
+                SheetRef::Shape(shape),
+                "Width",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        direct.apply(&mut ctx).expect("apply");
+        let doc = &ctx.active_document().expect("doc").document;
+        let cells = sheet_cells(doc, SheetRef::Shape(shape)).expect("cells");
+        let width = cells
+            .iter()
+            .find(|c| c.name.as_str() == "Width")
+            .expect("Width");
+        assert_eq!(width.formula.as_deref(), Some("4"), "the direct edit wins");
+        assert_eq!(width.value, Some(CellValue::Number(4.0)));
+    }
+
+    /// The size checks keep the model's error texts (a degenerate
+    /// `from` and a negative `to` are refused before any write).
+    #[test]
+    fn geometry_edits_reject_degenerate_sizes() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let mut edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            GeometryEdit::new(
+                doc,
+                session,
+                "Resize shape",
+                shapes[0],
+                Size::new(2.0, 1.0),
+                Size::new(4.0, 1.0),
+            )
+            .expect("geometry edit")
+        };
+        edit.from = Size::new(0.0, 1.0);
+        let error = edit.apply(&mut ctx).expect_err("zero source");
+        assert!(
+            error.to_string().contains("zero or non-finite source size"),
+            "{error}"
+        );
+        edit.from = Size::new(1.0, 1.0);
+        edit.to = Size::new(f64::NAN, 1.0);
+        let error = edit.apply(&mut ctx).expect_err("bad target");
+        assert!(
+            error
+                .to_string()
+                .contains("negative or non-finite target size"),
+            "{error}"
+        );
+        assert_eq!(
+            ctx.active_document().expect("doc").changes,
+            0,
+            "a refused rescale writes nothing"
+        );
+    }
+
+    /// The row source of a rescale: the shape's own rows when they carry
+    /// any, else the nearest master rung's rows (the ADR 0019 union).
+    #[test]
+    fn geometry_source_falls_back_to_the_master_rung() {
+        use ferrogram_model::{Master, MasterId, SectionName};
+        let (mut ctx, session, page, shapes) = fixture(1);
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        // No own rows and no master: no source at all.
+        if let Some(entity) = doc.shape_mut(shapes[0]) {
+            entity.sheet.sections.clear();
+        }
+        assert!(geometry_source(doc, shapes[0]).is_empty());
+
+        // A master whose one shape carries rows.
+        let mut rung = Shape::new(ShapeId { index: 0 }, 9);
+        let mut geometry = Section::new(SectionName::from_static("Geometry"));
+        let mut row = Row::new();
+        row.row_type = Some("LineTo".to_owned());
+        row.ix = Some(0);
+        row.cells = vec![number_cell("X", 1.0), number_cell("Y", 2.0)];
+        geometry.rows.push(row);
+        rung.sheet.sections.push(geometry);
+        let rung = doc.add_shape(rung);
+        let mut master = Master::new(MasterId { index: 0 }, 7);
+        master.shapes = vec![rung];
+        let master = doc.add_master(master).expect("master");
+        if let Some(entity) = doc.shape_mut(shapes[0]) {
+            entity.master = Some(master);
+            entity
+                .sheet
+                .sections
+                .push(Section::new(SectionName::from_static("Geometry")));
+        }
+        let source = geometry_source(doc, shapes[0]);
+        assert_eq!(source.len(), 1);
+        assert_eq!(source[0].rows.len(), 1, "the master rung's rows");
+
+        // A master chain that loops stops at the visited set.
+        if let Some(entity) = doc.shape_mut(rung) {
+            entity.master = Some(master);
+        }
+        assert_eq!(geometry_source(doc, shapes[0]).len(), 1);
+        let _ = page;
+    }
+
+    /// The rescale's per-cell rules (the P5-02 scaling map): `X`/`Y` on
+    /// a plain row, `A`/`B`/`C`/`D` on an `Ellipse`, `A` on an `ArcTo`
+    /// (a bow keeps its size) and nothing on a `Rel*` row.
+    #[test]
+    fn scale_row_scales_the_mapped_cells_only() {
+        let row = |kind: &str, cells: &[(&str, f64)]| {
+            let mut row = Row::new();
+            row.row_type = Some(kind.to_owned());
+            row.cells = cells
+                .iter()
+                .map(|(name, value)| number_cell(name, *value))
+                .collect();
+            row
+        };
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        section.rows = vec![
+            row("LineTo", &[("X", 1.0), ("Y", 1.0), ("A", 9.0)]),
+            row(
+                "Ellipse",
+                &[
+                    ("X", 1.0),
+                    ("Y", 1.0),
+                    ("A", 1.0),
+                    ("B", 1.0),
+                    ("C", 1.0),
+                    ("D", 1.0),
+                ],
+            ),
+            row("ArcTo", &[("X", 1.0), ("Y", 1.0), ("A", 1.0)]),
+            row("RelLineTo", &[("X", 1.0), ("Y", 1.0)]),
+        ];
+        let scaled = scale_sections(&[section], Size::new(1.0, 1.0), Size::new(2.0, 3.0));
+        assert!(scaled.touched);
+        let value = |row: usize, name: &str| -> f64 {
+            match &scaled.sections[0].rows[row]
+                .cells
+                .iter()
+                .find(|cell| cell.name.as_str() == name)
+                .expect("cell")
+                .value
+            {
+                Some(CellValue::Number(value)) => *value,
+                _ => f64::NAN,
+            }
+        };
+        assert_eq!(
+            (value(0, "X"), value(0, "Y"), value(0, "A")),
+            (2.0, 3.0, 9.0)
+        );
+        assert_eq!(
+            (
+                value(1, "X"),
+                value(1, "A"),
+                value(1, "B"),
+                value(1, "C"),
+                value(1, "D")
+            ),
+            (2.0, 2.0, 3.0, 2.0, 3.0)
+        );
+        assert_eq!((value(2, "X"), value(2, "A")), (2.0, 1.0), "the bow keeps");
+        assert_eq!((value(3, "X"), value(3, "Y")), (1.0, 1.0), "Rel rows keep");
+    }
+
+    /// A constant cell whose scaled value would not be finite is left
+    /// alone, and a shape whose rows all compute needs no write.
+    #[test]
+    fn scale_row_skips_the_cells_it_cannot_scale() {
+        let mut row = Row::new();
+        row.row_type = Some("LineTo".to_owned());
+        row.cells = vec![
+            number_cell("X", f64::MAX),
+            number_cell("Y", 1.0),
+            Cell {
+                name: CellName::new("A"),
+                formula: Some(String::from("Width")),
+                value: Some(CellValue::Number(1.0)),
+                unit: ferrogram_geom::Unit::Inches,
+                preserved: Preserved::new(),
+            },
+        ];
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        section.rows.push(row);
+        let scaled = scale_sections(&[section], Size::new(1.0, 1.0), Size::new(2.0, 2.0));
+        let cells = &scaled.sections[0].rows[0].cells;
+        assert_eq!(cells[0].value, Some(CellValue::Number(f64::MAX)), "kept");
+        assert_eq!(cells[1].value, Some(CellValue::Number(2.0)), "scaled");
+        assert_eq!(
+            cells[2].formula.as_deref(),
+            Some("Width"),
+            "a formula keeps"
+        );
+
+        // Every row computes: the pass owns it and nothing is written.
+        let mut row = Row::new();
+        row.row_type = Some("LineTo".to_owned());
+        row.cells = vec![Cell {
+            name: CellName::new("X"),
+            formula: Some(String::from("Width")),
+            value: Some(CellValue::Number(1.0)),
+            unit: ferrogram_geom::Unit::Inches,
+            preserved: Preserved::new(),
+        }];
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        section.rows.push(row);
+        assert!(!scale_sections(&[section], Size::new(1.0, 1.0), Size::new(2.0, 2.0)).touched);
+    }
+
+    /// The section-replacement rule keeps existing sections in place
+    /// (preserved content and section cells included), drops trailing
+    /// ones and appends the extra new ones.
+    #[test]
+    fn replace_geometry_sections_keeps_sections_in_place() {
+        let section = |name: &'static str| Section::new(SectionName::from_static(name));
+        // More old geometry sections than new: the trailing one goes.
+        let mut sections = vec![
+            section("Geometry"),
+            section("Property"),
+            section("Geometry"),
+        ];
+        let mut old_cells = section("Geometry");
+        old_cells.cells.push(number_cell("NoFill", 1.0));
+        sections[0] = old_cells;
+        replace_geometry_sections(&mut sections, vec![section("Geometry")]);
+        let names: Vec<&str> = sections.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names, ["Geometry", "Property"]);
+        assert_eq!(
+            sections[0].cells.len(),
+            1,
+            "an existing section keeps its section cells"
+        );
+
+        // Fewer old ones than new: the extra lands at the end.
+        let mut sections = vec![section("Geometry")];
+        let old_preserved = sections[0].preserved.clone();
+        replace_geometry_sections(
+            &mut sections,
+            vec![section("Geometry"), section("Geometry")],
+        );
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].preserved, old_preserved, "preserved stays");
+    }
+
+    /// Criterion 5 (ADR 0039) at the edit seam: a failing `apply`
+    /// changes nothing and records nothing.
+    #[test]
+    fn a_failing_edit_changes_nothing_and_recalculates_nothing() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let before = ctx.active_document().expect("doc").document.clone();
+        let mut edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::new(
+                doc,
+                session,
+                "Set Width",
+                SheetRef::Shape(shapes[0]),
+                "Width",
+                CellWrite::new("inf", CellValue::Number(f64::INFINITY)),
+            )
+            .expect("capture")
+        };
+        let error = edit.apply(&mut ctx).expect_err("the model refuses");
+        assert!(error.to_string().contains("non-finite"), "{error}");
+        assert_eq!(
+            ctx.active_document().expect("doc").document,
+            before,
+            "a failing edit changes nothing"
+        );
+        assert!(ctx.warnings.is_empty(), "nothing was recalculated");
+        assert!(ctx.active_document().expect("doc").undo.is_empty());
     }
 }

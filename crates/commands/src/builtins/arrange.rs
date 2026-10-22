@@ -23,10 +23,12 @@ use ferrogram_geom::{Point, Rect};
 use ferrogram_model::{
     CellName, CellReader, CellValue, CellWrite, Connect, Document, PageId, Shape, ShapeId, SheetRef,
 };
+use ferrogram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
 use crate::error::CommandError;
+use crate::recalc::subtree_addresses;
 use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
@@ -583,6 +585,9 @@ struct GroupEdit {
     /// The group `apply` created (a redo re-creates it at the same
     /// arena slot, [`reuse_slot`]).
     made: Option<Shape>,
+    /// The cells the members' re-based pins and the new group write
+    /// (ADR 0056: filled in by `apply`, read by the recalc pass).
+    dirty: Vec<CellAddress>,
 }
 
 impl GroupEdit {
@@ -595,6 +600,7 @@ impl GroupEdit {
             group: None,
             before: Vec::new(),
             made: None,
+            dirty: Vec::new(),
         }
     }
 }
@@ -604,12 +610,20 @@ impl Edit for GroupEdit {
         &self.label
     }
 
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
+
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         let session = self.session;
-        let (page, group) = {
+        let (page, group, dirty) = {
             let doc = document_mut(ctx, session)?;
             let page = resolve_page(doc, &self.page, PageId { index: 0 });
             self.before = capture_shapes(doc, &self.members)?;
+            let mut dirty = Vec::new();
+            for member in &self.members {
+                dirty.extend(subtree_addresses(doc, *member));
+            }
             let fresh = doc.group_shapes(page, &self.members).map_err(model_error)?;
             let group = match self.made.clone() {
                 Some(made) => reuse_slot(doc, page, fresh, made),
@@ -618,9 +632,11 @@ impl Edit for GroupEdit {
                     fresh
                 }
             };
-            (page, group)
+            dirty.extend(subtree_addresses(doc, group));
+            (page, group, dirty)
         };
         self.group = Some(group);
+        self.dirty = dirty;
         ctx.touch_session(session);
         select(ctx, session, page, &[group]);
         Ok(())
@@ -805,6 +821,9 @@ struct UngroupEdit {
     children: Vec<ShapeId>,
     /// What `apply` must put back (a redo re-captures it).
     before: Option<UngroupSnapshot>,
+    /// The cells the group and its members write (ADR 0056: filled in
+    /// by `apply`, read by the recalc pass).
+    dirty: Vec<CellAddress>,
 }
 
 impl UngroupEdit {
@@ -815,6 +834,7 @@ impl UngroupEdit {
             group: Some(group),
             children: Vec::new(),
             before: None,
+            dirty: Vec::new(),
         }
     }
 }
@@ -824,9 +844,13 @@ impl Edit for UngroupEdit {
         "Ungroup shapes"
     }
 
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
+
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         let session = self.session;
-        let (page, children) = {
+        let (page, children, dirty) = {
             let doc = document_mut(ctx, session)?;
             let page = resolve_page(doc, &self.page, PageId { index: 0 });
             // The group may have been re-created by an intervening
@@ -837,11 +861,13 @@ impl Edit for UngroupEdit {
                 .or_else(|| group_for_members(doc, page, &self.children))
                 .ok_or_else(|| CommandError::failed("nothing to ungroup"))?;
             self.before = Some(capture_group(doc, page, group)?);
+            let dirty = subtree_addresses(doc, group);
             let children = doc.ungroup_shape(group).map_err(model_error)?;
-            (page, children)
+            (page, children, dirty)
         };
         self.group = None;
         self.children = children.clone();
+        self.dirty = dirty;
         ctx.touch_session(session);
         select(ctx, session, page, &children);
         Ok(())
@@ -1084,6 +1110,70 @@ mod tests {
         assert_eq!(target.id, id);
         assert!(move_cell_edit(&doc, session, "Move", &target, f64::NAN, 0.0).is_err());
         assert!(move_cell_edit(&doc, session, "Move", &target, 0.0, f64::NAN).is_err());
+    }
+
+    /// Criterion 6 (task P6-07): `GroupEdit` and `UngroupEdit` write
+    /// cells (the re-based pins and the new group), so they report them.
+    #[test]
+    fn group_and_ungroup_edits_dirty_their_cells() {
+        let (mut ctx, session, page, first) = context();
+        let second = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 0);
+            for (name, value) in [
+                ("PinX", 2.0),
+                ("PinY", 0.0),
+                ("Width", 1.0),
+                ("Height", 1.0),
+                ("LocPinX", 0.5),
+                ("LocPinY", 0.5),
+            ] {
+                shape.sheet.cells.push(shape_cell(name, value));
+            }
+            doc.insert_shape(page, shape, None).expect("shape")
+        };
+        let key = PageKey {
+            visio_id: 1,
+            name_u: "Page-1".to_owned(),
+        };
+        let mut group = GroupEdit::new(session, key.clone(), vec![first, second]);
+        assert!(group.dirty_cells().is_empty(), "apply fills the set");
+        group.apply(&mut ctx).expect("group");
+        let dirty = group.dirty_cells();
+        assert!(!dirty.is_empty(), "{dirty:?}");
+        assert!(
+            dirty
+                .iter()
+                .any(|address| address.sheet == SheetRef::Shape(first)),
+            "the members' pins are re-based"
+        );
+        let members: Vec<ShapeId> = dirty
+            .iter()
+            .filter_map(|address| match address.sheet {
+                SheetRef::Shape(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        assert!(members.len() > 2, "the new group's cells are in the set");
+
+        let group_id = ctx
+            .active_document()
+            .expect("session")
+            .document
+            .pages
+            .get(page.index as usize)
+            .and_then(|entry| entry.shapes.first().copied())
+            .expect("group");
+        let mut ungroup = UngroupEdit::new(session, key, group_id);
+        ungroup.apply(&mut ctx).expect("ungroup");
+        assert!(!ungroup.dirty_cells().is_empty());
+        assert!(
+            ungroup
+                .dirty_cells()
+                .iter()
+                .any(|address| address.sheet == SheetRef::Shape(group_id)),
+            "the dissolved group's cells are in the set"
+        );
     }
 
     #[test]

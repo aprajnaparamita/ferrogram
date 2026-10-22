@@ -47,11 +47,14 @@ pub trait Edit: Send {
     /// Reverses the step (undo).
     fn revert(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError>;
 
-    /// The cells this step writes, so the recalc pass after `apply` (and
-    /// after `revert`, ADR 0056) knows what is dirty.
+    /// The cells this step writes, so the recalc pass knows what is
+    /// dirty (ADR 0056).
     ///
-    /// The default is an empty dirty set: a step that changes no cell
-    /// needs nothing recomputed. Task P6-07 fills the real edit types in.
+    /// [`AppCtx::push_edit`](crate::AppCtx::push_edit) runs the pass over
+    /// these cells after `apply` and again on every re-apply (the redo
+    /// that follows a revert); `revert` restores what the pass changed by
+    /// snapshot. The default is an empty dirty set: a step that changes
+    /// no cell needs nothing recomputed.
     fn dirty_cells(&self) -> &[CellAddress] {
         &[]
     }

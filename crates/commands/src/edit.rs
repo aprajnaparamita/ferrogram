@@ -13,6 +13,7 @@
 use crate::app::AppCtx;
 use crate::error::CommandError;
 use crate::undo::{Edit, run_suspended};
+use ferrogram_shapesheet::CellAddress;
 
 /// Several edits as one undoable step (ADR 0040).
 #[derive(Default)]
@@ -20,7 +21,14 @@ pub struct CompositeEdit {
     /// The undo menu label ("Move 3 shapes").
     pub label: String,
     /// The steps, in apply order (undo runs them backwards).
+    ///
+    /// Push through [`CompositeEdit::push`]: it keeps the dirty-cell
+    /// union the recalc pass needs (ADR 0056). A step pushed straight
+    /// into this list keeps its own [`Edit::dirty_cells`], but the
+    /// composite does not see it.
     pub edits: Vec<Box<dyn Edit>>,
+    /// The union of the steps' dirty cells, in push order.
+    dirty: Vec<CellAddress>,
 }
 
 impl CompositeEdit {
@@ -29,11 +37,13 @@ impl CompositeEdit {
         Self {
             label: label.into(),
             edits: Vec::new(),
+            dirty: Vec::new(),
         }
     }
 
     /// Adds one step (applied after the steps already added).
     pub fn push(&mut self, edit: Box<dyn Edit>) {
+        self.dirty.extend(edit.dirty_cells().iter().cloned());
         self.edits.push(edit);
     }
 
@@ -51,6 +61,12 @@ impl CompositeEdit {
 impl Edit for CompositeEdit {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    /// The union of the steps' dirty cells (ADR 0056): the recalc pass
+    /// after the composite runs over all of them.
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
     }
 
     /// Re-applies every step in order (redo).

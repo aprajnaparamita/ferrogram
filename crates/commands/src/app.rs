@@ -228,6 +228,10 @@ pub struct DocumentSession {
     /// snapshot every frame (the P4-05 deferred item). It only moves
     /// forward (`wrapping_add`).
     pub changes: u64,
+    /// The dependency graph of the document's formulas (ADR 0055): built
+    /// on the first recalc and kept beside the undo stack, so a pass
+    /// re-links only the nodes an edit touches. `None` until then.
+    pub graph: Option<ferrogram_shapesheet::DepGraph>,
     /// The package the document was read from, kept for the lossless
     /// patch-based writer (ADR 0018: `write_document` patches the
     /// source parts so unmapped content survives a save). `None` for a
@@ -249,6 +253,7 @@ impl DocumentSession {
             view: ViewState::new(),
             undo: UndoStack::new(UndoStack::DEFAULT_CAPACITY),
             changes: 0,
+            graph: None,
             preserve: None,
         }
     }
@@ -478,6 +483,14 @@ impl AppCtx {
     /// [`Outcome::edit`](crate::Outcome::edit) calls it after `execute`
     /// returns `Ok`.
     ///
+    /// The Phase 6 extension (ADR 0056): the step is already applied, so
+    /// this runs one recalc pass over the step's
+    /// [`dirty_cells`](Edit::dirty_cells) and pushes **one** entry holding
+    /// both the step and the pass's snapshot
+    /// (an internal `RecalcEdit`): undo restores the
+    /// recalculated cells by snapshot and the step's own writes by their
+    /// inverse.
+    ///
     /// - While an [`Edit`]'s `apply`/`revert` runs (the recording gate,
     ///   [`AppCtx::undo_recording_suspended`]) the edit is **dropped**
     ///   and one warning line is recorded ("an edit tried to record
@@ -487,7 +500,8 @@ impl AppCtx {
     ///   command that opened or closed documents cannot land its edit on
     ///   the wrong stack.
     /// - A [`SessionId`] that no longer names a session is an error:
-    ///   there is no stack to record on.
+    ///   there is no stack to record on. Nothing is recalculated then
+    ///   (a failing edit changes nothing, ADR 0039).
     pub fn push_edit(
         &mut self,
         session: SessionId,
@@ -497,10 +511,14 @@ impl AppCtx {
             self.record_warning("an edit tried to record during undo; step dropped");
             return Ok(());
         }
-        let Some(slot) = self.documents.iter_mut().find(|s| s.id == session) else {
+        if !self.documents.iter().any(|slot| slot.id == session) {
+            return Err(CommandError::failed("no document session for the edit"));
+        }
+        let entry = crate::recalc::RecalcEdit::wrap(self, session, edit)?;
+        let Some(slot) = self.documents.iter_mut().find(|slot| slot.id == session) else {
             return Err(CommandError::failed("no document session for the edit"));
         };
-        slot.undo.push(edit);
+        slot.undo.push(entry);
         Ok(())
     }
 
