@@ -35,10 +35,12 @@ use ferrogram_model::{
 };
 
 use crate::app::{AppCtx, SessionId};
+use crate::edit::CompositeEdit;
 use crate::error::CommandError;
+use crate::undo::Edit;
 use crate::{Invocation, Outcome};
 
-use super::edit::{StructuralEdit, document_mut};
+use super::edit::{GeometryEdit, StructuralEdit, document_mut};
 use super::{CommandTable, edit_outcome, has_pages, model_error, need_finite, no_document};
 
 /// The implemented `insert.*` commands (task P5-06).
@@ -94,18 +96,18 @@ pub(super) fn run_insert_shape(
     let (session, page) = active_page(ctx)?;
     let label = format!("Insert {}", definition.name);
 
-    let shape = {
+    let (shape, scaled) = {
         let doc = document_mut(ctx, session)?;
         let master_id = ensure_catalog_master(doc, &definition)?;
         let shape = doc
             .instantiate_master(master_id, page, Point::new(x, y), size)
             .map_err(model_error)?;
-        if let Some(size) = size
-            && (size.width != definition.width || size.height != definition.height)
-        {
-            doc.scale_geometry(shape, Size::new(definition.width, definition.height), size)
-                .map_err(model_error)?;
-        }
+        let scaled = match size {
+            Some(size) if size.width != definition.width || size.height != definition.height => {
+                Some(size)
+            }
+            _ => None,
+        };
         if let Some(target) = glue_to
             && let Err(error) = add_drop_glue(doc, page, shape, target, glue_point)
         {
@@ -114,13 +116,37 @@ pub(super) fn run_insert_shape(
             let _ = doc.detach_shape(shape);
             return Err(error);
         }
-        shape
+        (shape, scaled)
     };
 
-    let edit = {
+    // The drop is one undo step (ADR 0040): the insertion and the size
+    // rescale of the constant geometry share it. The rows whose formulas
+    // compute come from the recalc pass at `push_edit` (ADR 0056).
+    let mut edit = CompositeEdit::new(label.clone());
+    {
         let doc = document_mut(ctx, session)?;
-        StructuralEdit::insertion(doc, session, label.clone(), shape)?
-    };
+        edit.push(Box::new(StructuralEdit::insertion(
+            doc,
+            session,
+            label.clone(),
+            shape,
+        )?));
+    }
+    if let Some(size) = scaled {
+        let mut step = {
+            let doc = document_mut(ctx, session)?;
+            GeometryEdit::new(
+                doc,
+                session,
+                "Resize shape",
+                shape,
+                Size::new(definition.width, definition.height),
+                size,
+            )?
+        };
+        step.apply(ctx)?;
+        edit.push(Box::new(step));
+    }
     if glue_to.is_some() {
         // Glue-on-drop: "any glued connector endpoints on the page
         // re-route" (ADR 0046).

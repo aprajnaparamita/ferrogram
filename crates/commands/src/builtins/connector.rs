@@ -26,8 +26,10 @@
 use ferrogram_geom::{Point, Rect, RouteOptions, RouteStyle, Transform, route};
 use ferrogram_model::CellReader;
 use ferrogram_model::{
-    CellName, CellValue, CellWrite, Connect, Document, PageId, Section, ShapeId, SheetRef, mutate,
+    CellName, CellValue, CellWrite, Connect, Document, PageId, RowTarget, Section, ShapeId,
+    SheetRef, mutate,
 };
+use ferrogram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
@@ -837,6 +839,8 @@ struct PathEdit {
     connector: ShapeId,
     old_sections: Vec<Section>,
     points: Vec<Point>,
+    /// The row cells the path write replaces (ADR 0056's dirty set).
+    dirty: Vec<CellAddress>,
 }
 
 impl PathEdit {
@@ -852,11 +856,27 @@ impl PathEdit {
             .sheet
             .sections
             .clone();
+        let mut dirty = Vec::new();
+        for (position, _) in points.iter().enumerate() {
+            let target = RowTarget {
+                position: Some(position),
+                ix: Some(i32::try_from(position).unwrap_or(i32::MAX)),
+            };
+            for cell in ["X", "Y"] {
+                dirty.push(CellAddress::in_row(
+                    SheetRef::Shape(connector),
+                    ferrogram_model::SectionName::from_static("Geometry"),
+                    target,
+                    CellName::new(cell),
+                ));
+            }
+        }
         Ok(Self {
             session,
             connector,
             old_sections,
             points,
+            dirty,
         })
     }
 }
@@ -864,6 +884,10 @@ impl PathEdit {
 #[rustfmt::skip]
 impl Edit for PathEdit {
     fn label(&self) -> &str { "Route connector" }
+
+    fn dirty_cells(&self) -> &[CellAddress] {
+        &self.dirty
+    }
 
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         let session = self.session;
@@ -962,6 +986,12 @@ fn reroute_document(
         drop_detached_targets(doc, page, visio_id, warnings);
         let ends = doc.connects_of(page, connector).map_err(model_error)?;
         if ends.first().is_none_or(Option::is_none) && ends.get(1).is_none_or(Option::is_none) {
+            continue;
+        }
+        // ADR 0056: a connector whose geometry rows carry formulas is
+        // owned by recalc (a master-driven dynamic connector); the
+        // router never writes its rows.
+        if crate::recalc::geometry_is_formula_driven(doc, connector) {
             continue;
         }
         let transform = match page_transform(doc, connector) {
@@ -1480,6 +1510,31 @@ mod tests {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Criterion 6 (task P6-07): `PathEdit` writes geometry row cells,
+    /// so it reports them.
+    #[test]
+    fn path_edits_dirty_their_row_cells() {
+        let (ctx, session, _page, connector, _l, _r) = fixture();
+        let edit = {
+            let doc = ctx.active_document().expect("session").document.clone();
+            PathEdit::new(
+                &doc,
+                session,
+                connector,
+                vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)],
+            )
+            .expect("edit")
+        };
+        let dirty = edit.dirty_cells();
+        assert_eq!(dirty.len(), 4, "two points of X and Y: {dirty:?}");
+        assert!(dirty.iter().all(|address| address.row.is_some()));
+        assert!(
+            dirty
+                .iter()
+                .all(|address| address.sheet == SheetRef::Shape(connector))
+        );
     }
 
     #[test]
