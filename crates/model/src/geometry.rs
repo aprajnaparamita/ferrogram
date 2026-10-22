@@ -500,13 +500,17 @@ struct RowContext<'a> {
 }
 
 impl RowContext<'_> {
-    /// Resolves one cell of the row (ADR 0019 decision 5).
+    /// Resolves one cell of the row (ADR 0019 decision 5), with the
+    /// ADR 0054/0057 snapshot rule: the row's own cached value (an `Inh`
+    /// snapshot included) is what the reader returns.
     fn resolve<'d>(
         &self,
         doc: &'d Document,
         cell: &CellName,
     ) -> Result<crate::lookup::Resolved<'d>, Error> {
-        doc.resolve_repeated_with_table(self.sheet, &self.at, cell, CELLS)
+        let mut resolved = doc.resolve_repeated_with_table(self.sheet, &self.at, cell, CELLS)?;
+        crate::values::prefer_row(doc, self.sheet, &self.at, cell, &mut resolved);
+        Ok(resolved)
     }
 
     /// Reads one number of the row with the cached-value policy (ADR 0021).
@@ -1792,7 +1796,8 @@ mod row_union_tests {
         cell
     }
 
-    /// A cell whose formula is `Inh`: it does not define (ADR 0013).
+    /// A cell whose formula is `Inh`: it defines nothing (ADR 0013), but
+    /// its cached snapshot is this sheet's own value (ADR 0054/0057).
     fn inherited_cell(name: &str) -> Cell {
         let mut cell = Cell::new(CellName::new(name));
         cell.formula = Some("Inh".to_owned());
@@ -1900,15 +1905,16 @@ mod row_union_tests {
             vec![
                 ("MoveTo", 1.0),
                 ("LineTo", 20.0),
-                ("LineTo", 3.0),
+                ("LineTo", 99.0),
                 ("LineTo", 4.0),
                 ("LineTo", 5.0)
             ]
         );
-        // Partial cell override: row 2 keeps the master's Y (`Inh` does
-        // not define) and row 3 the master's X.
-        assert_eq!(rows[1], GeometryRow::LineTo { x: 20.0, y: 2.0 });
-        assert_eq!(rows[2], GeometryRow::LineTo { x: 3.0, y: 30.0 });
+        // Partial cell override: the `Inh` cells carry this sheet's own
+        // snapshot (ADR 0054/0057, value 99), and the master's rows fill
+        // the rest.
+        assert_eq!(rows[1], GeometryRow::LineTo { x: 20.0, y: 99.0 });
+        assert_eq!(rows[2], GeometryRow::LineTo { x: 99.0, y: 30.0 });
     }
 
     #[test]
@@ -2001,7 +2007,11 @@ mod row_union_tests {
     }
 
     #[test]
-    fn a_section_level_inh_cell_falls_through_to_the_master() {
+    fn a_section_level_inh_cell_keeps_its_snapshot() {
+        // ADR 0054/0057: an `Inh` cell's cached snapshot is this sheet's
+        // own value at save time, so it wins over the master's rung for
+        // the reader; `Document::resolve` still reports the master as the
+        // source (pinned in `values` tests).
         let (mut doc, instance) = two_rung(
             vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
             vec![row("MoveTo", 1, &[("X", 1.0), ("Y", 1.0)])],
@@ -2019,7 +2029,7 @@ mod row_union_tests {
             sec.cells.push(cell);
         }
         let geometry = doc.shape_geometry(instance).expect("reads");
-        assert!(geometry.paths[0].no_line);
+        assert!(!geometry.paths[0].no_line, "the snapshot is the value");
     }
 
     #[test]

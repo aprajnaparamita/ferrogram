@@ -29,7 +29,7 @@
 //! mismatch (ADR 0021 amendment, P3-16): one [`WarningKind::KindMismatch`]
 //! warning and the hard default, never a silent `0`.
 
-use crate::cell::{CellValue, Color};
+use crate::cell::{Cell, CellValue, Color};
 use crate::defaults::{DocumentedDefault, documented_default};
 use crate::document::Document;
 use crate::error::Error;
@@ -92,6 +92,97 @@ fn repeated<'a>(section: &'a str, row: RowTarget) -> crate::lookup::RepeatedCell
         section_pos: Some(0),
         row: row.position,
         row_ix: row.ix,
+    }
+}
+
+/// The cached value of the sheet's own entry for a direct or
+/// section-level cell (ADR 0054 amendment, ADR 0057): a cell whose own
+/// entry has a cached value, an `Inh` snapshot included, returns that
+/// value. A row cell needs the row identity its caller carries
+/// ([`own_row_value`]); this name-only search never picks one row's
+/// snapshot for another row.
+fn own_value(doc: &Document, sheet: SheetRef, cell: &CellName) -> Option<CellValue> {
+    let sheet = doc.sheet_of(sheet).ok()?;
+    let found = sheet
+        .cells
+        .iter()
+        .find(|entry| entry.name == *cell)
+        .or_else(|| {
+            sheet
+                .sections
+                .iter()
+                .flat_map(|section| section.cells.iter())
+                .find(|entry| entry.name == *cell)
+        })?;
+    found.value.clone()
+}
+
+/// The cached value of one row's own entry (ADR 0054 amendment, ADR
+/// 0057): the snapshot of an `Inh` cell is this sheet's own value at save
+/// time. The row is the one the lookup matched ([`crate::lookup::RepeatedCell`]).
+pub(crate) fn own_row_value<'d>(
+    doc: &'d Document,
+    sheet: SheetRef,
+    target: &crate::lookup::RepeatedCell<'_>,
+    cell: &CellName,
+) -> Option<&'d CellValue> {
+    let sheet = doc.sheet_of(sheet).ok()?;
+    let section = crate::lookup::match_repeated_section(
+        sheet,
+        target.section,
+        target.section_ix,
+        target.section_pos,
+    )?;
+    let row_cell = matched_row_cell(section, target.row, target.row_ix, cell)?;
+    row_cell.value.as_ref()
+}
+
+/// The cell of the row that matches a row at `row` with `IX` `row_ix`, by
+/// `IX` when both sides have one and by position otherwise (the row rule
+/// of [`crate::lookup::RepeatedCell`], kept here so the snapshot rule
+/// matches the lookup's own row).
+fn matched_row_cell<'a>(
+    section: &'a crate::section::Section,
+    row: Option<usize>,
+    row_ix: Option<i32>,
+    cell: &CellName,
+) -> Option<&'a Cell> {
+    let matched = match (row, row_ix) {
+        (None, None) => return section.cells.iter().find(|entry| entry.name == *cell),
+        (None, Some(row_ix)) => section
+            .rows
+            .iter()
+            .find(|candidate| candidate.ix == Some(row_ix)),
+        (Some(row), None) => section.rows.get(row),
+        (Some(row), Some(row_ix)) => match section
+            .rows
+            .iter()
+            .find(|candidate| candidate.ix == Some(row_ix))
+        {
+            Some(found) => Some(found),
+            None => section
+                .rows
+                .get(row)
+                .filter(|candidate| candidate.ix.is_none()),
+        },
+    };
+    matched?.cells.iter().find(|entry| entry.name == *cell)
+}
+
+/// Applies the ADR 0054/0057 snapshot rule to one row resolution: the
+/// row's own cached value wins over the rung's, and provenance reads as
+/// `Local` for the value policy only (the lookup's own `Resolved` is
+/// unchanged).
+pub(crate) fn prefer_row<'d>(
+    doc: &'d Document,
+    sheet: SheetRef,
+    target: &crate::lookup::RepeatedCell<'_>,
+    cell: &CellName,
+    resolved: &mut crate::lookup::Resolved<'d>,
+) {
+    if let Some(value) = own_row_value(doc, sheet, target, cell) {
+        resolved.value = Some(value);
+        resolved.source = ValueSource::Local;
     }
 }
 
@@ -270,12 +361,20 @@ impl<'d> CellReader<'d> {
         row: RowTarget,
         cell: &CellName,
     ) -> Result<crate::lookup::Resolved<'d>, Error> {
-        self.doc.resolve_repeated_with_table(
+        let mut resolved = self.doc.resolve_repeated_with_table(
             sheet,
             &repeated(section, row),
             cell,
             crate::generated::CELLS,
-        )
+        )?;
+        prefer_row(
+            self.doc,
+            sheet,
+            &repeated(section, row),
+            cell,
+            &mut resolved,
+        );
+        Ok(resolved)
     }
 
     /// Reads a number from one row of a repeated section, identifying the
@@ -288,9 +387,10 @@ impl<'d> CellReader<'d> {
         target: &crate::lookup::RepeatedCell<'_>,
         cell: &CellName,
     ) -> Result<f64, Error> {
-        let resolved =
+        let mut resolved =
             self.doc
                 .resolve_repeated_with_table(sheet, target, cell, crate::generated::CELLS)?;
+        prefer_row(self.doc, sheet, target, cell, &mut resolved);
         Ok(self.number_from(sheet, cell, resolved))
     }
 
@@ -308,8 +408,7 @@ impl<'d> CellReader<'d> {
         cell: &CellName,
         resolved: crate::lookup::Resolved<'_>,
     ) -> f64 {
-        let source = resolved.source;
-        let value = resolved.value.cloned();
+        let (value, source) = self.preferred(sheet, cell, &resolved);
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_number(sheet, cell),
             Some(CellValue::Number(number))
@@ -364,7 +463,13 @@ impl<'d> CellReader<'d> {
     /// non-finite cached value is not passed on: the substitution policy
     /// of [`CellReader::number_from`] rejects it with one warning.
     fn related_number(&self, sheet: SheetRef, name: &str) -> f64 {
-        let resolved = self.resolved(sheet, &CellName::new(name)).ok();
+        let cell = CellName::new(name);
+        if let Some(CellValue::Number(value)) = own_value(self.doc, sheet, &cell)
+            && value.is_finite()
+        {
+            return value;
+        }
+        let resolved = self.resolved(sheet, &cell).ok();
         resolved
             .and_then(|resolved| match resolved.value {
                 Some(CellValue::Number(value))
@@ -388,11 +493,10 @@ impl<'d> CellReader<'d> {
         resolved: crate::lookup::Resolved<'_>,
         default: f64,
     ) -> f64 {
-        if resolved.source == ValueSource::HardDefault {
+        let (value, source) = self.preferred(sheet, cell, &resolved);
+        if source == ValueSource::HardDefault {
             return default;
         }
-        let source = resolved.source;
-        let value = resolved.value.cloned();
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_number(sheet, cell),
             Some(CellValue::Number(number))
@@ -427,11 +531,10 @@ impl<'d> CellReader<'d> {
         resolved: crate::lookup::Resolved<'_>,
         default: bool,
     ) -> bool {
-        if resolved.source == ValueSource::HardDefault {
+        let (value, source) = self.preferred(sheet, cell, &resolved);
+        if source == ValueSource::HardDefault {
             return default;
         }
-        let source = resolved.source;
-        let value = resolved.value.cloned();
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_boolean(sheet, cell),
             Some(CellValue::Bool(flag)) if source != ValueSource::HardDefault => flag,
@@ -455,8 +558,7 @@ impl<'d> CellReader<'d> {
         cell: &CellName,
         resolved: crate::lookup::Resolved<'_>,
     ) -> bool {
-        let source = resolved.source;
-        let value = resolved.value.cloned();
+        let (value, source) = self.preferred(sheet, cell, &resolved);
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_boolean(sheet, cell),
             Some(CellValue::Bool(flag)) if source != ValueSource::HardDefault => flag,
@@ -486,6 +588,24 @@ impl<'d> CellReader<'d> {
         std::mem::take(&mut self.warnings)
     }
 
+    /// The ADR 0054/0057 value policy for an already-resolved cell: a
+    /// cell whose own entry has a cached value (the snapshot of an `Inh`
+    /// cell included) returns that value; the fallback chain runs as
+    /// before (the defining rung's cached value, the documented default,
+    /// the hard default) and provenance still comes from
+    /// [`Document::resolve`](crate::CellLookup::resolve).
+    fn preferred(
+        &self,
+        sheet: SheetRef,
+        cell: &CellName,
+        resolved: &crate::lookup::Resolved<'_>,
+    ) -> (Option<CellValue>, ValueSource) {
+        if let Some(value) = own_value(self.doc, sheet, cell) {
+            return (Some(value), ValueSource::Local);
+        }
+        (resolved.value.cloned(), resolved.source)
+    }
+
     /// The string policy (ADR 0021) for an already-resolved cell.
     ///
     /// The row readers resolve row cells themselves and apply the policy
@@ -496,8 +616,7 @@ impl<'d> CellReader<'d> {
         cell: &CellName,
         resolved: crate::lookup::Resolved<'_>,
     ) -> String {
-        let source = resolved.source;
-        let value = resolved.value.cloned();
+        let (value, source) = self.preferred(sheet, cell, &resolved);
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_text(sheet, cell),
             Some(CellValue::Str(text)) if source != ValueSource::HardDefault => text,
@@ -519,8 +638,7 @@ impl<'d> CellReader<'d> {
         cell: &CellName,
         resolved: crate::lookup::Resolved<'_>,
     ) -> Color {
-        let source = resolved.source;
-        let value = resolved.value.cloned();
+        let (value, source) = self.preferred(sheet, cell, &resolved);
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_color(sheet, cell),
             Some(CellValue::Color(color)) if source != ValueSource::HardDefault => color,
@@ -544,8 +662,7 @@ impl<'d> CellReader<'d> {
         cell: &CellName,
         resolved: crate::lookup::Resolved<'_>,
     ) -> Vec<f64> {
-        let source = resolved.source;
-        let value = resolved.value.cloned();
+        let (value, source) = self.preferred(sheet, cell, &resolved);
         match value {
             Some(CellValue::Str(text)) if text == THEMED => self.themed_list(sheet, cell),
             Some(CellValue::List(raw)) if source != ValueSource::HardDefault => {
@@ -2440,5 +2557,214 @@ mod tests {
             Ok(0.0)
         );
         assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    /// A cell whose formula is the `Inh` inherit marker, with the cached
+    /// snapshot of the value for this sheet (ADR 0054 amendment).
+    fn inherit_cell(name: &str, snapshot: f64) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.formula = Some("Inh".to_owned());
+        cell.value = Some(CellValue::Number(snapshot));
+        cell
+    }
+
+    #[test]
+    fn an_inh_snapshot_is_the_value_and_the_master_stays_the_source() {
+        // Acceptance (P6-05, ADR 0054 amendment): a cell with `F='Inh'`
+        // and a cached value returns that value while `Document::resolve`
+        // still reports `Master(..)` as the source.
+        let mut doc = Document::new();
+        let content = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(content)
+            .expect("content")
+            .sheet
+            .cells
+            .push(cell("PinX", CellValue::Number(0.98)));
+        let mut master = crate::master::Master::new(crate::id::MasterId { index: 0 }, 1);
+        master.shapes.push(content);
+        doc.masters.push(master);
+        let shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.master = Some(crate::id::MasterId { index: 0 });
+            entity.sheet.cells.push(inherit_cell("PinX", 2.16));
+        }
+
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader
+                .number(SheetRef::Shape(shape), &CellName::from_static("PinX"))
+                .expect("reads"),
+            2.16
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+
+        // The lookup's own answer is unchanged: the master defines the
+        // formula, so it is the source (its value is the fallback).
+        let resolved = doc
+            .resolve(shape, &CellName::from_static("PinX"))
+            .expect("resolves");
+        assert_eq!(
+            resolved.source,
+            ValueSource::Master(crate::id::MasterId { index: 0 })
+        );
+        assert_eq!(resolved.value, Some(&CellValue::Number(0.98)));
+    }
+
+    #[test]
+    fn an_inh_snapshot_without_any_rung_does_not_warn() {
+        // The snapshot is a value now (ADR 0057): nothing else defines
+        // the cell and the reader still records no `Missing` warning.
+        let (doc, shape) = document_with_cells(vec![inherit_cell("LineWeight", 0.02)]);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader
+                .number(SheetRef::Shape(shape), &CellName::from_static("LineWeight"))
+                .expect("reads"),
+            0.02
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn a_section_level_inh_snapshot_is_the_value() {
+        // The same rule for a section-level cell (the `NoFill` family).
+        let mut doc = Document::new();
+        let content = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(content)
+            .expect("content")
+            .sheet
+            .sections
+            .push(crate::section::Section::new(
+                crate::name::SectionName::from_static("Geometry"),
+            ));
+        doc.shape_mut(content)
+            .expect("content")
+            .sheet
+            .sections
+            .get_mut(0)
+            .expect("section")
+            .cells
+            .push({
+                let mut cell = Cell::new(CellName::from_static("NoFill"));
+                cell.value = Some(CellValue::Bool(false));
+                cell.formula = Some("Inh".to_owned());
+                cell
+            });
+        let mut master = crate::master::Master::new(crate::id::MasterId { index: 0 }, 1);
+        master.shapes.push(content);
+        doc.masters.push(master);
+        let shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+        {
+            let entity = doc.shape_mut(shape).expect("shape");
+            entity.master = Some(crate::id::MasterId { index: 0 });
+            let mut section =
+                crate::section::Section::new(crate::name::SectionName::from_static("Geometry"));
+            let mut cell = Cell::new(CellName::from_static("NoFill"));
+            cell.formula = Some("Inh".to_owned());
+            cell.value = Some(CellValue::Bool(false));
+            section.cells.push(cell);
+            entity.sheet.sections.push(section);
+        }
+
+        let mut reader = CellReader::new(&doc);
+        assert!(
+            !reader
+                .boolean(SheetRef::Shape(shape), &CellName::from_static("NoFill"))
+                .expect("reads")
+        );
+        assert!(reader.warnings().is_empty(), "{:?}", reader.warnings());
+    }
+
+    #[test]
+    fn a_row_snapshot_is_the_value() {
+        // A geometry row's own `Inh` snapshot is the value (the P3-15
+        // gap): the row is matched by position here.
+        let (mut doc, shape) = document_with_shape();
+        let mut section =
+            crate::section::Section::new(crate::name::SectionName::from_static("Geometry"));
+        let mut row = crate::section::Row::new();
+        row.cells.push(inherit_cell("X", 2.16));
+        section.rows.push(row);
+        doc.shape_mut(shape)
+            .expect("shape")
+            .sheet
+            .sections
+            .push(section);
+        let mut reader = CellReader::new(&doc);
+        assert_eq!(
+            reader
+                .row_number(
+                    SheetRef::Shape(shape),
+                    "Geometry",
+                    RowTarget::at(0),
+                    &CellName::from_static("X")
+                )
+                .expect("reads"),
+            2.16
+        );
+    }
+
+    #[test]
+    fn a_row_ix_matches_the_row_that_carries_it() {
+        // `RowTarget::by_ix` matches the row with that `IX`, and a target
+        // naming both falls back to the position when no row carries the
+        // `IX`.
+        let mut doc = Document::new();
+        let shape = doc.add_shape(Shape::new(ShapeId { index: 0 }, 1));
+        let mut section =
+            crate::section::Section::new(crate::name::SectionName::from_static("Geometry"));
+        let mut first = crate::section::Row::new();
+        first.cells.push(inherit_cell("X", 1.5));
+        let mut second = crate::section::Row::new();
+        second.ix = Some(2);
+        second.cells.push(inherit_cell("X", 2.5));
+        section.rows.push(first);
+        section.rows.push(second);
+        doc.shape_mut(shape)
+            .expect("shape")
+            .sheet
+            .sections
+            .push(section);
+
+        let mut reader = CellReader::new(&doc);
+        let sheet = SheetRef::Shape(shape);
+        let cell = CellName::from_static("X");
+        assert_eq!(
+            reader
+                .row_number(sheet, "Geometry", RowTarget::by_ix(2), &cell)
+                .expect("reads"),
+            2.5
+        );
+        assert_eq!(
+            reader
+                .row_number(
+                    sheet,
+                    "Geometry",
+                    RowTarget {
+                        position: Some(0),
+                        ix: Some(2)
+                    },
+                    &cell
+                )
+                .expect("reads"),
+            2.5
+        );
+        // An `IX` no row carries falls back to the position when that
+        // row has no `IX` of its own.
+        assert_eq!(
+            reader
+                .row_number(
+                    sheet,
+                    "Geometry",
+                    RowTarget {
+                        position: Some(0),
+                        ix: Some(7)
+                    },
+                    &cell
+                )
+                .expect("reads"),
+            1.5
+        );
     }
 }
