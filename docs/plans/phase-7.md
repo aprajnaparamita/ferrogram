@@ -1,4 +1,4 @@
-# Phase 7 plan: Larrygram, the Panel and Classic layouts, the welcome wizard
+# Phase 7 plan: Larrygram, the Panel Modern and Panel Classic layouts, the welcome wizard
 
 - Status: proposed (2026-10-23), for the user's review
 - Inputs: the Phase 7 package (`/Volumes/Dara/ferrogram-phase7/`, its
@@ -9,11 +9,11 @@
 
 | Topic | Decision |
 |---|---|
-| Phase numbers | Phase 7 is now the Panel and Classic layouts, the rename and the wizard. Binary `.vsd` import becomes Phase 8. Agents (control channel and MCP) becomes Phase 9 and is paused. |
+| Phase numbers | Phase 7 is now the Panel Modern and Panel Classic layouts, the rename and the wizard. Binary `.vsd` import becomes Phase 8. Agents (control channel and MCP) becomes Phase 9 and is paused. |
 | Name | Ferrogram becomes **Larrygram** everywhere: crates (`larrygram-*`), binaries, `LARRYGRAM_*` variables, docs, and the folders `/Users/dara/larrygram` and `/Volumes/Dara/larrygram`. The app shows **Larrygram v1.0 alpha**; the workspace version becomes `1.0.0-alpha.1`. |
-| Layout names | **Panel** (follows the 2013 style) and **Classic** (follows the 2007 style). "Ribbon" is not used in any doc, UI text or code identifier. The only exceptions are verbatim third-party identifiers and titles, such as the Fluent control id `RibbonAndQuickAccess` or a `visCmd…Ribbon…` constant. |
-| Side panels | The Shape Data and Size & Position side panels become **panes** (`panels.rs` becomes `panes.rs`), so "Panel" names only the layout. |
-| Default layout | Panel. |
+| Layout names | **Panel Modern** (id `panel-modern`, the 2013 data) and **Panel Classic** (id `panel-classic`, the 2007 data). The Phase 4 layouts become **Panel (2016 data)** and **Panel (365 data)** (ids `panel-2016`, `panel-365`). The Microsoft term for a tabbed command bar ("Ribbon") is a Microsoft feature name and is not used in any doc, UI text, file name or code identifier. The only exceptions are verbatim third-party identifiers and titles, such as the Fluent control id `RibbonAndQuickAccess` or a `visCmd…Ribbon…` constant. |
+| Side panels | The Shape Data and Size & Position side panels become **panes** (`panels.rs` becomes `panes.rs`), so "Panel" names only the layouts. |
+| Default layout | Panel Modern. |
 | Art licence | `about_screen.svg`, `panel-layout.svg`, `classic-layout.svg` and `icon.svg`: © 2026 Janet Jeffus, made in VectorCraft, all rights reserved, used in Larrygram with permission. `larry.png`: used with Larry Jeffus's permission, all rights reserved. Not covered by the MIT licence. `ATTRIBUTION.md` and the README say so, and forks must replace them. |
 | Earlier layout records | Removed from the tree, then purged from history with `git filter-repo` before the first push (section 4, step R4). |
 
@@ -41,13 +41,13 @@ again from Help > Welcome (proposed).
 
 - Two large buttons side by side, each showing its picture with the name
   under it:
-  - **Panel** (`panel-layout.svg`), selected by default;
-  - **Classic** (`classic-layout.svg`).
+  - **Panel Modern** (`panel-layout.svg`), selected by default;
+  - **Panel Classic** (`classic-layout.svg`).
 - Clicking a button selects it.
 - Bottom row: **Back** and **Start**. Start saves the choice as the
   default layout, applies it at once and closes the wizard.
 
-Cancel on either page closes the wizard and keeps Panel. The wizard is
+Cancel on either page closes the wizard and keeps Panel Modern. The wizard is
 marked as seen in both cases, so it does not open again on the next
 launch.
 
@@ -109,7 +109,7 @@ now ─┬─ Phase 6 tail: P6-09, P6-10, P6-15, P6-16 ─ P6-11 ─ P6-12/13/14
      └─ P7-01 architect (docs, data, stubs) ─────────── merge before the boundary
 boundary (nothing else running):
      R1 master: remove the earlier layout records from the tree
-     P7-00 worker: rename to Larrygram, Ribbon to Panel, panels to panes
+     P7-00 worker: rename to Larrygram, the old layout term to Panel, panels to panes
      R4 master: history rewrite (after "go"), move the folders, re-link
 Phase 7 groups:
      A: P7-02  P7-03  P7-04                      (3 in parallel)
@@ -129,13 +129,15 @@ only. It does not touch the Phase 6 crates (`shapesheet`, `commands`,
 
 - **Import the package.** Copy the package into the worktree, converted
   to the decisions in section 1:
-  - `ui-spec/layouts/ribbon.yaml` becomes `panel.yaml`, and the theme
-    file the same;
-  - "Ribbon" becomes "Panel" in the ADRs, guides and task files;
+  - the package's `layouts/ribbon.yaml` and `layouts/classic.yaml` become
+    `ui-spec/layouts/panel-modern.yaml` and `panel-classic.yaml`, and the
+    theme files the same;
+  - the old layout term becomes "Panel" (or "Panel Modern") in the ADRs,
+    guides and task files;
   - prose names Larrygram, while code paths keep today's crate names
     until P7-00.
 - **Brand assets.** Move `graphics/` to `crates/ui/assets/brand/`
-  (`ibbon-layout.svg`, meant as `ribbon-layout.svg`, is renamed `panel-layout.svg`; `.DS_Store` is not copied). Add the
+  (the user has already named the Panel Modern picture `panel-layout.svg`; `.DS_Store` is not copied). Add the
   `ATTRIBUTION.md` rows with the all-rights-reserved terms, and the
   README licence note.
 - **ADRs.**
@@ -149,7 +151,7 @@ only. It does not touch the Phase 6 crates (`shapesheet`, `commands`,
   - `crates/ui/src/wizard.rs` and `crates/ui/src/about.rs`: the types
     and the `show` functions, as "not implemented" stubs.
   - The settings fields `welcome_seen: bool` and `layout`.
-  - `LayoutKind::{Classic, Panel}`.
+  - `LayoutKind::{PanelModern, PanelClassic, Panel2016, Panel365}`.
   - The commands `help.about` and `help.welcome`, if the registry lacks
     them.
 - **KICKOFF.md.** Apply the Phase 7 section and the renumbering
@@ -168,7 +170,8 @@ Nothing else runs during the boundary, because every file changes.
   - Clean up the matching STATUS entries and notes.
 - **P7-00 (worker, large tier).** The mechanical rename, as one task:
   1. Side panels become panes.
-  2. Ribbon becomes Panel, except verbatim third-party identifiers.
+  2. The old layout term becomes Panel, except verbatim third-party
+     identifiers.
   3. Ferrogram becomes Larrygram in every case form: crate and directory
      names, `use` paths, snapshot file names, environment variables, the
      settings storage key, the web page title and the version.
@@ -202,15 +205,16 @@ did not.
 
 ### Phase 7 group B: 6 in parallel
 
-- **P7-05 to P7-08**, as in the package: theme, Classic widgets, Panel
-  widgets (the package's "Ribbon widgets") and selection contexts.
+- **P7-05 to P7-08**, as in the package: theme, Panel Classic widgets (menus
+  and toolbars), Panel Modern widgets (tabs and groups) and selection
+  contexts.
 - **P7-15 welcome wizard** (`wizard.rs`, medium tier).
   - Both pages, Cancel, Next, Back and Start, and the layout buttons.
   - It sets `welcome_seen` and the default layout through the settings
     API.
   - It calls `about::show` for **Why Larrygram?**.
   - It is tested with egui_kittest: page flow, the default selection,
-    Start saves the choice, and Cancel keeps Panel.
+    Start saves the choice, and Cancel keeps Panel Modern.
 - **P7-16 About window and app icon** (`about.rs`, medium tier).
   - The two-column window, the corrected text, the video button
     (through egui's open-URL output, which works on desktop and web) and
@@ -237,8 +241,8 @@ did not.
    without a restart, and the next launch skips the wizard.
 2. **Why Larrygram?** and **Help > About Larrygram** open the same About
    window, and its button opens the video link.
-3. No doc, UI text or identifier says "Ferrogram" or "Ribbon", except
-   verbatim third-party identifiers. A gate check enforces this from
+3. No doc, UI text, file name or identifier says "Ferrogram" or the old
+   layout term, except verbatim third-party identifiers. A gate check enforces this from
    P7-00 on.
 4. The brand assets have their `ATTRIBUTION.md` rows and pass the
    clean-room audit.
