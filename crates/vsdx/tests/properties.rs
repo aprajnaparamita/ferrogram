@@ -350,6 +350,7 @@ const ROW_NAMES: &[&str] = &["Row_1", "Row_2"];
 const ROW_TYPES: &[&str] = &["RelCubBezTo", "InX"];
 const FORMULAS: &[&str] = &["2", "0.5 in", "Inh", ""];
 const STRINGS: &[&str] = &["Themed", "a b", "not-a-number", "", "2", "0.5", "#4d4d4d"];
+const LISTS: &[&str] = &["1;0", "a;b", "Not Started;Done", "", "2"];
 const ERRORS: &[&str] = &["#VALUE!", "#REF!"];
 const PROPERTY_NAMES: &[&str] = &["title", "subject", "creator"];
 const UNITS: &[Unit] = &[
@@ -366,8 +367,9 @@ const UNITS: &[Unit] = &[
 /// A cell value with a unit the value can round-trip with: a number carries
 /// any unit, every other kind carries [`Unit::Unitsless`] (a `U` code
 /// declares the kind, and a written `V` that contradicts it does not read
-/// back). `List` is excluded: no `U` code maps back to a list (the formula
-/// engine owns it).
+/// back). `List` round-trips through the writer's `U="LIST"` spelling
+/// (task P6-08); `arb_cell` mirrors what a read keeps of the code
+/// (task P6-16).
 fn arb_cell_value() -> impl Strategy<Value = (CellValue, Unit)> {
     proptest::prop_oneof![
         (
@@ -377,12 +379,29 @@ fn arb_cell_value() -> impl Strategy<Value = (CellValue, Unit)> {
             .prop_map(|(value, unit)| (CellValue::Number(value), unit)),
         proptest::sample::select(STRINGS.to_vec())
             .prop_map(|text| { (CellValue::Str(text.to_owned()), Unit::Unitsless) }),
+        proptest::sample::select(LISTS.to_vec())
+            .prop_map(|text| { (CellValue::List(text.to_owned()), Unit::Unitsless) }),
         any::<bool>().prop_map(|flag| (CellValue::Bool(flag), Unit::Unitsless)),
         proptest::sample::select(ERRORS.to_vec())
             .prop_map(|text| { (CellValue::Error(text.to_owned()), Unit::Unitsless) }),
         (any::<u8>(), any::<u8>(), any::<u8>())
             .prop_map(|(r, g, b)| (CellValue::Color(Color::new(r, g, b)), Unit::Unitsless)),
     ]
+}
+
+/// Whether `text` reads back as a non-string kind without a `U` code: a
+/// number literal or a `#RGB`/`#RRGGBB` colour literal (the shape rules of
+/// `read::value`). The writer spells `U="STR"` only for those, so only a
+/// plain string keeps a read `U="STR"` in its preserved attributes
+/// (task P6-16).
+fn reads_as_non_string(text: &str) -> bool {
+    if text.trim().parse::<f64>().is_ok() {
+        return true;
+    }
+    let Some(digits) = text.trim().strip_prefix('#') else {
+        return false;
+    };
+    (digits.len() == 3 || digits.len() == 6) && digits.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn arb_cell() -> impl Strategy<Value = Cell> {
@@ -395,12 +414,15 @@ fn arb_cell() -> impl Strategy<Value = Cell> {
             let mut cell = Cell::new(CellName::new(name.to_owned()));
             cell.formula = formula;
             if let Some((value, unit)) = value {
-                // A `U` with no `Unit` spelling lives in the reader's
-                // preserved attributes, so a model that a read produced
-                // looks exactly like this (`U="BOOL"`, `U="STR"`).
+                // A `U` the writer does not spell back lives in the
+                // reader's preserved attributes (task P6-16), so a model
+                // that a read produced looks exactly like this: `STR` for
+                // a plain string (a number-like one is re-derived) and
+                // `COLOR` for a colour without a unit. A `BOOL` or `LIST`
+                // is always re-derived and never kept.
                 let code = match &value {
-                    CellValue::Bool(_) => Some("BOOL"),
-                    CellValue::Str(_) => Some("STR"),
+                    CellValue::Str(text) if !reads_as_non_string(text) => Some("STR"),
+                    CellValue::Color(_) => Some("COLOR"),
                     _ => None,
                 };
                 if let Some(code) = code {
@@ -766,25 +788,6 @@ fn build_shape(id: ShapeId, plan: ShapePlan) -> Shape {
     shape
 }
 
-/// Strips the writer's relationship plumbing from a read-back document: a
-/// generated `Page` or `Master` element carries a fresh `Rel` child (it names
-/// the contents relationship the writer just created), and the reader keeps
-/// that element in the entity's preserved content. It is writer furniture,
-/// not document content.
-fn without_rel_markers(document: &mut Document) {
-    for page in &mut document.pages {
-        page.preserved
-            .children
-            .retain(|child| child.name.local != "Rel");
-    }
-    for master in &mut document.masters {
-        master
-            .preserved
-            .children
-            .retain(|child| child.name.local != "Rel");
-    }
-}
-
 proptest::proptest! {
     /// ADR 0017: a random model document round-trips through `from_model`
     /// -> `to_model`.
@@ -793,9 +796,7 @@ proptest::proptest! {
         let document = assemble(plan);
         let package = from_model(&document).expect("from_model succeeds");
         let read_back = to_model(&package).expect("to_model succeeds");
-        let mut normalized = read_back;
-        without_rel_markers(&mut normalized);
-        proptest::prop_assert_eq!(document, normalized);
+        proptest::prop_assert_eq!(document, read_back);
     }
 
     /// The generated package also survives the file level: write it, read it
@@ -806,9 +807,7 @@ proptest::proptest! {
         let package = from_model(&document).expect("from_model succeeds");
         let bytes = write_package(&package).expect("write_package succeeds");
         let read_back = read_document(&bytes, &Limits::DEFAULT).expect("read_document succeeds");
-        let mut normalized = read_back;
-        without_rel_markers(&mut normalized);
-        proptest::prop_assert_eq!(document, normalized);
+        proptest::prop_assert_eq!(document, read_back);
     }
 }
 
