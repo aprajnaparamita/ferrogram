@@ -12,11 +12,27 @@ Task board. Only the master agent edits this file, on `main`.
 
 ## Phase 7 task board (plan: [plans/phase-7.md](plans/phase-7.md))
 
-Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard. Phase 8 is binary `.vsd` import; Phase 9 (agents) is paused. P7-01 runs beside the Phase 6 tail; the rename boundary (R1, P7-00, R4) waits for the `phase-6` tag.
+Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard. Phase 8 is binary `.vsd` import; Phase 9 (agents) is paused. The rename boundary (R1, P7-00, R4) waits for the `phase-6` tag; nothing else runs during it. Settings: `welcome_seen` and the default layout are stubbed in `crates/ui/src/settings.rs` and move onto `Settings` in `crates/commands` in P7-09.
 
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
-| [P7-01](tasks/P7-01.md) | architect | none (disjoint from Phase 6) | 0 | ready | — |
+| [P7-01](tasks/P7-01.md) | architect | none | 0 | merged (ADRs 0061–0067, data, brand assets, stubs, task files; master recovered six misplaced files) | — |
+| [P7-00](tasks/P7-00.md) | implementer | P7-01, `phase-6` tag | boundary | waiting (the Larrygram rename; runs alone) | — |
+| [P7-02](tasks/P7-02.md) | implementer | P7-00 | A | waiting (commands and the Fluent join fixes) | — |
+| [P7-03](tasks/P7-03.md) | implementer | P7-00 | A | waiting (v2 loader, cross-checks, adapter) | — |
+| [P7-04](tasks/P7-04.md) | implementer | P7-00 | A | waiting (icon pipeline, image loaders) | — |
+| [P7-05](tasks/P7-05.md) | implementer | P7-03 | B | waiting (theme) | — |
+| [P7-06](tasks/P7-06.md) | implementer | P7-03, P7-04 | B | waiting (Panel Classic widgets) | — |
+| [P7-07](tasks/P7-07.md) | implementer | P7-03, P7-04 | B | waiting (Panel Modern widgets) | — |
+| [P7-08](tasks/P7-08.md) | implementer | P7-02, P7-03 | B | waiting (selection contexts) | — |
+| [P7-15](tasks/P7-15.md) | implementer | P7-03 | B | waiting (welcome wizard) | — |
+| [P7-16](tasks/P7-16.md) | implementer | P7-03, P7-04 | B | waiting (About window, app icon) | — |
+| [P7-09](tasks/P7-09.md) | implementer | P7-05..P7-08, P7-15, P7-16 | C | waiting (shell integration) | — |
+| [P7-10](tasks/P7-10.md) | test-engineer | P7-09 | D | waiting (tests, golden images) | — |
+| [P7-11](tasks/P7-11.md) | reviewer | P7-10 | E | waiting | — |
+| [P7-12](tasks/P7-12.md) | coverage-auditor | P7-10 | E | waiting | — |
+| [P7-13](tasks/P7-13.md) | cleanroom-auditor | P7-10 | E | waiting | — |
+| [P7-14](tasks/P7-14.md) | implementer | P7-11..P7-13 | F | waiting (fixes, phase report) | — |
 
 ## Phase 6 task board
 
