@@ -1459,6 +1459,7 @@ dependencies = [
  "ferrogram-geom",
  "ferrogram-model",
  "ferrogram-render",
+ "ferrogram-shapesheet",
  "ferrogram-ui-spec",
  "insta",
  "js-sys",

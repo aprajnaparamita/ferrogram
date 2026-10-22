@@ -1,10 +1,47 @@
-//! The Shape Data and Size & Position panels (ADR 0035).
+//! The Shape Data and Size & Position panels (ADR 0035, ADR 0058).
 //!
 //! With no selection the panels show honest page and document data;
 //! with a selection they show the anchor shape (the panels' subject,
-//! ADR 0041) and its size, position and angle as editable fields. An
-//! edit dispatches the matching `shape.set.*` command through the
-//! registry (P5-05); the panel itself never mutates `AppCtx`.
+//! ADR 0041): its `Prop` rows typed (ADR 0058) and its size, position
+//! and angle as typed fields. An edit is parsed with the formula
+//! grammar's own parser, converted through the engine's unit table and
+//! dispatched as one `shape.set.*` command (P5-05); the panel itself
+//! never mutates `AppCtx` and never opens a dialog.
+//!
+//! # Typed values (ADR 0058)
+//!
+//! A Shape Data row shows the cached value's kind (ADR 0052): a number
+//! with its unit in [`DisplayUnits`] (the `Settings::units` display
+//! system; angles in degrees, ratios in percent), a boolean as a check
+//! box, a colour as its `#RRGGBB` RGB value, a string as written and
+//! every other kind as its cached text. The `Prop` row's `Type` cell is
+//! only a Shape Data format hint (P4-06); when it disagrees with the
+//! cached kind the cached value wins ("it is what the file holds"), so
+//! the panels show the cached kind and never consult `Type`.
+//!
+//! # Typed input (ADR 0058)
+//!
+//! An editable field takes the literals the grammar does (`2.5 in`,
+//! `2.5 cm`, `37%`, `45 deg`, `5 1/2`; ADR 0051) and converts the
+//! parsed value through the engine's unit table (ADR 0052) into the
+//! field's own unit before the write: the panels take inches and
+//! degrees (P5-05). A literal without a unit is a plain number of the
+//! field's unit (`5 1/2` is 5.5 in in a width field) and a ratio is its
+//! fraction (`37%` is 0.37); any other unit converts over the canonical
+//! units of its family (`2.5 cm` is 0.984 in in a width field). The
+//! field shows the value in [`DisplayUnits`] (or degrees), so what is
+//! shown is itself a literal the grammar accepts.
+//!
+//! # Formula cells are read-only (ADR 0058)
+//!
+//! A cell that carries a formula that *computes* — one that reads a cell
+//! or calls a function, its own (`Inh` included) or the one that defines
+//! it through the lookup — is marked `(formula)` and refuses edits with
+//! one status line: typing a bare number into a formula cell would
+//! silently replace the formula and break the master link. A constant
+//! literal (`5 in`, the literal the `shape.set.*` writes carry) is not
+//! such a formula (P6-07's classification) and stays editable.
+//! Editing formulas is the formula editor of a later phase.
 //!
 //! # Missing values
 //!
@@ -17,14 +54,32 @@ use egui::{RichText, Ui};
 use ferrogram_commands::{
     AppCtx, ArgValue, Args, CommandId, DisplayUnits, DocumentSession, Invocation, Source,
 };
-use ferrogram_model::{CellName, CellReader, Page, PageId, ShapeId, SheetRef};
+use ferrogram_model::{
+    CellLookup, CellName, CellReader, CellValue, Page, PageId, ShapeId, SheetRef, ValueSource,
+};
+use ferrogram_shapesheet::{
+    CellRef, Error as FormulaError, EvalContext, EvalWarning, Expr, ExprKind, UnaryOp, Unit,
+    UnitFamily, Value, eval, parse,
+};
 
 use crate::Intent;
 use crate::UiError;
-use crate::canvas::format_length;
+use crate::canvas::{format_length, format_number};
 
 /// The value shown for a missing, non-finite or empty value (ADR 0035).
 const MISSING_VALUE: &str = "—";
+
+/// The marker a formula cell carries beside its value (ADR 0058).
+const FORMULA_MARKER: &str = "(formula)";
+
+/// The hover text of [`FORMULA_MARKER`].
+const FORMULA_HINT: &str = "This cell carries a formula: read-only in this release";
+
+/// The status line of a refused edit of a formula cell (ADR 0058).
+const FORMULA_REFUSAL: &str = "is a formula cell; formulas are read-only in this release";
+
+/// The width of a typed field, in points.
+const FIELD_WIDTH: f32 = 140.0;
 
 /// One label/value row of a panel (ADR 0035).
 #[derive(Debug, Clone, PartialEq)]
@@ -33,10 +88,10 @@ pub struct PanelRow {
     pub label: String,
     /// The formatted value; "—" for missing or non-finite values.
     pub value: String,
-    /// The edit command and arguments for Phase 5; `None` while the
-    /// panel is read-only.
+    /// The edit command and arguments for a typed field; `None` for a
+    /// read-only row (a formula cell is read-only, ADR 0058).
     pub edit: Option<(CommandId, Args)>,
-    /// The numeric value behind an editable row (inches or degrees).
+    /// The numeric value behind a typed row (inches or degrees).
     pub numeric: Option<f64>,
 }
 
@@ -71,12 +126,125 @@ impl PanelRow {
     }
 }
 
-/// Builds the Shape Data rows (ADR 0035).
+/// The unit a typed entry is read in (P5-05: the panels take inches and
+/// degrees, [`DisplayUnits`] is the display system only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EntryUnit {
+    /// Inches: the width, height and pin fields.
+    Length,
+    /// Degrees: the angle field.
+    Angle,
+}
+
+impl EntryUnit {
+    /// The engine unit the entry lands in before the command's own
+    /// argument conversion (ADR 0058).
+    const fn unit(self) -> Unit {
+        match self {
+            EntryUnit::Length => Unit::Inches,
+            EntryUnit::Angle => Unit::Degrees,
+        }
+    }
+
+    /// The field value of one number in canonical units (inches or
+    /// radians): inches for a length field, degrees for the angle.
+    const fn field_value(self, canonical: f64) -> f64 {
+        match self {
+            EntryUnit::Length => canonical,
+            EntryUnit::Angle => canonical.to_degrees(),
+        }
+    }
+}
+
+/// What the value column of one row does (ADR 0058).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Field {
+    /// A read-only value: a check box for `Some(flag)`, a label else.
+    Shown(Option<bool>),
+    /// A typed field in this unit, dispatched on commit.
+    Typed(EntryUnit),
+}
+
+/// One panel row and what its value column does (ADR 0058).
+#[derive(Debug, Clone, PartialEq)]
+struct Entry {
+    /// The row as [`shape_data_rows`] and [`size_position_rows`] show it.
+    row: PanelRow,
+    /// What the value column does when it is typed into.
+    field: Field,
+    /// Whether the cell behind the row carries a formula (ADR 0058).
+    formula: bool,
+    /// Hover text for the label, when it adds something (a `Prop` row
+    /// name the label does not show).
+    note: Option<String>,
+}
+
+impl Entry {
+    /// A read-only row with no note and no formula.
+    fn shown(row: PanelRow) -> Self {
+        Self {
+            row,
+            field: Field::Shown(None),
+            formula: false,
+            note: None,
+        }
+    }
+}
+
+/// The buffer of one typed field between frames.
+#[derive(Debug, Clone)]
+struct FieldState {
+    /// The text shown in the field.
+    text: String,
+    /// Whether the user is editing it (the buffer wins over the row).
+    editing: bool,
+}
+
+/// Builds the Shape Data rows (ADR 0035, ADR 0058).
 ///
-/// With a selection: the anchor shape's name and Visio id. Without one:
-/// the document's `Property` rows (name, value) and the active page's
+/// With a selection: the anchor shape's name and Visio id, then one row
+/// per `Prop` row (the label, the row name and the typed `Value`). Without
+/// one: the document's `Property` rows (name, value) and the active page's
 /// name. A missing value renders "—" and records one warning.
 pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
+    Ok(shape_data_entries(app)?
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect())
+}
+
+/// Builds the Size & Position rows (ADR 0035, ADR 0058).
+///
+/// With a selection: the anchor shape's `Width`, `Height`, `PinX`,
+/// `PinY` and `Angle` as typed fields (the `shape.set.*` commands),
+/// then the evaluated `LocPinX`, `LocPinY`, `FlipX` and `FlipY`. Cells
+/// that carry a formula are read-only (ADR 0058). Without a selection:
+/// the active page's width and height in
+/// [`ferrogram_commands::Settings::units`], then its name. A missing
+/// value renders "—" and records one warning.
+pub fn size_position_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
+    Ok(size_position_entries(app)?
+        .into_iter()
+        .map(|entry| entry.row)
+        .collect())
+}
+
+/// Draws the Shape Data panel (ADR 0035) and returns the edit intents.
+pub fn show_shape_data(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
+    let entries = shape_data_entries(app)?;
+    Ok(show_panel(ui, app, "Shape Data", &entries))
+}
+
+/// Draws the Size & Position panel (ADR 0035) and returns the edit
+/// intents.
+pub fn show_size_position(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
+    let entries = size_position_entries(app)?;
+    Ok(show_panel(ui, app, "Size & Position", &entries))
+}
+
+/// Builds the Shape Data entries (ADR 0058).
+fn shape_data_entries(app: &mut AppCtx) -> Result<Vec<Entry>, UiError> {
+    let units = app.settings.units;
     let mut rows = Vec::new();
     let Some(session) = app.active_document() else {
         return Ok(rows);
@@ -92,8 +260,15 @@ pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
             format!("Shape {}", shape.visio_id)
         };
         let visio_id = shape.visio_id;
-        rows.push(PanelRow::read_only("Name", name));
-        rows.push(PanelRow::read_only("ID", visio_id.to_string()));
+        let props = prop_rows(session, anchor);
+        rows.push(Entry::shown(PanelRow::read_only("Name", name)));
+        rows.push(Entry::shown(PanelRow::read_only(
+            "ID",
+            visio_id.to_string(),
+        )));
+        for prop in &props {
+            rows.push(prop_entry(app, prop, units));
+        }
         return Ok(rows);
     }
     let properties: Vec<(String, String)> = session
@@ -112,13 +287,8 @@ pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
     Ok(rows)
 }
 
-/// Builds the Size & Position rows (ADR 0035).
-///
-/// With a selection: the anchor shape's width, height, pin and angle,
-/// each editable through its `shape.set.*` command. Without one: the
-/// active page's width and height in [`ferrogram_commands::Settings::units`],
-/// then its name. A missing value renders "—" and records one warning.
-pub fn size_position_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
+/// Builds the Size & Position entries (ADR 0058).
+fn size_position_entries(app: &mut AppCtx) -> Result<Vec<Entry>, UiError> {
     let units = app.settings.units;
     let mut rows = Vec::new();
     let Some(session) = app.active_document() else {
@@ -127,86 +297,507 @@ pub fn size_position_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
     if let Some(anchor) = app.selection.anchor
         && session.document.shape(anchor).is_some()
     {
-        let width = shape_number(session, anchor, "Width");
-        let height = shape_number(session, anchor, "Height");
-        let pin_x = shape_number(session, anchor, "PinX");
-        let pin_y = shape_number(session, anchor, "PinY");
-        let angle = shape_number(session, anchor, "Angle");
-        push_editable_length(app, &mut rows, "Width", width, "shape.set.width", "width")?;
-        push_editable_length(
-            app,
-            &mut rows,
-            "Height",
-            height,
-            "shape.set.height",
-            "height",
-        )?;
-        let x = pin_x.unwrap_or(0.0);
-        let y = pin_y.unwrap_or(0.0);
-        if pin_x.is_some() {
-            rows.push(PanelRow::editable(
-                "Pin X",
-                format_length(x, units),
-                x,
-                "shape.set.pin",
-                Args::new()
-                    .with("x", ArgValue::Number(x))
-                    .with("y", ArgValue::Number(y)),
-            )?);
-        } else {
-            push_missing(app, &mut rows, "Pin X", "no value");
-        }
-        if pin_y.is_some() {
-            rows.push(PanelRow::editable(
-                "Pin Y",
-                format_length(y, units),
-                y,
-                "shape.set.pin",
-                Args::new()
-                    .with("x", ArgValue::Number(x))
-                    .with("y", ArgValue::Number(y)),
-            )?);
-        } else {
-            push_missing(app, &mut rows, "Pin Y", "no value");
-        }
-        if let Some(angle) = angle {
-            rows.push(PanelRow::editable(
-                "Angle",
-                format!("{:.1}°", angle.to_degrees()),
-                angle.to_degrees(),
-                "shape.set.angle",
-                Args::new().with("angle", ArgValue::Number(angle)),
-            )?);
-        } else {
-            push_missing(app, &mut rows, "Angle", "no value");
+        let sheet = SheetRef::Shape(anchor);
+        let data = read_rows(session, sheet);
+        for entry in shape_row_entries(app, &data, units)? {
+            rows.push(entry);
         }
         return Ok(rows);
     }
     let page = active_page(session);
+    let page_id = page.map(|page| page.id);
     let width = page.and_then(|page| page_number(session, page.id, "PageWidth"));
     let height = page.and_then(|page| page_number(session, page.id, "PageHeight"));
     let name = page.map(|page| page.name.clone()).unwrap_or_default();
-    push_length(app, &mut rows, "Width", width, units);
-    push_length(app, &mut rows, "Height", height, units);
+    let width_formula = page_id
+        .map(|id| cell_has_formula(session, SheetRef::Page(id), "PageWidth"))
+        .unwrap_or(false);
+    let height_formula = page_id
+        .map(|id| cell_has_formula(session, SheetRef::Page(id), "PageHeight"))
+        .unwrap_or(false);
+    rows.push(push_length(app, "Width", width, units, width_formula));
+    rows.push(push_length(app, "Height", height, units, height_formula));
     push_text(app, &mut rows, "Name", &name);
     Ok(rows)
 }
 
-/// Draws the Shape Data panel (ADR 0035) and returns the edit intents.
-pub fn show_shape_data(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
-    let rows = shape_data_rows(app)?;
-    Ok(show_panel(ui, app, "Shape Data", &rows))
+/// One Size & Position row of a selected shape (ADR 0058).
+struct Spec {
+    /// The row label.
+    label: &'static str,
+    /// The ShapeSheet cell behind the row.
+    cell: &'static str,
+    /// The field unit of an editable row, `None` when read-only.
+    unit: Option<EntryUnit>,
+    /// The editing command id and its argument name, or `None`.
+    edit: Option<(&'static str, &'static str)>,
+    /// Whether the cell holds a boolean (shown as a check box).
+    flag: bool,
 }
 
-/// Draws the Size & Position panel (ADR 0035) and returns the edit
-/// intents.
-pub fn show_size_position(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
-    let rows = size_position_rows(app)?;
-    Ok(show_panel(ui, app, "Size & Position", &rows))
+/// The Size & Position rows of a selected shape (ADR 0058).
+const SHAPE_ROWS: &[Spec] = &[
+    Spec {
+        label: "Width",
+        cell: "Width",
+        unit: Some(EntryUnit::Length),
+        edit: Some(("shape.set.width", "width")),
+        flag: false,
+    },
+    Spec {
+        label: "Height",
+        cell: "Height",
+        unit: Some(EntryUnit::Length),
+        edit: Some(("shape.set.height", "height")),
+        flag: false,
+    },
+    Spec {
+        label: "Pin X",
+        cell: "PinX",
+        unit: Some(EntryUnit::Length),
+        edit: Some(("shape.set.pin", "x")),
+        flag: false,
+    },
+    Spec {
+        label: "Pin Y",
+        cell: "PinY",
+        unit: Some(EntryUnit::Length),
+        edit: Some(("shape.set.pin", "y")),
+        flag: false,
+    },
+    Spec {
+        label: "Angle",
+        cell: "Angle",
+        unit: Some(EntryUnit::Angle),
+        edit: Some(("shape.set.angle", "angle")),
+        flag: false,
+    },
+    Spec {
+        label: "Loc Pin X",
+        cell: "LocPinX",
+        unit: None,
+        edit: None,
+        flag: false,
+    },
+    Spec {
+        label: "Loc Pin Y",
+        cell: "LocPinY",
+        unit: None,
+        edit: None,
+        flag: false,
+    },
+    Spec {
+        label: "Flip X",
+        cell: "FlipX",
+        unit: None,
+        edit: None,
+        flag: true,
+    },
+    Spec {
+        label: "Flip Y",
+        cell: "FlipY",
+        unit: None,
+        edit: None,
+        flag: true,
+    },
+];
+
+/// The evaluated data of one [`Spec`] row (ADR 0055: the recalc result).
+struct Row {
+    /// The row's specification.
+    spec: &'static Spec,
+    /// The evaluated number (inches or radians), when there is one.
+    number: Option<f64>,
+    /// The evaluated flag, when the cell holds one.
+    flag: Option<bool>,
+    /// Whether the cell carries a formula (ADR 0058).
+    formula: bool,
+}
+
+/// Reads the evaluated Size & Position rows of one sheet. The reads
+/// borrow the session, so the entries are built after (they record
+/// warnings on [`AppCtx`]).
+fn read_rows(session: &DocumentSession, sheet: SheetRef) -> Vec<Row> {
+    SHAPE_ROWS
+        .iter()
+        .map(|spec| Row {
+            spec,
+            number: if spec.flag {
+                None
+            } else {
+                read_number(session, sheet, spec.cell)
+            },
+            flag: if spec.flag {
+                read_flag(session, sheet, spec.cell)
+            } else {
+                None
+            },
+            formula: cell_has_formula(session, sheet, spec.cell),
+        })
+        .collect()
+}
+
+/// Builds the entries of the evaluated rows (ADR 0058).
+fn shape_row_entries(
+    app: &mut AppCtx,
+    data: &[Row],
+    units: DisplayUnits,
+) -> Result<Vec<Entry>, UiError> {
+    let pin = pin_pair(data);
+    let mut rows = Vec::new();
+    for row in data {
+        rows.push(shape_row_entry(app, row, pin, units)?);
+    }
+    Ok(rows)
+}
+
+/// The pin coordinates both `shape.set.pin` arguments need (the command
+/// sets the pair, ADR 0035).
+fn pin_pair(data: &[Row]) -> (Option<f64>, Option<f64>) {
+    let x = data
+        .iter()
+        .find(|row| row.spec.cell == "PinX")
+        .and_then(|row| row.number);
+    let y = data
+        .iter()
+        .find(|row| row.spec.cell == "PinY")
+        .and_then(|row| row.number);
+    (x, y)
+}
+
+/// Builds one entry of the Size & Position panel (ADR 0058).
+fn shape_row_entry(
+    app: &mut AppCtx,
+    row: &Row,
+    pin: (Option<f64>, Option<f64>),
+    units: DisplayUnits,
+) -> Result<Entry, UiError> {
+    let label = row.spec.label;
+    if row.spec.flag {
+        return Ok(match row.flag {
+            Some(flag) => Entry {
+                row: PanelRow::read_only(label, flag_text(flag)),
+                field: Field::Shown(Some(flag)),
+                formula: row.formula,
+                note: None,
+            },
+            None => missing_entry(app, label, "no value"),
+        });
+    }
+    let Some(number) = row.number.filter(|number| number.is_finite()) else {
+        let reason = if row.number.is_some() {
+            "not a number"
+        } else {
+            "no value"
+        };
+        return Ok(missing_entry(app, label, reason));
+    };
+    let text = match row.spec.unit {
+        Some(EntryUnit::Angle) => format!("{}°", format_number(number.to_degrees())),
+        _ => format_length(number, units),
+    };
+    let (Some(unit), Some((command, argument))) = (row.spec.unit, row.spec.edit) else {
+        // A read-only row (LocPinX and friends): no command edits it.
+        return Ok(Entry {
+            row: PanelRow::read_only(label, text),
+            field: Field::Shown(None),
+            formula: row.formula,
+            note: None,
+        });
+    };
+    let numeric = unit.field_value(number);
+    let args = if command == "shape.set.pin" {
+        let (x, y) = pin;
+        Args::new()
+            .with("x", ArgValue::Number(x.unwrap_or(0.0)))
+            .with("y", ArgValue::Number(y.unwrap_or(0.0)))
+    } else {
+        // The command's own unit: inches, radians for `shape.set.angle`
+        // (P5-05); the field shows and takes the display form.
+        Args::new().with(argument, ArgValue::Number(number))
+    };
+    let edit = if row.formula {
+        None
+    } else {
+        PanelRow::editable(label, text.clone(), numeric, command, args)?.edit
+    };
+    Ok(Entry {
+        row: PanelRow {
+            label: label.to_owned(),
+            value: text,
+            edit,
+            numeric: Some(numeric),
+        },
+        field: Field::Typed(unit),
+        formula: row.formula,
+        note: None,
+    })
+}
+
+/// One `Prop` row of the Shape Data panel (ADR 0058).
+struct PropRow {
+    /// The label column: the `Label` cell's text, else the row name.
+    label: String,
+    /// Hover note (the row name), when the label does not show it.
+    note: Option<String>,
+    /// The `Value` cell's cached value and unit, when it has one.
+    value: Option<(CellValue, ferrogram_geom::Unit)>,
+    /// Whether the `Value` cell carries a formula (ADR 0058).
+    formula: bool,
+}
+
+/// Reads the `Prop` rows of one shape: the row name, the `Label` text
+/// and the cached `Value` (what the file holds, ADR 0058).
+fn prop_rows(session: &DocumentSession, shape: ShapeId) -> Vec<PropRow> {
+    let Some(shape) = session.document.shape(shape) else {
+        return Vec::new();
+    };
+    let mut rows = Vec::new();
+    for section in &shape.sheet.sections {
+        if section.name.as_str() != "Property" {
+            continue;
+        }
+        for (position, row) in section.rows.iter().enumerate() {
+            if row.is_deleted() {
+                continue;
+            }
+            let name = row.name.clone();
+            let label = row
+                .cells
+                .iter()
+                .find(|cell| cell.name.as_str() == "Label")
+                .and_then(|cell| cell.value.as_ref())
+                .and_then(|value| match value {
+                    CellValue::Str(text) if !text.is_empty() => Some(text.clone()),
+                    _ => None,
+                })
+                .or_else(|| name.clone())
+                .unwrap_or_else(|| format!("Row {}", position + 1));
+            let note = match &name {
+                Some(name) if *name != label => Some(name.clone()),
+                _ => None,
+            };
+            let value_cell = row.cells.iter().find(|cell| cell.name.as_str() == "Value");
+            rows.push(PropRow {
+                label,
+                note,
+                value: value_cell
+                    .and_then(|cell| cell.value.clone().map(|value| (value, cell.unit))),
+                formula: value_cell
+                    .and_then(|cell| cell.formula.as_deref())
+                    .is_some_and(formula_computes),
+            });
+        }
+    }
+    rows
+}
+
+/// Builds the entry of one `Prop` row (ADR 0058): the value typed.
+fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
+    let Some((value, unit)) = &prop.value else {
+        return missing_entry(app, &prop.label, "no value");
+    };
+    let Some((text, check)) = typed_value(value, *unit, units) else {
+        return missing_entry(app, &prop.label, "unsupported cached value");
+    };
+    Entry {
+        row: PanelRow::read_only(&prop.label, text),
+        field: Field::Shown(check),
+        formula: prop.formula,
+        note: prop.note.clone(),
+    }
+}
+
+/// The typed display of one cached value (ADR 0058): the text of the
+/// value and the flag of a boolean (drawn as a check box).
+///
+/// The kind is the cached value's kind (ADR 0052); a value the engine
+/// cannot type (`Value::from_cached` refuses it) has no display here
+/// and shows as "—" with one warning at the caller.
+fn typed_value(
+    value: &CellValue,
+    unit: ferrogram_geom::Unit,
+    units: DisplayUnits,
+) -> Option<(String, Option<bool>)> {
+    let value = Value::from_cached(value, unit).ok()?;
+    if let Value::Number(number) = &value {
+        return Some((number_text(number, units)?, None));
+    }
+    if let Value::Str(text) = &value {
+        return Some((text.clone(), None));
+    }
+    if let Value::Bool(flag) = &value {
+        return Some((flag_text(*flag), Some(*flag)));
+    }
+    if let Value::Color(color) = &value {
+        return Some((color_text(color), None));
+    }
+    if let Value::Err(code) = &value {
+        return Some((code.as_str().to_owned(), None));
+    }
+    if let Value::List(entries) = &value {
+        return Some((list_text(entries), None));
+    }
+    // `Value` is non-exhaustive: a kind this crate cannot show is not a
+    // display (never a panic, AGENTS.md section 6).
+    None
+}
+
+/// Formats one number for display (ADR 0058): a length in the display
+/// units of `Settings::units`, an angle in degrees, a ratio in percent
+/// and anything else as the cached number (a duration's spelling is
+/// lost in the model, ADR 0052, so its cached number is its text).
+fn number_text(number: &ferrogram_shapesheet::Number, units: DisplayUnits) -> Option<String> {
+    let canonical = number.unit.to_canonical(number.magnitude).ok()?;
+    let family = number.unit.family().ok()?;
+    let text = if family == UnitFamily::Length || family == UnitFamily::Typographic {
+        format_length(canonical, units)
+    } else if family == UnitFamily::Angle {
+        format!("{}°", format_number(canonical.to_degrees()))
+    } else if family == UnitFamily::Ratio {
+        format!("{}%", format_number(canonical * 100.0))
+    } else {
+        format_number(number.magnitude)
+    };
+    Some(text)
+}
+
+/// The text of a boolean: `TRUE` or `FALSE` (the grammar's spelling).
+fn flag_text(flag: bool) -> String {
+    if flag {
+        String::from("TRUE")
+    } else {
+        String::from("FALSE")
+    }
+}
+
+/// The `#RRGGBB` RGB value of a colour (the spelling the file writes).
+fn color_text(color: &ferrogram_model::Color) -> String {
+    format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b)
+}
+
+/// The cached text of a list value: its entries as the file spells them.
+fn list_text(entries: &[Value]) -> String {
+    let mut text = String::new();
+    for (index, entry) in entries.iter().enumerate() {
+        if index > 0 {
+            text.push(';');
+        }
+        text.push_str(&list_entry_text(entry));
+    }
+    text
+}
+
+/// The cached text of one list entry.
+fn list_entry_text(entry: &Value) -> String {
+    if let Value::Str(text) = entry {
+        return text.clone();
+    }
+    if let Value::Number(number) = entry {
+        return format_number(number.magnitude);
+    }
+    if let Value::Bool(flag) = entry {
+        return flag_text(*flag);
+    }
+    if let Value::Color(color) = entry {
+        return color_text(color);
+    }
+    if let Value::Err(code) = entry {
+        return code.as_str().to_owned();
+    }
+    String::new()
+}
+
+/// A literal-only evaluation context: a typed entry is a constant (ADR
+/// 0058), so a reference or a call is a refused entry, and any warning
+/// the evaluation records (a coercion, a non-finite result) refuses it
+/// too.
+#[derive(Default)]
+struct LiteralOnly {
+    /// How many warnings the evaluation recorded.
+    warnings: usize,
+}
+
+impl EvalContext for LiteralOnly {
+    fn cell_value(
+        &mut self,
+        _sheet: SheetRef,
+        _reference: &CellRef,
+    ) -> Result<Value, FormulaError> {
+        Err(FormulaError::Conversion("panel entries are constants"))
+    }
+
+    fn set_cell(
+        &mut self,
+        _sheet: SheetRef,
+        _reference: &CellRef,
+        _value: Value,
+    ) -> Result<(), FormulaError> {
+        Err(FormulaError::Conversion("panel entries are constants"))
+    }
+
+    fn warn(&mut self, _warning: EvalWarning) {
+        self.warnings = self.warnings.saturating_add(1);
+    }
+}
+
+/// Whether an expression is one literal of the grammar (ADR 0058: a
+/// number field takes "the same literals the grammar does"): a number,
+/// string or boolean literal under any chain of unary `+`, `-` and `%`.
+/// A call or a reference belongs to the formula editor of a later phase.
+fn is_literal(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Literal(_) => true,
+        ExprKind::Unary {
+            op: UnaryOp::Plus | UnaryOp::Minus | UnaryOp::Percent,
+            operand,
+        } => is_literal(operand),
+        _ => false,
+    }
+}
+
+/// Parses one typed entry and converts it to the field's unit (ADR 0058).
+///
+/// The grammar is the formula grammar (`shapesheet::parse`, so the two
+/// never disagree) and the conversion is the engine's unit table (ADR
+/// 0052). A literal without a unit is a plain number of the field's
+/// unit and a ratio is its fraction; any other unit converts over the
+/// canonical units of its family. A failure is the reason for one
+/// status line, never a panic (AGENTS.md section 6).
+fn typed_entry(text: &str, unit: EntryUnit) -> Result<f64, String> {
+    let bad = || format!("{text:?} is not a number");
+    let expr = parse(text).map_err(|_| bad())?;
+    if !is_literal(&expr) {
+        return Err(bad());
+    }
+    let mut context = LiteralOnly::default();
+    let sheet = SheetRef::Shape(ShapeId { index: 0 });
+    let value = eval(&expr, sheet, &mut context).map_err(|_| bad())?;
+    if context.warnings != 0 {
+        return Err(format!("{text:?} is not a plain number"));
+    }
+    let Value::Number(number) = value else {
+        return Err(bad());
+    };
+    let canonical = number
+        .unit
+        .to_canonical(number.magnitude)
+        .map_err(|_| bad())?;
+    let family = number.unit.family().map_err(|_| bad())?;
+    let magnitude = if family == UnitFamily::Dimensionless || family == UnitFamily::Ratio {
+        canonical
+    } else {
+        unit.unit().from_canonical(canonical).map_err(|_| bad())?
+    };
+    if magnitude.is_finite() {
+        Ok(magnitude)
+    } else {
+        Err(format!("{text:?} is not a finite number"))
+    }
 }
 
 /// Draws one panel: its title and the rows as a two-column grid.
-fn show_panel(ui: &mut Ui, app: &AppCtx, title: &str, rows: &[PanelRow]) -> Vec<Intent> {
+fn show_panel(ui: &mut Ui, app: &mut AppCtx, title: &str, entries: &[Entry]) -> Vec<Intent> {
     ui.label(RichText::new(title).strong());
     if app.active_document().is_none() {
         ui.label("No document");
@@ -214,29 +805,119 @@ fn show_panel(ui: &mut Ui, app: &AppCtx, title: &str, rows: &[PanelRow]) -> Vec<
     }
     let mut intents = Vec::new();
     egui::Grid::new(title).striped(true).show(ui, |ui| {
-        for row in rows {
-            ui.label(row.label.as_str());
-            if let (Some((command, args)), Some(numeric)) = (&row.edit, row.numeric) {
-                let mut value = numeric;
-                let suffix = if row.label == "Angle" { "°" } else { "" };
-                let changed = ui
-                    .add(egui::DragValue::new(&mut value).speed(0.01).suffix(suffix))
-                    .changed();
-                if changed {
-                    let mut args = args.clone();
-                    set_edited_argument(&row.label, &mut args, value);
-                    intents.push(Intent::new(*command, Invocation::new(args, Source::Ui)));
-                }
-            } else {
-                ui.label(row.value.as_str());
+        for entry in entries {
+            let mut label = ui.label(entry.row.label.as_str());
+            if let Some(note) = &entry.note {
+                label = label.on_hover_text(note.as_str());
             }
+            drop(label);
+            ui.horizontal(|ui| {
+                if let Field::Typed(unit) = entry.field {
+                    intents.append(&mut edit_field(ui, app, title, entry, unit));
+                } else {
+                    show_value(ui, entry);
+                }
+                if entry.formula {
+                    ui.label(RichText::new(FORMULA_MARKER).weak())
+                        .on_hover_text(FORMULA_HINT);
+                }
+            });
             ui.end_row();
         }
     });
     intents
 }
 
+/// Draws one read-only value: a check box for a boolean (ADR 0058's
+/// "checkbox-like value"), a label for everything else.
+fn show_value(ui: &mut Ui, entry: &Entry) {
+    if let Some(flag) = match entry.field {
+        Field::Shown(flag) => flag,
+        Field::Typed(_) => None,
+    } {
+        let mut checked = flag;
+        ui.add_enabled(
+            false,
+            egui::Checkbox::new(&mut checked, entry.row.value.as_str()),
+        );
+    } else {
+        ui.label(entry.row.value.as_str());
+    }
+}
+
+/// One typed field: shows the value text and, on commit, parses the
+/// typed entry into the command's arguments (ADR 0058).
+///
+/// A formula cell refuses the edit with one status line and a bad entry
+/// is refused the same way; both change nothing (no intent, no model
+/// write).
+fn edit_field(
+    ui: &mut Ui,
+    app: &mut AppCtx,
+    title: &str,
+    entry: &Entry,
+    unit: EntryUnit,
+) -> Vec<Intent> {
+    let id = egui::Id::unique(("panel-field", title, entry.row.label.as_str()));
+    let mut state = ui.data_mut(|data| {
+        data.get_temp::<FieldState>(id)
+            .unwrap_or_else(|| FieldState {
+                text: entry.row.value.clone(),
+                editing: false,
+            })
+    });
+    if !state.editing {
+        state.text = entry.row.value.clone();
+    }
+    let mut text = state.text.clone();
+    let response = ui.add(
+        egui::TextEdit::singleline(&mut text)
+            .desired_width(FIELD_WIDTH)
+            .hint_text(entry.row.label.as_str()),
+    );
+    state.text = text;
+    if response.changed() {
+        state.editing = true;
+    }
+    let mut intents = Vec::new();
+    let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
+    if state.editing && (response.lost_focus() || (enter && response.has_focus())) {
+        state.editing = false;
+        intents = commit_entry(app, entry, unit, &state.text);
+        state.text = entry.row.value.clone();
+    }
+    ui.data_mut(|data| data.insert_temp(id, state));
+    intents
+}
+
+/// The commit of one typed entry (ADR 0058): one command to dispatch,
+/// or one status line and nothing else — a formula cell refuses the
+/// edit and a bad entry is refused the same way. The panel itself
+/// never touches the model.
+fn commit_entry(app: &mut AppCtx, entry: &Entry, unit: EntryUnit, text: &str) -> Vec<Intent> {
+    if entry.formula {
+        record_line(app, format!("{} {FORMULA_REFUSAL}", entry.row.label));
+        return Vec::new();
+    }
+    let Some((command, mut args)) = entry.row.edit.clone() else {
+        return Vec::new();
+    };
+    match typed_entry(text, unit) {
+        Ok(value) => {
+            set_edited_argument(&entry.row.label, &mut args, value);
+            vec![Intent::new(command, Invocation::new(args, Source::Ui))]
+        }
+        Err(reason) => {
+            record_line(app, format!("{}: {}", entry.row.label, reason));
+            Vec::new()
+        }
+    }
+}
+
 /// Writes the edited field into the command arguments.
+///
+/// The value is in the field's own unit (inches or degrees): `Angle`
+/// converts to the radians its command takes (P5-05).
 fn set_edited_argument(label: &str, args: &mut Args, value: f64) {
     match label {
         "Width" => args.set("width", ArgValue::Number(value)),
@@ -248,6 +929,12 @@ fn set_edited_argument(label: &str, args: &mut Args, value: f64) {
     }
 }
 
+/// Records one status line (a refused entry, ADR 0058). Refusals record
+/// every time: one line per refused edit.
+fn record_line(app: &mut AppCtx, message: String) {
+    app.record_warning(message);
+}
+
 /// The active page of a session: the page `active_page` names, or `None`
 /// when there is no active page or the id is stale.
 fn active_page(session: &DocumentSession) -> Option<&Page> {
@@ -255,15 +942,26 @@ fn active_page(session: &DocumentSession) -> Option<&Page> {
     session.document.pages.iter().find(|page| page.id == id)
 }
 
-/// Reads one shape number cell (inches or radians).
+/// Reads one number cell of a sheet (inches or radians).
 ///
 /// `None` when the cell is missing or unusable: the ADR 0021 reader
 /// substitutes `0` and records a warning, which the panel treats as "no
 /// value" (ADR 0035) instead of showing the substitute.
-fn shape_number(session: &DocumentSession, shape: ShapeId, cell: &str) -> Option<f64> {
+fn read_number(session: &DocumentSession, sheet: SheetRef, cell: &str) -> Option<f64> {
     let mut reader = CellReader::new(&session.document);
     let before = reader.warnings().len();
-    match reader.number(SheetRef::Shape(shape), &CellName::new(cell)) {
+    match reader.number(sheet, &CellName::new(cell)) {
+        Ok(value) if reader.warnings().len() == before => Some(value),
+        _ => None,
+    }
+}
+
+/// Reads one boolean cell of a sheet, the same policy as
+/// [`read_number`].
+fn read_flag(session: &DocumentSession, sheet: SheetRef, cell: &str) -> Option<bool> {
+    let mut reader = CellReader::new(&session.document);
+    let before = reader.warnings().len();
+    match reader.boolean(sheet, &CellName::new(cell)) {
         Ok(value) if reader.warnings().len() == before => Some(value),
         _ => None,
     }
@@ -271,73 +969,109 @@ fn shape_number(session: &DocumentSession, shape: ShapeId, cell: &str) -> Option
 
 /// Reads one page number cell (inches).
 fn page_number(session: &DocumentSession, page: PageId, cell: &str) -> Option<f64> {
-    let mut reader = CellReader::new(&session.document);
-    let before = reader.warnings().len();
-    match reader.number(SheetRef::Page(page), &CellName::new(cell)) {
-        Ok(value) if reader.warnings().len() == before => Some(value),
-        _ => None,
-    }
+    read_number(session, SheetRef::Page(page), cell)
 }
 
-/// Adds one editable length row.
-fn push_editable_length(
-    app: &mut AppCtx,
-    rows: &mut Vec<PanelRow>,
-    label: &str,
-    value: Option<f64>,
-    command: &'static str,
-    argument: &str,
-) -> Result<(), UiError> {
-    let units = app.settings.units;
-    match value {
-        Some(value) if value.is_finite() => {
-            rows.push(PanelRow::editable(
-                label,
-                format_length(value, units),
-                value,
-                command,
-                Args::new().with(argument, ArgValue::Number(value)),
-            )?);
+/// Whether a formula computes something (P6-07's classification): one
+/// that reads a cell or calls a function. A constant literal (`-2`,
+/// `2+3`, `5 in`) computes nothing and is not a formula a write would
+/// break; `Inh` parses as a reference and counts.
+fn formula_computes(formula: &str) -> bool {
+    /// The tree walk over one parsed formula.
+    fn computes(expr: &Expr) -> bool {
+        match &expr.kind {
+            ExprKind::Ref(_) => true,
+            ExprKind::Call { .. } => true,
+            ExprKind::Unary { operand, .. } => computes(operand),
+            ExprKind::Binary { left, right, .. } => computes(left) || computes(right),
+            // A literal computes nothing.
+            ExprKind::Literal(_) => false,
+            // `ExprKind` is non-exhaustive: a construct this crate does
+            // not know counts as computing, so the cell stays read-only.
+            _ => true,
         }
-        Some(_) => push_missing(app, rows, label, "not a number"),
-        None => push_missing(app, rows, label, "no value"),
     }
-    Ok(())
+    match parse(formula) {
+        Ok(expr) => computes(&expr),
+        // A formula the parser refuses is kept read-only: conservative,
+        // never a silent replacement (ADR 0058).
+        Err(_) => true,
+    }
 }
 
-/// Adds one length row: formatted with units, or "—" plus one warning.
-fn push_length(
-    app: &mut AppCtx,
-    rows: &mut Vec<PanelRow>,
-    label: &str,
-    value: Option<f64>,
-    units: DisplayUnits,
-) {
-    match value {
-        Some(value) if value.is_finite() => {
-            rows.push(PanelRow::read_only(label, format_length(value, units)));
+/// Whether a cell carries a formula the write would replace (ADR 0058's
+/// read-only marking): its own (`Inh` included), or the one a real rung
+/// of the lookup defines. A constant literal is not such a formula and a
+/// documented default is not one either.
+fn cell_has_formula(session: &DocumentSession, sheet: SheetRef, cell: &str) -> bool {
+    let name = CellName::new(cell);
+    let own = match sheet {
+        SheetRef::Shape(id) => session
+            .document
+            .shape(id)
+            .and_then(|shape| shape.sheet.cells.iter().find(|entry| entry.name == name)),
+        SheetRef::Page(id) => session
+            .document
+            .page(id)
+            .and_then(|page| page.sheet.cells.iter().find(|entry| entry.name == name)),
+    };
+    if own
+        .and_then(|cell| cell.formula.as_deref())
+        .is_some_and(formula_computes)
+    {
+        return true;
+    }
+    let resolved = match sheet {
+        SheetRef::Shape(id) => session.document.resolve(id, &name),
+        SheetRef::Page(id) => session.document.resolve_page_cell(id, &name),
+    };
+    match resolved {
+        Ok(resolved) => {
+            let from_table = matches!(
+                resolved.source,
+                ValueSource::SectionDefault | ValueSource::HardDefault
+            );
+            resolved.formula.is_some_and(formula_computes) && !from_table
         }
-        Some(_) => push_missing(app, rows, label, "not a number"),
-        None => push_missing(app, rows, label, "no value"),
+        Err(_) => false,
     }
 }
 
-/// Adds one text row: the value, or "—" plus one warning when empty.
-fn push_text(app: &mut AppCtx, rows: &mut Vec<PanelRow>, label: &str, value: &str) {
-    if value.is_empty() {
-        push_missing(app, rows, label, "no value");
-    } else {
-        rows.push(PanelRow::read_only(label, value));
-    }
-}
-
-/// Adds the "—" row for a missing value and records its warning (the
-/// P4-07 sink fix: no warning pseudo-row).
-fn push_missing(app: &mut AppCtx, rows: &mut Vec<PanelRow>, label: &str, reason: &str) {
-    rows.push(PanelRow::read_only(label, MISSING_VALUE));
+/// Builds the "—" entry of a missing value and records its warning.
+fn missing_entry(app: &mut AppCtx, label: &str, reason: &str) -> Entry {
     let message = format!("{label}: {reason}");
     if !app.warnings.iter().any(|warning| warning == &message) {
         app.record_warning(message);
+    }
+    Entry::shown(PanelRow::read_only(label, MISSING_VALUE))
+}
+
+/// Adds one length row: formatted with units, or "—" plus one warning.
+/// A formula cell keeps its marker (ADR 0058).
+fn push_length(
+    app: &mut AppCtx,
+    label: &str,
+    value: Option<f64>,
+    units: DisplayUnits,
+    formula: bool,
+) -> Entry {
+    let mut entry = match value {
+        Some(value) if value.is_finite() => {
+            Entry::shown(PanelRow::read_only(label, format_length(value, units)))
+        }
+        Some(_) => missing_entry(app, label, "not a number"),
+        None => missing_entry(app, label, "no value"),
+    };
+    entry.formula = formula;
+    entry
+}
+
+/// Adds one text row: the value, or "—" plus one warning when empty.
+fn push_text(app: &mut AppCtx, rows: &mut Vec<Entry>, label: &str, value: &str) {
+    if value.is_empty() {
+        rows.push(missing_entry(app, label, "no value"));
+    } else {
+        rows.push(Entry::shown(PanelRow::read_only(label, value)));
     }
 }
 
@@ -346,7 +1080,8 @@ mod tests {
     use super::*;
     use crate::test_util::with_ui;
     use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{Cell, CellValue, Document, Page, PageId, Property, Shape};
+    use ferrogram_geom::Unit as GeomUnit;
+    use ferrogram_model::{Cell, Color, Document, Page, PageId, Property, Row, Section, Shape};
 
     /// A page with the given name and an 8.5 x 11 in sheet.
     fn page(name: &str) -> Page {
@@ -360,6 +1095,13 @@ mod tests {
     fn cell(name: &str, value: f64) -> Cell {
         let mut cell = Cell::new(CellName::new(name));
         cell.value = Some(CellValue::Number(value));
+        cell
+    }
+
+    /// A cell with a cached boolean.
+    fn flag_cell(name: &str, flag: bool) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Bool(flag));
         cell
     }
 
@@ -391,6 +1133,10 @@ mod tests {
             cell("PinX", 3.0),
             cell("PinY", 4.0),
             cell("Angle", core::f64::consts::FRAC_PI_6),
+            cell("LocPinX", 1.0),
+            cell("LocPinY", 0.5),
+            flag_cell("FlipX", false),
+            flag_cell("FlipY", false),
         ];
         let id = doc.add_shape(shape);
         let mut page = page("Page-1");
@@ -401,6 +1147,53 @@ mod tests {
         app.selection.anchor = Some(id);
         app.selection.page = Some(PageId { index: 0 });
         (app, id)
+    }
+
+    /// A cell with a formula and a cached value.
+    fn formula_cell(name: &str, formula: &str, value: f64) -> Cell {
+        let mut cell = cell(name, value);
+        cell.formula = Some(formula.to_owned());
+        cell
+    }
+
+    /// A `Property` section row with the given `Label` and `Value` cells.
+    fn prop_row(name: &str, label: Option<&str>, value: Option<Cell>) -> Row {
+        let mut row = Row::new();
+        row.name = Some(name.to_owned());
+        let mut cells = Vec::new();
+        if let Some(label) = label {
+            let mut cell = Cell::new(CellName::new("Label"));
+            cell.value = Some(CellValue::Str(label.to_owned()));
+            cells.push(cell);
+        }
+        if let Some(value) = value {
+            cells.push(value);
+        }
+        row.cells = cells;
+        row
+    }
+
+    /// A `Value` cell with the given cached value and unit.
+    fn value_cell(value: CellValue, unit: GeomUnit) -> Cell {
+        let mut cell = Cell::new(CellName::new("Value"));
+        cell.value = Some(value);
+        cell.unit = unit;
+        cell
+    }
+
+    /// The entry with `label` of an entry list, or panic (tests may).
+    fn entry_of<'a>(entries: &'a [Entry], label: &str) -> &'a Entry {
+        entries
+            .iter()
+            .find(|entry| entry.row.label == label)
+            .unwrap_or_else(|| panic!("no entry labelled {label}"))
+    }
+
+    /// The row with `label` of a row list, or panic (tests may).
+    fn row<'a>(rows: &'a [PanelRow], label: &str) -> &'a PanelRow {
+        rows.iter()
+            .find(|row| row.label == label)
+            .unwrap_or_else(|| panic!("no row labelled {label}"))
     }
 
     #[test]
@@ -446,18 +1239,13 @@ mod tests {
         assert_eq!(data[0].value, "Connector");
         let size = size_position_rows(&mut app).expect("rows");
         assert_eq!(size[0].value, MISSING_VALUE);
-        assert!(
-            size.iter()
-                .any(|row| row.label == "Pin X" && row.value == MISSING_VALUE)
-        );
-        assert!(
-            size.iter()
-                .any(|row| row.label == "Pin Y" && row.value == MISSING_VALUE)
-        );
-        assert!(
-            size.iter()
-                .any(|row| row.label == "Angle" && row.value == MISSING_VALUE)
-        );
+        for label in ["Pin X", "Pin Y", "Angle", "Flip X", "Flip Y"] {
+            assert_eq!(row(&size, label).value, MISSING_VALUE, "{label}");
+        }
+        // LocPinX/LocPinY have a documented default (`Width*0.5`), so
+        // they quietly evaluate to 0 (ADR 0021's quiet defaults).
+        assert_eq!(row(&size, "Loc Pin X").value, "0 in");
+        assert_eq!(row(&size, "Loc Pin Y").value, "0 in");
 
         // The unnamed fallback names the Visio id.
         let mut app2 = app;
@@ -467,30 +1255,6 @@ mod tests {
         }
         let data = shape_data_rows(&mut app2).expect("rows");
         assert_eq!(data[0].value, "Shape 12");
-    }
-
-    #[test]
-    fn non_finite_panel_values_take_the_warning_path() {
-        let mut app = AppCtx::new(Settings::default());
-        let mut rows = Vec::new();
-        push_length(
-            &mut app,
-            &mut rows,
-            "Width",
-            Some(f64::NAN),
-            DisplayUnits::Inches,
-        );
-        assert_eq!(rows[0].value, MISSING_VALUE);
-        push_editable_length(
-            &mut app,
-            &mut rows,
-            "Height",
-            Some(f64::INFINITY),
-            "shape.set.height",
-            "height",
-        )
-        .expect("no error");
-        assert_eq!(rows[1].value, MISSING_VALUE);
     }
 
     #[test]
@@ -539,6 +1303,17 @@ mod tests {
     }
 
     #[test]
+    fn the_pin_rows_carry_both_coordinates() {
+        let (mut app, _id) = selected_document();
+        let size = size_position_rows(&mut app).expect("rows");
+        for label in ["Pin X", "Pin Y"] {
+            let (_, args) = row(&size, label).edit.as_ref().expect("editable");
+            assert_eq!(args.number("x"), Some(3.0), "{label}");
+            assert_eq!(args.number("y"), Some(4.0), "{label}");
+        }
+    }
+
+    #[test]
     fn size_position_rows_show_the_page_size_and_name() {
         let mut app = app_with(document(), DisplayUnits::Inches);
         let rows = size_position_rows(&mut app).expect("rows");
@@ -571,14 +1346,13 @@ mod tests {
         doc.pages.push(Page::new(PageId { index: 0 }, 0));
         let mut app = app_with(doc, DisplayUnits::Inches);
         let rows = size_position_rows(&mut app).expect("rows");
+        assert_eq!(rows[0], PanelRow::read_only("Width", MISSING_VALUE));
+        assert_eq!(rows[1], PanelRow::read_only("Height", MISSING_VALUE));
         assert_eq!(
-            rows,
-            vec![
-                PanelRow::read_only("Width", MISSING_VALUE),
-                PanelRow::read_only("Height", MISSING_VALUE),
-                PanelRow::read_only("Name", MISSING_VALUE),
-            ]
+            rows.last().cloned(),
+            Some(PanelRow::read_only("Name", MISSING_VALUE))
         );
+        assert_eq!(rows.len(), 3);
         assert_eq!(app.warnings.len(), 3);
         assert_eq!(app.warnings[0], "Width: no value");
 
@@ -626,11 +1400,7 @@ mod tests {
         let mut app = app_with(doc, DisplayUnits::Inches);
         let rows = size_position_rows(&mut app).expect("rows");
         for label in ["Width", "Height"] {
-            let row = rows
-                .iter()
-                .find(|row| row.label == label)
-                .expect("the row exists");
-            assert_eq!(row.value, MISSING_VALUE, "{label}");
+            assert_eq!(row(&rows, label).value, MISSING_VALUE, "{label}");
         }
         assert!(
             app.warnings
@@ -670,5 +1440,608 @@ mod tests {
         for row in rows.iter().filter(|row| row.label != "Name") {
             assert_eq!(row.value, MISSING_VALUE, "{}", row.label);
         }
+    }
+
+    #[test]
+    fn a_constant_literal_is_not_a_refused_formula() {
+        // P6-07's classification: a constant literal computes nothing,
+        // so the panel keeps the field editable.
+        for formula in ["2 in", "-2", "2+3", "0.5235987755982988"] {
+            assert!(!formula_computes(formula), "{formula}");
+        }
+        for formula in ["Inh", "Width*2", "GUARD(2 in)", "not a formula ((("] {
+            assert!(formula_computes(formula), "{formula}");
+        }
+    }
+
+    #[test]
+    fn a_constant_literal_cell_stays_editable() {
+        let (mut app, id) = selected_document();
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            for cell in &mut shape.sheet.cells {
+                if cell.name.as_str() == "Width" {
+                    cell.set_formula(Some(String::from("2 in")));
+                }
+            }
+        }
+        let entries = size_position_entries(&mut app).expect("entries");
+        let width = entry_of(&entries, "Width");
+        assert!(!width.formula);
+        assert!(width.row.edit.is_some(), "a literal cell takes the edit");
+    }
+
+    #[test]
+    fn a_formula_cell_is_marked_read_only() {
+        let (mut app, id) = selected_document();
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            for cell in &mut shape.sheet.cells {
+                if cell.name.as_str() == "Width" {
+                    cell.set_formula(Some(String::from("Guard(2 in)")));
+                }
+            }
+        }
+        let entries = size_position_entries(&mut app).expect("entries");
+        let width = entries
+            .iter()
+            .find(|entry| entry.row.label == "Width")
+            .expect("the width row");
+        assert!(width.formula);
+        assert!(width.row.edit.is_none(), "a formula row is read-only");
+        assert_eq!(width.row.numeric, Some(2.0));
+        assert!(matches!(width.field, Field::Typed(EntryUnit::Length)));
+        let height = entries
+            .iter()
+            .find(|entry| entry.row.label == "Height")
+            .expect("the height row");
+        assert!(!height.formula);
+        assert!(height.row.edit.is_some());
+    }
+
+    #[test]
+    fn an_inherited_formula_marks_the_cell_read_only() {
+        let mut doc = Document::new();
+        let mut master = Shape::new(ShapeId { index: 0 }, 1);
+        master.sheet.cells = vec![formula_cell("Width", "Height*2", 2.0)];
+        let master_id = doc.add_shape(master);
+        let mut master_row =
+            ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+        master_row.shapes.push(master_id);
+        let master_row = doc.add_master(master_row).expect("the master adds");
+        let mut shape = Shape::new(ShapeId { index: 1 }, 7);
+        shape.master = Some(master_row);
+        let id = doc.add_shape(shape);
+        let mut page = page("Page-1");
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let mut app = app_with(doc, DisplayUnits::Inches);
+        app.selection.shapes = vec![id];
+        app.selection.anchor = Some(id);
+        let entries = size_position_entries(&mut app).expect("entries");
+        let width = entries
+            .iter()
+            .find(|entry| entry.row.label == "Width")
+            .expect("the width row");
+        assert!(width.formula, "the master's formula marks the cell");
+    }
+
+    #[test]
+    fn a_documented_default_is_not_a_formula() {
+        // LocPinX has no entry at all; its documented default is a
+        // formula, but a write replaces no formula (ADR 0058).
+        let (mut app, _id) = selected_document();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let loc = entries
+            .iter()
+            .find(|entry| entry.row.label == "Loc Pin X")
+            .expect("the loc pin row");
+        assert!(!loc.formula);
+    }
+
+    #[test]
+    fn flip_rows_show_the_evaluated_flag() {
+        let (mut app, id) = selected_document();
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            for cell in &mut shape.sheet.cells {
+                match cell.name.as_str() {
+                    "FlipX" => cell.value = Some(CellValue::Bool(true)),
+                    "FlipY" => cell.value = Some(CellValue::Number(0.0)),
+                    _ => {}
+                }
+            }
+        }
+        let entries = size_position_entries(&mut app).expect("entries");
+        let flip = entries
+            .iter()
+            .find(|entry| entry.row.label == "Flip X")
+            .expect("the flip row");
+        assert_eq!(flip.row.value, "TRUE");
+        assert_eq!(flip.field, Field::Shown(Some(true)));
+        let flip_y = entries
+            .iter()
+            .find(|entry| entry.row.label == "Flip Y")
+            .expect("the flip row");
+        assert_eq!(flip_y.row.value, "FALSE", "a cached 0 reads as FALSE");
+    }
+
+    #[test]
+    fn typed_values_show_the_cached_kind() {
+        // A number in the display units of Settings::units ...
+        let number = typed_value(
+            &CellValue::Number(2.0),
+            GeomUnit::Inches,
+            DisplayUnits::Centimeters,
+        )
+        .expect("a number displays");
+        assert_eq!(number, ("5.08 cm".to_owned(), None));
+        // ... a boolean as a check box ...
+        let flag = typed_value(
+            &CellValue::Bool(true),
+            GeomUnit::Unitsless,
+            DisplayUnits::Inches,
+        )
+        .expect("a boolean displays");
+        assert_eq!(flag, ("TRUE".to_owned(), Some(true)));
+        // ... a colour as its RGB value ...
+        let color = typed_value(
+            &CellValue::Color(Color::new(255, 128, 0)),
+            GeomUnit::Unitsless,
+            DisplayUnits::Inches,
+        )
+        .expect("a colour displays");
+        assert_eq!(color, ("#FF8000".to_owned(), None));
+        // ... and a string as written.
+        let text = typed_value(
+            &CellValue::Str("hello".to_owned()),
+            GeomUnit::Unitsless,
+            DisplayUnits::Inches,
+        )
+        .expect("a string displays");
+        assert_eq!(text, ("hello".to_owned(), None));
+    }
+
+    #[test]
+    fn the_cached_kind_wins_over_the_type_cell() {
+        // A `Prop` row whose Type cell says "number" (2) but whose Value
+        // caches a string shows the string (ADR 0058: "the cached value
+        // wins").
+        let mut cost = prop_row("Row_1", Some("Cost"), None);
+        let mut value = value_cell(CellValue::Str("sheep".to_owned()), GeomUnit::Unitsless);
+        value.name = CellName::new("Value");
+        cost.cells.push(value);
+        let mut kind = Cell::new(CellName::new("Type"));
+        kind.value = Some(CellValue::Number(2.0));
+        cost.cells.push(kind);
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        shape.name = "Box".to_owned();
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        section.rows.push(cost);
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let mut page = page("Page-1");
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let mut app = app_with(doc, DisplayUnits::Inches);
+        app.selection.shapes = vec![id];
+        app.selection.anchor = Some(id);
+        let rows = shape_data_rows(&mut app).expect("rows");
+        assert_eq!(row(&rows, "Cost").value, "sheep");
+    }
+
+    #[test]
+    fn prop_rows_show_the_label_the_row_name_and_the_typed_value() {
+        let mut named = prop_row(
+            "Cost",
+            Some("Unit cost"),
+            Some(value_cell(CellValue::Number(2.0), GeomUnit::Inches)),
+        );
+        named.cells.last_mut().expect("a value cell").formula = Some(String::from("Inh"));
+        let unnamed = prop_row(
+            "Row_2",
+            None,
+            Some(value_cell(CellValue::Bool(false), GeomUnit::Unitsless)),
+        );
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        shape.name = "Box".to_owned();
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        section.rows.push(named);
+        section.rows.push(unnamed);
+        section.rows.push(prop_row("Row_3", Some("Empty"), None));
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let mut page = page("Page-1");
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let mut app = app_with(doc, DisplayUnits::Inches);
+        app.selection.shapes = vec![id];
+        app.selection.anchor = Some(id);
+        let entries = shape_data_entries(&mut app).expect("entries");
+
+        let cost = entries
+            .iter()
+            .find(|entry| entry.row.label == "Unit cost")
+            .expect("the labelled row");
+        assert_eq!(cost.row.value, "2 in");
+        assert_eq!(
+            cost.note.as_deref(),
+            Some("Cost"),
+            "the row name is the note"
+        );
+        assert!(cost.formula, "a formula value is marked");
+        assert!(cost.row.edit.is_none());
+
+        let fallback = entries
+            .iter()
+            .find(|entry| entry.row.label == "Row_2")
+            .expect("the unnamed row");
+        assert_eq!(fallback.row.value, "FALSE");
+        assert_eq!(fallback.field, Field::Shown(Some(false)));
+        assert_eq!(fallback.note, None);
+
+        let missing = entries
+            .iter()
+            .find(|entry| entry.row.label == "Empty")
+            .expect("the empty row");
+        assert_eq!(missing.row.value, MISSING_VALUE);
+    }
+
+    #[test]
+    fn an_unsupported_cached_value_is_a_dash() {
+        let mut code = prop_row("Row_1", Some("Code"), None);
+        code.cells.push(value_cell(
+            CellValue::Error(String::from("#NAME?")),
+            GeomUnit::Unitsless,
+        ));
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        section.rows.push(code);
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let mut page = page("Page-1");
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let mut app = app_with(doc, DisplayUnits::Millimeters);
+        app.selection.shapes = vec![id];
+        app.selection.anchor = Some(id);
+        let rows = shape_data_rows(&mut app).expect("rows");
+        assert_eq!(row(&rows, "Code").value, MISSING_VALUE);
+        assert!(
+            app.warnings
+                .iter()
+                .any(|warning| warning == "Code: unsupported cached value"),
+            "{:?}",
+            app.warnings
+        );
+    }
+
+    #[test]
+    fn every_cached_kind_has_a_display() {
+        let cases = [
+            (
+                CellValue::Number(core::f64::consts::FRAC_PI_2),
+                GeomUnit::Radians,
+                "90°",
+            ),
+            (CellValue::Number(0.37), GeomUnit::Percent, "37%"),
+            (CellValue::Number(5.0), GeomUnit::Unitsless, "5"),
+            // A typographic length displays in `Settings::units` too
+            // (2 in of picas is 2 in).
+            (CellValue::Number(2.0), GeomUnit::Points, "2 in"),
+            (
+                CellValue::Error(String::from("#VALUE!")),
+                GeomUnit::Unitsless,
+                "#VALUE!",
+            ),
+            (
+                CellValue::List(String::from("1;TRUE;x;#N/A!;#FF0000")),
+                GeomUnit::Unitsless,
+                "1;TRUE;x;#N/A!;#FF0000",
+            ),
+        ];
+        for (value, unit, expected) in cases {
+            let shown = typed_value(&value, unit, DisplayUnits::Inches).expect("a display");
+            assert_eq!(shown.0, expected, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_nested_list_entry_shows_nothing_extra() {
+        assert_eq!(list_entry_text(&Value::List(Vec::new())), "");
+    }
+
+    #[test]
+    fn typed_entries_parse_like_the_grammar() {
+        // A unit suffix converts through the engine's unit table ...
+        let width = typed_entry("2.5 cm", EntryUnit::Length).expect("2.5 cm parses");
+        assert!((width - 2.5 / 2.54).abs() < 1.0e-12);
+        // ... a plain number is a number of the field's unit ...
+        let mixed = typed_entry("5 1/2", EntryUnit::Length).expect("5 1/2 parses");
+        assert_eq!(mixed, 5.5);
+        // ... a ratio is its fraction of the field's unit ...
+        let percent = typed_entry("37%", EntryUnit::Length).expect("37% parses");
+        assert!((percent - 0.37).abs() < 1.0e-12);
+        // ... and an angle literal lands in the angle field.
+        let angle = typed_entry("45 deg", EntryUnit::Angle).expect("45 deg parses");
+        assert!((angle - 45.0).abs() < 1.0e-12);
+        let angle = typed_entry("-45°", EntryUnit::Angle).expect("-45° parses");
+        assert!((angle + 45.0).abs() < 1.0e-12);
+        // An angle into a length field converts over the canonical
+        // units of its family.
+        let crossed = typed_entry("45 deg", EntryUnit::Length).expect("it still parses");
+        assert!((crossed - core::f64::consts::FRAC_PI_4).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn a_bad_entry_is_refused_with_a_reason() {
+        for entry in ["abc", "", "Width", "2 in +", "\"text\"", "1/0", "1e999"] {
+            let error = typed_entry(entry, EntryUnit::Length).expect_err("a refused entry");
+            assert!(!error.is_empty(), "{entry:?}");
+        }
+        // A function call is not a constant entry either.
+        let error = typed_entry("ABS(-2)", EntryUnit::Length).expect_err("a call is refused");
+        assert!(error.contains("not a number"), "{error}");
+    }
+
+    #[test]
+    fn a_coerced_entry_is_refused() {
+        // `"x"%` is a literal under unary `%`, so it parses; the
+        // evaluation coerces the string and warns, which refuses it.
+        let error = typed_entry("\"x\"%", EntryUnit::Length).expect_err("a coercion");
+        assert!(error.contains("not a plain number"), "{error}");
+    }
+
+    #[test]
+    fn the_literal_context_refuses_references_and_writes() {
+        let mut context = LiteralOnly::default();
+        let reference = CellRef::new("Width");
+        assert!(
+            context
+                .cell_value(SheetRef::Shape(ShapeId { index: 0 }), &reference)
+                .is_err()
+        );
+        assert!(
+            context
+                .set_cell(
+                    SheetRef::Shape(ShapeId { index: 0 }),
+                    &reference,
+                    Value::Bool(false)
+                )
+                .is_err()
+        );
+        context.warn(EvalWarning {
+            sheet: SheetRef::Shape(ShapeId { index: 0 }),
+            kind: ferrogram_shapesheet::EvalWarningKind::Coercion(String::from("x")),
+        });
+        assert_eq!(context.warnings, 1);
+    }
+
+    #[test]
+    fn entry_units_convert_at_the_command_edge() {
+        assert_eq!(EntryUnit::Length.unit(), Unit::Inches);
+        assert_eq!(EntryUnit::Angle.unit(), Unit::Degrees);
+        assert_eq!(EntryUnit::Length.field_value(2.5), 2.5);
+        assert!(
+            (EntryUnit::Angle.field_value(core::f64::consts::FRAC_PI_6) - 30.0).abs() < 1.0e-12
+        );
+    }
+
+    #[test]
+    fn a_formula_row_refuses_the_edit_with_one_status_line() {
+        let (mut app, id) = selected_document();
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            for cell in &mut shape.sheet.cells {
+                if cell.name.as_str() == "Width" {
+                    cell.set_formula(Some(String::from("GUARD(2 in)")));
+                }
+            }
+        }
+        let before = app.active_document().expect("session").document.clone();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let intents = commit_entry(
+            &mut app,
+            entry_of(&entries, "Width"),
+            EntryUnit::Length,
+            "5 in",
+        );
+        assert!(intents.is_empty(), "the refusal dispatches nothing");
+        assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
+        assert!(
+            app.warnings[0].contains("Width is a formula cell"),
+            "{:?}",
+            app.warnings
+        );
+        assert_eq!(
+            app.active_document().expect("session").document,
+            before,
+            "the document is unchanged"
+        );
+    }
+
+    #[test]
+    fn a_committed_entry_dispatches_one_command() {
+        let (mut app, _id) = selected_document();
+        let before = app.active_document().expect("session").document.clone();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let intents = commit_entry(
+            &mut app,
+            entry_of(&entries, "Width"),
+            EntryUnit::Length,
+            "2.5 cm",
+        );
+        assert_eq!(intents.len(), 1, "{intents:?}");
+        assert_eq!(intents[0].command.as_str(), "shape.set.width");
+        let width = intents[0].invocation.args.number("width").expect("width");
+        assert!((width - 2.5 / 2.54).abs() < 1.0e-12, "{width}");
+        assert!(
+            app.warnings.is_empty(),
+            "an accepted edit records no warning: {:?}",
+            app.warnings
+        );
+        assert_eq!(
+            app.active_document().expect("session").document,
+            before,
+            "the panel itself never touches the model"
+        );
+    }
+
+    #[test]
+    fn a_bad_committed_entry_is_refused_with_one_status_line() {
+        let (mut app, _id) = selected_document();
+        let before = app.active_document().expect("session").document.clone();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let intents = commit_entry(
+            &mut app,
+            entry_of(&entries, "Height"),
+            EntryUnit::Length,
+            "abc",
+        );
+        assert!(intents.is_empty(), "{intents:?}");
+        assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
+        assert!(app.warnings[0].contains("Height: "), "{:?}", app.warnings);
+        assert_eq!(
+            app.active_document().expect("session").document,
+            before,
+            "a refused entry changes nothing"
+        );
+    }
+
+    #[test]
+    fn a_read_only_row_commits_nothing() {
+        let (mut app, _id) = selected_document();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let intents = commit_entry(
+            &mut app,
+            entry_of(&entries, "Loc Pin X"),
+            EntryUnit::Length,
+            "5 in",
+        );
+        assert!(intents.is_empty());
+        assert!(app.warnings.is_empty(), "{:?}", app.warnings);
+    }
+
+    #[test]
+    fn a_committed_angle_entry_takes_degrees() {
+        let (mut app, _id) = selected_document();
+        let entries = size_position_entries(&mut app).expect("entries");
+        let intents = commit_entry(
+            &mut app,
+            entry_of(&entries, "Angle"),
+            EntryUnit::Angle,
+            "45 deg",
+        );
+        assert_eq!(intents.len(), 1, "{intents:?}");
+        let angle = intents[0].invocation.args.number("angle").expect("angle");
+        assert!(
+            (angle - core::f64::consts::FRAC_PI_4).abs() < 1.0e-12,
+            "{angle}"
+        );
+    }
+
+    #[test]
+    fn value_columns_render_a_check_box_for_a_boolean() {
+        let (mut app, id) = selected_document();
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            let mut flip = Cell::new(CellName::new("FlipX"));
+            flip.value = Some(CellValue::Bool(true));
+            shape.sheet.cells.push(flip);
+        }
+        let entries = size_position_entries(&mut app).expect("entries");
+        with_ui(|ui| {
+            for entry in &entries {
+                show_value(ui, entry);
+                if entry.formula {
+                    ui.label(RichText::new(FORMULA_MARKER).weak())
+                        .on_hover_text(FORMULA_HINT);
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn non_finite_values_take_the_warning_path() {
+        let mut app = AppCtx::new(Settings::default());
+        let mut rows = Vec::new();
+        let row = push_length(
+            &mut app,
+            "Width",
+            Some(f64::NAN),
+            DisplayUnits::Inches,
+            false,
+        );
+        assert_eq!(row.row.value, MISSING_VALUE);
+        rows.push(row);
+        assert_eq!(rows[0].row.value, MISSING_VALUE);
+    }
+
+    #[test]
+    fn push_text_shows_the_value_or_a_dash() {
+        let mut app = AppCtx::new(Settings::default());
+        let mut rows = Vec::new();
+        push_text(&mut app, &mut rows, "Name", "Page-1");
+        push_text(&mut app, &mut rows, "Other", "");
+        assert_eq!(rows[0].row.value, "Page-1");
+        assert_eq!(rows[1].row.value, MISSING_VALUE);
+    }
+
+    #[test]
+    fn a_prop_row_label_falls_back_to_its_position() {
+        let doc = Document::new();
+        let session = DocumentSession::new(doc, None);
+        let rows = prop_rows(&session, ShapeId { index: 9 });
+        assert!(rows.is_empty(), "a stale shape id has no rows");
+
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        section.rows.push(Row::new());
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let session = DocumentSession::new(doc, None);
+        let rows = prop_rows(&session, id);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Row 1");
+        assert_eq!(rows[0].note, None);
+    }
+
+    #[test]
+    fn deleted_prop_rows_are_skipped() {
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut row = prop_row("Row_1", Some("Gone"), None);
+        row.preserved
+            .attributes
+            .push(ferrogram_model::XmlAttribute {
+                name: ferrogram_model::QName {
+                    prefix: None,
+                    uri: None,
+                    local: String::from("Del"),
+                },
+                value: String::from("1"),
+            });
+        section.rows.push(row);
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let session = DocumentSession::new(doc, None);
+        assert!(prop_rows(&session, id).is_empty());
+    }
+
+    #[test]
+    fn a_section_that_is_not_property_is_ignored() {
+        let mut doc = Document::new();
+        let mut shape = Shape::new(ShapeId { index: 0 }, 7);
+        let mut section = Section::new(ferrogram_model::SectionName::new("Geometry"));
+        section.rows.push(prop_row("Row_1", Some("X"), None));
+        shape.sheet.sections.push(section);
+        let id = doc.add_shape(shape);
+        let session = DocumentSession::new(doc, None);
+        assert!(prop_rows(&session, id).is_empty());
     }
 }
