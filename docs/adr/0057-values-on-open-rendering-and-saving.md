@@ -90,3 +90,23 @@ now).
 - **Keep the `SKIP_RASTER`/`KNOWN_BLANK` markers and fill lazily in the
   app.** Rejected: the fill-in pass fixes the files for every consumer
   (CLI, tests, panels) at one point.
+
+## Amendments
+
+### Amended 2026-10-22, P6-15: the blank files were a style-inheritance gap
+
+The first Consequences bullet (and the Decision's claim that the fill-in
+pass is "exactly the five blank corpus files") assumed the missing
+cached values were what made the files render blank. Wrong premise: P6-08
+scanned every corpus cell and found **no** cell with a formula and no
+cached value, so the fill-in pass is a no-op on the current corpus. What
+the blank files lacked was style inheritance: their master instances
+took no `FillStyle`/`LineStyle`/`TextStyle` from their master, so
+`FillPattern`/`LinePattern` fell through to the hard default 0 (P6-08
+open issues 1 and 6). The lookup now inherits the master's style links
+(ADR 0013 amendment P6-15); `dwg`, `fdo86664` and `testfile5` render
+non-blank and left the harness's `KNOWN_BLANK`. The two files that stay
+marked (`tab-short-prefix`, `recursion-cycle`) have nothing to draw by
+construction and their markers say so. The fill-in pass stays as
+written: it is still the right rule for a file whose cells do lack
+cached values, and it still changes nothing that had one.
