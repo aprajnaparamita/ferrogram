@@ -89,11 +89,7 @@ fn drawing_with_cell(attrs: &[(&str, &str)]) -> Vec<(&'static str, XmlNode)> {
         &[("xml:space", "preserve")],
         &[element("DocumentSettings", &[("TopPage", "0")], &[])],
     );
-    let shape = element(
-        "Shape",
-        &[("ID", "1")],
-        &[element("Cell", attrs, &[])],
-    );
+    let shape = element("Shape", &[("ID", "1")], &[element("Cell", attrs, &[])]);
     let pages = element(
         "Pages",
         &[],
@@ -103,11 +99,7 @@ fn drawing_with_cell(attrs: &[(&str, &str)]) -> Vec<(&'static str, XmlNode)> {
             &[element("Rel", &[("r:id", "rId1")], &[])],
         )],
     );
-    let page_contents = element(
-        "PageContents",
-        &[],
-        &[element("Shapes", &[], &[shape])],
-    );
+    let page_contents = element("PageContents", &[], &[element("Shapes", &[], &[shape])]);
     vec![
         ("/visio/document.xml", document),
         ("/visio/pages/pages.xml", pages),

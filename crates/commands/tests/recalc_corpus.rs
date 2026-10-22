@@ -48,7 +48,10 @@ fn every_corpus_file_recalculates_deterministically() {
 
         let mut again = read_corpus_file(path);
         let second = recalc(&mut again, &dirty, &RecalcOptions::new()).expect("recalc");
-        assert_eq!(second.updates, first.updates, "{name}: deterministic updates");
+        assert_eq!(
+            second.updates, first.updates,
+            "{name}: deterministic updates"
+        );
         assert_eq!(
             second.warnings, first.warnings,
             "{name}: deterministic warnings"

@@ -86,10 +86,7 @@ fn fixture() -> (AppCtx, Registry, PageId, ShapeId, ShapeId) {
 
     let mut ctx = AppCtx::new(Settings::default());
     let index = ctx.open_document(DocumentSession::new(doc, None));
-    ctx.documents
-        .get_mut(index)
-        .expect("session")
-        .active_page = Some(page);
+    ctx.documents.get_mut(index).expect("session").active_page = Some(page);
     let registry = registry().expect("registry");
     (ctx, registry, page, formulas, setf)
 }
@@ -210,8 +207,7 @@ fn a_move_is_undone_with_its_recalculated_cells() {
     );
     assert_eq!(
         number_of(&after, setf, "Follow"),
-        number_of(&before, formulas, "PinX")
-            .map(|pin| pin + 1.5 + 1.0),
+        number_of(&before, formulas, "PinX").map(|pin| pin + 1.5 + 1.0),
         "the cross-shape dependent recomputed at the new PinX"
     );
     dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
@@ -316,8 +312,13 @@ fn op_strategy() -> impl Strategy<Value = Op> {
         "shape.set.pin",
         "shape.set.angle",
     ];
-    (any::<u8>(), -5.0..5.0, -5.0..5.0, proptest::sample::select(ids)).prop_map(
-        |(shape, a, b, id): (u8, f64, f64, &'static str)| {
+    (
+        any::<u8>(),
+        -5.0..5.0,
+        -5.0..5.0,
+        proptest::sample::select(ids),
+    )
+        .prop_map(|(shape, a, b, id): (u8, f64, f64, &'static str)| {
             let args = match id {
                 "shape.resize" => vec![("width", 1.0 + a.abs()), ("height", 1.0 + b.abs())],
                 "shape.move" => vec![("dx", a), ("dy", b)],
@@ -331,8 +332,7 @@ fn op_strategy() -> impl Strategy<Value = Op> {
                 shape: shape % 2,
                 args,
             }
-        },
-    )
+        })
 }
 
 proptest! {

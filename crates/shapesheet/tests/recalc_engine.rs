@@ -94,10 +94,7 @@ fn value_of(doc: &Document, address: &CellAddress) -> Option<CellValue> {
             .and_then(|entry| entry.value.clone()),
         (SheetRef::Shape(id), Some(section)) => {
             let sheet = &doc.shape(id)?.sheet;
-            let section = sheet
-                .sections
-                .iter()
-                .find(|entry| entry.name == *section)?;
+            let section = sheet.sections.iter().find(|entry| entry.name == *section)?;
             section
                 .cells
                 .iter()
@@ -324,8 +321,12 @@ fn a_cyclic_master_chain_is_cut() {
     let instance = doc.insert_shape(page, instance, None).expect("insert");
 
     let target = section_at(instance, "Geometry", "NoFill");
-    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &RecalcOptions::new())
-        .expect("recalc");
+    let outcome = recalc(
+        &mut doc,
+        std::slice::from_ref(&target),
+        &RecalcOptions::new(),
+    )
+    .expect("recalc");
     assert_eq!(outcome.updates, Vec::new());
     assert_eq!(outcome.warnings, Vec::new());
 }
@@ -336,12 +337,11 @@ fn a_cyclic_master_chain_is_cut() {
 
 /// One shape carrying `formulas` in its direct cells, recalculated
 /// over all of them.
-fn pass_over(formulas: &[(&str, &str)]) -> (Document, ShapeId, ferrogram_shapesheet::RecalcOutcome) {
+fn pass_over(
+    formulas: &[(&str, &str)],
+) -> (Document, ShapeId, ferrogram_shapesheet::RecalcOutcome) {
     let (mut doc, ids) = document_with(vec![shape_with(1, formulas)]);
-    let dirty: Vec<CellAddress> = formulas
-        .iter()
-        .map(|(name, _)| at(ids[0], name))
-        .collect();
+    let dirty: Vec<CellAddress> = formulas.iter().map(|(name, _)| at(ids[0], name)).collect();
     let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
     (doc, ids[0], outcome)
 }
@@ -422,7 +422,11 @@ fn a_formula_that_does_not_parse_keeps_the_cached_value() {
     let (mut doc, ids) = document_with(vec![shape]);
     let dirty = [at(ids[0], "Alpha")];
     let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
-    assert_eq!(number_of(&doc, &dirty[0]), Some(3.0), "the cached value stays");
+    assert_eq!(
+        number_of(&doc, &dirty[0]),
+        Some(3.0),
+        "the cached value stays"
+    );
     assert!(
         outcome
             .warnings
@@ -465,7 +469,9 @@ fn chain_shape(visio_id: i32, length: usize) -> Shape {
 #[test]
 fn a_long_chain_recomputes_in_order_and_is_idempotent() {
     let (mut doc, ids) = document_with(vec![chain_shape(1, 200)]);
-    let chain: Vec<CellAddress> = (0..200).map(|index| at(ids[0], &format!("A{index}"))).collect();
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
     let outcome = recalc(&mut doc, &chain, &RecalcOptions::new()).expect("recalc");
     assert_eq!(outcome.updates.len(), 200);
     for (index, update) in outcome.updates.iter().enumerate() {
@@ -477,7 +483,9 @@ fn a_long_chain_recomputes_in_order_and_is_idempotent() {
 
     // Determinism: the same input, the same outcome.
     let (mut again, ids) = document_with(vec![chain_shape(1, 200)]);
-    let chain: Vec<CellAddress> = (0..200).map(|index| at(ids[0], &format!("A{index}"))).collect();
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
     let second = recalc(&mut again, &chain, &RecalcOptions::new()).expect("recalc");
     assert_eq!(second.updates, outcome.updates);
 
@@ -492,7 +500,9 @@ fn a_long_chain_recomputes_in_order_and_is_idempotent() {
 #[test]
 fn a_tiny_budget_truncates_a_long_chain() {
     let (mut doc, ids) = document_with(vec![chain_shape(1, 200)]);
-    let chain: Vec<CellAddress> = (0..200).map(|index| at(ids[0], &format!("A{index}"))).collect();
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
     let options = RecalcOptions {
         max_evaluations: 50,
         ..RecalcOptions::new()
@@ -570,7 +580,10 @@ fn a_thousand_cell_page_serves_the_budget_rule() {
         ..RecalcOptions::new()
     };
     let outcome = recalc(&mut doc, &dirty, &options).expect("recalc");
-    assert!(outcome.truncated, "1 200 cells do not fit in 100 evaluations");
+    assert!(
+        outcome.truncated,
+        "1 200 cells do not fit in 100 evaluations"
+    );
     assert!(
         outcome
             .warnings
@@ -602,7 +615,10 @@ fn broken_references_are_warnings_not_failures() {
     for name in [
         "Gone", "Named", "Row", "Prop", "Char", "Master", "Page", "Style", "Doc",
     ] {
-        assert!(value_of(&doc, &at(shape, name)).is_some(), "{name} has a value");
+        assert!(
+            value_of(&doc, &at(shape, name)).is_some(),
+            "{name} has a value"
+        );
     }
     assert!(!outcome.warnings.is_empty());
     assert!(!outcome.truncated);
@@ -643,7 +659,11 @@ fn a_self_referencing_setf_is_a_cycle_of_one() {
     let dirty = [at(ids[0], "Self")];
     let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
     assert!(!outcome.truncated);
-    assert_eq!(number_of(&doc, &dirty[0]), Some(1.0), "the cached value stays");
+    assert_eq!(
+        number_of(&doc, &dirty[0]),
+        Some(1.0),
+        "the cached value stays"
+    );
     assert_eq!(outcome.updates, Vec::new());
 }
 
@@ -671,4 +691,3 @@ fn a_formula_cycle_keeps_the_cached_values() {
         .collect();
     assert_eq!(cycles.len(), 1, "{:?}", outcome.warnings);
 }
-

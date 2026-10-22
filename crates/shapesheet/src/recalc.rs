@@ -1404,7 +1404,9 @@ mod tests {
         });
         assert_eq!(
             mapped.map(|warning| warning.kind),
-            Some(RecalcWarningKind::SetfRefused(String::from("\"User.Nope\"")))
+            Some(RecalcWarningKind::SetfRefused(String::from(
+                "\"User.Nope\""
+            )))
         );
     }
 

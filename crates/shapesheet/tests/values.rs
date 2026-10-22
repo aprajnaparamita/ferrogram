@@ -140,11 +140,7 @@ const ALL_ERRORS: &[ErrorCode] = &[
 fn arb_magnitude() -> impl Strategy<Value = f64> {
     (any::<bool>(), -30i32..=30, 1_000u32..2_000).prop_map(|(sign, exponent, mantissa)| {
         let magnitude = f64::from(mantissa) / 1_000.0 * 10f64.powi(exponent);
-        if sign {
-            magnitude
-        } else {
-            -magnitude
-        }
+        if sign { magnitude } else { -magnitude }
     })
 }
 
