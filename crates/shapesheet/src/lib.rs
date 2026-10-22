@@ -52,7 +52,8 @@ pub use lexer::{MAX_NESTING, MAX_SOURCE_LEN, MAX_TOKENS, Token, TokenKind, token
 pub use parser::{parse, parse_formula};
 pub use printer::print;
 pub use recalc::{
-    CellUpdate, RecalcOptions, RecalcOutcome, RecalcWarning, RecalcWarningKind, recalc,
+    CellUpdate, CellWriteOp, DocumentEngine, Evaluation, FormulaEngine, RecalcOptions,
+    RecalcOutcome, RecalcWarning, RecalcWarningKind, recalc, recalc_with,
 };
 pub use resolve::{DocumentResolver, ResolvedCell};
 pub use units::{Unit, UnitFamily, parse_unit};
