@@ -23,7 +23,9 @@
 
 mod emit;
 mod patch;
-mod value;
+// `pub(crate)`: the reader asks the writer's own `U` spelling decision
+// which codes it must preserve (task P6-16).
+pub(crate) mod value;
 
 use ferrogram_model::{Document, DocumentKind, Master, Page, Preserved, XmlNode};
 
@@ -302,8 +304,10 @@ fn prune_orphan_parts(package: &mut Package, index: &PartName, rel_local: &str, 
 trait ListEntity {
     /// Whether the entity has content that needs a contents part.
     fn has_content(&self) -> bool;
-    /// The entity's preserved fragment (which holds its `Rel` element).
+    /// The entity's preserved fragment.
     fn preserved(&self) -> &Preserved;
+    /// Visio's `ID`, the key the source list element is matched by.
+    fn visio_id(&self) -> i32;
 }
 
 impl ListEntity for Page {
@@ -313,6 +317,9 @@ impl ListEntity for Page {
     fn preserved(&self) -> &Preserved {
         &self.preserved
     }
+    fn visio_id(&self) -> i32 {
+        self.visio_id
+    }
 }
 
 impl ListEntity for Master {
@@ -321,6 +328,9 @@ impl ListEntity for Master {
     }
     fn preserved(&self) -> &Preserved {
         &self.preserved
+    }
+    fn visio_id(&self) -> i32 {
+        self.visio_id
     }
 }
 
@@ -346,6 +356,12 @@ fn ensure_list<E: ListEntity>(
     let mut rel_ids: Vec<Option<String>> = Vec::with_capacity(entities.len());
     for entity in entities {
         let mut rel_id = emit::preserved_rel_id(entity.preserved());
+        if rel_id.is_none() {
+            // The reader no longer keeps the contents `Rel` of a mapped
+            // page or master (task P6-16); the id is recovered from the
+            // source element it was read from.
+            rel_id = source_rel_id(package, index, entity.visio_id());
+        }
         if rel_id.is_none() && entity.has_content() {
             rel_id = Some(fresh_rel_id(&mut used));
         }
@@ -385,6 +401,51 @@ fn fresh_rel_id_from(used: &[String]) -> String {
         }
         n = n.saturating_add(1);
     }
+}
+
+/// The `r:id` the source list element of `visio_id` names in its `Rel`
+/// child, if any.
+///
+/// The reader drops the contents `Rel` from the preserved content of a
+/// mapped page or master (task P6-16), so a patched entity recovers the id
+/// from the source tree the same element was read from. An entity with no
+/// source element (a new page or master) has none and allocates a fresh id
+/// in [`ensure_list`].
+fn source_rel_id(package: &Package, index: &PartName, visio_id: i32) -> Option<String> {
+    let PartData::Xml(root) = &package.part(index)?.data else {
+        return None;
+    };
+    root.children.iter().find_map(|child| {
+        let element = match child {
+            ferrogram_model::XmlChild::Element(element) => element,
+            _ => return None,
+        };
+        if !matches!(element.name.local.as_str(), "Page" | "Master") {
+            return None;
+        }
+        let id = element
+            .attributes
+            .iter()
+            .find(|attribute| attribute.name.local == "ID")
+            .and_then(|attribute| attribute.value.trim().parse::<i32>().ok());
+        if id != Some(visio_id) {
+            return None;
+        }
+        element
+            .children
+            .iter()
+            .filter_map(|child| match child {
+                ferrogram_model::XmlChild::Element(element) => Some(element),
+                _ => None,
+            })
+            .find(|element| element.name.local == "Rel")
+            .and_then(|rel| {
+                rel.attributes
+                    .iter()
+                    .find(|attribute| attribute.name.local == "id")
+                    .map(|attribute| attribute.value.clone())
+            })
+    })
 }
 
 /// Adds the relationship (`source`, `rel_type`) to `target` when it is not

@@ -62,6 +62,12 @@
 //! ([`Shape::children`](ferrogram_model::Shape)); the wrapper's own attributes
 //! follow the wrapper's owner.
 //!
+//! Two writer-managed spellings are the exception (task P6-16): a cell's
+//! `U` attribute is preserved only when the writer cannot spell the code
+//! back for that cell (the rule in [`sheet`]), and the `Rel` child of a
+//! `Page` or `Master` that names its contents part is not kept at all —
+//! the writer writes that element again.
+//!
 //! # Degrading, never panicking
 //!
 //! Malformed-but-recoverable input degrades (AGENTS.md section 6); a scalar
@@ -398,7 +404,7 @@ impl Mapper<'_> {
             // A document without a master list has no masters.
             return Ok(());
         };
-        let mut contents: Vec<(usize, Option<String>)> = Vec::new();
+        let mut contents: Vec<(usize, Option<RelRef>)> = Vec::new();
         for element in elements(index) {
             if element.name.local != "Master" {
                 self.document.preserved.children.push(element.clone());
@@ -411,7 +417,7 @@ impl Mapper<'_> {
         }
         for (position, rel) in contents {
             let Some(rel) = rel else { continue };
-            let Some(target) = self.rel_target(&index_name, &rel) else {
+            let Some(target) = self.rel_target(&index_name, &rel.id) else {
                 continue;
             };
             let Ok(root) = xml_part(self.package, &target) else {
@@ -441,6 +447,9 @@ impl Mapper<'_> {
                 // Every top-level shape of the master part is kept, in
                 // document order (P2-06b decision 2).
                 master.shapes = shapes;
+                // The `Rel` named the contents part the writer writes
+                // again; it is plumbing, not content (task P6-16).
+                drop_rel_child(&mut master.preserved, rel.slot);
             }
         }
         Ok(())
@@ -462,7 +471,7 @@ impl Mapper<'_> {
             .filter(|element| element.name.local == "Page")
             .filter_map(|element| attribute(element, "ID").and_then(|id| parse_int(id).ok()))
             .collect();
-        let mut contents: Vec<(usize, Option<String>)> = Vec::new();
+        let mut contents: Vec<(usize, Option<RelRef>)> = Vec::new();
         for element in elements(index) {
             if element.name.local != "Page" {
                 self.document.preserved.children.push(element.clone());
@@ -475,7 +484,7 @@ impl Mapper<'_> {
         }
         for (position, rel) in contents {
             let Some(rel) = rel else { continue };
-            let Some(target) = self.rel_target(&index_name, &rel) else {
+            let Some(target) = self.rel_target(&index_name, &rel.id) else {
                 continue;
             };
             let Ok(root) = xml_part(self.package, &target) else {
@@ -487,6 +496,12 @@ impl Mapper<'_> {
                 continue;
             }
             self.read_page_contents(position, root, target.as_str())?;
+            // The `Rel` named the contents part the writer writes again; it
+            // is plumbing, not content (task P6-16). A `Rel` that names
+            // something else stays preserved as before.
+            if let Some(page) = self.document.pages.get_mut(position) {
+                drop_rel_child(&mut page.preserved, rel.slot);
+            }
         }
         Ok(())
     }
@@ -651,10 +666,11 @@ impl Mapper<'_> {
 /// Maps one `Master` element of the master list at list position `index`.
 ///
 /// All children (`PageSheet`, `Icon`, `Rel`) are kept verbatim: a master has
-/// no sheet field, and the `Rel` element is both used (to find the contents
-/// part) and preserved. Returns the master and the `Rel` relationship id its
-/// contents part hangs off, if any.
-fn map_master(node: &XmlNode, index: usize) -> Result<(Master, Option<String>), Error> {
+/// no sheet field. Returns the master and, when the element names its
+/// contents part, the `Rel` relationship id and the slot the `Rel` child
+/// took in the master's preserved children (the caller drops it again when
+/// the contents part maps, task P6-16).
+fn map_master(node: &XmlNode, index: usize) -> Result<(Master, Option<RelRef>), Error> {
     let id = MasterId {
         index: u32::try_from(index).unwrap_or(u32::MAX),
     };
@@ -679,18 +695,45 @@ fn map_master(node: &XmlNode, index: usize) -> Result<(Master, Option<String>), 
             && rel.is_none()
             && let Some(id) = attribute(element, "id")
         {
-            rel = Some(id.to_owned());
+            rel = Some(RelRef {
+                id: id.to_owned(),
+                slot: master.preserved.children.len(),
+            });
         }
         master.preserved.children.push(element.clone());
     }
     Ok((master, rel))
 }
 
+/// The `Rel` child of a list element that names its contents part: the
+/// relationship id it points at and the slot it took in the entity's
+/// preserved children (task P6-16).
+struct RelRef {
+    /// The relationship id the `id` attribute names.
+    id: String,
+    /// The index of the `Rel` child in the entity's preserved children.
+    slot: usize,
+}
+
+/// Drops the `Rel` child at `slot` from `preserved`.
+///
+/// The `Rel` names the contents relationship the writer writes again (it
+/// inserts the element when a source entity lacks it), so the element is
+/// plumbing, not content: keeping it made every read model differ from a
+/// model built in memory (the P5-10 artefact, task P6-16).
+fn drop_rel_child(preserved: &mut Preserved, slot: usize) {
+    if preserved.children.get(slot).is_some() {
+        preserved.children.remove(slot);
+    }
+}
+
 /// Maps one `Page` element of the page list at list position `index`.
 ///
-/// Returns the page and the `Rel` relationship id its contents part hangs
-/// off, if any. `ids` is every page's `ID`, in list order, for `BackPage`.
-fn map_page(node: &XmlNode, index: usize, ids: &[i32]) -> Result<(Page, Option<String>), Error> {
+/// Returns the page and, when the element names its contents part, the
+/// `Rel` reference (dropped from the preserved children when the contents
+/// part maps, task P6-16). `ids` is every page's `ID`, in list order, for
+/// `BackPage`.
+fn map_page(node: &XmlNode, index: usize, ids: &[i32]) -> Result<(Page, Option<RelRef>), Error> {
     let id = PageId {
         index: u32::try_from(index).unwrap_or(u32::MAX),
     };
@@ -740,7 +783,10 @@ fn map_page(node: &XmlNode, index: usize, ids: &[i32]) -> Result<(Page, Option<S
                 if rel.is_none()
                     && let Some(id) = attribute(element, "id")
                 {
-                    rel = Some(id.to_owned());
+                    rel = Some(RelRef {
+                        id: id.to_owned(),
+                        slot: page.preserved.children.len(),
+                    });
                 }
                 page.preserved.children.push(element.clone());
             }
@@ -1215,16 +1261,44 @@ mod tests {
         assert_eq!(root_attrs, ["type", "space"]);
 
         let page = &document.pages[0];
-        // The `Rel` element and the page sheet's `Trigger` are unmapped.
+        // The page sheet's `Trigger` is unmapped; the `Rel` that named the
+        // mapped contents part is plumbing the writer writes again, so it
+        // is no longer kept (task P6-16).
         let names: Vec<&str> = page
             .preserved
             .children
             .iter()
             .map(|child| child.name.local.as_str())
             .collect();
-        assert_eq!(names, ["Trigger", "Rel"]);
-        // The master's `Rel` and `Icon` children are all preserved.
-        assert_eq!(document.masters[0].preserved.children.len(), 2);
+        assert_eq!(names, ["Trigger"]);
+        // The master's `Icon` child is preserved; its `Rel` is dropped for
+        // the same reason (its contents part maps).
+        let master_names: Vec<&str> = document.masters[0]
+            .preserved
+            .children
+            .iter()
+            .map(|child| child.name.local.as_str())
+            .collect();
+        assert_eq!(master_names, ["Icon"]);
+    }
+
+    #[test]
+    fn drop_rel_child_removes_the_slot_and_tolerates_a_missing_one() {
+        let mut preserved = Preserved::new();
+        preserved
+            .children
+            .push(element("Rel", &[("r:id", "rId1")], &[]));
+        preserved.children.push(element("Icon", &[], &[]));
+        // A slot past the end is a no-op (never a panic).
+        drop_rel_child(&mut preserved, 7);
+        assert_eq!(preserved.children.len(), 2);
+        drop_rel_child(&mut preserved, 0);
+        let names: Vec<&str> = preserved
+            .children
+            .iter()
+            .map(|child| child.name.local.as_str())
+            .collect();
+        assert_eq!(names, ["Icon"]);
     }
 
     #[test]
