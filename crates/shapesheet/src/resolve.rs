@@ -596,23 +596,23 @@ impl EvalContext for DocumentResolver<'_> {
         let cached = value.to_cached()?;
         let target = self
             .target(sheet, &reference.sheets)
-            .ok_or(Error::Conversion("SETF target does not exist"))?;
+            .ok_or(Error::SetfRefused("target does not exist"))?;
         let target = match target {
             Target::Sheet(target) => target,
             Target::Style(_) | Target::Document => {
-                return Err(Error::Conversion("SETF target is not writable"));
+                return Err(Error::SetfRefused("target is not writable"));
             }
         };
         let (section, names) = split_names(reference);
         let slot = {
             let found_sheet = self
                 .sheet_of(target)
-                .ok_or(Error::Conversion("SETF target does not exist"))?;
+                .ok_or(Error::SetfRefused("target does not exist"))?;
             match section {
                 Some(section) => {
                     let name = names
                         .first()
-                        .ok_or(Error::Conversion("SETF target does not exist"))?;
+                        .ok_or(Error::SetfRefused("target does not exist"))?;
                     let explicit = names.get(1).map(String::as_str);
                     let (base, instance) = split_section_name(section);
                     let canon = canonical_section(base.as_str());
@@ -627,22 +627,21 @@ impl EvalContext for DocumentResolver<'_> {
                         RowKind::Named(parts.full.clone())
                     };
                     section_slot(found_sheet, canon.as_str(), instance, &kind, explicit)
-                        .ok_or(Error::Conversion("SETF target does not exist"))?
+                        .ok_or(Error::SetfRefused("target does not exist"))?
                 }
                 None => {
                     let name = names
                         .first()
-                        .ok_or(Error::Conversion("SETF target does not exist"))?;
+                        .ok_or(Error::SetfRefused("target does not exist"))?;
                     let (_, slot) = find_entry(found_sheet, name)
-                        .ok_or(Error::Conversion("SETF target does not exist"))?;
+                        .ok_or(Error::SetfRefused("target does not exist"))?;
                     slot
                 }
             }
         };
-        let found_sheet = sheet_mut(self.document, target)
-            .ok_or(Error::Conversion("SETF target does not exist"))?;
-        write_slot(found_sheet, &slot, cached)
-            .ok_or(Error::Conversion("SETF target does not exist"))
+        let found_sheet =
+            sheet_mut(self.document, target).ok_or(Error::SetfRefused("target does not exist"))?;
+        write_slot(found_sheet, &slot, cached).ok_or(Error::SetfRefused("target does not exist"))
     }
 
     fn warn(&mut self, warning: EvalWarning) {

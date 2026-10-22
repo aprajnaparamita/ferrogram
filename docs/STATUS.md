@@ -15,13 +15,13 @@ Task board. Only the master agent edits this file, on `main`.
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
 | [P6-01](tasks/P6-01.md) | architect | Phase 5 | — | merged `12ecf24` (ADRs 0051–0060, stubs, task files) | — |
-| [P6-02](tasks/P6-02.md) | implementer | P6-01 | A | ready (lexer, parser, AST, printer, fuzz target) | — |
+| [P6-02](tasks/P6-02.md) | implementer | P6-01 | A | merged (lexer, parser, printer, `parse` fuzz target) | — |
 | [P6-03](tasks/P6-03.md) | implementer | P6-01 | A | merged (values, units, coercions; `Coerced` exported by the master) | — |
 | [P6-04](tasks/P6-04.md) | implementer | P6-01 | A | merged (42 functions, evaluator) | — |
 | [P6-05](tasks/P6-05.md) | implementer | P6-01 | A | merged (reference resolution, inheritance; P3-15 closed) | — |
 | [P6-06](tasks/P6-06.md) | implementer | P6-01 | A | merged (dependency graph, recalc; exports added by the master) | — |
-| [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | waiting (edits with recalc and undo) | — |
-| [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | waiting (values on open, render, save) | — |
+| [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | ready (edits with recalc and undo) | — |
+| [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | ready (values on open, render, save) | — |
 | [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | waiting (typed panels) | — |
 | [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | waiting (cross-check, exit test) | — |
 | [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | waiting | — |
@@ -243,3 +243,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P6-06 (open): master rungs are addressed as the master's first top-level shape and style rungs have no `CellAddress`, so a style edit does not dirty instances through the graph (fine while only page shapes and instances are edited). `write_cell`'s derived-cell refresh is outside `RecalcOutcome::updates` (P6-07 note). A unit suffix in a `SETF`-written formula needs the printer. `DEFAULT_MAX_EVALUATIONS` is unmeasured (P6-10). `formula_types.rs` still asserts the `parse` stub error (P6-02 updates it).
 - P6-05 (open): `CellReader` now prefers a cell's own `Inh` snapshot (ADR 0054/0057), so instance geometry renders at the instance's size (P3-15 closed); the preference sits in `values.rs` plus a 3-line hook in `geometry.rs`, not in `lookup.rs` (moving it there would flip two `Inh` lookup tests). `TheDoc!` resolves against `Document::properties`, because the model has no document sheet. The missing-reference warning is named `UnsupportedReference` until P6-04 renames it.
 - P6-04 (open): an unknown function keeps the cached value through a warning plus an `#N/A!` placeholder (the evaluator signature has no keep-cached channel). `EvalWarningKind::UnsupportedReference` is ADR 0054's `MissingReference` (name kept). Four warning kinds do not reach `RecalcOutcome` (P6-11 note). Black-box checks: `MODULUS` sign, `CEILING`/`FLOOR` on negatives, unit-ed number to string (`1 in & ""`), string to boolean. `MOD` is an alias of `MODULUS`; `EXP` has no reference page and is kept per ADR 0053.
+- P6-02 (open): 976 of 994 unique corpus formulas parse and all of those round-trip; the 18 others are `FORMATEX` calls with omitted arguments, rejected by decision. `37%` is the percent operator; the `%` unit needs brackets (`5 [%]`). `Expr` equality includes spans, unlike ADR 0051 (P6-12 rules). The master switched `resolve.rs`'s refused-`SETF` errors to the new `Error::SetfRefused`.
