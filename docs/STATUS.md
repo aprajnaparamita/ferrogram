@@ -21,7 +21,9 @@ Task board. Only the master agent edits this file, on `main`.
 | [P6-05](tasks/P6-05.md) | implementer | P6-01 | A | merged (reference resolution, inheritance; P3-15 closed) | — |
 | [P6-06](tasks/P6-06.md) | implementer | P6-01 | A | merged (dependency graph, recalc; exports added by the master) | — |
 | [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | ready (edits with recalc and undo) | — |
-| [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | ready (values on open, render, save) | — |
+| [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | merged (U spelling for every value kind, fill-in on open; P2-14 closed) | — |
+| [P6-15](tasks/P6-15.md) | implementer | P6-08 | B | ready (instances inherit master style links; 3 blank corpus files) | — |
+| [P6-16](tasks/P6-16.md) | implementer | P6-08 | B | ready (reader drops the P5-10 artefacts) | — |
 | [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | waiting (typed panels) | — |
 | [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | waiting (cross-check, exit test) | — |
 | [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | waiting | — |
@@ -244,3 +246,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P6-05 (open): `CellReader` now prefers a cell's own `Inh` snapshot (ADR 0054/0057), so instance geometry renders at the instance's size (P3-15 closed); the preference sits in `values.rs` plus a 3-line hook in `geometry.rs`, not in `lookup.rs` (moving it there would flip two `Inh` lookup tests). `TheDoc!` resolves against `Document::properties`, because the model has no document sheet. The missing-reference warning is named `UnsupportedReference` until P6-04 renames it.
 - P6-04 (open): an unknown function keeps the cached value through a warning plus an `#N/A!` placeholder (the evaluator signature has no keep-cached channel). `EvalWarningKind::UnsupportedReference` is ADR 0054's `MissingReference` (name kept). Four warning kinds do not reach `RecalcOutcome` (P6-11 note). Black-box checks: `MODULUS` sign, `CEILING`/`FLOOR` on negatives, unit-ed number to string (`1 in & ""`), string to boolean. `MOD` is an alias of `MODULUS`; `EXP` has no reference page and is kept per ADR 0053.
 - P6-02 (open): 976 of 994 unique corpus formulas parse and all of those round-trip; the 18 others are `FORMATEX` calls with omitted arguments, rejected by decision. `37%` is the percent operator; the `%` unit needs brackets (`5 [%]`). `Expr` equality includes spans, unlike ADR 0051 (P6-12 rules). The master switched `resolve.rs`'s refused-`SETF` errors to the new `Error::SetfRefused`.
+- P6-08 (open): the fill-in pass is a no-op on the corpus (no cell has a formula without a cached value). The blank `dwg`, `fdo86664` and `testfile5` come from the model's style lookup ignoring the master's style links (P6-15). `tab-short-prefix` and `recursion-cycle` have nothing to draw by construction. The `Value::to_cached` round-trip test lives in `crates/commands/tests/` (vsdx may not depend on shapesheet). P6-16 removes the P5-10 reader artefacts; P6-11 fixes section-level cells in `graph::effective`.
