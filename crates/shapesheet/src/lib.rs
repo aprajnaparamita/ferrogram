@@ -42,7 +42,7 @@ mod units;
 mod value;
 
 pub use ast::{BinaryOp, Expr, ExprKind, Literal, NumberLiteral, UnaryOp};
-pub use coerce::{ValueKind, as_bool, as_color, as_list, as_number, as_str, coerce};
+pub use coerce::{Coerced, ValueKind, as_bool, as_color, as_list, as_number, as_str, coerce};
 pub use error::{Error, Span, SyntaxKind};
 pub use eval::{EvalContext, EvalWarning, EvalWarningKind, eval, eval_formula};
 pub use formula::{CellRef, Formula};
