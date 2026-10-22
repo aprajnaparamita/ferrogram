@@ -8,10 +8,9 @@
 //! 0027 metric (the canvas and the PNG backend share one rasterizer,
 //! ADR 0033) and is non-blank.
 //!
-//! Per-file `skip_reason`s (ADR 0037) cover the pages the renderer
-//! cannot draw yet (see [`SKIP_RASTER`] and [`KNOWN_BLANK`], and the
-//! P4-09 Result's Open issues); every other assertion still runs for
-//! those files.
+//! Per-file `skip_reason`s (ADR 0037) cover the files with nothing to
+//! draw (see [`SKIP_RASTER`] and [`KNOWN_BLANK`], and the P6-15
+//! Result); every other assertion still runs for those files.
 //!
 //! The corpus is fetched, never committed (ADR 0005): the test
 //! self-skips with a message when `corpus/vsdx/` is absent and fails
@@ -92,47 +91,25 @@ fn require_corpus_or(files: &[PathBuf]) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Files with no page raster to check (the whole raster section
-/// skips).
+/// skips). Nothing to draw by construction, not a renderer bug.
 const SKIP_RASTER: &[(&str, &str)] = &[(
     "recursion-cycle.vsdx",
-    "the package has no page part (visio/pages is empty), so there is no page raster",
+    "nothing to draw by construction: the package has no page part (visio/pages is empty), so there is no page raster at all (P6-08 open issue 2)",
 )];
 
-/// Files whose page rasterizes to nothing with the current renderer.
-/// Only the non-blank check skips; the open, frame and raster-match
-/// assertions still run. The causes are **not** missing cached values
-/// (task P6-08 proved the fill-in pass finds no cell to fill in any
-/// corpus file: no corpus `Cell` has a formula without a cached
-/// value):
-///
-/// - `dwg`, `fdo86664`, `testfile5`: the shapes are master instances
-///   with no `FillStyle`/`LineStyle`/`TextStyle` of their own, and
-///   `Document::resolve` never consults the **master's** style chain,
-///   so `FillPattern`/`LinePattern` fall through to the hard default 0
-///   and the shapes draw nothing. Copying the master's style links onto
-///   the instances makes all three rasterize non-blank (P6-08 Result,
-///   open issue 1; a `model` change, not a value-pipeline one).
-/// - `tab-short-prefix`: the shape has no size, geometry or text cells
-///   and no formula anywhere (its only section is `Tabs`), so there is
-///   nothing to draw and nothing a fill-in pass could evaluate.
-const KNOWN_BLANK: &[(&str, &str)] = &[
-    (
-        "dwg.vsdx",
-        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
-    ),
-    (
-        "fdo86664.vsdx",
-        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
-    ),
-    (
-        "tab-short-prefix.vsdx",
-        "the shape has no size, geometry or text cells and no formula; nothing draws (P6-08 open issue 2)",
-    ),
-    (
-        "testfile5.vsdx",
-        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
-    ),
-];
+/// Files whose page rasterizes to nothing because the file has nothing
+/// to draw, not because the renderer fails (P6-15). Only the non-blank
+/// check skips; the open, frame and raster-match assertions still run.
+/// Each reason states why the file cannot draw. `dwg`, `fdo86664` and
+/// `testfile5` used to sit here: their instances took no
+/// `FillStyle`/`LineStyle`/`TextStyle` from their master and
+/// `FillPattern`/`LinePattern` fell through to the hard default 0
+/// (P6-08 open issue 1). The lookup inherits the master's style links
+/// now (P6-15) and the three draw.
+const KNOWN_BLANK: &[(&str, &str)] = &[(
+    "tab-short-prefix.vsdx",
+    "nothing to draw by construction: the shape has no size, geometry or text cells and no formula (its only section is `Tabs`), so there is nothing to draw and nothing a fill-in pass could evaluate (P6-08 open issue 2)",
+)];
 
 /// The documented skip reason for `name` in `table`, if any.
 fn skip_reason(table: &'static [(&'static str, &'static str)], name: &str) -> Option<&'static str> {
