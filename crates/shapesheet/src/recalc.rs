@@ -95,6 +95,26 @@ pub enum RecalcWarningKind {
     Cycle(Vec<CellAddress>),
     /// The pass ran out of its evaluation budget and stopped.
     BudgetExceeded,
+    /// A call passed a count outside the table's bounds; the call
+    /// evaluated to `#VALUE!` (ADR 0053).
+    WrongArgumentCount {
+        /// The function name as written.
+        function: String,
+        /// The fewest arguments the function takes.
+        min: u8,
+        /// The most arguments it takes, or `None` for a variadic call.
+        max: Option<u8>,
+        /// How many arguments the call passed.
+        got: usize,
+    },
+    /// A `SETF` whose target is not a writable cell reference; the call
+    /// evaluated to `#REF!` (ADR 0056).
+    SetfRefused(String),
+    /// A value had to be coerced to the type an operator needed and the
+    /// conversion was lossy or defaulted (ADR 0052).
+    Coercion(String),
+    /// A computed number was not finite; it became `#NUM!` (P3-11).
+    NonFinite,
 }
 
 /// What one recalc pass did (ADR 0055).
@@ -265,15 +285,30 @@ fn collect_refs(expr: &Expr, out: &mut Vec<CellRef>) {
     }
 }
 
-/// Maps an evaluator warning to the recalc vocabulary. A coercion or a
-/// cut evaluation cycle is not a recalc warning and is dropped here.
+/// Maps an evaluator warning to the recalc vocabulary. A cut evaluation
+/// cycle is not a recalc warning (the pass reports its own [`RecalcWarningKind::Cycle`])
+/// and is dropped here; every other kind keeps its content (P6-11).
 fn map_warning(warning: EvalWarning) -> Option<RecalcWarning> {
     let kind = match &warning.kind {
         EvalWarningKind::UnknownFunction(name) => RecalcWarningKind::UnknownFunction(name.clone()),
         EvalWarningKind::UnsupportedReference(name) => {
             RecalcWarningKind::MissingReference(name.clone())
         }
-        _ => return None,
+        EvalWarningKind::WrongArgumentCount {
+            function,
+            min,
+            max,
+            got,
+        } => RecalcWarningKind::WrongArgumentCount {
+            function: function.clone(),
+            min: *min,
+            max: *max,
+            got: *got,
+        },
+        EvalWarningKind::SetfRefused(target) => RecalcWarningKind::SetfRefused(target.clone()),
+        EvalWarningKind::Coercion(why) => RecalcWarningKind::Coercion(why.clone()),
+        EvalWarningKind::NonFinite => RecalcWarningKind::NonFinite,
+        EvalWarningKind::Cycle => return None,
     };
     Some(RecalcWarning { target: None, kind })
 }
@@ -1294,9 +1329,75 @@ mod tests {
         assert_eq!(
             map_warning(EvalWarning {
                 sheet: SheetRef::Page(PageId { index: 0 }),
-                kind: EvalWarningKind::NonFinite,
+                kind: EvalWarningKind::Cycle,
             }),
             None
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::WrongArgumentCount`] reaches the
+    /// recalc outcome with every field kept.
+    #[test]
+    fn map_warning_keeps_a_wrong_argument_count() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::WrongArgumentCount {
+                function: String::from("ABS"),
+                min: 1,
+                max: Some(1),
+                got: 2,
+            },
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::WrongArgumentCount {
+                function: String::from("ABS"),
+                min: 1,
+                max: Some(1),
+                got: 2,
+            })
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::SetfRefused`] reaches the recalc
+    /// outcome with its target kept.
+    #[test]
+    fn map_warning_keeps_a_refused_setf() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::SetfRefused(String::from("\"User.Nope\"")),
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::SetfRefused(String::from("\"User.Nope\"")))
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::Coercion`] reaches the recalc
+    /// outcome with its reason kept.
+    #[test]
+    fn map_warning_keeps_a_coercion() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::Coercion(String::from("sheep")),
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::Coercion(String::from("sheep")))
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::NonFinite`] reaches the recalc
+    /// outcome.
+    #[test]
+    fn map_warning_keeps_a_non_finite() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::NonFinite,
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::NonFinite)
         );
     }
 
