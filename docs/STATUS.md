@@ -10,6 +10,14 @@ Task board. Only the master agent edits this file, on `main`.
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
 - Phase 2 complete (2026-10-14, report: [progress/phase-2.md](progress/phase-2.md), tag `phase-2`).
 
+## Phase 7 task board (plan: [plans/phase-7.md](plans/phase-7.md))
+
+Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard. Phase 8 is binary `.vsd` import; Phase 9 (agents) is paused. P7-01 runs beside the Phase 6 tail; the rename boundary (R1, P7-00, R4) waits for the `phase-6` tag.
+
+| Task | Role | Depends on | Group | State | Branch |
+|---|---|---|---|---|---|
+| [P7-01](tasks/P7-01.md) | architect | none (disjoint from Phase 6) | 0 | ready | — |
+
 ## Phase 6 task board
 
 | Task | Role | Depends on | Group | State | Branch |
