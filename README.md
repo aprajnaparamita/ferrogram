@@ -2,11 +2,11 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 5 of 8 complete.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. It is not ready for real work: formulas are not evaluated, `.vsd` import and the control channel are not built, and visual fidelity is approximate.
+> **Status: pre-alpha, Phase 5 of 8 complete, Phase 6 in progress.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. The ShapeSheet formula engine exists as a library but is not yet wired into editing, opening or saving. It is not ready for real work: `.vsd` import and the control channel are not built, and visual fidelity is approximate.
 
 ## Build status
 
-Last full gate on `main`: **green, 2026-10-21** (Phase 5 close, commit `688cb8b`, 2531 tests). There is no public CI yet; the gate runs locally.
+Last full gate on `main`: **green, 2026-10-22** (Phase 6 engine merged, commit `fff98f9`, 2835 tests). There is no public CI yet; the gate runs locally.
 
 | Step | Result |
 |---|---|
@@ -21,13 +21,13 @@ Line coverage per crate (`cargo xtask coverage`):
 | Crate | Coverage | Crate | Coverage |
 |---|---:|---|---:|
 | geom | 100.0% | text | 98.9% |
-| shapesheet | 100.0% | commands | 98.3% |
+| shapesheet | 92.9% | commands | 98.3% |
 | model | 99.7% | vsdx | 98.1% |
 | ui-spec | 99.4% | ferrogram-cli | 96.8% |
 | render | 98.5% | ui | 96.8% |
 | ferrogram (desktop) | 80.0% | ferrogram-web | 77.9% |
 
-`control` and `vsd-binary` have no code yet (Phases 8 and 7).
+`control` and `vsd-binary` have no code yet (Phases 8 and 7). `shapesheet` dropped from 100% because Phase 6 replaced its stubs with about 6500 lines of real code; its threshold is 85%.
 
 ## What works today
 
@@ -45,16 +45,24 @@ Line coverage per crate (`cargo xtask coverage`):
   - undo and redo for every edit.
 
   The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). Phase report: [docs/progress/phase-5.md](docs/progress/phase-5.md).
+- **ShapeSheet engine** (Phase 6, in progress), in `crates/shapesheet`:
+  - a formula parser and printer: 976 of the 994 distinct formulas in the test corpus parse, and every one of them prints back unchanged;
+  - values with units and Visio's type conversions;
+  - an evaluator with 42 functions (arithmetic, logic, `IF`, `GUARD`, `SETF`, trig, rounding, string and unit helpers);
+  - reference resolution across shapes, masters, pages and styles, with inheritance;
+  - a dependency graph with incremental recalculation and cycle detection.
+
+  Instances of a master now draw at their own size instead of the master's.
 
 ## Next
 
-Phase 6: the ShapeSheet formula engine (core subset), so edits update dependent cells and files without cached values render.
+Phase 6 continues: wire the engine into editing and undo, into opening, rendering and saving, and into the Shape Data and Size & Position panels. Then compare its results with the values Visio saved in the corpus files, and prove that resizing a master-based shape recomputes its geometry. Group A (the engine library) is merged; the integration tasks are running.
 
 The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the ribbon is in [docs/parity/controls.md](docs/parity/controls.md).
 
 ## What does not work yet
 
-The ShapeSheet formula engine (shapes whose cells have no cached values render blank), `.vsd` import, the MCP/control channel, and most ribbon commands (they are listed but stubbed).
+Formula evaluation in the app (edits still write fixed values, and shapes whose cells have no cached values render blank until Phase 6 wires the engine in), `.vsd` import, the MCP/control channel, and most ribbon commands (they are listed but stubbed).
 
 ## Plan (alpha MVP)
 
@@ -66,7 +74,7 @@ The ShapeSheet formula engine (shapes whose cells have no cached values render b
 | 3 | Rendering (PNG/SVG) and CLI | done |
 | 4 | App shell, switchable 2016/365 ribbon | done |
 | 5 | Editing core | done |
-| 6 | ShapeSheet engine (core subset) | planned |
+| 6 | ShapeSheet engine (core subset) | in progress |
 | 7 | Binary .vsd import (read-only) | planned |
 | 8 | Control channel and MCP | planned |
 
