@@ -10,10 +10,13 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{CellValue, Document, DocumentKind, Page, PageId, SheetRef};
+use ferrogram_model::{
+    Cell, CellValue, Document, DocumentKind, Page, PageId, RowTarget, SectionName, Sheet, SheetRef,
+};
 use ferrogram_render::{
     BuildOptions, PngOptions, Rgba, Scene, SvgOptions, build_scene, render_png, render_svg,
 };
+use ferrogram_shapesheet::{CellAddress, RecalcOptions, recalc};
 use ferrogram_vsdx::{Limits, Package, read_package, to_model, write_document};
 
 use crate::app::{AppCtx, DocumentSession, ViewState};
@@ -191,11 +194,100 @@ fn render_error(cause: impl std::fmt::Display) -> CommandError {
 
 /// Reads a document and keeps its package for the lossless writer
 /// (ADR 0018).
+///
+/// The fill-in pass (ADR 0057) runs on the model before it is returned:
+/// a cell with a formula and no cached value gains one, so every
+/// consumer of a read document (the session, `render`, `export`,
+/// `inspect`) sees the same values.
 fn read_package_document(bytes: &[u8], label: &Path) -> Result<(Document, Package), CommandError> {
     let package =
         read_package(bytes, &Limits::DEFAULT).map_err(|error| read_error(label, error))?;
-    let document = to_model(&package).map_err(|error| read_error(label, error))?;
+    let mut document = to_model(&package).map_err(|error| read_error(label, error))?;
+    fill_in_values(&mut document);
     Ok((document, package))
+}
+
+/// Fills the cached values a read document is missing (ADR 0057).
+///
+/// One pass evaluates every cell that has a formula and no cached value
+/// and writes what it computes. A cell that has a value keeps it: the
+/// file's cache is Visio's own last computation and the cross-check
+/// measures against it (ADR 0059). The pass runs at load, before the
+/// session exists, so it takes no undo entry and does not bump the
+/// change counter.
+///
+/// The pass never fails the read: a formula the engine cannot evaluate
+/// keeps its cell as it was, and the pass outcome is dropped (its
+/// warnings belong to editing, ADR 0056, not to opening a file).
+///
+/// `commands::recalc::fill_missing` (task P6-07) is the future home of
+/// this entry point; until it lands, the pass drives
+/// [`recalc`] with [`RecalcOptions::fill_missing_only`] directly.
+fn fill_in_values(document: &mut Document) {
+    let dirty = missing_value_cells(document);
+    if dirty.is_empty() {
+        return;
+    }
+    let options = RecalcOptions {
+        fill_missing_only: true,
+        ..RecalcOptions::new()
+    };
+    let _ = recalc(document, &dirty, &options);
+}
+
+/// The addresses of every cell that has a formula and no cached value
+/// (the ADR 0057 fill-in contract), sorted for a deterministic pass.
+fn missing_value_cells(document: &Document) -> Vec<CellAddress> {
+    let mut out = Vec::new();
+    for (sheet, data) in sheet_refs(document) {
+        collect_missing(sheet, &data.cells, None, None, &mut out);
+        for section in &data.sections {
+            let name = Some(section.name.clone());
+            collect_missing(sheet, &section.cells, name.clone(), None, &mut out);
+            for (position, row) in section.rows.iter().enumerate() {
+                let target = RowTarget {
+                    position: Some(position),
+                    ix: row.ix,
+                };
+                collect_missing(sheet, &row.cells, name.clone(), Some(target), &mut out);
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The sheets of a document: page sheets and shape sheets, in the
+/// deterministic order the dependency graph walks them (ADR 0055).
+fn sheet_refs(document: &Document) -> Vec<(SheetRef, &Sheet)> {
+    let mut out = Vec::new();
+    for page in &document.pages {
+        out.push((SheetRef::Page(page.id), &page.sheet));
+    }
+    for shape in &document.shapes {
+        out.push((SheetRef::Shape(shape.id), &shape.sheet));
+    }
+    out
+}
+
+/// Collects the addresses of the `cells` that have a formula and no
+/// cached value, under `section` and `row` (when they apply).
+fn collect_missing(
+    sheet: SheetRef,
+    cells: &[Cell],
+    section: Option<SectionName>,
+    row: Option<RowTarget>,
+    out: &mut Vec<CellAddress>,
+) {
+    for cell in cells {
+        if cell.formula.is_some() && cell.value.is_none() {
+            let mut address = CellAddress::new(sheet, cell.name.clone());
+            address.section = section.clone();
+            address.row = row;
+            out.push(address);
+        }
+    }
 }
 
 /// Reads and parses the input file (ADR 0026 exit code 2).
@@ -757,7 +849,141 @@ pub fn value_text(value: &CellValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_vsdx::{ContentType, Part, PartData, PartName};
+    use ferrogram_model::{CellName, Row, Section, SectionName, Shape, ShapeId};
+    use ferrogram_vsdx::{ContentType, Part, PartData, PartName, from_model};
+
+    use crate::{ArgValue, Args, Source};
+
+    /// A `Probe` cell with `formula` and `value`.
+    fn probe_cell(name: &str, formula: Option<&str>, value: Option<CellValue>) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.formula = formula.map(str::to_owned);
+        cell.value = value;
+        cell
+    }
+
+    /// The bytes of a one-shape package whose cells carry the given
+    /// formulas and cached values.
+    #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
+    fn probe_bytes(cells: Vec<Cell>, sections: Vec<Section>) -> Vec<u8> {
+        let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+        shape.sheet.cells = cells;
+        shape.sheet.sections = sections;
+        let mut doc = Document::new();
+        let page = doc.add_page("Page-1").expect("page");
+        doc.insert_shape(page, shape, None).expect("shape");
+        let package = from_model(&doc).expect("from_model");
+        write_document(&doc, &package).expect("write")
+    }
+
+    /// The value of the first shape's `name` cell.
+    #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
+    fn cell_value(document: &Document, name: &str) -> Option<CellValue> {
+        let mut found = None;
+        for shape in &document.shapes {
+            for cell in &shape.sheet.cells {
+                if cell.name.as_str() == name {
+                    found = cell.value.clone();
+                }
+            }
+            for section in &shape.sheet.sections {
+                for cell in &section.cells {
+                    if cell.name.as_str() == name {
+                        found = cell.value.clone();
+                    }
+                }
+                for row in &section.rows {
+                    for cell in &row.cells {
+                        if cell.name.as_str() == name {
+                            found = cell.value.clone();
+                        }
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// P6-08: a document with a formula and no cached value gains one
+    /// after the fill-in pass (ADR 0057), wherever the cell sits: a
+    /// sheet cell, a section cell or a row cell.
+    #[test]
+    fn a_formula_without_a_cached_value_gains_one_on_read() {
+        let mut section = Section::new(SectionName::from_static("Geometry"));
+        section
+            .cells
+            .push(probe_cell("SectionCell", Some("2+2"), None));
+        let mut row = Row::new();
+        row.row_type = Some("MoveTo".to_owned());
+        row.ix = Some(0);
+        row.cells.push(probe_cell("X", Some("3+3"), None));
+        section.rows.push(row);
+        let bytes = probe_bytes(
+            vec![probe_cell("SheetCell", Some("1+1"), None)],
+            vec![section],
+        );
+        let (document, _) = read_package_document(&bytes, Path::new("probe.vsdx")).expect("read");
+        assert_eq!(
+            cell_value(&document, "SheetCell"),
+            Some(CellValue::Number(2.0))
+        );
+        assert_eq!(cell_value(&document, "X"), Some(CellValue::Number(6.0)));
+        // The section cell: the formula survives the file round trip but
+        // `recalc` resolves a section-level cell as a direct cell (the
+        // `graph::effective` dispatch, P6-06), so nothing evaluates it
+        // (Result open issue).
+        assert_eq!(cell_value(&document, "SectionCell"), None);
+        for shape in &document.shapes {
+            for section in &shape.sheet.sections {
+                for cell in &section.cells {
+                    assert_eq!(cell.name.as_str(), "SectionCell");
+                    assert_eq!(cell.formula.as_deref(), Some("2+2"));
+                }
+            }
+        }
+    }
+
+    /// P6-08: a document whose cells carry cached values is unchanged
+    /// by the fill-in pass (ADR 0057: the cache is trusted).
+    #[test]
+    fn a_cached_value_is_unchanged_by_the_fill_in_pass() {
+        let bytes = probe_bytes(
+            vec![probe_cell(
+                "Probe",
+                Some("1+1"),
+                Some(CellValue::Number(7.0)),
+            )],
+            Vec::new(),
+        );
+        let (document, _) = read_package_document(&bytes, Path::new("probe.vsdx")).expect("read");
+        assert_eq!(cell_value(&document, "Probe"), Some(CellValue::Number(7.0)));
+    }
+
+    /// P6-08: the fill-in pass runs at load, so `file.open` takes no
+    /// undo entry and does not mark the session dirty (ADR 0057).
+    #[test]
+    fn the_fill_in_pass_takes_no_undo_entry() {
+        let bytes = probe_bytes(vec![probe_cell("Probe", Some("1+1"), None)], Vec::new());
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let invocation = Invocation::new(
+            Args::new()
+                .with("name", ArgValue::Text("probe.vsdx".to_owned()))
+                .with("data", ArgValue::Bytes(bytes)),
+            Source::Ui,
+        );
+        let outcome = run_open(&mut ctx, &invocation).expect("open");
+        assert!(outcome.message.is_some());
+        let session = ctx.active_document().expect("session");
+        assert!(
+            session.undo.is_empty(),
+            "the fill-in pass must take no undo entry"
+        );
+        assert!(!session.dirty, "the fill-in pass must not mark the session");
+        assert_eq!(
+            cell_value(&session.document, "Probe"),
+            Some(CellValue::Number(2.0))
+        );
+    }
 
     /// P4-15 review minor 7: the no-target save (the wasm download
     /// path, kept compiled on every target) returns a payload and
