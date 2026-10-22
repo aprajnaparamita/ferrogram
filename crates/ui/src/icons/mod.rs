@@ -1,15 +1,19 @@
-//! Placeholder icons for ribbon and menu controls (ADR 0030).
+//! Icons for command-bar and menu controls (ADR 0030, ADR 0062).
 //!
-//! Phase 4 draws simple marks of our own (a filled rounded square
-//! with the first letter of the control id); no icon set is committed
-//! and no Office icon is ever used (AGENTS.md section 4). The
-//! screenshot pass may replace the marks with an open-licensed set
-//! whose licence goes in `ATTRIBUTION.md` in the same commit.
+//! [`placeholder`] draws a simple mark of our own (a filled rounded
+//! square with the first letter of the control id); no Office icon is
+//! ever used (AGENTS.md section 4). A key that has no row in
+//! `ui-spec/icons.yaml` draws the mark (ADR 0062).
 //!
-//! Marks are `SizeVariant`-independent for now: the same mark is drawn
-//! at every requested size (ADR 0030).
+//! [`icon_atom`] and [`draw`] are the icon-set pipeline (ADR 0062):
+//! Tabler outline SVGs rasterised at 16 and 32 px with theme tints.
+//! Task P7-01 defines them as interface stubs; task P7-04 implements
+//! them over `crates/ui/assets/icons/tabler/` and `ui-spec/icons.yaml`.
 //!
-//! Owned by task P4-04.
+//! Placeholder marks are `SizeVariant`-independent for now: the same
+//! mark is drawn at every requested size (ADR 0030).
+//!
+//! Placeholder marks owned by task P4-04; the icon pipeline by P7-04.
 
 use egui::{Align2, Atom, AtomPaintArgs, FontId, Rect, Response, Sense, Ui, Vec2};
 
@@ -195,5 +199,71 @@ mod tests {
             let atom = dropdown_arrow(f32::NAN);
             ui.add(egui::Button::new(atom));
         });
+    }
+}
+
+/// The icon for an icon-map key as a paint atom (stub, task P7-01).
+///
+/// Task P7-04 rasterises the SVG named by `ui-spec/icons.yaml` at
+/// `size` points with the `theme` tint, caches the texture and falls
+/// back to [`icon`] for an unknown key or a rasterisation error.
+/// `enabled: false` draws the icon at 40% alpha.
+pub fn icon_atom(
+    _key: &str,
+    _size: f32,
+    _theme: &ferrogram_ui_spec::v2::Theme,
+    _enabled: bool,
+) -> Result<Atom<'static>, UiError> {
+    Err(UiError::NotImplemented)
+}
+
+/// Draws the icon for an icon-map key into `rect` (stub, task P7-01).
+///
+/// Same pipeline as [`icon_atom`], for widgets that paint into a rect
+/// they already have.
+pub fn draw(
+    _ui: &mut Ui,
+    _rect: Rect,
+    _key: &str,
+    _size: f32,
+    _theme: &ferrogram_ui_spec::v2::Theme,
+    _enabled: bool,
+) -> Result<(), UiError> {
+    Err(UiError::NotImplemented)
+}
+
+#[cfg(test)]
+mod icon_set_tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::test_util::with_ui;
+
+    /// A minimal theme for the contract tests.
+    fn theme() -> ferrogram_ui_spec::v2::Theme {
+        ferrogram_ui_spec::v2::Theme {
+            schema_version: 1,
+            id: "panel-modern".to_owned(),
+            name: "Panel Modern (white)".to_owned(),
+            fonts: BTreeMap::new(),
+            colors: BTreeMap::new(),
+            metrics: BTreeMap::new(),
+            contextual_tab_sets: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn icon_atom_is_not_implemented() {
+        assert!(matches!(
+            icon_atom("edit.cut", 16.0, &theme(), true),
+            Err(UiError::NotImplemented)
+        ));
+    }
+
+    #[test]
+    fn draw_is_not_implemented() {
+        let rect = Rect::from_min_size(egui::Pos2::ZERO, Vec2::splat(16.0));
+        let outcome = with_ui(|ui| draw(ui, rect, "edit.cut", 16.0, &theme(), true));
+        assert!(matches!(outcome, Err(UiError::NotImplemented)));
     }
 }

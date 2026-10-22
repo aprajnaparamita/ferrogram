@@ -1,0 +1,3256 @@
+# Larrygram Panel Modern layout (layout format v2, docs/ui/layout-format.md).
+# Tabs in display order; group controls carry their column/row slot.
+# `command` links to ui-spec/commands.yaml, `icon` to ui-spec/icons.yaml,
+# `fluent` to the Fluent control id where one exists.
+schema_version: 2
+id: panel-modern
+name: Panel Modern
+kind: panel-modern
+description: Tabbed command bar with a File view, a Quick Access Toolbar and contextual tabs.
+theme: panel-modern
+window:
+  regions:
+  - id: title_bar
+    edge: top
+    size: 25
+    notes: Quick Access Toolbar at the left, document title centred, help and window buttons at the right.
+  - id: tab_strip
+    edge: top
+    size: 25
+    notes: File button, then the tabs; contextual tab sets appear to the right of the core tabs under
+      a coloured set caption.
+  - id: command_bar
+    edge: top
+    size: 93
+    collapsible: true
+    notes: Groups left to right with captions along the bottom edge; a collapse button at the far right.
+  - id: shapes_window
+    edge: left
+    size: 262
+    notes: 'Shapes window: title, STENCILS and SEARCH headings, then stencil sections.'
+  - id: rulers
+    edge: top_left_of_drawing
+    size: 16
+  - id: drawing
+    edge: fill
+  - id: page_tabs
+    edge: bottom_of_drawing
+    size: 40
+    notes: Page tabs, an All-pages menu and an insert-page button below the horizontal scroll bar.
+  - id: status_bar
+    edge: bottom
+    size: 22
+    notes: Page n of m and language on the left; presentation, zoom slider, zoom percent, fit-page and
+      switch-window buttons on the right.
+quick_access_toolbar:
+- id: qat.save
+  kind: button
+  label: Save
+  command: file.save
+  fluent: FileSave
+  icon: file.save
+- id: qat.undo
+  kind: split
+  label: Undo
+  command: edit.undo
+  fluent: Undo
+  icon: edit.undo
+  dynamic_label: true
+- id: qat.redo
+  kind: button
+  label: Redo
+  command: edit.redo.or.repeat
+  fluent: RedoOrRepeat
+  dynamic_label: true
+- id: qat.customize
+  kind: dropdown
+  label: Customize Quick Access Toolbar
+  command: view.qat.customize
+  new_command: true
+file_button:
+  label: File
+  opens: file_view
+tabs:
+- id: tab.home
+  label: Home
+  fluent: TabHome
+  groups:
+  - id: tab.home.clipboard
+    label: Clipboard
+    layout: stack
+    fluent: GroupClipboard
+    controls:
+    - id: tab.home.clipboard.paste
+      kind: split
+      label: Paste
+      command: edit.paste
+      fluent: PasteMenu
+      size: large
+      column: 0
+      row: 0
+      icon: edit.paste
+      items:
+      - id: tab.home.clipboard.paste.paste
+        kind: button
+        label: Paste
+        command: edit.paste
+        fluent: Paste
+        icon: edit.paste
+      - id: tab.home.clipboard.paste.paste_special
+        kind: button
+        label: Paste Special...
+        command: edit.paste.special.dialog
+        fluent: PasteSpecialDialog
+        icon: edit.paste.special.dialog
+      - id: tab.home.clipboard.paste.paste_as_hyperlink
+        kind: button
+        label: Paste as Hyperlink
+        command: tools.inet.paste.as.hyperlink
+        fluent: PasteAsHyperlink
+        icon: tools.inet.paste.as.hyperlink
+      - id: tab.home.clipboard.paste.duplicate
+        kind: button
+        label: Duplicate
+        command: edit.paste.duplicate
+        fluent: PasteDuplicate
+        icon: edit.paste.duplicate
+    - id: tab.home.clipboard.cut
+      kind: button
+      label: Cut
+      command: edit.cut
+      fluent: Cut
+      size: medium
+      column: 1
+      row: 0
+      icon: edit.cut
+    - id: tab.home.clipboard.copy
+      kind: button
+      label: Copy
+      command: edit.copy
+      fluent: Copy
+      size: medium
+      column: 1
+      row: 1
+      icon: edit.copy
+    - id: tab.home.clipboard.format_painter
+      kind: button
+      label: Format Painter
+      command: tools.format_painter
+      fluent: FormatPainter
+      size: medium
+      column: 1
+      row: 2
+      icon: tools.format_painter
+  - id: tab.home.font
+    label: Font
+    layout: rows
+    fluent: GroupFont
+    controls:
+    - id: tab.home.font.font
+      kind: combo
+      label: Font
+      command: text.font
+      fluent: Font
+      column: 0
+      row: 0
+      width: 107
+    - id: tab.home.font.font_size
+      kind: combo
+      label: Font Size
+      command: text.font.size
+      fluent: FontSize
+      column: 1
+      row: 0
+      width: 52
+    - id: tab.home.font.increase_font_size
+      kind: button
+      label: Increase Font Size
+      command: text.font.size.increase
+      fluent: FontSizeIncrease
+      size: small
+      column: 2
+      row: 0
+      icon: text.font.size.increase
+    - id: tab.home.font.decrease_font_size
+      kind: button
+      label: Decrease Font Size
+      command: text.font.size.decrease
+      fluent: FontSizeDecrease
+      size: small
+      column: 3
+      row: 0
+      icon: text.font.size.decrease
+    - id: tab.home.font.bold
+      kind: button
+      label: Bold
+      command: format.text.bold
+      fluent: Bold
+      size: small
+      column: 0
+      row: 1
+      icon: format.text.bold
+    - id: tab.home.font.italic
+      kind: button
+      label: Italic
+      command: format.text.italic
+      fluent: Italic
+      size: small
+      column: 1
+      row: 1
+      icon: format.text.italic
+    - id: tab.home.font.underline
+      kind: button
+      label: Underline
+      command: format.text.underline
+      fluent: Underline
+      size: small
+      column: 2
+      row: 1
+      icon: format.text.underline
+    - id: tab.home.font.strikethrough
+      kind: button
+      label: Strikethrough
+      command: tools.strikethrough
+      fluent: Strikethrough
+      size: small
+      column: 3
+      row: 1
+      icon: tools.strikethrough
+    - id: tab.home.font.change_case
+      kind: dropdown
+      label: Change Case...
+      command: tools.change.case.dialog.classic
+      fluent: ChangeCaseDialogClassic
+      size: small
+      column: 4
+      row: 1
+      icon: tools.change.case.dialog.classic
+      items:
+      - id: tab.home.font.change_case.normal
+        kind: button
+        label: Normal
+        command: text.normal.case
+        fluent: TextNormalCase
+        icon: text.normal.case
+      - id: tab.home.font.change_case.all_caps
+        kind: button
+        label: All Caps
+        command: format.text.all_caps
+        fluent: TextAllCaps
+        icon: format.text.all_caps
+      - id: tab.home.font.change_case.capitalize_each_word
+        kind: button
+        label: Capitalize Each Word
+        command: text.initial.caps
+        fluent: TextInitialCaps
+      - id: tab.home.font.change_case.small_caps
+        kind: button
+        label: Small Caps
+        command: format.text.small_caps
+        fluent: TextSmallCaps
+        icon: format.text.small_caps
+    - id: tab.home.font.font_color
+      kind: split
+      label: Font Color
+      command: text.font.color
+      fluent: FontColorGallery
+      size: small
+      column: 5
+      row: 1
+      icon: text.font.color
+      list: colors
+    launcher:
+      label: Font
+      command: format.all.text.props
+      fluent: FontDialogVisio
+  - id: tab.home.paragraph
+    label: Paragraph
+    layout: rows
+    fluent: GroupParagraph
+    controls:
+    - id: tab.home.paragraph.align_top
+      kind: button
+      label: Align Top
+      command: format.text.align_top
+      fluent: TextAlignTop
+      size: small
+      column: 0
+      row: 0
+      icon: format.text.align_top
+    - id: tab.home.paragraph.align_middle
+      kind: button
+      label: Align Middle
+      command: format.text.align_middle
+      fluent: TextAlignMiddle
+      size: small
+      column: 1
+      row: 0
+      icon: format.text.align_middle
+    - id: tab.home.paragraph.align_bottom
+      kind: button
+      label: Align Bottom
+      command: format.text.align_bottom
+      fluent: TextAlignBottom
+      size: small
+      column: 2
+      row: 0
+      icon: format.text.align_bottom
+    - id: tab.home.paragraph.bullets
+      kind: button
+      label: Bullets
+      command: text.bullets
+      fluent: Bullets
+      size: small
+      column: 3
+      row: 0
+      icon: text.bullets
+    - id: tab.home.paragraph.rotate_text
+      kind: button
+      label: Rotate Text
+      command: text.rotate90
+      fluent: TextRotate90Degrees
+      size: small
+      column: 4
+      row: 0
+      icon: text.rotate90
+    - id: tab.home.paragraph.align_left
+      kind: button
+      label: Align Left
+      command: format.text.align_left
+      fluent: AlignLeft
+      size: small
+      column: 0
+      row: 1
+      icon: format.text.align_left
+    - id: tab.home.paragraph.center
+      kind: button
+      label: Center
+      command: format.text.align_center
+      fluent: AlignCenter
+      size: small
+      column: 1
+      row: 1
+      icon: format.text.align_center
+    - id: tab.home.paragraph.align_right
+      kind: button
+      label: Align Right
+      command: format.text.align_right
+      fluent: AlignRight
+      size: small
+      column: 2
+      row: 1
+      icon: format.text.align_right
+    - id: tab.home.paragraph.justify
+      kind: button
+      label: Justify
+      command: format.text.align_justify
+      fluent: AlignJustify
+      size: small
+      column: 3
+      row: 1
+      icon: format.text.align_justify
+    - id: tab.home.paragraph.decrease_indent
+      kind: button
+      label: Decrease Indent
+      command: format.decrease.indent
+      fluent: IndentDecreaseWord
+      size: small
+      column: 4
+      row: 1
+      icon: format.decrease.indent
+    - id: tab.home.paragraph.increase_indent
+      kind: button
+      label: Increase Indent
+      command: format.increase.indent
+      fluent: IndentIncreaseWord
+      size: small
+      column: 5
+      row: 1
+      icon: format.increase.indent
+    - id: tab.home.paragraph.left_to_right
+      kind: button
+      label: Left-to-Right
+      hidden: true
+      command: text.direction.left.to.right
+      fluent: TextDirectionLeftToRight
+      size: small
+      icon: text.direction.left.to.right
+    - id: tab.home.paragraph.right_to_left
+      kind: button
+      label: Right-to-Left
+      hidden: true
+      command: text.direction.right.to.left
+      fluent: TextDirectionRightToLeft
+      size: small
+      icon: text.direction.right.to.left
+    - id: tab.home.paragraph.text_direction
+      kind: button
+      label: Text Direction
+      hidden: true
+      command: text.direction.vertical
+      fluent: TextDirectionVertical
+      size: small
+      icon: text.direction.vertical
+    launcher:
+      label: Paragraph
+      command: format.paragraph
+      fluent: ParagraphDialogVisio
+  - id: tab.home.tools
+    label: Tools
+    layout: stack
+    fluent: GroupTools
+    controls:
+    - id: tab.home.tools.pointer_tool
+      kind: button
+      label: Pointer Tool
+      command: tools.pointer
+      fluent: PointerTool
+      size: medium
+      column: 0
+      row: 0
+      icon: tools.pointer
+    - id: tab.home.tools.connector
+      kind: button
+      label: Connector
+      command: tools.connector
+      fluent: ConnectorTool
+      size: medium
+      column: 0
+      row: 1
+      icon: tools.connector
+    - id: tab.home.tools.text
+      kind: button
+      label: Text
+      command: tools.text
+      fluent: TextTool
+      size: medium
+      column: 0
+      row: 2
+      icon: tools.text
+    - id: tab.home.tools.rectangle
+      kind: split
+      label: Rectangle
+      command: shape.drawing.tools
+      fluent: DrawingToolsMenu
+      size: small
+      column: 1
+      row: 0
+      items:
+      - id: tab.home.tools.rectangle.rectangle
+        kind: button
+        label: Rectangle
+        command: tools.rectangle
+        fluent: RectangleTool
+        icon: tools.rectangle
+      - id: tab.home.tools.rectangle.ellipse
+        kind: button
+        label: Ellipse
+        command: tools.ellipse
+        fluent: EllipseTool
+        icon: tools.ellipse
+      - id: tab.home.tools.rectangle.line
+        kind: button
+        label: Line
+        command: format.line
+        fluent: LineTool
+        icon: format.line
+      - id: tab.home.tools.rectangle.freeform
+        kind: button
+        label: Freeform
+        command: tools.freeform
+        fluent: FreeformTool
+        icon: tools.freeform
+      - id: tab.home.tools.rectangle.arc
+        kind: button
+        label: Arc
+        command: shape.arc
+        fluent: ArcTool
+        icon: shape.arc
+      - id: tab.home.tools.rectangle.pencil
+        kind: button
+        label: Pencil
+        command: tools.pencil
+        fluent: PencilTool
+        icon: tools.pencil
+    - id: tab.home.tools.connection_point
+      kind: button
+      label: Connection Point
+      command: tools.connection.point
+      fluent: ConnectionPointTool
+      size: small
+      column: 1
+      row: 1
+      icon: tools.connection.point
+    - id: tab.home.tools.text_block
+      kind: button
+      label: Text Block
+      command: tools.text_block
+      fluent: TextBlockTool
+      size: small
+      column: 1
+      row: 2
+      icon: tools.text_block
+  - id: tab.home.shape_styles
+    label: Shape Styles
+    layout: stack
+    fluent: GroupShapeStyles
+    controls:
+    - id: tab.home.shape_styles.quick_styles
+      kind: gallery
+      label: Quick Styles
+      command: shape.styles
+      fluent: ShapeStylesGallery
+      size: large
+      column: 0
+      row: 0
+      icon: shape.styles
+      list: shape_styles
+    - id: tab.home.shape_styles.fill
+      kind: split
+      label: Fill
+      command: format.set.fill.color
+      fluent: FillColorGallery
+      size: medium
+      column: 1
+      row: 0
+      icon: format.set.fill.color
+      list: colors
+      items:
+      - id: tab.home.shape_styles.fill.fill_options
+        kind: button
+        label: Fill Options...
+        command: format.fill
+    - id: tab.home.shape_styles.line
+      kind: split
+      label: Line
+      command: format.set.line.color
+      fluent: LineColorGallery
+      size: medium
+      column: 1
+      row: 1
+      icon: format.set.line.color
+      list: colors
+      items:
+      - id: tab.home.shape_styles.line.weight
+        kind: submenu
+        label: Weight
+        fluent: LineWeightGallery
+        items:
+        - id: tab.home.shape_styles.line.weight.line_weights
+          kind: list
+          list: line_weights
+      - id: tab.home.shape_styles.line.dashes
+        kind: submenu
+        label: Dashes
+        fluent: LinePatternGallery
+        items:
+        - id: tab.home.shape_styles.line.dashes.line_patterns
+          kind: list
+          list: line_patterns
+      - id: tab.home.shape_styles.line.arrows
+        kind: submenu
+        label: Arrows
+        fluent: LineArrowsGallery
+        items:
+        - id: tab.home.shape_styles.line.arrows.line_ends
+          kind: list
+          list: line_ends
+        - id: tab.home.shape_styles.line.arrows.options
+          kind: button
+          label: Arrows Options...
+          command: tools.arrows.more
+          fluent: ArrowsMore
+          icon: tools.arrows.more
+      - id: tab.home.shape_styles.line.line_options
+        kind: button
+        label: Line Options...
+        command: format.line
+    - id: tab.home.shape_styles.effects
+      kind: dropdown
+      label: Effects
+      command: shape.effects
+      fluent: ShapeEffectsMenu
+      size: medium
+      column: 1
+      row: 2
+      icon: shape.effects
+      list: effects
+      items:
+      - id: tab.home.shape_styles.effects.shadow
+        kind: submenu
+        label: Shadow
+        fluent: ObjectEffectShadowGallery
+        items:
+        - id: tab.home.shape_styles.effects.shadow.shadow_presets
+          kind: list
+          list: shadow_presets
+        - id: tab.home.shape_styles.effects.shadow.options
+          kind: button
+          label: Shadow Options...
+          command: tools.shadow.options.dialog
+          fluent: ShadowOptionsDialog
+          icon: tools.shadow.options.dialog
+      - id: tab.home.shape_styles.effects.reflection
+        kind: submenu
+        label: Reflection
+        fluent: ReflectionGallery
+        items:
+        - id: tab.home.shape_styles.effects.reflection.reflection_presets
+          kind: list
+          list: reflection_presets
+        - id: tab.home.shape_styles.effects.reflection.options
+          kind: button
+          label: Reflection Options...
+          command: tools.reflections.more.options
+          fluent: ReflectionsMoreOptions
+          icon: tools.reflections.more.options
+      - id: tab.home.shape_styles.effects.glow
+        kind: submenu
+        label: Glow
+        fluent: ObjectEffectGlowGallery
+        items:
+        - id: tab.home.shape_styles.effects.glow.glow_presets
+          kind: list
+          list: glow_presets
+        - id: tab.home.shape_styles.effects.glow.options
+          kind: button
+          label: Glow Options...
+          command: tools.glows.more.options
+          fluent: GlowsMoreOptions
+          icon: tools.glows.more.options
+      - id: tab.home.shape_styles.effects.soft_edges
+        kind: submenu
+        label: Soft Edges
+        fluent: ObjectEffectSoftEdgesGallery
+        items:
+        - id: tab.home.shape_styles.effects.soft_edges.soft_edge_presets
+          kind: list
+          list: soft_edge_presets
+        - id: tab.home.shape_styles.effects.soft_edges.options
+          kind: button
+          label: Soft Edges Options...
+          command: tools.soft.edges.more.options
+          fluent: SoftEdgesMoreOptions
+          icon: tools.soft.edges.more.options
+      - id: tab.home.shape_styles.effects.bevel
+        kind: submenu
+        label: Bevel
+        fluent: BevelShapeGallery
+        items:
+        - id: tab.home.shape_styles.effects.bevel.bevel_presets
+          kind: list
+          list: bevel_presets
+      - id: tab.home.shape_styles.effects.3_d_rotation
+        kind: submenu
+        label: 3-D Rotation
+        fluent: _3DRotationGallery
+        items:
+        - id: tab.home.shape_styles.effects.3_d_rotation.rotation_3d_presets
+          kind: list
+          list: rotation_3d_presets
+        - id: tab.home.shape_styles.effects.3_d_rotation.options
+          kind: button
+          label: 3-D Rotation Options...
+          command: tools.rotation_3d_options
+          fluent: _3DRotationOptionsDialog
+          icon: tools.rotation_3d_options
+    launcher:
+      label: Format Object...
+      command: format.shape.pane
+      fluent: ObjectFormatDialog
+      new_command: true
+  - id: tab.home.arrange
+    label: Arrange
+    layout: stack
+    fluent: GroupArrange
+    controls:
+    - id: tab.home.arrange.align
+      kind: dropdown
+      label: Align
+      command: arrange.align.box
+      fluent: AlignGallery
+      size: large
+      column: 0
+      row: 0
+      icon: arrange.align.box
+      list: align
+    - id: tab.home.arrange.position
+      kind: dropdown
+      label: Position
+      command: arrange.position
+      fluent: PositionMenu
+      size: large
+      column: 1
+      row: 0
+      icon: arrange.position
+      list: position
+      items:
+      - id: tab.home.arrange.position.rotate_shapes
+        kind: submenu
+        label: Rotate Shapes
+        fluent: ShapesRotateGallery
+        items:
+        - id: tab.home.arrange.position.rotate_shapes.rotate_right_90
+          kind: button
+          label: Rotate Right 90°
+          command: arrange.rotate90.clockwise
+          icon: arrange.rotate90.clockwise
+        - id: tab.home.arrange.position.rotate_shapes.rotate_left_90
+          kind: button
+          label: Rotate Left 90°
+          command: arrange.object.rotate90
+          icon: arrange.object.rotate90
+        - id: tab.home.arrange.position.rotate_shapes.flip_vertical
+          kind: button
+          label: Flip Vertical
+          command: arrange.flip_vertical
+          icon: arrange.flip_vertical
+        - id: tab.home.arrange.position.rotate_shapes.flip_horizontal
+          kind: button
+          label: Flip Horizontal
+          command: arrange.flip_horizontal
+          icon: arrange.flip_horizontal
+      - id: tab.home.arrange.position.rotate_diagram
+        kind: submenu
+        label: Rotate Diagram
+        fluent: RotateDiagram
+        items:
+        - id: tab.home.arrange.position.rotate_diagram.diagram_rotations
+          kind: list
+          list: diagram_rotations
+    - id: tab.home.arrange.bring_to_front
+      kind: split
+      label: Bring to Front
+      command: arrange.bring_to_front
+      fluent: ObjectBringToFrontMenu
+      size: medium
+      column: 2
+      row: 0
+      icon: arrange.bring_to_front
+      items:
+      - id: tab.home.arrange.bring_to_front.bring_forward
+        kind: button
+        label: Bring Forward
+        command: arrange.bring_forward
+        fluent: ObjectBringForward
+        icon: arrange.bring_forward
+      - id: tab.home.arrange.bring_to_front.bring_to_front
+        kind: button
+        label: Bring to Front
+        command: arrange.bring_to_front
+        fluent: ObjectBringToFront
+        icon: arrange.bring_to_front
+    - id: tab.home.arrange.send_to_back
+      kind: split
+      label: Send to Back
+      command: arrange.send_to_back
+      fluent: ObjectSendToBackMenu
+      size: medium
+      column: 2
+      row: 1
+      icon: arrange.send_to_back
+    - id: tab.home.arrange.group
+      kind: dropdown
+      label: Group
+      command: arrange.group
+      fluent: ObjectsGroupMenu
+      size: medium
+      column: 2
+      row: 2
+      icon: arrange.group
+      items:
+      - id: tab.home.arrange.group.group
+        kind: button
+        label: Group
+        command: arrange.group
+        fluent: ObjectsGroup
+        icon: arrange.group
+      - id: tab.home.arrange.group.ungroup
+        kind: button
+        label: Ungroup
+        command: arrange.ungroup
+        fluent: ObjectsUngroup
+        icon: arrange.ungroup
+      - id: tab.home.arrange.group.add_to_group
+        kind: button
+        label: Add to Group
+        command: tools.objects.add.to
+        fluent: ObjectsAddToGroup
+      - id: tab.home.arrange.group.remove_from_group
+        kind: button
+        label: Remove from Group
+        command: tools.objects.remove.from
+        fluent: ObjectsRemoveFromGroup
+      - id: tab.home.arrange.group.convert_to_group
+        kind: button
+        label: Convert to Group
+        command: tools.objects.convert.to
+        fluent: ObjectsConvertToGroup
+  - id: tab.home.editing
+    label: Editing
+    layout: stack
+    fluent: GroupEditing
+    controls:
+    - id: tab.home.editing.change_shape
+      kind: gallery
+      label: Change Shape
+      command: edit.replace.shape
+      fluent: ReplaceShape
+      size: large
+      column: 0
+      row: 0
+      icon: edit.replace.shape
+      list: shapes_for_change_shape
+    - id: tab.home.editing.find
+      kind: dropdown
+      label: Find
+      command: edit.find
+      fluent: FindMenu
+      size: medium
+      column: 1
+      row: 0
+      icon: edit.find
+      items:
+      - id: tab.home.editing.find.find
+        kind: button
+        label: Find...
+        command: tools.find.dialog
+        fluent: FindDialog
+        icon: tools.find.dialog
+      - id: tab.home.editing.find.replace
+        kind: button
+        label: Replace...
+        command: edit.replace.dialog
+        fluent: ReplaceDialog
+        icon: edit.replace.dialog
+    - id: tab.home.editing.layers
+      kind: dropdown
+      label: Layers
+      command: tools.layers
+      fluent: LayersMenu
+      size: medium
+      column: 1
+      row: 1
+      icon: tools.layers
+      items:
+      - id: tab.home.editing.layers.assign_to_layer
+        kind: button
+        label: Assign to Layer...
+        command: layer.dialog
+        fluent: LayerDialog
+        icon: layer.dialog
+      - id: tab.home.editing.layers.layer_properties
+        kind: button
+        label: Layer Properties...
+        command: layer.properties.dialog
+        fluent: LayerPropertiesDialog
+        icon: layer.properties.dialog
+    - id: tab.home.editing.select
+      kind: dropdown
+      label: Select
+      command: edit.select.special
+      fluent: SelectMenu
+      size: medium
+      column: 1
+      row: 2
+      icon: edit.select.special
+      items:
+      - id: tab.home.editing.select.select_all
+        kind: button
+        label: Select All
+        command: edit.select_all
+        fluent: SelectAll
+        icon: edit.select_all
+      - id: tab.home.editing.select.select_by_type
+        kind: button
+        label: Select by Type...
+        command: edit.select.by.type.dialog
+        fluent: SelectByTypeDialog
+      - id: tab.home.editing.select.area_select
+        kind: button
+        label: Area Select
+        command: tools.area.select
+        fluent: AreaSelect
+        icon: tools.area.select
+      - id: tab.home.editing.select.lasso_select
+        kind: button
+        label: Lasso Select
+        command: tools.lasso.select.visio
+        fluent: LassoSelectVisio
+        icon: tools.lasso.select.visio
+- id: tab.insert
+  label: Insert
+  fluent: TabInsert
+  groups:
+  - id: tab.insert.pages
+    label: Pages
+    layout: stack
+    fluent: GroupInsertPages
+    controls:
+    - id: tab.insert.pages.new_page
+      kind: split
+      label: New Page
+      command: tools.blank.page.insert
+      fluent: BlankPageInsertMenu
+      size: large
+      column: 0
+      row: 0
+      icon: tools.blank.page.insert
+      items:
+      - id: tab.insert.pages.new_page.blank_page
+        kind: button
+        label: Blank Page
+        command: tools.blank.page.insert.visio
+        fluent: BlankPageInsertVisio
+        icon: tools.blank.page.insert.visio
+      - id: tab.insert.pages.new_page.background_page
+        kind: button
+        label: Background Page...
+        command: insert.new.background.page
+        fluent: BackgroundPageInsert
+        icon: insert.new.background.page
+      - id: tab.insert.pages.new_page.duplicate_this_page
+        kind: button
+        label: Duplicate This Page
+        command: edit.duplicate.page
+        fluent: DuplicateThisPage
+        icon: edit.duplicate.page
+  - id: tab.insert.illustrations
+    label: Illustrations
+    layout: stack
+    fluent: GroupInsertIllustrations
+    controls:
+    - id: tab.insert.illustrations.pictures
+      kind: button
+      label: Pictures...
+      command: tools.picture.insert.from.file
+      fluent: PictureInsertFromFile
+      size: large
+      column: 0
+      row: 0
+      icon: tools.picture.insert.from.file
+    - id: tab.insert.illustrations.online_pictures
+      kind: button
+      label: Online Pictures...
+      command: insert.clip.art
+      fluent: ClipArtInsertDialog
+      size: large
+      column: 1
+      row: 0
+      icon: insert.clip.art
+    - id: tab.insert.illustrations.cad_drawing
+      kind: button
+      label: CAD Drawing...
+      command: tools.cad.drawing
+      fluent: CadDrawing
+      size: large
+      column: 2
+      row: 0
+      icon: tools.cad.drawing
+    - id: tab.insert.illustrations.chart
+      kind: button
+      label: Chart...
+      hidden: true
+      command: tools.chart.insert
+      fluent: ChartInsert
+      size: large
+      icon: tools.chart.insert
+  - id: tab.insert.diagram_parts
+    label: Diagram Parts
+    layout: stack
+    fluent: GroupDiagramParts
+    controls:
+    - id: tab.insert.diagram_parts.container
+      kind: dropdown
+      label: Container
+      command: insert.add.to.new.container
+      fluent: ContainerGallery
+      size: large
+      column: 0
+      row: 0
+      icon: insert.add.to.new.container
+      list: container
+    - id: tab.insert.diagram_parts.callout
+      kind: dropdown
+      label: Callout
+      command: shape.associate.callout
+      fluent: CalloutGallery
+      size: large
+      column: 1
+      row: 0
+      icon: shape.associate.callout
+      list: callout
+    - id: tab.insert.diagram_parts.connector
+      kind: button
+      label: Connector
+      command: tools.quick.connector
+      fluent: QuickConnectorTool
+      size: large
+      column: 2
+      row: 0
+      icon: tools.quick.connector
+  - id: tab.insert.links
+    label: Links
+    layout: stack
+    fluent: GroupInsertLinks
+    controls:
+    - id: tab.insert.links.hyperlink
+      kind: button
+      label: Hyperlink...
+      command: tools.hyperlink.insert
+      fluent: HyperlinkInsert
+      size: large
+      column: 0
+      row: 0
+      icon: tools.hyperlink.insert
+  - id: tab.insert.text
+    label: Text
+    layout: stack
+    fluent: GroupTextBoxText
+    controls:
+    - id: tab.insert.text.text_box
+      kind: split
+      label: Text Box
+      command: insert.text.box
+      fluent: TextBoxInsertMenu
+      size: large
+      column: 0
+      row: 0
+      icon: insert.text.box
+      items:
+      - id: tab.insert.text.text_box.horizontal_text_box
+        kind: button
+        label: Horizontal Text Box
+        command: insert.text.box
+        fluent: TextBoxInsertHorizontal
+        icon: insert.text.box
+      - id: tab.insert.text.text_box.vertical_text_box
+        kind: button
+        label: Vertical Text Box
+        command: insert.vert.text.box
+        fluent: TextBoxInsertVertical
+        icon: insert.vert.text.box
+    - id: tab.insert.text.screentip
+      kind: button
+      label: ScreenTip...
+      command: tools.screen.tip
+      fluent: ScreenTip
+      size: large
+      column: 1
+      row: 0
+      icon: tools.screen.tip
+    - id: tab.insert.text.object
+      kind: button
+      label: Object...
+      command: tools.ole.objectct.insert
+      fluent: OleObjectctInsert
+      size: large
+      column: 2
+      row: 0
+      icon: tools.ole.objectct.insert
+    - id: tab.insert.text.field
+      kind: button
+      label: Field...
+      command: edit.insert.field
+      fluent: FieldInsert
+      size: large
+      column: 3
+      row: 0
+      icon: edit.insert.field
+    - id: tab.insert.text.symbol
+      kind: dropdown
+      label: Symbol
+      command: tools.mso.insert.symbol
+      fluent: SymbolInsertGallery
+      size: large
+      column: 4
+      row: 0
+      icon: tools.mso.insert.symbol
+- id: tab.design
+  label: Design
+  fluent: TabDesignVisio
+  groups:
+  - id: tab.design.page_setup
+    label: Page Setup
+    layout: stack
+    fluent: GroupPrintPreviewPageSetup
+    controls:
+    - id: tab.design.page_setup.orientation
+      kind: dropdown
+      label: Orientation
+      command: format.set.page.orientation
+      fluent: PageOrientation
+      size: large
+      column: 0
+      row: 0
+      icon: format.set.page.orientation
+      items:
+      - id: tab.design.page_setup.orientation.options
+        kind: options
+        options:
+        - Portrait
+        - Landscape
+    - id: tab.design.page_setup.size
+      kind: dropdown
+      label: Size
+      command: page.size.dlg
+      fluent: PageSize
+      size: large
+      column: 1
+      row: 0
+      icon: page.size.dlg
+      items:
+      - id: tab.design.page_setup.size.options
+        kind: options
+        options:
+        - Letter
+        - Tabloid
+        - Legal
+        - Statement
+        - Executive
+        - A3
+        - A4
+        - A5
+        - B4 (JIS)
+        - B5 (JIS)
+      - id: tab.design.page_setup.size.fit_to_drawing
+        kind: button
+        label: Fit to Drawing
+        command: page.size.to.fit.drawing
+        fluent: PageFitToDrawing
+        icon: page.size.to.fit.drawing
+      - id: tab.design.page_setup.size.more_page_sizes
+        kind: button
+        label: More Page Sizes...
+        command: tools.more.page.sizes
+        fluent: MorePageSizes
+        icon: tools.more.page.sizes
+    - id: tab.design.page_setup.auto_size
+      kind: button
+      label: Auto Size
+      command: page.auto.size.toggle
+      fluent: AutoSizePage
+      size: large
+      column: 2
+      row: 0
+      icon: page.auto.size.toggle
+    launcher:
+      label: Page Setup...
+      command: tools.options.page.setup
+      fluent: PageSetupDialogVisio
+  - id: tab.design.themes
+    label: Themes
+    layout: stack
+    fluent: GroupThemesVisioLegacy
+    controls:
+    - id: tab.design.themes.themes
+      kind: dropdown
+      label: Themes
+      command: tools.themes.gallery.visio.legacy
+      fluent: ThemesGalleryVisioLegacy
+      size: large
+      column: 0
+      row: 0
+      icon: tools.themes.gallery.visio.legacy
+      list: themes
+      items:
+      - id: tab.design.themes.themes.apply_theme_to_new_shapes
+        kind: button
+        label: Apply Theme to New Shapes
+        command: format.apply.theme.to.new.shapes.toggle
+  - id: tab.design.variants
+    label: Variants
+    layout: stack
+    fluent: GroupThemeVariants
+    controls:
+    - id: tab.design.variants.variants
+      kind: gallery
+      label: Variants
+      command: tools.theme.variants
+      fluent: ThemeVariantsGallery
+      size: large
+      column: 0
+      row: 0
+      icon: tools.theme.variants
+      list: theme_variants
+  - id: tab.design.backgrounds
+    label: Backgrounds
+    layout: stack
+    fluent: GroupBackgrounds
+    controls:
+    - id: tab.design.backgrounds.backgrounds
+      kind: dropdown
+      label: Backgrounds
+      command: tools.backgrounds
+      fluent: BackgroundsGallery
+      size: large
+      column: 0
+      row: 0
+      icon: tools.backgrounds
+      list: backgrounds
+      items:
+      - id: tab.design.backgrounds.backgrounds.background_color
+        kind: submenu
+        label: Background Color
+        fluent: BackgroundColor
+        items:
+        - id: tab.design.backgrounds.backgrounds.background_color.colors
+          kind: list
+          list: colors
+    - id: tab.design.backgrounds.borders_and_titles
+      kind: dropdown
+      label: Borders & Titles
+      command: tools.borders.and.titles
+      fluent: BordersAndTitlesGallery
+      size: large
+      column: 1
+      row: 0
+      icon: tools.borders.and.titles
+      list: borders_and_titles
+    launcher:
+      label: Page Setup
+      command: tools.options.page.setup
+      fluent: PageSetupPageDialog
+  - id: tab.design.layout
+    label: Layout
+    layout: stack
+    fluent: GroupLayoutRouting
+    controls:
+    - id: tab.design.layout.re_layout_page
+      kind: dropdown
+      label: Re-Layout Page
+      command: page.relayout
+      fluent: PageRelayoutGallery
+      size: large
+      column: 0
+      row: 0
+      icon: page.relayout
+      items:
+      - id: tab.design.layout.re_layout_page.options
+        kind: options
+        options:
+        - Top To Bottom
+        - Bottom To Top
+        - Left to Right
+        - Right to Left
+        - Down then Right
+        - Down then Left
+        - Right then Down
+        - Left then Down
+        - Radial
+        - Circular
+      - id: tab.design.layout.re_layout_page.more_layout_options
+        kind: button
+        label: More Layout Options...
+        command: arrange.layout.more.options
+        fluent: LayoutMoreOptions
+        icon: arrange.layout.more.options
+    - id: tab.design.layout.connectors
+      kind: dropdown
+      label: Connectors
+      command: connector.style
+      fluent: ConnectorsGallery
+      size: large
+      column: 1
+      row: 0
+      icon: connector.style
+      items:
+      - id: tab.design.layout.connectors.right_angle
+        kind: button
+        label: Right Angle
+        command: connector.right_angle
+        fluent: ConnectorRightAngle
+        icon: connector.right_angle
+      - id: tab.design.layout.connectors.straight_lines
+        kind: button
+        label: Straight Lines
+        command: connector.straight.lines
+        fluent: ConnectorStraightLines
+        icon: connector.straight.lines
+      - id: tab.design.layout.connectors.curved_lines
+        kind: button
+        label: Curved Lines
+        command: connector.curved.lines
+        fluent: ConnectorCurvedLines
+        icon: connector.curved.lines
+      - id: tab.design.layout.connectors.show_line_jumps
+        kind: button
+        label: Show Line Jumps
+        command: connector.show.line.jumps
+        fluent: ConnectorShowLineJumps
+    launcher:
+      label: Layout & Routing...
+      command: page.setup.layout_and_routing
+      fluent: PageSetupLayoutAndRoutingDialog
+      new_command: true
+- id: tab.data
+  label: Data
+  fluent: TabData
+  groups:
+  - id: tab.data.external_data
+    label: External Data
+    layout: stack
+    fluent: GroupExternalData
+    controls:
+    - id: tab.data.external_data.link_data_to_shapes
+      kind: button
+      label: Link Data to Shapes
+      command: data.link.data.to.shapes
+      fluent: DataLinkDataToShapes
+      size: large
+      column: 0
+      row: 0
+      icon: data.link.data.to.shapes
+    - id: tab.data.external_data.automatically_link
+      kind: button
+      label: Automatically Link...
+      command: data.automatically.link
+      fluent: DataAutomaticallyLink
+      size: large
+      column: 1
+      row: 0
+      icon: data.automatically.link
+    - id: tab.data.external_data.refresh_all
+      kind: split
+      label: Refresh All
+      command: data.refresh
+      fluent: RefreshMenu
+      size: large
+      column: 2
+      row: 0
+      icon: data.refresh
+  - id: tab.data.display_data
+    label: Display Data
+    layout: stack
+    fluent: GroupDisplayData
+    controls:
+    - id: tab.data.display_data.data_graphics
+      kind: dropdown
+      label: Data Graphics
+      command: data.graphics.gallery.visio
+      fluent: DataGraphicsGalleryVisio
+      size: large
+      column: 0
+      row: 0
+      icon: data.graphics.gallery.visio
+      list: data_graphics
+      items:
+      - id: tab.data.display_data.data_graphics.create_new_data_graphic
+        kind: button
+        label: Create New Data Graphic...
+        command: data.graphic.create.new
+        fluent: DataGraphicCreateNew
+        icon: data.graphic.create.new
+      - id: tab.data.display_data.data_graphics.edit_data_graphic
+        kind: button
+        label: Edit Data Graphic...
+        command: data.graphic.edit
+        fluent: DataGraphicEdit
+        icon: data.graphic.edit
+      - id: tab.data.display_data.data_graphics.apply_after_linking_data_to_shapes
+        kind: button
+        label: Apply after Linking Data to Shapes
+        command: format.apply.data.graphic
+        fluent: DataGraphicApplyAfterLinkingData
+    - id: tab.data.display_data.insert_legend
+      kind: dropdown
+      label: Insert Legend
+      command: insert.legend.horizontal
+      fluent: LegendInsertGallery
+      size: large
+      column: 1
+      row: 0
+      icon: insert.legend.horizontal
+      items:
+      - id: tab.data.display_data.insert_legend.options
+        kind: options
+        options:
+        - Horizontal
+        - Vertical
+  - id: tab.data.show_hide
+    label: Show/Hide
+    layout: stack
+    rows: 2
+    fluent: GroupDataShowHide
+    controls:
+    - id: tab.data.show_hide.shape_data_window
+      kind: check
+      label: Shape Data Window
+      command: shape.data.window
+      fluent: ShapeDataWindow
+      column: 0
+      row: 0
+      icon: shape.data.window
+    - id: tab.data.show_hide.external_data_window
+      kind: check
+      label: External Data Window
+      command: tools.external.data.window
+      fluent: ExternalDataWindow
+      column: 0
+      row: 1
+      icon: tools.external.data.window
+- id: tab.process
+  label: Process
+  fluent: TabProcess
+  groups:
+  - id: tab.process.subprocess
+    label: Subprocess
+    layout: stack
+    fluent: GroupSubProcess
+    controls:
+    - id: tab.process.subprocess.create_new
+      kind: button
+      label: Create New
+      command: tools.subprocess.create.new
+      fluent: SubprocessCreateNew
+      size: large
+      column: 0
+      row: 0
+      icon: tools.subprocess.create.new
+    - id: tab.process.subprocess.link_to_existing
+      kind: dropdown
+      label: Link to Existing
+      command: tools.subprocess.link.to.existing
+      fluent: SubprocessLinkToExisting
+      size: large
+      column: 1
+      row: 0
+      icon: tools.subprocess.link.to.existing
+    - id: tab.process.subprocess.create_from_selection
+      kind: button
+      label: Create from Selection
+      command: tools.subprocess.create.from.selection
+      fluent: SubprocessCreateFromSelection
+      size: large
+      column: 2
+      row: 0
+      icon: tools.subprocess.create.from.selection
+  - id: tab.process.diagram_validation
+    label: Diagram Validation
+    layout: stack
+    rows: 2
+    fluent: GroupDiagramValidation
+    controls:
+    - id: tab.process.diagram_validation.check_diagram
+      kind: split
+      label: Check Diagram
+      command: arrange.diagram.check
+      fluent: DiagramCheckMenu
+      size: large
+      column: 0
+      row: 0
+      icon: arrange.diagram.check
+      items:
+      - id: tab.process.diagram_validation.check_diagram.check_diagram
+        kind: button
+        label: Check Diagram
+        command: arrange.diagram.check
+        fluent: DiagramCheck
+        icon: arrange.diagram.check
+      - id: tab.process.diagram_validation.check_diagram.rules_to_check
+        kind: submenu
+        label: Rules to Check
+        fluent: RulesToCheck
+        items:
+        - id: tab.process.diagram_validation.check_diagram.rules_to_check.validation_rule_sets
+          kind: list
+          list: validation_rule_sets
+      - id: tab.process.diagram_validation.check_diagram.import_rules_from
+        kind: submenu
+        label: Import Rules From
+        fluent: RulesImportFrom
+        items:
+        - id: tab.process.diagram_validation.check_diagram.import_rules_from.open_documents
+          kind: list
+          list: open_documents
+    - id: tab.process.diagram_validation.ignore_this_issue
+      kind: split
+      label: Ignore This Issue
+      command: review.ignore.this.issue
+      fluent: IgnoreThisIssueMenu
+      size: medium
+      column: 1
+      row: 0
+      icon: review.ignore.this.issue
+    - id: tab.process.diagram_validation.issues_window
+      kind: check
+      label: Issues Window
+      command: review.validation.issues.window.toggle
+      fluent: IssuesWindow
+      column: 1
+      row: 1
+- id: tab.review
+  label: Review
+  fluent: TabReviewWord
+  groups:
+  - id: tab.review.proofing
+    label: Proofing
+    layout: stack
+    fluent: GroupProofing
+    controls:
+    - id: tab.review.proofing.spelling
+      kind: button
+      label: Spelling...
+      command: review.spelling.change
+      fluent: Spelling
+      size: large
+      column: 0
+      row: 0
+      icon: review.spelling.change
+    - id: tab.review.proofing.research
+      kind: button
+      label: Research...
+      command: view.task.pane.research
+      fluent: ResearchPane
+      size: large
+      column: 1
+      row: 0
+      icon: view.task.pane.research
+    - id: tab.review.proofing.thesaurus
+      kind: button
+      label: Thesaurus...
+      command: help.research.thesaurus
+      fluent: Thesaurus
+      size: large
+      column: 2
+      row: 0
+      icon: help.research.thesaurus
+  - id: tab.review.language
+    label: Language
+    layout: stack
+    fluent: GroupLanguage
+    controls:
+    - id: tab.review.language.translate
+      kind: button
+      label: Translate
+      command: help.research.translate
+      fluent: Translate
+      size: large
+      column: 0
+      row: 0
+      icon: help.research.translate
+    - id: tab.review.language.language
+      kind: dropdown
+      label: Language
+      command: tools.language.commands
+      fluent: LanguageCommands
+      size: large
+      column: 1
+      row: 0
+      icon: tools.language.commands
+      items:
+      - id: tab.review.language.language.set_proofing_language
+        kind: button
+        label: Set Proofing Language...
+        command: format.set.language.dlg
+        fluent: SetLanguage
+        icon: format.set.language.dlg
+      - id: tab.review.language.language.language_preferences
+        kind: button
+        label: Language Preferences...
+        command: tools.language.preferences.dlg
+        fluent: LanguagePreferences
+  - id: tab.review.comments
+    label: Comments
+    layout: stack
+    fluent: GroupComments
+    controls:
+    - id: tab.review.comments.new_comment
+      kind: button
+      label: New Comment
+      command: review.new.comment
+      fluent: ReviewNewComment
+      size: large
+      column: 0
+      row: 0
+      icon: review.new.comment
+    - id: tab.review.comments.comments_pane
+      kind: split
+      label: Comments Pane
+      command: view.show.comments
+      fluent: ShowCommentsMenu
+      size: large
+      column: 1
+      row: 0
+      icon: view.show.comments
+      items:
+      - id: tab.review.comments.comments_pane.comments_pane
+        kind: button
+        label: Comments Pane
+        command: tools.commenting
+        fluent: CommentingPane
+        icon: tools.commenting
+      - id: tab.review.comments.comments_pane.reveal_tags
+        kind: button
+        label: Reveal Tags
+        command: view.show.tags
+        fluent: ShowTags
+    - id: tab.review.comments.ink
+      kind: button
+      label: Ink
+      command: tools.ink.tool
+      fluent: InkTool
+      size: large
+      column: 2
+      row: 0
+      icon: tools.ink.tool
+  - id: tab.review.reports
+    label: Reports
+    layout: stack
+    fluent: GroupReports
+    controls:
+    - id: tab.review.reports.shape_reports
+      kind: button
+      label: Shape Reports
+      command: shape.reports
+      fluent: ShapeReports
+      size: large
+      column: 0
+      row: 0
+      icon: shape.reports
+- id: tab.view
+  label: View
+  fluent: TabView
+  groups:
+  - id: tab.view.views
+    label: Views
+    layout: stack
+    fluent: GroupDocumentViewsVisio
+    controls:
+    - id: tab.view.views.presentation_mode
+      kind: button
+      label: Presentation Mode
+      command: view.full_screen_mode
+      size: large
+      column: 0
+      row: 0
+  - id: tab.view.show
+    label: Show
+    layout: stack
+    rows: 2
+    fluent: GroupViewShowHide
+    controls:
+    - id: tab.view.show.ruler
+      kind: check
+      label: Ruler
+      command: view.rulers
+      fluent: ShowRulerVisio
+      column: 0
+      row: 0
+      icon: view.rulers
+    - id: tab.view.show.grid
+      kind: check
+      label: Grid
+      command: view.toggle_grid
+      fluent: ShowGrid
+      column: 0
+      row: 1
+      icon: view.toggle_grid
+    - id: tab.view.show.page_breaks
+      kind: check
+      label: Page Breaks
+      command: view.show.page.breaks
+      fluent: ShowPageBreaks
+      column: 1
+      row: 0
+      icon: view.show.page.breaks
+    - id: tab.view.show.guides
+      kind: check
+      label: Guides
+      command: view.guides
+      fluent: ShowGuides
+      column: 1
+      row: 1
+      icon: view.guides
+    - id: tab.view.show.task_panes
+      kind: dropdown
+      label: Task Panes
+      command: view.task.panes.menu.visio
+      fluent: TaskPanesMenuVisio
+      size: large
+      column: 2
+      row: 0
+      icon: view.task.panes.menu.visio
+      items:
+      - id: tab.view.show.task_panes.shapes
+        kind: button
+        label: Shapes
+        command: shape.shapes.window
+        fluent: ShapesWindow
+        icon: shape.shapes.window
+      - id: tab.view.show.task_panes.shape_data
+        kind: button
+        label: Shape Data
+        command: shape.data.window.show.hide
+        fluent: ShapeDataWindowShowHide
+        icon: shape.data.window.show.hide
+      - id: tab.view.show.task_panes.pan_and_zoom
+        kind: button
+        label: Pan & Zoom
+        command: view.pan.zoom
+        fluent: PanAndZoomWindow
+        icon: view.pan.zoom
+      - id: tab.view.show.task_panes.size_and_position
+        kind: button
+        label: Size & Position
+        command: arrange.size.and.position.window
+        fluent: SizeAndPositionWindow
+        icon: arrange.size.and.position.window
+    launcher:
+      label: Ruler & Grid...
+      command: view.ruler.grid.dlg
+      fluent: RulerAndGridDialog
+  - id: tab.view.zoom
+    label: Zoom
+    layout: stack
+    fluent: GroupZoom
+    controls:
+    - id: tab.view.zoom.zoom
+      kind: button
+      label: Zoom...
+      command: view.zoom.dialog
+      fluent: ZoomDialog
+      size: medium
+      column: 0
+      row: 0
+      icon: view.zoom.dialog
+    - id: tab.view.zoom.fit_to_window
+      kind: button
+      label: Fit to Window
+      command: view.zoom.fit
+      fluent: ZoomFitToWindowVisio
+      size: medium
+      column: 0
+      row: 1
+      icon: view.zoom.fit
+    - id: tab.view.zoom.page_width
+      kind: button
+      label: Page Width
+      command: view.zoom.page.width
+      fluent: ZoomPageWidthVisio
+      size: medium
+      column: 0
+      row: 2
+      icon: view.zoom.page.width
+  - id: tab.view.visual_aids
+    label: Visual Aids
+    layout: stack
+    fluent: GroupVisualAids
+    controls:
+    - id: tab.view.visual_aids.dynamic_grid
+      kind: check
+      label: Dynamic Grid
+      command: connector.dynamic.grid
+      fluent: DynamicGrid
+      column: 0
+      row: 0
+      icon: connector.dynamic.grid
+    - id: tab.view.visual_aids.autoconnect
+      kind: check
+      label: AutoConnect
+      command: connector.auto_connect
+      fluent: AutoConnect
+      column: 0
+      row: 1
+      icon: connector.auto_connect
+    - id: tab.view.visual_aids.connection_points
+      kind: check
+      label: Connection Points
+      command: tools.connection.points
+      fluent: ConnectionPoints
+      column: 0
+      row: 2
+      icon: tools.connection.points
+    launcher:
+      label: Snap & Glue...
+      command: tools.snap_glue_setup
+      fluent: SnapAndGlueDialog
+  - id: tab.view.window
+    label: Window
+    layout: stack
+    fluent: GroupWindow
+    controls:
+    - id: tab.view.window.new_window
+      kind: button
+      label: New Window
+      command: view.window.new.window
+      fluent: WindowNew
+      size: large
+      column: 0
+      row: 0
+      icon: view.window.new.window
+    - id: tab.view.window.arrange_all
+      kind: button
+      label: Arrange All
+      command: tools.windows.arrange.all
+      fluent: WindowsArrangeAll
+      size: large
+      column: 1
+      row: 0
+      icon: tools.windows.arrange.all
+    - id: tab.view.window.cascade
+      kind: button
+      label: Cascade
+      command: tools.windows.cascade
+      fluent: WindowsCascade
+      size: large
+      column: 2
+      row: 0
+      icon: tools.windows.cascade
+    - id: tab.view.window.switch_windows
+      kind: dropdown
+      label: Switch Windows
+      command: view.window.switch.windows.menu.word
+      fluent: WindowSwitchWindowsMenuWord
+      size: large
+      column: 3
+      row: 0
+      icon: view.window.switch.windows.menu.word
+      items:
+      - id: tab.view.window.switch_windows.windows
+        kind: list
+        list: windows
+  - id: tab.view.macros
+    label: Macros
+    layout: stack
+    fluent: GroupMacros
+    controls:
+    - id: tab.view.macros.macros
+      kind: button
+      label: Macros
+      command: tools.macro.play
+      fluent: MacroPlay
+      size: large
+      column: 0
+      row: 0
+      icon: tools.macro.play
+    - id: tab.view.macros.add_ons
+      kind: dropdown
+      label: Add-Ons
+      command: insert.add.ons
+      fluent: AddOnsMenu
+      size: large
+      column: 1
+      row: 0
+      icon: insert.add.ons
+      items:
+      - id: tab.view.macros.add_ons.run_add_on
+        kind: button
+        label: Run Add-On...
+        command: developer.run_add_on
+        new_command: true
+      - id: tab.view.macros.add_ons.add_ons
+        kind: list
+        list: add_ons
+contextual_tabs:
+- id: tab.picture_tools.format
+  tab_set: Picture Tools
+  label: Format
+  fluent: TabPictureToolsFormat
+  shown_in: picture_selected
+  groups:
+  - id: tab.picture_tools.format.adjust
+    label: Adjust
+    layout: stack
+    fluent: GroupPictureToolAdjust
+    controls:
+    - id: tab.picture_tools.format.adjust.brightness
+      kind: dropdown
+      label: Brightness
+      command: tools.picture.brightness
+      fluent: PictureBrightnessGallery
+      size: large
+      column: 0
+      row: 0
+      icon: tools.picture.brightness
+      list: brightness
+      items:
+      - id: tab.picture_tools.format.adjust.brightness.picture_corrections_options
+        kind: button
+        label: Picture Corrections Options...
+        command: tools.picture.corrections.dialog
+        fluent: PictureCorrectionsDialog
+        icon: tools.picture.corrections.dialog
+    - id: tab.picture_tools.format.adjust.contrast
+      kind: dropdown
+      label: Contrast
+      command: tools.picture.contrast
+      fluent: PictureContrastGallery
+      size: large
+      column: 1
+      row: 0
+      icon: tools.picture.contrast
+    - id: tab.picture_tools.format.adjust.autobalance
+      kind: button
+      label: AutoBalance
+      command: tools.picture.auto.balance
+      fluent: PictureAutoBalance
+      size: large
+      column: 2
+      row: 0
+      icon: tools.picture.auto.balance
+    - id: tab.picture_tools.format.adjust.compress_picture
+      kind: button
+      label: Compress Picture
+      command: tools.picture.compress
+      fluent: PictureCompress
+      size: large
+      column: 3
+      row: 0
+      icon: tools.picture.compress
+    launcher:
+      label: Picture...
+      command: insert.image.properties.dlg
+      fluent: PictureFormatDialogVisio
+  - id: tab.picture_tools.format.picture_styles
+    label: Picture Styles
+    layout: stack
+    fluent: GroupPictureStylesVisio
+    controls:
+    - id: tab.picture_tools.format.picture_styles.line
+      kind: split
+      label: Line
+      command: format.set.line.color
+      fluent: LineColorGallery
+      size: large
+      column: 0
+      row: 0
+      icon: format.set.line.color
+      list: colors
+  - id: tab.picture_tools.format.arrange
+    label: Arrange
+    layout: stack
+    fluent: GroupPictureToolArrange
+    controls:
+    - id: tab.picture_tools.format.arrange.bring_to_front
+      kind: split
+      label: Bring to Front
+      command: arrange.bring_to_front
+      fluent: ObjectBringToFrontMenu
+      size: large
+      column: 0
+      row: 0
+      icon: arrange.bring_to_front
+    - id: tab.picture_tools.format.arrange.send_to_back
+      kind: split
+      label: Send to Back
+      command: arrange.send_to_back
+      fluent: ObjectSendToBackMenu
+      size: large
+      column: 1
+      row: 0
+      icon: arrange.send_to_back
+    - id: tab.picture_tools.format.arrange.rotate
+      kind: dropdown
+      label: Rotate
+      command: arrange.rotate.object
+      fluent: ObjectRotateGallery
+      size: large
+      column: 2
+      row: 0
+      icon: arrange.rotate.object
+    - id: tab.picture_tools.format.arrange.crop_tool
+      kind: button
+      label: Crop Tool
+      command: tools.crop
+      fluent: CropTool
+      size: large
+      column: 3
+      row: 0
+      icon: tools.crop
+- id: tab.container_tools.format
+  tab_set: Container Tools
+  label: Format
+  fluent: TabFormat
+  shown_in: container_selected
+  groups:
+  - id: tab.container_tools.format.size
+    label: Size
+    layout: stack
+    rows: 2
+    fluent: GroupContainerSize
+    controls:
+    - id: tab.container_tools.format.size.margins
+      kind: dropdown
+      label: Margins
+      command: shape.container.margins
+      fluent: ContainerMargins
+      size: large
+      column: 0
+      row: 0
+      icon: shape.container.margins
+      list: margins
+    - id: tab.container_tools.format.size.fit_to_contents
+      kind: button
+      label: Fit to Contents
+      command: view.fit.container.to.contents
+      fluent: FitToContents
+      size: medium
+      column: 1
+      row: 0
+      icon: view.fit.container.to.contents
+    - id: tab.container_tools.format.size.automatic_resize
+      kind: dropdown
+      label: Automatic Resize
+      command: tools.automatic.resize
+      fluent: AutomaticResize
+      size: medium
+      column: 1
+      row: 1
+      icon: tools.automatic.resize
+  - id: tab.container_tools.format.container_styles
+    label: Container Styles
+    layout: stack
+    fluent: GroupContainerStyles
+    controls:
+    - id: tab.container_tools.format.container_styles.heading_style
+      kind: dropdown
+      label: Heading Style
+      command: shape.container.heading.styles
+      fluent: ContainerHeadingStyles
+      size: large
+      column: 0
+      row: 0
+      icon: shape.container.heading.styles
+  - id: tab.container_tools.format.membership
+    label: Membership
+    layout: stack
+    fluent: GroupMembership
+    controls:
+    - id: tab.container_tools.format.membership.lock_container
+      kind: button
+      label: Lock Container
+      command: shape.lock.container
+      fluent: ContainerLock
+      size: large
+      column: 0
+      row: 0
+      icon: shape.lock.container
+    - id: tab.container_tools.format.membership.select_contents
+      kind: button
+      label: Select Contents
+      command: edit.select.contents
+      fluent: SelectContents
+      size: large
+      column: 1
+      row: 0
+      icon: edit.select.contents
+    - id: tab.container_tools.format.membership.disband_container
+      kind: button
+      label: Disband Container
+      command: arrange.disband.container
+      fluent: ContainerDisband
+      size: large
+      column: 2
+      row: 0
+      icon: arrange.disband.container
+- id: tab.shapesheet_tools.design
+  tab_set: ShapeSheet Tools
+  label: Design
+  fluent: TabShapeSheetDesign
+  shown_in: shapesheet_window
+  groups:
+  - id: tab.shapesheet_tools.design.view
+    label: View
+    layout: stack
+    rows: 2
+    fluent: GroupShapeSheetView
+    controls:
+    - id: tab.shapesheet_tools.design.view.formulas
+      kind: button
+      label: Formulas
+      command: edit.sw.show.formulas
+      fluent: ShapeSheetShowFormulas
+      size: large
+      column: 0
+      row: 0
+      icon: edit.sw.show.formulas
+    - id: tab.shapesheet_tools.design.view.values
+      kind: button
+      label: Values
+      command: edit.sw.show.values
+      fluent: ShapeSheetShowValues
+      size: large
+      column: 1
+      row: 0
+      icon: edit.sw.show.values
+    - id: tab.shapesheet_tools.design.view.sections
+      kind: button
+      label: Sections
+      command: edit.sw.show.sections.dlg
+      fluent: ShapeSheetShowSections
+      size: medium
+      column: 2
+      row: 0
+      icon: edit.sw.show.sections.dlg
+    - id: tab.shapesheet_tools.design.view.style_explorer
+      kind: check
+      label: Style Explorer
+      command: format.style.explorer
+      fluent: StyleExplorer
+      column: 2
+      row: 1
+      icon: format.style.explorer
+  - id: tab.shapesheet_tools.design.sections
+    label: Sections
+    layout: stack
+    rows: 2
+    fluent: GroupShapeSheetSections
+    controls:
+    - id: tab.shapesheet_tools.design.sections.insert
+      kind: button
+      label: Insert
+      command: shape.sheet.insert.section
+      fluent: ShapeSheetInsertSection
+      size: medium
+      column: 0
+      row: 0
+      icon: shape.sheet.insert.section
+    - id: tab.shapesheet_tools.design.sections.delete
+      kind: button
+      label: Delete
+      command: shape.sheet.delete.section
+      fluent: ShapeSheetDeleteSection
+      size: medium
+      column: 0
+      row: 1
+      icon: shape.sheet.delete.section
+  - id: tab.shapesheet_tools.design.rows
+    label: Rows
+    layout: stack
+    rows: 2
+    fluent: GroupShapeSheetRows
+    controls:
+    - id: tab.shapesheet_tools.design.rows.insert
+      kind: button
+      label: Insert
+      command: shape.sheet.insert.row
+      fluent: ShapeSheetInsertRow
+      size: medium
+      column: 0
+      row: 0
+      icon: shape.sheet.insert.row
+    - id: tab.shapesheet_tools.design.rows.delete
+      kind: button
+      label: Delete
+      command: shape.sheet.delete.row
+      fluent: ShapeSheetDeleteRow
+      size: medium
+      column: 0
+      row: 1
+      icon: shape.sheet.delete.row
+  - id: tab.shapesheet_tools.design.editing
+    label: Editing
+    layout: stack
+    fluent: GroupShapeSheetEditing
+    controls:
+    - id: tab.shapesheet_tools.design.editing.edit_formula
+      kind: button
+      label: Edit Formula
+      command: shape.sheet.edit.formula
+      fluent: ShapeSheetEditFormula
+      size: large
+      column: 0
+      row: 0
+      icon: shape.sheet.edit.formula
+    - id: tab.shapesheet_tools.design.editing.shape_data
+      kind: button
+      label: Shape Data
+      command: format.cust.prop.edit
+      fluent: ShapeData
+      size: medium
+      column: 1
+      row: 0
+      icon: format.cust.prop.edit
+    - id: tab.shapesheet_tools.design.editing.hyperlink
+      kind: button
+      label: Hyperlink...
+      command: tools.hyperlink.insert
+      fluent: HyperlinkInsert
+      size: medium
+      column: 1
+      row: 1
+      icon: tools.hyperlink.insert
+    - id: tab.shapesheet_tools.design.editing.shape_action
+      kind: button
+      label: Shape Action
+      command: shape.sheet.shape.action
+      fluent: ShapeSheetShapeAction
+      size: medium
+      column: 1
+      row: 2
+      icon: shape.sheet.shape.action
+  - id: tab.shapesheet_tools.design.formula_tracing
+    label: Formula Tracing
+    layout: stack
+    fluent: GroupShapeSheetFormulaTracing
+    controls:
+    - id: tab.shapesheet_tools.design.formula_tracing.show_window
+      kind: button
+      label: Show Window
+      command: view.show.formula.tracing.window
+      fluent: ShowFormulaTracingWindow
+      size: medium
+      column: 0
+      row: 0
+      icon: view.show.formula.tracing.window
+    - id: tab.shapesheet_tools.design.formula_tracing.trace_precedents
+      kind: button
+      label: Trace Precedents
+      command: tools.trace.precedent.cells
+      fluent: TracePrecedentCells
+      size: medium
+      column: 0
+      row: 1
+      icon: tools.trace.precedent.cells
+    - id: tab.shapesheet_tools.design.formula_tracing.trace_dependents
+      kind: button
+      label: Trace Dependents
+      command: tools.trace.dependent.cells
+      fluent: TraceDependentCells
+      size: medium
+      column: 0
+      row: 2
+      icon: tools.trace.dependent.cells
+    - id: tab.shapesheet_tools.design.formula_tracing.back
+      kind: button
+      label: Back
+      command: tools.trace.back
+      fluent: TraceBack
+      size: large
+      column: 1
+      row: 0
+      icon: tools.trace.back
+    - id: tab.shapesheet_tools.design.formula_tracing.forward
+      kind: button
+      label: Forward
+      command: tools.trace.forward
+      fluent: TraceForward
+      size: large
+      column: 2
+      row: 0
+      icon: tools.trace.forward
+file_view:
+  back_button: true
+  nav:
+  - id: file_view.info
+    kind: page
+    label: Info
+  - id: file_view.new
+    kind: page
+    label: New
+    command: file.new
+  - id: file_view.open
+    kind: page
+    label: Open
+    command: file.open
+  - id: file_view.save
+    kind: command
+    label: Save
+    command: file.save
+  - id: file_view.save_as
+    kind: page
+    label: Save As
+    command: file.save_as
+  - id: file_view.print
+    kind: page
+    label: Print
+    command: file.print
+  - id: file_view.export
+    kind: page
+    label: Export
+  - id: file_view.close
+    kind: command
+    label: Close
+    command: file.close
+  - id: file_view.options
+    kind: command
+    label: Options
+    command: app.office.center.options
+  default_page: file_view.info
+context_menus:
+- id: context.shape
+  label: Shape
+  trigger: right-click a shape
+  items:
+  - id: context.shape.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.shape.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.shape.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    icon: edit.paste
+  - id: context.shape.insert_shape_before
+    kind: button
+    label: Insert Shape Before
+    access: "i"
+    new_command: true
+    command: shape.insert_shape_before
+    begin_group: true
+    hidden: true
+  - id: context.shape.insert_shape_after
+    kind: button
+    label: Insert Shape After
+    access: "n"
+    new_command: true
+    command: shape.insert_shape_after
+    hidden: true
+  - id: context.shape.group
+    kind: submenu
+    label: Group
+    access: "g"
+    items:
+    - id: context.shape.group.group
+      kind: button
+      label: Group
+      access: "g"
+      command: arrange.group
+      visuicmd: visCmdObjectGroup
+      shortcut: Shift+Ctrl+G
+      icon: arrange.group
+    - id: context.shape.group.ungroup
+      kind: button
+      label: Ungroup
+      access: "u"
+      command: arrange.ungroup
+      visuicmd: visCmdObjectUngroup
+      shortcut: Shift+Ctrl+U
+      icon: arrange.ungroup
+    - id: context.shape.group.object
+      kind: button
+      label: Object...
+      access: "o"
+      command: edit.open.object
+      visuicmd: visCmdEditOpenObject
+      begin_group: true
+      hidden: true
+    begin_group: true
+  - id: context.shape.container
+    kind: submenu
+    label: Container
+    access: "e"
+    items:
+    - id: context.shape.container.fit_to_contents
+      kind: button
+      label: Fit to Contents
+      access: "f"
+      command: view.fit.container.to.contents
+      hidden: true
+    - id: context.shape.container.lock_container
+      kind: button
+      label: Lock Container
+      access: "l"
+      command: shape.lock.container
+      hidden: true
+    - id: context.shape.container.select_contents
+      kind: button
+      label: Select Contents
+      access: "s"
+      command: edit.select.container.members
+      hidden: true
+    - id: context.shape.container.disband_container
+      kind: button
+      label: Disband Container
+      access: "d"
+      command: arrange.disband.container
+      hidden: true
+    - id: context.shape.container.add_to_new_container
+      kind: button
+      label: Add to New Container
+      access: "a"
+      command: insert.add.to.new.container
+      begin_group: true
+    - id: context.shape.container.add_to_underlying_container
+      kind: button
+      label: Add to Underlying Container
+      access: "u"
+      command: insert.add.member.to.container
+  - id: context.shape.hyperlinks
+    kind: list
+    list: hyperlinks
+    begin_group: true
+    hidden: true
+  - id: context.shape.add_comment
+    kind: button
+    label: Add Comment
+    access: "a"
+    command: insert.comment
+    visuicmd: visCmdInsertComment
+    icon: insert.comment
+  - id: context.shape.edit_text
+    kind: button
+    label: Edit Text
+    access: "t"
+    command: text.begin
+    shortcut: F2
+    icon: text.begin
+  - id: context.shape.data
+    kind: submenu
+    label: Data
+    access: "d"
+    items:
+    - id: context.shape.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "s"
+      command: tools.cust.prop
+      visuicmd: visCmdCustProp
+      icon: tools.cust.prop
+    - id: context.shape.data.define_shape_data
+      kind: button
+      label: Define Shape Data...
+      access: "d"
+      new_command: true
+      command: shape.data.define_shape_data
+    - id: context.shape.data.edit_data_graphic
+      kind: button
+      label: Edit Data Graphic...
+      access: "e"
+      new_command: true
+      command: shape.data.edit_data_graphic
+      begin_group: true
+    - id: context.shape.data.remove_data_graphic
+      kind: button
+      label: Remove Data Graphic
+      access: "r"
+      command: edit.remove.data.graphic.from.sel
+    - id: context.shape.data.data_recordset_links
+      kind: list
+      list: data_recordset_links
+      hidden: true
+    begin_group: true
+  - id: context.shape.format_shape
+    kind: button
+    label: Format Shape
+    access: "s"
+    new_command: true
+    command: format.shape.pane
+    shortcut: F3
+  - id: context.shape.right_angle_connector
+    kind: button
+    label: Right-Angle Connector
+    access: "i"
+    command: connector.right_angle
+    icon: connector.right_angle
+    begin_group: true
+  - id: context.shape.straight_connector
+    kind: button
+    label: Straight Connector
+    access: "g"
+    command: connector.straight
+    icon: connector.straight
+  - id: context.shape.curved_connector
+    kind: button
+    label: Curved Connector
+    access: "v"
+    command: connector.curved
+    icon: connector.curved
+  - id: context.shape.reset_connector
+    kind: button
+    label: Reset Connector
+    access: "n"
+    command: connector.dyn.conn.reroute
+    visuicmd: visCmdDynConnReroute
+    icon: connector.dyn.conn.reroute
+    begin_group: true
+    hidden: true
+  - id: context.shape.convert_ink_to_text
+    kind: button
+    label: Convert Ink to Text
+    access: "i"
+    new_command: true
+    command: shape.convert_ink_to_text
+    hidden: true
+  - id: context.shape.convert_ink_to_geometry
+    kind: button
+    label: Convert Ink to Geometry
+    access: "m"
+    new_command: true
+    command: shape.convert_ink_to_geometry
+    hidden: true
+- id: context.page
+  label: Page
+  trigger: right-click an empty part of the page
+  items:
+  - id: context.page.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.page.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    shortcut: Ctrl+C
+    icon: edit.copy
+  - id: context.page.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    icon: edit.paste
+  - id: context.page.paste_special
+    kind: button
+    label: Paste Special...
+    access: "a"
+    command: edit.paste.special
+    visuicmd: visCmdEditPasteSpecial
+    shortcut: Ctrl+Alt+V
+    icon: edit.paste.special
+  - id: context.page.hyperlinks
+    kind: list
+    list: hyperlinks
+    begin_group: true
+    hidden: true
+  - id: context.page.add_comment
+    kind: button
+    label: Add Comment
+    access: "a"
+    command: insert.comment
+    visuicmd: visCmdInsertComment
+    icon: insert.comment
+- id: context.text_edit
+  label: Text editing
+  trigger: right-click inside text being edited
+  items:
+  - id: context.text_edit.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.text_edit.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.text_edit.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.text_edit.font
+    kind: button
+    label: Font...
+    access: "n"
+    command: format.all.text.props
+    visuicmd: visCmdFormatAllTextProps
+    icon: format.all.text.props
+    begin_group: true
+  - id: context.text_edit.paragraph
+    kind: button
+    label: Paragraph...
+    access: "g"
+    command: format.paragraph
+  - id: context.text_edit.bullets
+    kind: button
+    label: Bullets
+    access: "s"
+    command: text.bullets
+    icon: text.bullets
+  - id: context.text_edit.insert_field
+    kind: button
+    label: Insert Field...
+    access: "f"
+    command: edit.insert.field
+    visuicmd: visCmdEditInsertField
+  - id: context.text_edit.reconvert
+    kind: button
+    label: Reconvert
+    access: "v"
+    new_command: true
+    command: text.reconvert
+    begin_group: true
+  - id: context.text_edit.change_text_direction
+    kind: button
+    label: Change Text Direction
+    access: "c"
+    command: view.direction.toggle
+    icon: view.direction.toggle
+    hidden: true
+  - id: context.text_edit.horizontal_in_vertical
+    kind: button
+    label: Horizontal in Vertical...
+    access: "o"
+    new_command: true
+    command: text.horizontal_in_vertical
+    hidden: true
+  - id: context.text_edit.text_ruler
+    kind: button
+    label: Text Ruler
+    access: "r"
+    command: text.edit.ruler
+    begin_group: true
+- id: context.page_tab
+  label: Page tab
+  trigger: right-click a page tab
+  items:
+  - id: context.page_tab.insert
+    kind: button
+    label: Insert
+    access: "i"
+    command: tools.options.new.page
+  - id: context.page_tab.delete
+    kind: button
+    label: Delete
+    access: "d"
+    command: page.delete
+    icon: page.delete
+  - id: context.page_tab.rename
+    kind: button
+    label: Rename
+    access: "r"
+    command: page.rename
+  - id: context.page_tab.duplicate
+    kind: button
+    label: Duplicate
+    access: "u"
+    command: edit.duplicate.page
+  - id: context.page_tab.page_setup
+    kind: button
+    label: Page Setup...
+    access: "s"
+    command: tools.options.page.setup
+  - id: context.page_tab.reorder_pages
+    kind: button
+    label: Reorder Pages...
+    access: "p"
+    new_command: true
+    command: page.reorder_pages
+    shortcut: Ctrl+Alt+P
+    begin_group: true
+- id: context.page_tab_navigation
+  label: Page navigation
+  trigger: right-click the page navigation buttons
+  items:
+  - id: context.page_tab_navigation.pages
+    kind: list
+    list: pages
+    hidden: true
+  - id: context.page_tab_navigation.go_to_page
+    kind: button
+    label: Go to Page...
+    access: "g"
+    command: tools.options.go.to.drawing
+    visuicmd: visCmdOptionsGoToDrawing
+    begin_group: true
+- id: context.hyperlink
+  label: Hyperlink
+  trigger: right-click a hyperlink in text
+  items:
+  - id: context.hyperlink.open
+    kind: button
+    label: Open
+    access: "o"
+    new_command: true
+    command: insert.hyperlink.open
+  - id: context.hyperlink.open_in_new_window
+    kind: button
+    label: Open in New Window
+    access: "n"
+    new_command: true
+    command: insert.hyperlink.open_in_new_window
+  - id: context.hyperlink.copy_hyperlink
+    kind: button
+    label: Copy Hyperlink
+    access: "c"
+    new_command: true
+    command: insert.hyperlink.copy_hyperlink
+    begin_group: true
+  - id: context.hyperlink.add_to_favorites
+    kind: button
+    label: Add to Favorites
+    access: "a"
+    new_command: true
+    command: insert.hyperlink.add_to_favorites
+  - id: context.hyperlink.edit_hyperlink
+    kind: button
+    label: Edit Hyperlink
+    access: "e"
+    new_command: true
+    command: insert.hyperlink.edit_hyperlink
+- id: context.connection_point
+  label: Connection point
+  trigger: right-click a connection point
+  items:
+  - id: context.connection_point.inward
+    kind: button
+    label: Inward
+    access: "i"
+    new_command: true
+    command: edit.connection_point.inward
+  - id: context.connection_point.outward
+    kind: button
+    label: Outward
+    access: "o"
+    new_command: true
+    command: edit.connection_point.outward
+  - id: context.connection_point.inward_and_outward
+    kind: button
+    label: Inward & Outward
+    access: "w"
+    new_command: true
+    command: edit.connection_point.inward_and_outward
+- id: context.full_screen
+  label: Full screen
+  trigger: right-click in full-screen view
+  items:
+  - id: context.full_screen.previous_page
+    kind: button
+    label: Previous Page
+    access: "p"
+    command: page.previous
+    icon: page.previous
+  - id: context.full_screen.next_page
+    kind: button
+    label: Next Page
+    access: "n"
+    command: page.next
+    icon: page.next
+  - id: context.full_screen.go_to
+    kind: submenu
+    label: Go To
+    access: "g"
+    items:
+    - id: context.full_screen.go_to.foreground
+      kind: button
+      label: Foreground
+      access: "f"
+      command: tools.options.edit.drawing
+      visuicmd: visCmdOptionsEditDrawing
+    - id: context.full_screen.go_to.background
+      kind: button
+      label: Background
+      access: "b"
+      command: tools.options.edit.background
+      visuicmd: visCmdOptionsEditBackground
+    - id: context.full_screen.go_to.pages
+      kind: list
+      list: pages
+      begin_group: true
+      hidden: true
+    - id: context.full_screen.go_to.unnamed
+      kind: button
+      label: ''
+      new_command: true
+      command: view.go_to.unnamed
+      hidden: true
+    - id: context.full_screen.go_to.page
+      kind: button
+      label: Page...
+      access: "p"
+      command: tools.options.go.to.drawing
+      visuicmd: visCmdOptionsGoToDrawing
+      begin_group: true
+    begin_group: true
+  - id: context.full_screen.close
+    kind: button
+    label: Close
+    access: "c"
+    command: view.full_screen_mode
+    visuicmd: visCmdFullScreenMode
+- id: context.shapesheet
+  label: ShapeSheet
+  trigger: right-click in a ShapeSheet window
+  items:
+  - id: context.shapesheet.values
+    kind: button
+    label: Values
+    access: "v"
+    command: edit.sw.show.values
+  - id: context.shapesheet.formulas
+    kind: button
+    label: Formulas
+    access: "f"
+    command: edit.sw.show.formulas
+  - id: context.shapesheet.view_sections
+    kind: button
+    label: View Sections...
+    access: "n"
+    command: edit.sw.show.sections.dlg
+    begin_group: true
+  - id: context.shapesheet.insert_section
+    kind: button
+    label: Insert Section...
+    access: "s"
+    command: edit.sw.add.section.dlg
+  - id: context.shapesheet.delete_or_inherit_section
+    kind: button
+    label: Delete or Inherit Section
+    access: "e"
+    new_command: true
+    command: edit.delete_or_inherit_section
+  - id: context.shapesheet.insert_row
+    kind: button
+    label: Insert Row
+    access: "r"
+    command: edit.sw.insert.row
+    begin_group: true
+  - id: context.shapesheet.insert_row_after
+    kind: button
+    label: Insert Row After
+    access: "a"
+    command: edit.sw.insert.row.after
+  - id: context.shapesheet.delete_row
+    kind: button
+    label: Delete Row
+    access: "d"
+    command: edit.sw.delete.row
+  - id: context.shapesheet.expand_row
+    kind: button
+    label: Expand Row
+    access: "x"
+    command: edit.sw.expand.row
+  - id: context.shapesheet.change_row_type
+    kind: button
+    label: Change Row Type
+    access: "c"
+    command: edit.sw.change.row.type.dlg
+- id: context.issues_list
+  label: Issues list
+  trigger: right-click an issue in the Issues window
+  items:
+  - id: context.issues_list.ignore_this_issue
+    kind: button
+    label: Ignore This Issue
+    access: "n"
+    command: review.ignore.this.issue
+    icon: review.ignore.this.issue
+  - id: context.issues_list.ignore_rule
+    kind: button
+    label: Ignore Rule
+    access: "u"
+    command: review.ignore.validation.rule
+  - id: context.issues_list.stop_ignoring_this_issue
+    kind: button
+    label: Stop Ignoring This Issue
+    access: "s"
+    new_command: true
+    command: review.issues.stop_ignoring_this_issue
+  - id: context.issues_list.stop_ignoring_rule
+    kind: button
+    label: Stop Ignoring Rule
+    access: "t"
+    new_command: true
+    command: review.issues.stop_ignoring_rule
+  - id: context.issues_list.show_ignored_issues
+    kind: button
+    label: Show Ignored Issues
+    access: "h"
+    command: view.show.ignored.issues.toggle
+  - id: context.issues_list.arrange_by
+    kind: submenu
+    label: Arrange by
+    access: "r"
+    items:
+    - id: context.issues_list.arrange_by.rule
+      kind: button
+      label: Rule
+      access: "r"
+      command: review.validation.issues.arrange.by.rule
+      hidden: true
+    - id: context.issues_list.arrange_by.category
+      kind: button
+      label: Category
+      access: "c"
+      command: review.validation.issues.arrange.by.category
+      hidden: true
+    - id: context.issues_list.arrange_by.page
+      kind: button
+      label: Page
+      access: "p"
+      command: tools.options.go.to.drawing
+      hidden: true
+    - id: context.issues_list.arrange_by.ignored
+      kind: button
+      label: Ignored
+      access: "n"
+      command: review.validation.issues.arrange.by.ignored
+      hidden: true
+    - id: context.issues_list.arrange_by.original_order
+      kind: button
+      label: Original Order
+      access: "o"
+      command: review.validation.issues.arrange.original.order
+      begin_group: true
+      hidden: true
+    begin_group: true
+- id: context.embedded_object
+  label: Embedded object
+  trigger: right-click an embedded object
+  items:
+  - id: context.embedded_object.hyperlinks
+    kind: list
+    list: hyperlinks
+    hidden: true
+  - id: context.embedded_object.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.embedded_object.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.embedded_object.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    icon: edit.paste
+  - id: context.embedded_object.paste_special
+    kind: button
+    label: Paste Special...
+    access: "a"
+    command: edit.paste.special
+    visuicmd: visCmdEditPasteSpecial
+    shortcut: Ctrl+Alt+V
+    icon: edit.paste.special
+  - id: context.embedded_object.placeholder
+    kind: list
+    list: placeholder
+    begin_group: true
+  - id: context.embedded_object.data
+    kind: submenu
+    label: Data
+    access: "d"
+    items:
+    - id: context.embedded_object.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "s"
+      command: tools.cust.prop
+      visuicmd: visCmdCustProp
+      icon: tools.cust.prop
+    - id: context.embedded_object.data.define_shape_data
+      kind: button
+      label: Define Shape Data...
+      access: "d"
+      new_command: true
+      command: shape.data.define_shape_data
+    - id: context.embedded_object.data.edit_data_graphic
+      kind: button
+      label: Edit Data Graphic...
+      access: "e"
+      new_command: true
+      command: shape.data.edit_data_graphic
+      begin_group: true
+    - id: context.embedded_object.data.remove_data_graphic
+      kind: button
+      label: Remove Data Graphic
+      access: "r"
+      command: edit.remove.data.graphic.from.sel
+    - id: context.embedded_object.data.data_recordset_links
+      kind: list
+      list: data_recordset_links
+      hidden: true
+    begin_group: true
+  - id: context.embedded_object.format
+    kind: submenu
+    label: Format
+    access: "r"
+    items:
+    - id: context.embedded_object.format.text
+      kind: button
+      label: Text...
+      access: "t"
+      command: format.all.text.props
+      visuicmd: visCmdFormatAllTextProps
+      icon: format.all.text.props
+  - id: context.embedded_object.format_shape
+    kind: button
+    label: Format Shape
+    access: "s"
+    new_command: true
+    command: format.shape.pane
+    shortcut: F3
+  - id: context.embedded_object.object
+    kind: button
+    label: Object...
+    access: "o"
+    command: edit.open.object
+    visuicmd: visCmdEditOpenObject
+    begin_group: true
+- id: context.master_edit
+  label: Master editing
+  trigger: right-click the page of a master being edited
+  items:
+  - id: context.master_edit.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+  - id: context.master_edit.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.master_edit.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.master_edit.paste_shortcut
+    kind: button
+    label: Paste Shortcut
+    access: "o"
+    command: edit.paste.shortcut
+  - id: context.master_edit.add_to_my_shapes
+    kind: submenu
+    label: Add to My Shapes
+    access: "m"
+    items:
+    - id: context.master_edit.add_to_my_shapes.my_shapes
+      kind: list
+      list: my_shapes
+      hidden: true
+    - id: context.master_edit.add_to_my_shapes.add_to_new_stencil
+      kind: button
+      label: Add To New Stencil...
+      access: "n"
+      new_command: true
+      command: shape.master.add_to_my_shapes.add_to_new_stencil
+      begin_group: true
+    - id: context.master_edit.add_to_my_shapes.add_to_existing_stencil
+      kind: button
+      label: Add To Existing Stencil...
+      access: "e"
+      new_command: true
+      command: shape.master.add_to_my_shapes.add_to_existing_stencil
+    - id: context.master_edit.add_to_my_shapes.organize_my_shapes
+      kind: button
+      label: Organize My Shapes
+      access: "o"
+      new_command: true
+      command: file.shapes.organize_my_shapes
+      begin_group: true
+    begin_group: true
+  - id: context.master_edit.add_to_quick_shapes
+    kind: button
+    label: Add to Quick Shapes
+    access: "q"
+    new_command: true
+    command: shape.master.add_to_quick_shapes
+  - id: context.master_edit.remove_from_quick_shapes
+    kind: button
+    label: Remove from Quick Shapes
+    access: "q"
+    new_command: true
+    command: shape.master.remove_from_quick_shapes
+  - id: context.master_edit.new_master
+    kind: button
+    label: New Master...
+    access: "n"
+    command: shape.sten.new.master
+    begin_group: true
+  - id: context.master_edit.delete_master
+    kind: button
+    label: Delete Master
+    access: "l"
+    new_command: true
+    command: shape.master.delete_master
+    icon: shape.master.delete_master
+  - id: context.master_edit.rename_master
+    kind: button
+    label: Rename Master
+    access: "r"
+    new_command: true
+    command: shape.master.rename_master
+  - id: context.master_edit.edit_master
+    kind: submenu
+    label: Edit Master
+    access: "e"
+    items:
+    - id: context.master_edit.edit_master.properties
+      kind: button
+      label: Properties...
+      access: "p"
+      new_command: true
+      command: shape.master.edit_master.properties
+    - id: context.master_edit.edit_master.edit_master_shape
+      kind: button
+      label: Edit Master Shape
+      access: "e"
+      new_command: true
+      command: shape.master.edit_master.edit_master_shape
+      icon: shape.master.edit_master.edit_master_shape
+      begin_group: true
+    - id: context.master_edit.edit_master.edit_icon_image
+      kind: button
+      label: Edit Icon Image
+      access: "i"
+      new_command: true
+      command: shape.master.edit_master.edit_icon_image
+  - id: context.master_edit.help
+    kind: button
+    label: Help
+    access: "h"
+    command: help.contents
+    icon: help.contents
+    begin_group: true
+    hidden: true
+- id: context.stencil_edit
+  label: Stencil editing
+  trigger: right-click a master in an editable stencil
+  items:
+  - id: context.stencil_edit.edit_stencil
+    kind: button
+    label: Edit Stencil
+    access: "e"
+    new_command: true
+    command: shape.stencil.edit_stencil
+    icon: shape.stencil.edit_stencil
+  - id: context.stencil_edit.save
+    kind: button
+    label: Save
+    access: "s"
+    command: file.save
+    icon: file.save
+  - id: context.stencil_edit.save_as
+    kind: button
+    label: Save As...
+    access: "a"
+    command: file.save_as
+  - id: context.stencil_edit.properties
+    kind: button
+    label: Properties...
+    access: "i"
+    new_command: true
+    command: shape.stencil.properties
+    icon: shape.stencil.properties
+  - id: context.stencil_edit.view
+    kind: submenu
+    label: View
+    access: "v"
+    items:
+    - id: context.stencil_edit.view.icons_and_names
+      kind: button
+      label: Icons and Names
+      access: "m"
+      command: shape.sten.icon.and.name
+      visuicmd: visCmdStenIconAndName
+      icon: shape.sten.icon.and.name
+    - id: context.stencil_edit.view.names_under_icons
+      kind: button
+      label: Names Under Icons
+      access: "u"
+      command: shape.sten.names.under.icons
+      visuicmd: visCmdStenNamesUnderIcons
+      icon: shape.sten.names.under.icons
+    - id: context.stencil_edit.view.icons_only
+      kind: button
+      label: Icons Only
+      access: "o"
+      command: shape.sten.icon.only
+      visuicmd: visCmdStenIconOnly
+      icon: shape.sten.icon.only
+    - id: context.stencil_edit.view.names_only
+      kind: button
+      label: Names Only
+      access: "n"
+      command: shape.sten.name.only
+      visuicmd: visCmdStenNameOnly
+      icon: shape.sten.name.only
+    - id: context.stencil_edit.view.icons_and_details
+      kind: button
+      label: Icons and Details
+      access: "t"
+      command: shape.sten.icon.and.detail
+      visuicmd: visCmdStenIconAndDetail
+      icon: shape.sten.icon.and.detail
+    begin_group: true
+  - id: context.stencil_edit.order
+    kind: submenu
+    label: Order
+    access: "o"
+    items:
+    - id: context.stencil_edit.order.move_up
+      kind: button
+      label: Move Up
+      access: "u"
+      new_command: true
+      command: shape.stencil.order.move_up
+    - id: context.stencil_edit.order.move_down
+      kind: button
+      label: Move Down
+      access: "d"
+      new_command: true
+      command: shape.stencil.order.move_down
+  - id: context.stencil_edit.reset_stencil
+    kind: button
+    label: Reset Stencil
+    access: "r"
+    new_command: true
+    command: shape.stencil.reset_stencil
+  - id: context.stencil_edit.drawing_explorer_window
+    kind: button
+    label: Drawing Explorer Window
+    access: "d"
+    command: shape.drawing.explorer
+    icon: shape.drawing.explorer
+  - id: context.stencil_edit.collapse_all_groups
+    kind: button
+    label: Collapse All Groups
+    access: "l"
+    new_command: true
+    command: shape.stencil.collapse_all_groups
+    icon: shape.stencil.collapse_all_groups
+    begin_group: true
+  - id: context.stencil_edit.expand_all_groups
+    kind: button
+    label: Expand All Groups
+    access: "x"
+    new_command: true
+    command: shape.stencil.expand_all_groups
+    icon: shape.stencil.expand_all_groups
+  - id: context.stencil_edit.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    new_command: true
+    command: shape.stencil.float_window
+    begin_group: true
+  - id: context.stencil_edit.close
+    kind: button
+    label: Close
+    access: "c"
+    new_command: true
+    command: shape.stencil.close
+    icon: shape.stencil.close

@@ -1,14 +1,14 @@
 //! egui_kittest interaction tests (task P4-10, ADR 0037): clicks that
 //! drive the real [`Shell`] end to end.
 //!
-//! P4-09's modules cover ribbon placement, enabled/disabled states,
+//! P4-09's modules cover command-bar placement, enabled/disabled states,
 //! the file flow and layout switching at the data level. This file
 //! clicks the widgets the way a user does, through `egui_kittest`'s
 //! AccessKit tree, and asserts the *application state* changes:
 //!
-//! - a ribbon button/checkbox click dispatches its registry command
+//! - a command-bar button/checkbox click dispatches its registry command
 //!   (the View tab's `ShowGrid` toggle);
-//! - the View/Options dialog switches the ribbon layout with no
+//! - the View/Options dialog switches the panel layout with no
 //!   restart and toggling the grid there changes what the canvas
 //!   draws (P4-16: the dialog dispatches through the registry);
 //! - the Help menu opens the About window;
@@ -17,7 +17,7 @@
 //! - a QAT button opens a document;
 //! - a page tab click switches the active page.
 //!
-//! The committed ribbon is about 5000 points wide, so these use
+//! The committed command bar is about 5000 points wide, so these use
 //! [`ShellRig::large`] (the P4-04 note: a click outside the window
 //! rect never reaches a widget).
 //!
@@ -39,7 +39,7 @@ use ferrogram_ui_spec::LayoutKind;
 
 use crate::{ShellRig, sets};
 
-/// The ribbon tab labels of one layout (the `layout_switch.rs` rule).
+/// The command-bar tab labels of one layout (the `layout_switch.rs` rule).
 fn tab_labels(kind: LayoutKind) -> BTreeSet<String> {
     sets()
         .get(kind)
@@ -73,7 +73,7 @@ fn clicking_the_grid_checkbox_in_the_view_tab_toggles_the_grid() {
         "the new document starts with the grid on (ADR 0029)"
     );
 
-    // The checkbox lives on the View tab of the committed ribbon.
+    // The checkbox lives on the View tab of the committed command bar.
     rig.click(Role::Button, "TabView");
     rig.click(Role::CheckBox, "ShowGrid");
     {
@@ -127,7 +127,7 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
     rig.run();
 
     // Click the 365 radio of the dialog body (`settings::show_options`).
-    rig.click(Role::RadioButton, "Microsoft 365 ribbon");
+    rig.click(Role::RadioButton, "Panel (365 data)");
     {
         let shell = rig.shell.borrow();
         assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
@@ -139,7 +139,7 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
         assert_eq!(shell.status(), "Ribbon layout: Visio 365");
     }
 
-    // The next frame draws the 365 ribbon: no restart, same harness.
+    // The next frame draws the 365 panel: no restart, same harness.
     rig.run();
     let only_365 = unique_tab(LayoutKind::Visio365, LayoutKind::Visio2016)
         .expect("365 has a tab 2016 does not");
@@ -213,9 +213,9 @@ fn the_file_button_opens_the_backstage_with_its_entries() {
         assert!(!before.contains_key(entry), "{entry:?} is backstage-only");
     }
 
-    // The window has two "File" buttons (the menu bar and the ribbon
+    // The window has two "File" buttons (the menu bar and the command
     // tab strip). Each attempt gets a fresh rig: a click on the menu
-    // bar button opens a popup that covers the ribbon one, so the
+    // bar's tab-strip button opens a popup that covers the command-bar one, so the
     // attempts must not share a frame history.
     let mut opened = false;
     for nth in 0..3 {

@@ -1,0 +1,6630 @@
+# Larrygram Panel Classic layout (layout format v2, docs/ui/layout-format.md).
+# Menu bar, toolbars and context menus. Labels are short UI labels;
+# `command` links to ui-spec/commands.yaml, `icon` to ui-spec/icons.yaml.
+schema_version: 2
+id: panel-classic
+name: Panel Classic
+kind: panel-classic
+description: Menu bar and docked toolbars above the drawing window.
+theme: panel-classic
+window:
+  regions:
+  - id: title_bar
+    edge: top
+    size: 23
+  - id: menu_bar
+    edge: top
+    size: 24
+    notes: Menus left; a help search box at the right end.
+  - id: toolbars
+    edge: top
+    size: 26
+    per_row: true
+    notes: Docked toolbar rows; Standard on row 0, Formatting on row 1.
+  - id: shapes_window
+    edge: left
+    size: 190
+    notes: 'Docked Shapes window: title row, search box, stencils.'
+  - id: rulers
+    edge: top_left_of_drawing
+    size: 16
+  - id: drawing
+    edge: fill
+  - id: page_tabs
+    edge: bottom_of_drawing
+    size: 18
+    notes: First/previous/next/last page buttons, page tabs, then the horizontal scroll bar.
+  - id: status_bar
+    edge: bottom
+    size: 20
+    notes: Shape geometry fields on the left; page n/m on the right.
+menu_bars:
+- id: drawing
+  label: Drawing menu bar
+  menus:
+  - id: drawing.file
+    label: File
+    access: "f"
+    items:
+    - id: drawing.file.new
+      kind: submenu
+      label: New
+      access: "n"
+      icon: classic.drawing.file.new
+      items:
+      - id: drawing.file.new.getting_started
+        kind: button
+        label: Getting Started...
+        access: "g"
+        command: file.create.new.drawing
+        visuicmd: visCmdCreateNewDrawing
+      - id: drawing.file.new.new_drawing
+        kind: button
+        label: New Drawing
+        access: "n"
+        command: file.new.blank.drawing
+        visuicmd: visCmdFileNewBlankDrawing
+        shortcut: Ctrl+N
+        icon: file.new.blank.drawing
+      - id: drawing.file.new.new_drawing_metric
+        kind: button
+        label: New Drawing (Metric)
+        access: "e"
+        command: file.new.blank.drawing.metric
+        visuicmd: visCmdFileNewBlankDrawingMetric
+        icon: file.new.blank.drawing.metric
+      - id: drawing.file.new.new_drawing_us_units
+        kind: button
+        label: New Drawing (US Units)
+        access: "e"
+        command: file.new.blank.drawing.us
+        visuicmd: visCmdFileNewBlankDrawingUS
+        icon: file.new.blank.drawing.us
+      - id: drawing.file.new.new_drawing_from_template
+        kind: button
+        label: New Drawing from Template...
+        access: "t"
+        command: file.new
+        visuicmd: visCmdFileNew
+        icon: file.new
+      - id: drawing.file.new.template_categories
+        kind: list
+        list: template_categories
+        begin_group: true
+    - id: drawing.file.open
+      kind: button
+      label: Open...
+      access: "o"
+      command: file.open
+      visuicmd: visCmdFileOpen
+      shortcut: Ctrl+O
+      icon: file.open
+    - id: drawing.file.close
+      kind: button
+      label: Close
+      access: "c"
+      command: file.close
+      visuicmd: visCmdFileClose
+    - id: drawing.file.save
+      kind: button
+      label: Save
+      access: "s"
+      command: file.save
+      visuicmd: visCmdFileSave
+      shortcut: Ctrl+S
+      icon: file.save
+      begin_group: true
+    - id: drawing.file.save_as
+      kind: button
+      label: Save As...
+      access: "a"
+      command: file.save_as
+      visuicmd: visCmdFileSaveAs
+    - id: drawing.file.save_as_web_page
+      kind: button
+      label: Save as Web Page...
+      access: "g"
+      command: file.save.as.web.page
+      visuicmd: visCmdFileSaveAsWebPage
+      icon: file.save.as.web.page
+    - id: drawing.file.publish_as_pdf_or_xps
+      kind: button
+      label: Publish as PDF or XPS...
+      access: "b"
+      command: file.save.as.fixed.format.dlg
+      visuicmd: visCmdSaveAsFixedFormatDlg
+      hidden: true
+    - id: drawing.file.remove_hidden_information
+      kind: button
+      label: Remove Hidden Information...
+      access: "r"
+      command: help.rhi.dlg
+      visuicmd: visCmdRHIDlg
+    - id: drawing.file.check_in
+      kind: button
+      label: Check In
+      access: "e"
+      command: file.checkin
+      visuicmd: visCmdFileCheckin
+      begin_group: true
+      hidden: true
+    - id: drawing.file.check_out
+      kind: button
+      label: Check Out
+      access: "e"
+      command: file.checkout
+      visuicmd: visCmdFileCheckout
+      hidden: true
+    - id: drawing.file.discard_check_out
+      kind: button
+      label: Discard Check Out
+      access: "k"
+      command: file.undo.checkout
+      visuicmd: visCmdFileUndoCheckout
+      hidden: true
+    - id: drawing.file.shapes
+      kind: submenu
+      label: Shapes
+      access: "e"
+      icon: classic.drawing.file.shapes
+      begin_group: true
+      items:
+      - id: drawing.file.shapes.my_shapes
+        kind: submenu
+        label: My Shapes
+        access: "m"
+        items:
+        - id: drawing.file.shapes.my_shapes.my_shapes
+          kind: list
+          list: my_shapes
+        - id: drawing.file.shapes.my_shapes.organize_my_shapes
+          kind: button
+          label: Organize My Shapes
+          access: "o"
+          command: file.shapes.organize_my_shapes
+          begin_group: true
+      - id: drawing.file.shapes.stencil_categories
+        kind: list
+        list: stencil_categories
+        begin_group: true
+      - id: drawing.file.shapes.open_stencil
+        kind: button
+        label: Open Stencil...
+        access: "o"
+        command: file.open.stencil
+        visuicmd: visCmdFileOpenStencil
+        icon: file.open.stencil
+        begin_group: true
+      - id: drawing.file.shapes.new_stencil
+        kind: button
+        label: New Stencil
+        access: "n"
+        command: file.new.blank.stencil
+        visuicmd: visCmdFileNewBlankStencil
+        icon: file.new.blank.stencil
+      - id: drawing.file.shapes.new_stencil_metric
+        kind: button
+        label: New Stencil (Metric)
+        access: "e"
+        command: file.new.blank.stencil.metric
+        visuicmd: visCmdFileNewBlankStencilMetric
+        icon: file.new.blank.stencil.metric
+      - id: drawing.file.shapes.new_stencil_us_units
+        kind: button
+        label: New Stencil (US Units)
+        access: "e"
+        command: file.new.blank.stencil.us
+        visuicmd: visCmdFileNewBlankStencilUS
+        icon: file.new.blank.stencil.us
+      - id: drawing.file.shapes.show_document_stencil
+        kind: button
+        label: Show Document Stencil
+        access: "d"
+        command: view.window.show.master.objects
+        visuicmd: visCmdWindowShowMasterObjects
+    - id: drawing.file.page_setup
+      kind: button
+      label: Page Setup...
+      access: "u"
+      command: tools.options.page.setup
+      visuicmd: visCmdOptionsPageSetup
+      begin_group: true
+    - id: drawing.file.print_preview
+      kind: button
+      label: Print Preview
+      access: "v"
+      command: file.print_preview
+      visuicmd: visCmdPrintPreview
+      icon: file.print_preview
+    - id: drawing.file.print
+      kind: button
+      label: Print...
+      access: "p"
+      command: file.print
+      visuicmd: visCmdFilePrint
+      shortcut: Ctrl+P
+      icon: file.print
+    - id: drawing.file.send_to
+      kind: submenu
+      label: Send To
+      access: "d"
+      begin_group: true
+      items:
+      - id: drawing.file.send_to.mail_recipient_as_attachment
+        kind: button
+        label: Mail Recipient (as Attachment)...
+        access: "m"
+        command: file.send.as.mail
+        visuicmd: visCmdSendAsMail
+        icon: file.send.as.mail
+    - id: drawing.file.properties
+      kind: button
+      label: Properties
+      access: "i"
+      command: file.summary.info.dlg
+      visuicmd: visCmdFileSummaryInfoDlg
+    - id: drawing.file.recent_files
+      kind: list
+      list: recent_files
+      begin_group: true
+    - id: drawing.file.exit
+      kind: button
+      label: Exit
+      access: "x"
+      command: file.exit
+      visuicmd: visCmdFileExit
+      begin_group: true
+  - id: drawing.edit
+    label: Edit
+    access: "e"
+    items:
+    - id: drawing.edit.undo
+      kind: button
+      label: Undo
+      access: "u"
+      command: edit.undo
+      visuicmd: visCmdEditUndo
+      shortcut: Ctrl+Z
+      icon: edit.undo
+      hidden: true
+    - id: drawing.edit.redo
+      kind: button
+      label: Redo
+      access: "r"
+      command: edit.redo
+      visuicmd: visCmdEditRedo
+      shortcut: Ctrl+Y
+      icon: edit.redo
+      hidden: true
+    - id: drawing.edit.cut
+      kind: button
+      label: Cut
+      access: "t"
+      command: edit.cut
+      visuicmd: visCmdUFEditCut
+      shortcut: Ctrl+X
+      icon: edit.cut
+      begin_group: true
+    - id: drawing.edit.copy
+      kind: button
+      label: Copy
+      access: "c"
+      command: edit.copy
+      visuicmd: visCmdUFEditCopy
+      shortcut: Ctrl+C
+      icon: edit.copy
+    - id: drawing.edit.paste
+      kind: button
+      label: Paste
+      access: "p"
+      command: edit.paste
+      visuicmd: visCmdUFEditPaste
+      shortcut: Ctrl+V
+      icon: edit.paste
+    - id: drawing.edit.paste_special
+      kind: button
+      label: Paste Special...
+      access: "s"
+      command: edit.paste.special
+      visuicmd: visCmdEditPasteSpecial
+      shortcut: Ctrl+Alt+V
+    - id: drawing.edit.paste_as_hyperlink
+      kind: button
+      label: Paste as Hyperlink
+      access: "h"
+      command: tools.inet.paste.as.hyperlink
+      visuicmd: visCmdINETPasteAsHyperlink
+    - id: drawing.edit.clear
+      kind: button
+      label: Clear
+      access: "a"
+      command: edit.clear
+      visuicmd: visCmdUFEditClear
+      shortcut: Delete
+      begin_group: true
+    - id: drawing.edit.select_all
+      kind: button
+      label: Select All
+      access: "l"
+      command: edit.select_all
+      visuicmd: visCmdUFEditSelectAll
+      shortcut: Ctrl+A
+    - id: drawing.edit.select_by_type
+      kind: button
+      label: Select by Type...
+      access: "b"
+      command: edit.select.special
+      visuicmd: visCmdEditSelectSpecial
+    - id: drawing.edit.duplicate
+      kind: button
+      label: Duplicate
+      access: "i"
+      command: edit.duplicate
+      visuicmd: visCmdUFEditDuplicate
+      shortcut: Ctrl+D
+    - id: drawing.edit.delete_pages
+      kind: button
+      label: Delete Pages...
+      access: "d"
+      command: page.delete
+      visuicmd: visCmdOptionsDeletePages
+    - id: drawing.edit.find
+      kind: button
+      label: Find...
+      access: "f"
+      command: edit.find
+      visuicmd: visCmdEditFind
+      shortcut: Ctrl+F
+      icon: edit.find
+      begin_group: true
+    - id: drawing.edit.replace
+      kind: button
+      label: Replace...
+      access: "e"
+      command: edit.replace
+      visuicmd: visCmdEditReplace
+    - id: drawing.edit.reconvert
+      kind: button
+      label: Reconvert
+      access: "v"
+      command: edit.reconvert
+      new_command: true
+      begin_group: true
+    - id: drawing.edit.go_to
+      kind: submenu
+      label: Go To
+      access: "g"
+      begin_group: true
+      items:
+      - id: drawing.edit.go_to.foreground
+        kind: button
+        label: Foreground
+        access: "f"
+        command: tools.options.edit.drawing
+        visuicmd: visCmdOptionsEditDrawing
+      - id: drawing.edit.go_to.background
+        kind: button
+        label: Background
+        access: "b"
+        command: tools.options.edit.background
+        visuicmd: visCmdOptionsEditBackground
+      - id: drawing.edit.go_to.pages
+        kind: list
+        list: pages
+        begin_group: true
+      - id: drawing.edit.go_to.page
+        kind: button
+        label: Page...
+        access: "p"
+        command: tools.options.go.to.drawing
+        visuicmd: visCmdOptionsGoToDrawing
+        begin_group: true
+    - id: drawing.edit.links
+      kind: button
+      label: Links...
+      access: "k"
+      command: edit.links
+      visuicmd: visCmdEditLinks
+      begin_group: true
+    - id: drawing.edit.object
+      kind: button
+      label: Object...
+      access: "o"
+      command: edit.open.object
+      visuicmd: visCmdEditOpenObject
+  - id: drawing.view
+    label: View
+    access: "v"
+    items:
+    - id: drawing.view.shapes_window
+      kind: button
+      label: Shapes Window
+      access: "n"
+      command: shape.shapes.window
+      visuicmd: visCmdShapesWindow
+      icon: shape.shapes.window
+    - id: drawing.view.pan_and_zoom_window
+      kind: button
+      label: Pan & Zoom Window
+      access: "p"
+      command: view.pan.zoom
+      visuicmd: visCmdPanZoom
+      icon: view.pan.zoom
+    - id: drawing.view.shape_data_window
+      kind: button
+      label: Shape Data Window
+      access: "e"
+      command: tools.cust.prop
+      visuicmd: visCmdCustProp
+      icon: tools.cust.prop
+    - id: drawing.view.size_and_position_window
+      kind: button
+      label: Size & Position Window
+      access: "s"
+      command: arrange.size.pos
+      visuicmd: visCmdSizePos
+      icon: arrange.size.pos
+    - id: drawing.view.drawing_explorer_window
+      kind: button
+      label: Drawing Explorer Window
+      access: "d"
+      command: shape.drawing.explorer
+      visuicmd: visCmdDrawingExplorer
+      icon: shape.drawing.explorer
+    - id: drawing.view.master_explorer_window
+      kind: button
+      label: Master Explorer Window
+      access: "e"
+      command: shape.master.explorer
+      visuicmd: visCmdMasterExplorer
+      icon: shape.master.explorer
+      hidden: true
+    - id: drawing.view.external_data_window
+      kind: button
+      label: External Data Window
+      access: "x"
+      command: tools.external.data.window
+    - id: drawing.view.task_pane
+      kind: button
+      label: Task Pane
+      access: "k"
+      command: tools.mso.custom.item
+      visuicmd: visCmdMsoCustomItem
+      shortcut: Ctrl+F1
+      begin_group: true
+    - id: drawing.view.toolbars
+      kind: submenu
+      label: Toolbars
+      access: "t"
+      items:
+      - id: drawing.view.toolbars.standard
+        kind: check
+        label: Standard
+        command: view.toolbar.standard
+        new_command: true
+      - id: drawing.view.toolbars.formatting
+        kind: check
+        label: Formatting
+        command: view.toolbar.formatting
+        new_command: true
+      - id: drawing.view.toolbars.action
+        kind: button
+        label: Action
+        command: view.toolbar.action
+        new_command: true
+      - id: drawing.view.toolbars.data
+        kind: button
+        label: Data
+        command: view.toolbar.data
+        new_command: true
+      - id: drawing.view.toolbars.developer
+        kind: button
+        label: Developer
+        command: view.toolbar.developer
+        new_command: true
+      - id: drawing.view.toolbars.drawing
+        kind: button
+        label: Drawing
+        command: view.toolbar.drawing
+        new_command: true
+      - id: drawing.view.toolbars.format_shape
+        kind: button
+        label: Format Shape
+        command: format.shape.pane
+      - id: drawing.view.toolbars.format_text
+        kind: button
+        label: Format Text
+        command: view.toolbar.format_text
+        new_command: true
+      - id: drawing.view.toolbars.ink
+        kind: button
+        label: Ink
+        command: tools.ink.tool
+      - id: drawing.view.toolbars.layout_and_routing
+        kind: button
+        label: Layout & Routing
+        command: view.toolbar.layout_and_routing
+        new_command: true
+      - id: drawing.view.toolbars.picture
+        kind: button
+        label: Picture
+        command: view.toolbar.picture
+        new_command: true
+      - id: drawing.view.toolbars.reviewing
+        kind: button
+        label: Reviewing
+        command: view.toolbar.reviewing
+        new_command: true
+      - id: drawing.view.toolbars.snap_and_glue
+        kind: button
+        label: Snap & Glue
+        command: tools.snap_glue_setup
+      - id: drawing.view.toolbars.stencil
+        kind: button
+        label: Stencil
+        command: view.toolbar.stencil
+        new_command: true
+      - id: drawing.view.toolbars.view
+        kind: button
+        label: View
+        command: view.toolbar.view
+        new_command: true
+      - id: drawing.view.toolbars.web
+        kind: button
+        label: Web
+        command: tools.inet.visio.on.the.web
+      - id: drawing.view.toolbars.customize
+        kind: button
+        label: Customize...
+        access: "c"
+        command: view.toolbar.customize
+        new_command: true
+        begin_group: true
+    - id: drawing.view.view_direction
+      kind: submenu
+      label: View Direction
+      access: "v"
+      command: view.direction.toggle
+      visuicmd: visCmdViewDirectionToggle
+      hidden: true
+      items:
+      - id: drawing.view.view_direction.left_to_right
+        kind: button
+        label: Left-to-Right
+        access: "l"
+        command: view.left.to.right
+        visuicmd: visCmdViewLeftToRight
+      - id: drawing.view.view_direction.right_to_left
+        kind: button
+        label: Right-to-Left
+        access: "r"
+        command: view.right.to.left
+        visuicmd: visCmdViewRightToLeft
+    - id: drawing.view.rulers
+      kind: check
+      label: Rulers
+      access: "r"
+      command: view.rulers
+      visuicmd: visCmdViewRulers
+      begin_group: true
+    - id: drawing.view.grid
+      kind: check
+      label: Grid
+      access: "g"
+      command: view.toggle_grid
+      visuicmd: visCmdViewGrid
+    - id: drawing.view.guides
+      kind: check
+      label: Guides
+      access: "u"
+      command: view.toggle_guides
+      visuicmd: visCmdViewGuides
+    - id: drawing.view.connection_points
+      kind: check
+      label: Connection Points
+      access: "c"
+      command: view.connections
+      visuicmd: visCmdViewConnections
+    - id: drawing.view.page_breaks
+      kind: check
+      label: Page Breaks
+      access: "b"
+      command: view.page.breaks
+      visuicmd: visCmdViewPageBreaks
+    - id: drawing.view.header_and_footer
+      kind: button
+      label: Header and Footer...
+      access: "h"
+      command: file.header.footer
+      visuicmd: visCmdHeaderFooter
+      begin_group: true
+    - id: drawing.view.markup
+      kind: button
+      label: Markup
+      access: "a"
+      command: view.markup
+      new_command: true
+      icon: view.markup
+    - id: drawing.view.layer_properties
+      kind: button
+      label: Layer Properties...
+      access: "l"
+      command: layer.setup.dlg
+      visuicmd: visCmdLayerSetupDlg
+      icon: layer.setup.dlg
+    - id: drawing.view.full_screen
+      kind: button
+      label: Full Screen
+      access: "f"
+      command: view.full_screen_mode
+      visuicmd: visCmdFullScreenMode
+      shortcut: F5
+      icon: view.full_screen_mode
+      begin_group: true
+    - id: drawing.view.zoom
+      kind: submenu
+      label: Zoom
+      access: "z"
+      items:
+      - id: drawing.view.zoom.last_zoom
+        kind: button
+        label: Last Zoom
+        access: "l"
+        command: view.zoom.last
+        visuicmd: visCmdZoomLast
+      - id: drawing.view.zoom.page_width
+        kind: button
+        label: Page Width
+        access: "p"
+        command: view.zoom.page.width
+        visuicmd: visCmdZoomPageWidth
+      - id: drawing.view.zoom.whole_page
+        kind: button
+        label: Whole Page
+        access: "w"
+        command: view.fit.in.window
+        visuicmd: visCmdViewFitInWindow
+      - id: drawing.view.zoom.400
+        kind: button
+        label: 400%
+        access: "4"
+        command: view.view400
+        visuicmd: visCmdView400
+        begin_group: true
+      - id: drawing.view.zoom.200
+        kind: button
+        label: 200%
+        access: "2"
+        command: view.view200
+        visuicmd: visCmdView200
+      - id: drawing.view.zoom.150
+        kind: button
+        label: 150%
+        access: "0"
+        command: view.view150
+        visuicmd: visCmdView150
+      - id: drawing.view.zoom.100
+        kind: button
+        label: 100%
+        access: "1"
+        command: view.view100
+        visuicmd: visCmdView100
+      - id: drawing.view.zoom.75
+        kind: button
+        label: 75%
+        access: "7"
+        command: view.view75
+        visuicmd: visCmdView75
+      - id: drawing.view.zoom.50
+        kind: button
+        label: 50%
+        access: "5"
+        command: view.view50
+        visuicmd: visCmdView50
+      - id: drawing.view.zoom.zoom
+        kind: button
+        label: Zoom...
+        access: "z"
+        command: view.custom
+        visuicmd: visCmdViewCustom
+        begin_group: true
+  - id: drawing.insert
+    label: Insert
+    access: "i"
+    items:
+    - id: drawing.insert.new_page
+      kind: button
+      label: New Page...
+      access: "n"
+      command: tools.options.new.page
+      visuicmd: visCmdOptionsNewPage
+      icon: tools.options.new.page
+    - id: drawing.insert.field
+      kind: button
+      label: Field...
+      access: "f"
+      command: edit.insert.field
+      visuicmd: visCmdEditInsertField
+      begin_group: true
+    - id: drawing.insert.symbol
+      kind: button
+      label: Symbol...
+      access: "s"
+      command: tools.mso.insert.symbol.dlg
+      visuicmd: visCmdMSOInsertSymbolDlg
+    - id: drawing.insert.shape_screentip
+      kind: button
+      label: Shape ScreenTip...
+      access: "t"
+      command: shape.comment.dlg
+      visuicmd: visCmdShapeCommentDlg
+    - id: drawing.insert.comment
+      kind: button
+      label: Comment
+      access: "m"
+      command: insert.comment
+      visuicmd: visCmdInsertComment
+      icon: insert.comment
+    - id: drawing.insert.picture
+      kind: submenu
+      label: Picture
+      access: "p"
+      begin_group: true
+      items:
+      - id: drawing.insert.picture.clip_art
+        kind: button
+        label: Clip Art...
+        access: "c"
+        command: tools.mso.media.gallery
+        visuicmd: visCmdMsoMediaGallery
+        icon: tools.mso.media.gallery
+      - id: drawing.insert.picture.from_file
+        kind: button
+        label: From File...
+        access: "f"
+        command: file.import
+        visuicmd: visCmdFileImport
+        icon: file.import
+      - id: drawing.insert.picture.chart
+        kind: button
+        label: Chart
+        access: "h"
+        command: insert.microsoft.graph
+        visuicmd: visCmdInsertMicrosoftGraph
+        icon: insert.microsoft.graph
+        begin_group: true
+      - id: drawing.insert.picture.data_map
+        kind: button
+        label: Data Map...
+        access: "d"
+        command: insert.data.map
+        visuicmd: visCmdInsertDataMap
+      - id: drawing.insert.picture.equation
+        kind: button
+        label: Equation...
+        access: "e"
+        command: tools.mso.insert.equation
+        visuicmd: visCmdMSOInsertEquation
+        icon: tools.mso.insert.equation
+      - id: drawing.insert.picture.word_art
+        kind: button
+        label: Word Art...
+        access: "w"
+        command: insert.word.art
+        visuicmd: visCmdInsertWordArt
+        icon: insert.word.art
+    - id: drawing.insert.text_box
+      kind: button
+      label: Text Box
+      access: "x"
+      command: insert.text.box
+      visuicmd: visCmdInsertTextBox
+      icon: insert.text.box
+    - id: drawing.insert.text_box_2
+      kind: submenu
+      label: Text Box
+      access: "x"
+      command: insert.text.box
+      visuicmd: visCmdInsertTextBox
+      items:
+      - id: drawing.insert.text_box_2.horizontal
+        kind: button
+        label: Horizontal
+        access: "h"
+        command: insert.text.box
+        visuicmd: visCmdInsertTextBox
+        icon: insert.text.box
+      - id: drawing.insert.text_box_2.vertical
+        kind: button
+        label: Vertical
+        access: "v"
+        command: insert.vert.text.box
+        visuicmd: visCmdInsertVertTextBox
+        icon: insert.vert.text.box
+    - id: drawing.insert.cad_drawing
+      kind: button
+      label: CAD Drawing...
+      access: "d"
+      command: insert.auto.cad.add.on
+      visuicmd: visCmdInsertAutoCADAddOn
+    - id: drawing.insert.control
+      kind: button
+      label: Control...
+      access: "c"
+      command: insert.control.dlg
+      visuicmd: visCmdInsertControlDlg
+      icon: insert.control.dlg
+    - id: drawing.insert.object
+      kind: button
+      label: Object...
+      access: "o"
+      command: edit.insert.object
+      visuicmd: visCmdEditInsertObject
+      begin_group: true
+    - id: drawing.insert.hyperlinks
+      kind: button
+      label: Hyperlinks...
+      access: "h"
+      command: insert.hyper.link
+      visuicmd: visCmdInsertHyperLink
+      shortcut: Ctrl+K
+      icon: insert.hyper.link
+  - id: drawing.format
+    label: Format
+    access: "o"
+    items:
+    - id: drawing.format.text
+      kind: button
+      label: Text...
+      access: "t"
+      command: format.all.text.props
+      visuicmd: visCmdFormatAllTextProps
+      icon: format.all.text.props
+    - id: drawing.format.line
+      kind: button
+      label: Line...
+      access: "l"
+      command: format.line
+      visuicmd: visCmdFormatLine
+      icon: format.line
+    - id: drawing.format.fill
+      kind: button
+      label: Fill...
+      access: "f"
+      command: format.fill
+      visuicmd: visCmdFormatFill
+      icon: format.fill
+    - id: drawing.format.shadow
+      kind: button
+      label: Shadow...
+      access: "w"
+      command: format.shadow
+      visuicmd: visCmdFormatShadow
+      icon: format.shadow
+    - id: drawing.format.corner_rounding
+      kind: button
+      label: Corner Rounding...
+      access: "c"
+      command: format.corners
+      visuicmd: visCmdFormatCorners
+      icon: format.corners
+    - id: drawing.format.theme
+      kind: button
+      label: Theme...
+      access: "m"
+      command: format.theme
+      new_command: true
+      icon: format.theme
+      begin_group: true
+    - id: drawing.format.picture
+      kind: button
+      label: Picture...
+      access: "i"
+      command: insert.image.properties.dlg
+      visuicmd: visCmdImagePropertiesDlg
+      icon: insert.image.properties.dlg
+      begin_group: true
+    - id: drawing.format.ink
+      kind: button
+      label: Ink...
+      access: "n"
+      command: format.ink.dlg
+      visuicmd: visCmdFormatInkDlg
+    - id: drawing.format.protection
+      kind: button
+      label: Protection...
+      access: "p"
+      command: format.protection
+      visuicmd: visCmdFormatProtection
+      begin_group: true
+    - id: drawing.format.behavior
+      kind: button
+      label: Behavior...
+      access: "b"
+      command: format.behavior
+      visuicmd: visCmdFormatBehavior
+    - id: drawing.format.special
+      kind: button
+      label: Special...
+      access: "e"
+      command: format.special
+      visuicmd: visCmdFormatSpecial
+      hidden: true
+    - id: drawing.format.style
+      kind: button
+      label: Style...
+      access: "s"
+      command: format.style
+      visuicmd: visCmdFormatStyle
+      begin_group: true
+      hidden: true
+    - id: drawing.format.define_styles
+      kind: button
+      label: Define Styles...
+      access: "d"
+      command: format.define.styles
+      visuicmd: visCmdFormatDefineStyles
+      hidden: true
+    - id: drawing.format.layer
+      kind: button
+      label: Layer...
+      access: "r"
+      command: layer.dlg
+      visuicmd: visCmdLayerDlg
+      begin_group: true
+  - id: drawing.tools
+    label: Tools
+    access: "t"
+    items:
+    - id: drawing.tools.spelling
+      kind: submenu
+      label: Spelling
+      access: "s"
+      items:
+      - id: drawing.tools.spelling.spelling
+        kind: button
+        label: Spelling...
+        access: "s"
+        command: tools.spelling
+        visuicmd: visCmdToolsSpelling
+        shortcut: F7
+        icon: tools.spelling
+      - id: drawing.tools.spelling.spelling_options
+        kind: button
+        label: Spelling Options...
+        access: "o"
+        command: review.spelling.options.dlg
+        visuicmd: visCmdSpellingOptionsDlg
+    - id: drawing.tools.document_management
+      kind: button
+      label: Document Management...
+      access: "u"
+      command: view.task.pane.document.management
+      visuicmd: visCmdTaskPaneDocumentManagement
+      begin_group: true
+    - id: drawing.tools.track_markup
+      kind: button
+      label: Track Markup
+      access: "k"
+      command: format.set.add.markup
+      visuicmd: visCmdSetAddMarkup
+      icon: format.set.add.markup
+    - id: drawing.tools.snap_and_glue
+      kind: button
+      label: Snap & Glue...
+      access: "g"
+      command: tools.snap_glue_setup
+      visuicmd: visCmdOptionsSnapGlueSetup
+      begin_group: true
+    - id: drawing.tools.ruler_and_grid
+      kind: button
+      label: Ruler & Grid...
+      access: "r"
+      command: view.ruler.grid.dlg
+      visuicmd: visCmdRulerGridDlg
+    - id: drawing.tools.color_palette
+      kind: button
+      label: Color Palette...
+      access: "p"
+      command: tools.options.color.palette.dlg
+      visuicmd: visCmdOptionsColorPaletteDlg
+    - id: drawing.tools.shapestudio
+      kind: button
+      label: ShapeStudio...
+      access: "e"
+      command: shape.studio.add.on
+      visuicmd: visCmdShapeStudioAddOn
+      hidden: true
+    - id: drawing.tools.macro
+      kind: submenu
+      label: Macro
+      access: "m"
+      begin_group: true
+      items:
+      - id: drawing.tools.macro.macros
+        kind: button
+        label: Macros...
+        access: "m"
+        command: tools.macro.dlg
+        visuicmd: visCmdToolsMacroDlg
+        shortcut: Alt+F8
+        icon: tools.macro.dlg
+      - id: drawing.tools.macro.record_new_macro
+        kind: button
+        label: Record New Macro...
+        access: "r"
+        command: developer.record.new.macro
+        visuicmd: visCmdRecordNewMacro
+        icon: developer.record.new.macro
+      - id: drawing.tools.macro.stop_recording
+        kind: button
+        label: Stop Recording
+        access: "r"
+        command: tools.stop.recording.macro
+        visuicmd: visCmdStopRecordingMacro
+        icon: tools.stop.recording.macro
+      - id: drawing.tools.macro.visual_basic_editor
+        kind: button
+        label: Visual Basic Editor
+        access: "v"
+        command: tools.run.vbe
+        visuicmd: visCmdToolsRunVBE
+        shortcut: Alt+F11
+        icon: tools.run.vbe
+        begin_group: true
+      - id: drawing.tools.macro.macros_2
+        kind: list
+        list: macros
+        begin_group: true
+    - id: drawing.tools.add_ons
+      kind: submenu
+      label: Add-Ons
+      access: "d"
+      command: developer.run.addon.menu
+      visuicmd: visCmdRunAddonMenu
+      items:
+      - id: drawing.tools.add_ons.run_add_on
+        kind: button
+        label: Run Add-On...
+        access: "r"
+        command: developer.run.add.on.dlg
+        visuicmd: visCmdRunAddOnDlg
+      - id: drawing.tools.add_ons.add_ons
+        kind: list
+        list: add_ons
+        begin_group: true
+    - id: drawing.tools.autocorrect_options
+      kind: button
+      label: AutoCorrect Options...
+      access: "a"
+      command: tools.mso.auto.correct.dlg
+      visuicmd: visCmdMsoAutoCorrectDlg
+      icon: tools.mso.auto.correct.dlg
+    - id: drawing.tools.trust_center
+      kind: button
+      label: Trust Center...
+      access: "t"
+      command: app.trust.center.dlg
+      visuicmd: visCmdTrustCenterDlg
+    - id: drawing.tools.customize
+      kind: button
+      label: Customize...
+      access: "c"
+      command: view.toolbars.dlg
+      visuicmd: visCmdToolbarsDlg
+    - id: drawing.tools.options
+      kind: button
+      label: Options...
+      access: "o"
+      command: tools.options.preferences
+      visuicmd: visCmdOptionsPreferences
+  - id: drawing.data
+    label: Data
+    access: "d"
+    items:
+    - id: drawing.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "s"
+      command: format.cust.prop.edit
+      visuicmd: visCmdFormatCustPropEdit
+      icon: format.cust.prop.edit
+    - id: drawing.data.link_data_to_shapes
+      kind: button
+      label: Link Data to Shapes...
+      access: "l"
+      command: data.link.data.to.shapes
+      icon: data.link.data.to.shapes
+      begin_group: true
+    - id: drawing.data.automatically_link
+      kind: button
+      label: Automatically Link...
+      access: "a"
+      command: data.automatically.link
+      icon: data.automatically.link
+    - id: drawing.data.refresh_data
+      kind: button
+      label: Refresh Data...
+      access: "r"
+      command: data.refresh
+      icon: data.refresh
+    - id: drawing.data.display_data_on_shapes
+      kind: button
+      label: Display Data on Shapes...
+      access: "d"
+      command: view.task.pane.data.graphic
+      visuicmd: visCmdTaskPaneDataGraphic
+      icon: view.task.pane.data.graphic
+      begin_group: true
+    - id: drawing.data.insert_pivotdiagram
+      kind: button
+      label: Insert PivotDiagram...
+      access: "p"
+      command: data.insert_pivotdiagram
+      new_command: true
+      begin_group: true
+    - id: drawing.data.insert_data_solutions
+      kind: submenu
+      label: Insert Data Solutions
+      access: "n"
+      items:
+      - id: drawing.data.insert_data_solutions.organization_chart
+        kind: button
+        label: Organization Chart...
+        access: "o"
+        command: data.insert_data_solutions.organization_chart
+        new_command: true
+      - id: drawing.data.insert_data_solutions.timeline
+        kind: button
+        label: Timeline...
+        access: "t"
+        command: data.insert_data_solutions.timeline
+        new_command: true
+      - id: drawing.data.insert_data_solutions.calendar
+        kind: button
+        label: Calendar...
+        access: "c"
+        command: data.insert_data_solutions.calendar
+        new_command: true
+      - id: drawing.data.insert_data_solutions.gantt_chart
+        kind: button
+        label: Gantt Chart...
+        access: "g"
+        command: data.insert_data_solutions.gantt_chart
+        new_command: true
+    - id: drawing.data.reports
+      kind: button
+      label: Reports...
+      access: "t"
+      command: tools.inventory
+      visuicmd: visCmdToolsInventory
+      begin_group: true
+  - id: drawing.shape
+    label: Shape
+    access: "s"
+    items:
+    - id: drawing.shape.grouping
+      kind: submenu
+      label: Grouping
+      access: "g"
+      begin_group: true
+      items:
+      - id: drawing.shape.grouping.group
+        kind: button
+        label: Group
+        access: "g"
+        command: arrange.group
+        visuicmd: visCmdObjectGroup
+        shortcut: Shift+Ctrl+G
+        icon: arrange.group
+      - id: drawing.shape.grouping.ungroup
+        kind: button
+        label: Ungroup
+        access: "u"
+        command: arrange.ungroup
+        visuicmd: visCmdObjectUngroup
+        shortcut: Shift+Ctrl+U
+        icon: arrange.ungroup
+      - id: drawing.shape.grouping.add_to_group
+        kind: button
+        label: Add to Group
+        access: "a"
+        command: arrange.object.add.to.group
+        visuicmd: visCmdObjectAddToGroup
+        begin_group: true
+      - id: drawing.shape.grouping.remove_from_group
+        kind: button
+        label: Remove from Group
+        access: "r"
+        command: arrange.object.remove.from.group
+        visuicmd: visCmdObjectRemoveFromGroup
+      - id: drawing.shape.grouping.convert_to_group
+        kind: button
+        label: Convert to Group
+        access: "c"
+        command: arrange.object.convert.to.group
+        visuicmd: visCmdObjectConvertToGroup
+    - id: drawing.shape.order
+      kind: submenu
+      label: Order
+      access: "o"
+      items:
+      - id: drawing.shape.order.bring_to_front
+        kind: button
+        label: Bring to Front
+        access: "f"
+        command: arrange.bring_to_front
+        visuicmd: visCmdObjectBringToFront
+        icon: arrange.bring_to_front
+      - id: drawing.shape.order.send_to_back
+        kind: button
+        label: Send to Back
+        access: "b"
+        command: arrange.send_to_back
+        visuicmd: visCmdObjectSendToBack
+        icon: arrange.send_to_back
+      - id: drawing.shape.order.bring_forward
+        kind: button
+        label: Bring Forward
+        access: "o"
+        command: arrange.bring_forward
+        visuicmd: visCmdObjectBringForward
+        icon: arrange.bring_forward
+      - id: drawing.shape.order.send_backward
+        kind: button
+        label: Send Backward
+        access: "a"
+        command: arrange.send_backward
+        visuicmd: visCmdObjectSendBackward
+        icon: arrange.send_backward
+    - id: drawing.shape.rotate_or_flip
+      kind: submenu
+      label: Rotate or Flip
+      access: "r"
+      items:
+      - id: drawing.shape.rotate_or_flip.rotate_left
+        kind: button
+        label: Rotate Left
+        access: "l"
+        command: arrange.object.rotate90
+        visuicmd: visCmdObjectRotate90
+        shortcut: Ctrl+L
+        icon: arrange.object.rotate90
+      - id: drawing.shape.rotate_or_flip.rotate_right
+        kind: button
+        label: Rotate Right
+        access: "r"
+        command: arrange.rotate90.clockwise
+        visuicmd: visCmdRotate90Clockwise
+        shortcut: Ctrl+R
+        icon: arrange.rotate90.clockwise
+      - id: drawing.shape.rotate_or_flip.rotate_text
+        kind: button
+        label: Rotate Text
+        access: "t"
+        command: text.rotate90
+        visuicmd: visCmdTextRotate90
+        icon: text.rotate90
+      - id: drawing.shape.rotate_or_flip.flip_horizontal
+        kind: button
+        label: Flip Horizontal
+        access: "h"
+        command: arrange.flip_horizontal
+        visuicmd: visCmdObjectFlipHorizontal
+        shortcut: Ctrl+H
+        icon: arrange.flip_horizontal
+        begin_group: true
+      - id: drawing.shape.rotate_or_flip.flip_vertical
+        kind: button
+        label: Flip Vertical
+        access: "v"
+        command: arrange.flip_vertical
+        visuicmd: visCmdObjectFlipVertical
+        shortcut: Ctrl+J
+        icon: arrange.flip_vertical
+    - id: drawing.shape.operations
+      kind: submenu
+      label: Operations
+      access: "n"
+      items:
+      - id: drawing.shape.operations.update_alignment_box
+        kind: button
+        label: Update Alignment Box
+        access: "a"
+        command: edit.recalc.object.wh
+        visuicmd: visCmdRecalcObjectWH
+      - id: drawing.shape.operations.reverse_ends
+        kind: button
+        label: Reverse Ends
+        access: "r"
+        command: arrange.object.swap.ends
+        visuicmd: visCmdObjectSwapEnds
+      - id: drawing.shape.operations.union
+        kind: button
+        label: Union
+        access: "u"
+        command: arrange.object.union
+        visuicmd: visCmdObjectUnion
+        icon: arrange.object.union
+        begin_group: true
+      - id: drawing.shape.operations.combine
+        kind: button
+        label: Combine
+        access: "c"
+        command: arrange.object.combine
+        visuicmd: visCmdObjectCombine
+        icon: arrange.object.combine
+      - id: drawing.shape.operations.fragment
+        kind: button
+        label: Fragment
+        access: "f"
+        command: arrange.object.fragment
+        visuicmd: visCmdObjectFragment
+        icon: arrange.object.fragment
+      - id: drawing.shape.operations.intersect
+        kind: button
+        label: Intersect
+        access: "i"
+        command: arrange.intersect
+        visuicmd: visCmdIntersect
+        icon: arrange.intersect
+      - id: drawing.shape.operations.subtract
+        kind: button
+        label: Subtract
+        access: "s"
+        command: arrange.subtract
+        visuicmd: visCmdSubtract
+        icon: arrange.subtract
+      - id: drawing.shape.operations.join
+        kind: button
+        label: Join
+        access: "j"
+        command: arrange.join
+        visuicmd: visCmdJoin
+        icon: arrange.join
+        begin_group: true
+      - id: drawing.shape.operations.trim
+        kind: button
+        label: Trim
+        access: "t"
+        command: arrange.trim
+        visuicmd: visCmdTrim
+        icon: arrange.trim
+      - id: drawing.shape.operations.offset
+        kind: button
+        label: Offset...
+        access: "o"
+        command: arrange.offset.dlg
+        visuicmd: visCmdOffsetDlg
+        icon: arrange.offset.dlg
+      - id: drawing.shape.operations.fit_curve
+        kind: button
+        label: Fit Curve...
+        access: "e"
+        command: tools.dlg.custom.fit
+        visuicmd: visCmdDlgCustomFit
+        begin_group: true
+    - id: drawing.shape.align_shapes
+      kind: button
+      label: Align Shapes...
+      access: "a"
+      command: arrange.align_objects
+      visuicmd: visCmdObjectAlignObjects
+      icon: arrange.align_objects
+      begin_group: true
+    - id: drawing.shape.distribute_shapes
+      kind: button
+      label: Distribute Shapes...
+      access: "d"
+      command: arrange.object.distribute.dlg
+      visuicmd: visCmdObjectDistributeDlg
+      icon: arrange.object.distribute.dlg
+    - id: drawing.shape.connect_shapes
+      kind: button
+      label: Connect Shapes
+      access: "c"
+      command: arrange.object.connect.objects
+      visuicmd: visCmdObjectConnectObjects
+      icon: arrange.object.connect.objects
+    - id: drawing.shape.configure_layout
+      kind: button
+      label: Configure Layout...
+      access: "l"
+      command: tools.layout.shapes.dlg
+      visuicmd: visCmdToolsLayoutShapesDlg
+      icon: tools.layout.shapes.dlg
+    - id: drawing.shape.re_layout_shapes
+      kind: button
+      label: Re-layout Shapes
+      access: "e"
+      command: arrange.relayout.shapes
+      visuicmd: visCmdRelayoutShapes
+    - id: drawing.shape.center_drawing
+      kind: button
+      label: Center Drawing
+      access: "w"
+      command: view.center.drawing
+      visuicmd: visCmdCenterDrawing
+    - id: drawing.shape.actions
+      kind: button
+      label: Actions
+      access: "t"
+      command: shape.actions
+      visuicmd: visCmdShapeActions
+      begin_group: true
+      hidden: true
+  - id: drawing.window
+    label: Window
+    access: "w"
+    items:
+    - id: drawing.window.new_window
+      kind: button
+      label: New Window
+      access: "n"
+      command: view.window.new.window
+      visuicmd: visCmdWindowNewWindow
+      icon: view.window.new.window
+    - id: drawing.window.tile
+      kind: button
+      label: Tile
+      access: "t"
+      command: view.tile_all
+      visuicmd: visCmdWindowTileAll
+      icon: view.tile_all
+    - id: drawing.window.cascade
+      kind: button
+      label: Cascade
+      access: "c"
+      command: view.cascade_all
+      visuicmd: visCmdWindowCascadeAll
+      icon: view.cascade_all
+    - id: drawing.window.show_shapesheet
+      kind: button
+      label: Show ShapeSheet
+      access: "s"
+      command: view.window.show.shape.sheet
+      visuicmd: visCmdWindowShowShapeSheet
+      icon: view.window.show.shape.sheet
+      begin_group: true
+    - id: drawing.window.windows
+      kind: list
+      list: windows
+      begin_group: true
+  - id: drawing.help
+    label: Help
+    access: "h"
+    items:
+    - id: drawing.help.ferrogram_help
+      kind: button
+      label: Larrygram Help
+      access: "h"
+      command: help.contents
+      visuicmd: visCmdHelpContents
+      icon: help.contents
+      hidden: true
+    - id: drawing.help.developer_reference
+      kind: button
+      label: Developer Reference
+      access: "d"
+      command: developer.prog.ref.help
+      visuicmd: visCmdProgRefHelp
+      icon: developer.prog.ref.help
+    - id: drawing.help.sample_diagrams
+      kind: button
+      label: Sample Diagrams
+      access: "s"
+      command: help.sample_diagrams
+      begin_group: true
+    - id: drawing.help.welcome
+      kind: button
+      label: Welcome
+      access: "w"
+      command: help.welcome
+      new_command: true
+      begin_group: true
+    - id: drawing.help.about_ferrogram
+      kind: button
+      label: About Larrygram
+      access: "a"
+      command: help.about
+      new_command: true
+      visuicmd: visCmdHelpAboutVisio
+    - id: drawing.help.hyperlinks
+      kind: list
+      list: hyperlinks
+      begin_group: true
+- id: shapesheet
+  label: ShapeSheet menu bar
+  shown_in: shapesheet_window
+  menus:
+  - id: shapesheet.file
+    label: File
+    access: "f"
+    items:
+    - id: shapesheet.file.new
+      kind: submenu
+      label: New
+      access: "n"
+      icon: classic.shapesheet.file.new
+      items:
+      - id: shapesheet.file.new.getting_started
+        kind: button
+        label: Getting Started...
+        access: "g"
+        command: file.create.new.drawing
+        visuicmd: visCmdCreateNewDrawing
+      - id: shapesheet.file.new.new_drawing
+        kind: button
+        label: New Drawing
+        access: "n"
+        command: file.new.blank.drawing
+        visuicmd: visCmdFileNewBlankDrawing
+        shortcut: Ctrl+N
+        icon: file.new.blank.drawing
+      - id: shapesheet.file.new.new_drawing_metric
+        kind: button
+        label: New Drawing (Metric)
+        access: "e"
+        command: file.new.blank.drawing.metric
+        visuicmd: visCmdFileNewBlankDrawingMetric
+        icon: file.new.blank.drawing.metric
+      - id: shapesheet.file.new.new_drawing_us_units
+        kind: button
+        label: New Drawing (US Units)
+        access: "e"
+        command: file.new.blank.drawing.us
+        visuicmd: visCmdFileNewBlankDrawingUS
+        icon: file.new.blank.drawing.us
+      - id: shapesheet.file.new.new_drawing_from_template
+        kind: button
+        label: New Drawing from Template...
+        access: "t"
+        command: file.new
+        visuicmd: visCmdFileNew
+        icon: file.new
+      - id: shapesheet.file.new.template_categories
+        kind: list
+        list: template_categories
+        begin_group: true
+    - id: shapesheet.file.open
+      kind: button
+      label: Open...
+      access: "o"
+      command: file.open
+      visuicmd: visCmdFileOpen
+      shortcut: Ctrl+O
+      icon: file.open
+    - id: shapesheet.file.close
+      kind: button
+      label: Close
+      access: "c"
+      command: file.close
+      visuicmd: visCmdFileClose
+      icon: file.close
+    - id: shapesheet.file.save
+      kind: button
+      label: Save
+      access: "s"
+      command: file.save
+      visuicmd: visCmdFileSave
+      shortcut: Ctrl+S
+      icon: file.save
+      begin_group: true
+    - id: shapesheet.file.save_as
+      kind: button
+      label: Save As...
+      access: "a"
+      command: file.save_as
+      visuicmd: visCmdFileSaveAs
+    - id: shapesheet.file.save_as_web_page
+      kind: button
+      label: Save as Web Page...
+      access: "g"
+      command: file.save.as.web.page
+      visuicmd: visCmdFileSaveAsWebPage
+      icon: file.save.as.web.page
+    - id: shapesheet.file.check_in
+      kind: button
+      label: Check In
+      access: "e"
+      command: file.checkin
+      visuicmd: visCmdFileCheckin
+      begin_group: true
+    - id: shapesheet.file.check_out
+      kind: button
+      label: Check Out
+      access: "e"
+      command: file.checkout
+      visuicmd: visCmdFileCheckout
+    - id: shapesheet.file.discard_check_out
+      kind: button
+      label: Discard Check Out
+      access: "k"
+      command: file.undo.checkout
+      visuicmd: visCmdFileUndoCheckout
+    - id: shapesheet.file.shapes
+      kind: submenu
+      label: Shapes
+      access: "e"
+      begin_group: true
+      items:
+      - id: shapesheet.file.shapes.my_shapes
+        kind: submenu
+        label: My Shapes
+        access: "m"
+        items:
+        - id: shapesheet.file.shapes.my_shapes.my_shapes
+          kind: list
+          list: my_shapes
+        - id: shapesheet.file.shapes.my_shapes.organize_my_shapes
+          kind: button
+          label: Organize My Shapes
+          access: "o"
+          command: file.shapes.organize_my_shapes
+          begin_group: true
+      - id: shapesheet.file.shapes.stencil_categories
+        kind: list
+        list: stencil_categories
+        begin_group: true
+      - id: shapesheet.file.shapes.open_stencil
+        kind: button
+        label: Open Stencil...
+        access: "o"
+        command: file.open.stencil
+        visuicmd: visCmdFileOpenStencil
+        icon: file.open.stencil
+        begin_group: true
+      - id: shapesheet.file.shapes.new_stencil
+        kind: button
+        label: New Stencil
+        access: "n"
+        command: file.new.blank.stencil
+        visuicmd: visCmdFileNewBlankStencil
+        icon: file.new.blank.stencil
+      - id: shapesheet.file.shapes.new_stencil_metric
+        kind: button
+        label: New Stencil (Metric)
+        access: "e"
+        command: file.new.blank.stencil.metric
+        visuicmd: visCmdFileNewBlankStencilMetric
+        icon: file.new.blank.stencil.metric
+      - id: shapesheet.file.shapes.new_stencil_us_units
+        kind: button
+        label: New Stencil (US Units)
+        access: "e"
+        command: file.new.blank.stencil.us
+        visuicmd: visCmdFileNewBlankStencilUS
+        icon: file.new.blank.stencil.us
+      - id: shapesheet.file.shapes.show_document_stencil
+        kind: button
+        label: Show Document Stencil
+        access: "d"
+        command: view.window.show.master.objects
+        visuicmd: visCmdWindowShowMasterObjects
+    - id: shapesheet.file.properties
+      kind: button
+      label: Properties
+      access: "i"
+      command: file.summary.info.dlg
+      visuicmd: visCmdFileSummaryInfoDlg
+    - id: shapesheet.file.recent_files
+      kind: list
+      list: recent_files
+      begin_group: true
+    - id: shapesheet.file.exit
+      kind: button
+      label: Exit
+      access: "x"
+      command: file.exit
+      visuicmd: visCmdFileExit
+      begin_group: true
+  - id: shapesheet.edit
+    label: Edit
+    access: "e"
+    items:
+    - id: shapesheet.edit.undo
+      kind: button
+      label: Undo
+      access: "u"
+      command: edit.undo
+      visuicmd: visCmdEditUndo
+      shortcut: Ctrl+Z
+      icon: edit.undo
+    - id: shapesheet.edit.redo
+      kind: button
+      label: Redo
+      access: "r"
+      command: edit.redo
+      visuicmd: visCmdEditRedo
+      shortcut: Ctrl+Y
+      icon: edit.redo
+    - id: shapesheet.edit.cut
+      kind: button
+      label: Cut
+      access: "t"
+      command: edit.cut
+      visuicmd: visCmdUFEditCut
+      shortcut: Ctrl+X
+      icon: edit.cut
+      begin_group: true
+    - id: shapesheet.edit.copy
+      kind: button
+      label: Copy
+      access: "c"
+      command: edit.copy
+      visuicmd: visCmdUFEditCopy
+      shortcut: Ctrl+C
+      icon: edit.copy
+    - id: shapesheet.edit.paste
+      kind: button
+      label: Paste
+      access: "p"
+      command: edit.paste
+      visuicmd: visCmdUFEditPaste
+      shortcut: Ctrl+V
+      icon: edit.paste
+    - id: shapesheet.edit.clear
+      kind: button
+      label: Clear
+      access: "a"
+      command: edit.clear
+      visuicmd: visCmdUFEditClear
+      shortcut: Delete
+    - id: shapesheet.edit.delete_section
+      kind: button
+      label: Delete Section
+      access: "e"
+      command: edit.sw.delete.section
+      begin_group: true
+    - id: shapesheet.edit.delete_row
+      kind: button
+      label: Delete Row
+      access: "d"
+      command: edit.sw.delete.row
+    - id: shapesheet.edit.expand_row
+      kind: button
+      label: Expand Row
+      access: "x"
+      command: edit.sw.expand.row
+    - id: shapesheet.edit.change_row_type
+      kind: button
+      label: Change Row Type
+      access: "h"
+      command: edit.sw.change.row.type.dlg
+      begin_group: true
+    - id: shapesheet.edit.action
+      kind: button
+      label: Action...
+      access: "o"
+      command: edit.action
+      new_command: true
+  - id: shapesheet.view
+    label: View
+    access: "v"
+    items:
+    - id: shapesheet.view.values
+      kind: button
+      label: Values
+      access: "v"
+      command: edit.sw.show.values
+    - id: shapesheet.view.formulas
+      kind: button
+      label: Formulas
+      access: "f"
+      command: edit.sw.show.formulas
+    - id: shapesheet.view.sections
+      kind: button
+      label: Sections...
+      access: "n"
+      command: view.sections
+      new_command: true
+      begin_group: true
+    - id: shapesheet.view.style_explorer_window
+      kind: button
+      label: Style Explorer Window
+      access: "s"
+      command: shape.drawing.explorer
+      visuicmd: visCmdDrawingExplorer
+      icon: shape.drawing.explorer
+      begin_group: true
+    - id: shapesheet.view.formula_tracing_window
+      kind: button
+      label: Formula Tracing Window
+      access: "r"
+      command: view.formula_tracing_window
+      new_command: true
+      icon: view.formula_tracing_window
+    - id: shapesheet.view.toolbars
+      kind: submenu
+      label: Toolbars
+      access: "t"
+      begin_group: true
+      items:
+      - id: shapesheet.view.toolbars.standard
+        kind: button
+        label: Standard
+        command: view.toolbar.standard
+        new_command: true
+      - id: shapesheet.view.toolbars.formatting
+        kind: button
+        label: Formatting
+        command: view.toolbar.formatting
+        new_command: true
+      - id: shapesheet.view.toolbars.action
+        kind: button
+        label: Action
+        command: view.toolbar.action
+        new_command: true
+      - id: shapesheet.view.toolbars.data
+        kind: button
+        label: Data
+        command: view.toolbar.data
+        new_command: true
+      - id: shapesheet.view.toolbars.developer
+        kind: button
+        label: Developer
+        command: view.toolbar.developer
+        new_command: true
+      - id: shapesheet.view.toolbars.drawing
+        kind: button
+        label: Drawing
+        command: view.toolbar.drawing
+        new_command: true
+      - id: shapesheet.view.toolbars.format_shape
+        kind: button
+        label: Format Shape
+        command: format.shape.pane
+      - id: shapesheet.view.toolbars.format_text
+        kind: button
+        label: Format Text
+        command: view.toolbar.format_text
+        new_command: true
+      - id: shapesheet.view.toolbars.ink
+        kind: button
+        label: Ink
+        command: tools.ink.tool
+      - id: shapesheet.view.toolbars.layout_and_routing
+        kind: button
+        label: Layout & Routing
+        command: view.toolbar.layout_and_routing
+        new_command: true
+      - id: shapesheet.view.toolbars.picture
+        kind: button
+        label: Picture
+        command: view.toolbar.picture
+        new_command: true
+      - id: shapesheet.view.toolbars.reviewing
+        kind: button
+        label: Reviewing
+        command: view.toolbar.reviewing
+        new_command: true
+      - id: shapesheet.view.toolbars.snap_and_glue
+        kind: button
+        label: Snap & Glue
+        command: tools.snap_glue_setup
+      - id: shapesheet.view.toolbars.stencil
+        kind: button
+        label: Stencil
+        command: view.toolbar.stencil
+        new_command: true
+      - id: shapesheet.view.toolbars.view
+        kind: button
+        label: View
+        command: view.toolbar.view
+        new_command: true
+      - id: shapesheet.view.toolbars.web
+        kind: button
+        label: Web
+        command: tools.inet.visio.on.the.web
+      - id: shapesheet.view.toolbars.customize
+        kind: button
+        label: Customize...
+        access: "c"
+        command: view.toolbar.customize
+        new_command: true
+        begin_group: true
+  - id: shapesheet.insert
+    label: Insert
+    access: "i"
+    items:
+    - id: shapesheet.insert.section
+      kind: button
+      label: Section...
+      access: "s"
+      command: insert.section
+      new_command: true
+    - id: shapesheet.insert.row
+      kind: button
+      label: Row
+      access: "r"
+      command: insert.row
+      new_command: true
+    - id: shapesheet.insert.row_after
+      kind: button
+      label: Row After
+      access: "a"
+      command: insert.row_after
+      new_command: true
+    - id: shapesheet.insert.name
+      kind: button
+      label: Name...
+      access: "n"
+      command: insert.name
+      new_command: true
+      begin_group: true
+    - id: shapesheet.insert.function
+      kind: button
+      label: Function...
+      access: "f"
+      command: view.ss.window.paste.function
+    - id: shapesheet.insert.hyperlinks
+      kind: button
+      label: Hyperlinks...
+      access: "h"
+      command: insert.hyper.link
+      visuicmd: visCmdInsertHyperLink
+      shortcut: Ctrl+K
+      icon: insert.hyper.link
+      begin_group: true
+  - id: shapesheet.format
+    label: Format
+    access: "o"
+    items:
+    - id: shapesheet.format.text
+      kind: button
+      label: Text...
+      access: "t"
+      command: format.all.text.props
+      visuicmd: visCmdFormatAllTextProps
+      icon: format.all.text.props
+    - id: shapesheet.format.line
+      kind: button
+      label: Line...
+      access: "l"
+      command: format.line
+      visuicmd: visCmdFormatLine
+      icon: format.line
+    - id: shapesheet.format.fill
+      kind: button
+      label: Fill...
+      access: "f"
+      command: format.fill
+      visuicmd: visCmdFormatFill
+      icon: format.fill
+    - id: shapesheet.format.picture
+      kind: button
+      label: Picture...
+      access: "u"
+      command: insert.image.properties.dlg
+      visuicmd: visCmdImagePropertiesDlg
+      icon: insert.image.properties.dlg
+      begin_group: true
+    - id: shapesheet.format.ink
+      kind: button
+      label: Ink...
+      access: "n"
+      command: format.ink.dlg
+      visuicmd: visCmdFormatInkDlg
+    - id: shapesheet.format.protection
+      kind: button
+      label: Protection...
+      access: "p"
+      command: format.protection
+      visuicmd: visCmdFormatProtection
+      begin_group: true
+    - id: shapesheet.format.behavior
+      kind: button
+      label: Behavior...
+      access: "b"
+      command: format.behavior
+      visuicmd: visCmdFormatBehavior
+    - id: shapesheet.format.special
+      kind: button
+      label: Special...
+      access: "e"
+      command: format.special
+      visuicmd: visCmdFormatSpecial
+    - id: shapesheet.format.style
+      kind: button
+      label: Style...
+      access: "s"
+      command: format.style
+      visuicmd: visCmdFormatStyle
+      begin_group: true
+    - id: shapesheet.format.layer
+      kind: button
+      label: Layer...
+      access: "r"
+      command: layer.dlg
+      visuicmd: visCmdLayerDlg
+      begin_group: true
+  - id: shapesheet.tools
+    label: Tools
+    access: "t"
+    items:
+    - id: shapesheet.tools.macro
+      kind: submenu
+      label: Macro
+      access: "m"
+      begin_group: true
+      items:
+      - id: shapesheet.tools.macro.macros
+        kind: button
+        label: Macros...
+        access: "m"
+        command: tools.macro.dlg
+        visuicmd: visCmdToolsMacroDlg
+        shortcut: Alt+F8
+        icon: tools.macro.dlg
+      - id: shapesheet.tools.macro.record_new_macro
+        kind: button
+        label: Record New Macro...
+        access: "r"
+        command: developer.record.new.macro
+        visuicmd: visCmdRecordNewMacro
+        icon: developer.record.new.macro
+      - id: shapesheet.tools.macro.stop_recording
+        kind: button
+        label: Stop Recording
+        access: "r"
+        command: tools.stop.recording.macro
+        visuicmd: visCmdStopRecordingMacro
+        icon: tools.stop.recording.macro
+      - id: shapesheet.tools.macro.visual_basic_editor
+        kind: button
+        label: Visual Basic Editor
+        access: "v"
+        command: tools.run.vbe
+        visuicmd: visCmdToolsRunVBE
+        shortcut: Alt+F11
+        icon: tools.run.vbe
+        begin_group: true
+      - id: shapesheet.tools.macro.macros_2
+        kind: list
+        list: macros
+        begin_group: true
+    - id: shapesheet.tools.add_ons
+      kind: submenu
+      label: Add-ons
+      access: "n"
+      command: developer.run.addon.menu
+      visuicmd: visCmdRunAddonMenu
+      items:
+      - id: shapesheet.tools.add_ons.run_add_on
+        kind: button
+        label: Run Add-On...
+        access: "r"
+        command: developer.run.add.on.dlg
+        visuicmd: visCmdRunAddOnDlg
+      - id: shapesheet.tools.add_ons.add_ons
+        kind: list
+        list: add_ons
+        begin_group: true
+    - id: shapesheet.tools.formula_tracing
+      kind: submenu
+      label: Formula Tracing
+      access: "f"
+      begin_group: true
+      items:
+      - id: shapesheet.tools.formula_tracing.shapesheet_formula_tracing_window
+        kind: button
+        label: ShapeSheet Formula Tracing Window
+        access: "r"
+        command: tools.formula_tracing.shapesheet_formula_tracing_window
+        new_command: true
+        icon: tools.formula_tracing.shapesheet_formula_tracing_window
+      - id: shapesheet.tools.formula_tracing.trace_dependents
+        kind: button
+        label: Trace Dependents
+        access: "d"
+        command: tools.formula_tracing.trace_dependents
+        new_command: true
+        icon: tools.formula_tracing.trace_dependents
+      - id: shapesheet.tools.formula_tracing.trace_precedents
+        kind: button
+        label: Trace Precedents
+        access: "p"
+        command: tools.formula_tracing.trace_precedents
+        new_command: true
+        icon: tools.formula_tracing.trace_precedents
+      - id: shapesheet.tools.formula_tracing.back
+        kind: button
+        label: Back
+        access: "b"
+        command: tools.formula_tracing.back
+        new_command: true
+        icon: tools.formula_tracing.back
+        begin_group: true
+      - id: shapesheet.tools.formula_tracing.forward
+        kind: button
+        label: Forward
+        access: "f"
+        command: tools.formula_tracing.forward
+        new_command: true
+        icon: tools.formula_tracing.forward
+    - id: shapesheet.tools.customize
+      kind: button
+      label: Customize...
+      access: "u"
+      command: view.toolbars.dlg
+      visuicmd: visCmdToolbarsDlg
+      begin_group: true
+    - id: shapesheet.tools.options
+      kind: button
+      label: Options...
+      access: "o"
+      command: tools.options.preferences
+      visuicmd: visCmdOptionsPreferences
+  - id: shapesheet.data
+    label: Data
+    access: "d"
+    items:
+    - id: shapesheet.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "d"
+      command: format.cust.prop.edit
+      visuicmd: visCmdFormatCustPropEdit
+      icon: format.cust.prop.edit
+  - id: shapesheet.shape
+    label: Shape
+    access: "s"
+    items:
+    - id: shapesheet.shape.rotate_left
+      kind: button
+      label: Rotate Left
+      access: "l"
+      command: arrange.object.rotate90
+      visuicmd: visCmdObjectRotate90
+      shortcut: Ctrl+L
+      icon: arrange.object.rotate90
+      begin_group: true
+    - id: shapesheet.shape.rotate_right
+      kind: button
+      label: Rotate Right
+      access: "r"
+      command: arrange.rotate90.clockwise
+      visuicmd: visCmdRotate90Clockwise
+      shortcut: Ctrl+R
+      icon: arrange.rotate90.clockwise
+    - id: shapesheet.shape.flip_vertical
+      kind: button
+      label: Flip Vertical
+      access: "v"
+      command: arrange.flip_vertical
+      visuicmd: visCmdObjectFlipVertical
+      shortcut: Ctrl+J
+      icon: arrange.flip_vertical
+    - id: shapesheet.shape.flip_horizontal
+      kind: button
+      label: Flip Horizontal
+      access: "h"
+      command: arrange.flip_horizontal
+      visuicmd: visCmdObjectFlipHorizontal
+      shortcut: Ctrl+H
+      icon: arrange.flip_horizontal
+    - id: shapesheet.shape.rotate_text
+      kind: button
+      label: Rotate Text
+      access: "t"
+      command: text.rotate90
+      visuicmd: visCmdTextRotate90
+      icon: text.rotate90
+    - id: shapesheet.shape.update_alignment_box
+      kind: button
+      label: Update Alignment Box
+      access: "u"
+      command: edit.recalc.object.wh
+      visuicmd: visCmdRecalcObjectWH
+      begin_group: true
+    - id: shapesheet.shape.reverse_ends
+      kind: button
+      label: Reverse Ends
+      access: "e"
+      command: arrange.object.swap.ends
+      visuicmd: visCmdObjectSwapEnds
+  - id: shapesheet.window
+    label: Window
+    access: "w"
+    items:
+    - id: shapesheet.window.new_window
+      kind: button
+      label: New Window
+      access: "n"
+      command: view.window.new.window
+      visuicmd: visCmdWindowNewWindow
+      icon: view.window.new.window
+    - id: shapesheet.window.tile
+      kind: button
+      label: Tile
+      access: "t"
+      command: view.tile_all
+      visuicmd: visCmdWindowTileAll
+      icon: view.tile_all
+    - id: shapesheet.window.cascade
+      kind: button
+      label: Cascade
+      access: "c"
+      command: view.cascade_all
+      visuicmd: visCmdWindowCascadeAll
+      icon: view.cascade_all
+    - id: shapesheet.window.windows
+      kind: list
+      list: windows
+      begin_group: true
+  - id: shapesheet.help
+    label: Help
+    access: "h"
+    items:
+    - id: shapesheet.help.ferrogram_help
+      kind: button
+      label: Larrygram Help
+      access: "h"
+      command: help.contents
+      visuicmd: visCmdHelpContents
+      icon: help.contents
+    - id: shapesheet.help.developer_reference
+      kind: button
+      label: Developer Reference
+      access: "d"
+      command: developer.prog.ref.help
+      visuicmd: visCmdProgRefHelp
+      icon: developer.prog.ref.help
+    - id: shapesheet.help.sample_diagrams
+      kind: button
+      label: Sample Diagrams
+      access: "s"
+      command: help.sample_diagrams
+      begin_group: true
+    - id: shapesheet.help.welcome
+      kind: button
+      label: Welcome
+      access: "w"
+      command: help.welcome
+      new_command: true
+      begin_group: true
+    - id: shapesheet.help.about_ferrogram
+      kind: button
+      label: About Larrygram
+      access: "a"
+      command: help.about
+      new_command: true
+      visuicmd: visCmdHelpAboutVisio
+    - id: shapesheet.help.hyperlinks
+      kind: list
+      list: hyperlinks
+      begin_group: true
+- id: stencil
+  label: Stencil menu bar
+  shown_in: stencil_edit
+  menus:
+  - id: stencil.file
+    label: File
+    access: "f"
+    items:
+    - id: stencil.file.new
+      kind: submenu
+      label: New
+      access: "n"
+      icon: classic.stencil.file.new
+      items:
+      - id: stencil.file.new.getting_started
+        kind: button
+        label: Getting Started...
+        access: "g"
+        command: file.create.new.drawing
+        visuicmd: visCmdCreateNewDrawing
+      - id: stencil.file.new.new_drawing
+        kind: button
+        label: New Drawing
+        access: "n"
+        command: file.new.blank.drawing
+        visuicmd: visCmdFileNewBlankDrawing
+        shortcut: Ctrl+N
+        icon: file.new.blank.drawing
+      - id: stencil.file.new.new_drawing_metric
+        kind: button
+        label: New Drawing (Metric)
+        access: "e"
+        command: file.new.blank.drawing.metric
+        visuicmd: visCmdFileNewBlankDrawingMetric
+        icon: file.new.blank.drawing.metric
+      - id: stencil.file.new.new_drawing_us_units
+        kind: button
+        label: New Drawing (US Units)
+        access: "e"
+        command: file.new.blank.drawing.us
+        visuicmd: visCmdFileNewBlankDrawingUS
+        icon: file.new.blank.drawing.us
+      - id: stencil.file.new.new_drawing_from_template
+        kind: button
+        label: New Drawing from Template...
+        access: "t"
+        command: file.new
+        visuicmd: visCmdFileNew
+        icon: file.new
+      - id: stencil.file.new.template_categories
+        kind: list
+        list: template_categories
+        begin_group: true
+    - id: stencil.file.open
+      kind: button
+      label: Open...
+      access: "o"
+      command: file.open
+      visuicmd: visCmdFileOpen
+      shortcut: Ctrl+O
+      icon: file.open
+    - id: stencil.file.close
+      kind: button
+      label: Close
+      access: "c"
+      command: file.close
+      visuicmd: visCmdFileClose
+      icon: file.close
+    - id: stencil.file.save
+      kind: button
+      label: Save
+      access: "s"
+      command: file.save
+      visuicmd: visCmdFileSave
+      shortcut: Ctrl+S
+      icon: file.save
+      begin_group: true
+    - id: stencil.file.save_as
+      kind: button
+      label: Save As...
+      access: "a"
+      command: file.save_as
+      visuicmd: visCmdFileSaveAs
+    - id: stencil.file.save_as_web_page
+      kind: button
+      label: Save as Web Page...
+      access: "g"
+      command: file.save.as.web.page
+      visuicmd: visCmdFileSaveAsWebPage
+      icon: file.save.as.web.page
+    - id: stencil.file.check_in
+      kind: button
+      label: Check In
+      access: "e"
+      command: file.checkin
+      visuicmd: visCmdFileCheckin
+      begin_group: true
+    - id: stencil.file.check_out
+      kind: button
+      label: Check Out
+      access: "e"
+      command: file.checkout
+      visuicmd: visCmdFileCheckout
+    - id: stencil.file.discard_check_out
+      kind: button
+      label: Discard Check Out
+      access: "k"
+      command: file.undo.checkout
+      visuicmd: visCmdFileUndoCheckout
+    - id: stencil.file.shapes
+      kind: submenu
+      label: Shapes
+      access: "e"
+      begin_group: true
+      items:
+      - id: stencil.file.shapes.my_shapes
+        kind: submenu
+        label: My Shapes
+        access: "m"
+        items:
+        - id: stencil.file.shapes.my_shapes.my_shapes
+          kind: list
+          list: my_shapes
+        - id: stencil.file.shapes.my_shapes.organize_my_shapes
+          kind: button
+          label: Organize My Shapes
+          access: "o"
+          command: file.shapes.organize_my_shapes
+          begin_group: true
+      - id: stencil.file.shapes.stencil_categories
+        kind: list
+        list: stencil_categories
+        begin_group: true
+      - id: stencil.file.shapes.open_stencil
+        kind: button
+        label: Open Stencil...
+        access: "o"
+        command: file.open.stencil
+        visuicmd: visCmdFileOpenStencil
+        icon: file.open.stencil
+        begin_group: true
+      - id: stencil.file.shapes.new_stencil
+        kind: button
+        label: New Stencil
+        access: "n"
+        command: file.new.blank.stencil
+        visuicmd: visCmdFileNewBlankStencil
+        icon: file.new.blank.stencil
+      - id: stencil.file.shapes.new_stencil_metric
+        kind: button
+        label: New Stencil (Metric)
+        access: "e"
+        command: file.new.blank.stencil.metric
+        visuicmd: visCmdFileNewBlankStencilMetric
+        icon: file.new.blank.stencil.metric
+      - id: stencil.file.shapes.new_stencil_us_units
+        kind: button
+        label: New Stencil (US Units)
+        access: "e"
+        command: file.new.blank.stencil.us
+        visuicmd: visCmdFileNewBlankStencilUS
+        icon: file.new.blank.stencil.us
+      - id: stencil.file.shapes.show_document_stencil
+        kind: button
+        label: Show Document Stencil
+        access: "d"
+        command: view.window.show.master.objects
+        visuicmd: visCmdWindowShowMasterObjects
+    - id: stencil.file.properties
+      kind: button
+      label: Properties
+      access: "i"
+      command: file.summary.info.dlg
+      visuicmd: visCmdFileSummaryInfoDlg
+    - id: stencil.file.recent_files
+      kind: list
+      list: recent_files
+      begin_group: true
+    - id: stencil.file.exit
+      kind: button
+      label: Exit
+      access: "x"
+      command: file.exit
+      visuicmd: visCmdFileExit
+      begin_group: true
+  - id: stencil.edit
+    label: Edit
+    access: "e"
+    items:
+    - id: stencil.edit.undo
+      kind: button
+      label: Undo
+      access: "u"
+      command: edit.undo
+      visuicmd: visCmdEditUndo
+      shortcut: Ctrl+Z
+      icon: edit.undo
+    - id: stencil.edit.redo
+      kind: button
+      label: Redo
+      access: "r"
+      command: edit.redo
+      visuicmd: visCmdEditRedo
+      shortcut: Ctrl+Y
+      icon: edit.redo
+    - id: stencil.edit.cut
+      kind: button
+      label: Cut
+      access: "t"
+      command: edit.cut
+      visuicmd: visCmdUFEditCut
+      shortcut: Ctrl+X
+      icon: edit.cut
+      begin_group: true
+    - id: stencil.edit.copy
+      kind: button
+      label: Copy
+      access: "c"
+      command: edit.copy
+      visuicmd: visCmdUFEditCopy
+      shortcut: Ctrl+C
+      icon: edit.copy
+    - id: stencil.edit.paste
+      kind: button
+      label: Paste
+      access: "p"
+      command: edit.paste
+      visuicmd: visCmdUFEditPaste
+      shortcut: Ctrl+V
+      icon: edit.paste
+    - id: stencil.edit.paste_shortcut
+      kind: button
+      label: Paste Shortcut
+      access: "o"
+      command: edit.paste_shortcut
+      new_command: true
+    - id: stencil.edit.clear
+      kind: button
+      label: Clear
+      access: "a"
+      command: edit.clear
+      visuicmd: visCmdUFEditClear
+      shortcut: Delete
+      begin_group: true
+    - id: stencil.edit.select_all
+      kind: button
+      label: Select All
+      access: "l"
+      command: edit.select_all
+      visuicmd: visCmdUFEditSelectAll
+      shortcut: Ctrl+A
+    - id: stencil.edit.duplicate
+      kind: button
+      label: Duplicate
+      access: "d"
+      command: edit.duplicate
+      visuicmd: visCmdUFEditDuplicate
+      shortcut: Ctrl+D
+    - id: stencil.edit.create_shortcut
+      kind: button
+      label: Create Shortcut
+      access: "s"
+      command: edit.create_shortcut
+      new_command: true
+  - id: stencil.view
+    label: View
+    access: "v"
+    items:
+    - id: stencil.view.icons_and_names
+      kind: button
+      label: Icons and Names
+      access: "a"
+      command: shape.sten.icon.and.name
+      visuicmd: visCmdStenIconAndName
+      icon: shape.sten.icon.and.name
+    - id: stencil.view.names_under_icons
+      kind: button
+      label: Names Under Icons
+      access: "u"
+      command: shape.sten.names.under.icons
+      visuicmd: visCmdStenNamesUnderIcons
+      icon: shape.sten.names.under.icons
+    - id: stencil.view.icons_only
+      kind: button
+      label: Icons Only
+      access: "i"
+      command: shape.sten.icon.only
+      visuicmd: visCmdStenIconOnly
+      icon: shape.sten.icon.only
+    - id: stencil.view.names_only
+      kind: button
+      label: Names Only
+      access: "n"
+      command: shape.sten.name.only
+      visuicmd: visCmdStenNameOnly
+      icon: shape.sten.name.only
+    - id: stencil.view.icons_and_details
+      kind: button
+      label: Icons and Details
+      access: "c"
+      command: shape.sten.icon.and.detail
+      visuicmd: visCmdStenIconAndDetail
+      icon: shape.sten.icon.and.detail
+    - id: stencil.view.toolbars
+      kind: submenu
+      label: Toolbars
+      access: "t"
+      begin_group: true
+      items:
+      - id: stencil.view.toolbars.standard
+        kind: button
+        label: Standard
+        command: view.toolbar.standard
+        new_command: true
+      - id: stencil.view.toolbars.formatting
+        kind: button
+        label: Formatting
+        command: view.toolbar.formatting
+        new_command: true
+      - id: stencil.view.toolbars.action
+        kind: button
+        label: Action
+        command: view.toolbar.action
+        new_command: true
+      - id: stencil.view.toolbars.data
+        kind: button
+        label: Data
+        command: view.toolbar.data
+        new_command: true
+      - id: stencil.view.toolbars.developer
+        kind: button
+        label: Developer
+        command: view.toolbar.developer
+        new_command: true
+      - id: stencil.view.toolbars.drawing
+        kind: button
+        label: Drawing
+        command: view.toolbar.drawing
+        new_command: true
+      - id: stencil.view.toolbars.format_shape
+        kind: button
+        label: Format Shape
+        command: format.shape.pane
+      - id: stencil.view.toolbars.format_text
+        kind: button
+        label: Format Text
+        command: view.toolbar.format_text
+        new_command: true
+      - id: stencil.view.toolbars.ink
+        kind: button
+        label: Ink
+        command: tools.ink.tool
+      - id: stencil.view.toolbars.layout_and_routing
+        kind: button
+        label: Layout & Routing
+        command: view.toolbar.layout_and_routing
+        new_command: true
+      - id: stencil.view.toolbars.picture
+        kind: button
+        label: Picture
+        command: view.toolbar.picture
+        new_command: true
+      - id: stencil.view.toolbars.reviewing
+        kind: button
+        label: Reviewing
+        command: view.toolbar.reviewing
+        new_command: true
+      - id: stencil.view.toolbars.snap_and_glue
+        kind: button
+        label: Snap & Glue
+        command: tools.snap_glue_setup
+      - id: stencil.view.toolbars.stencil
+        kind: button
+        label: Stencil
+        command: view.toolbar.stencil
+        new_command: true
+      - id: stencil.view.toolbars.view
+        kind: button
+        label: View
+        command: view.toolbar.view
+        new_command: true
+      - id: stencil.view.toolbars.web
+        kind: button
+        label: Web
+        command: tools.inet.visio.on.the.web
+      - id: stencil.view.toolbars.customize
+        kind: button
+        label: Customize...
+        access: "c"
+        command: view.toolbar.customize
+        new_command: true
+        begin_group: true
+    - id: stencil.view.drawing_explorer_window
+      kind: button
+      label: Drawing Explorer Window
+      access: "d"
+      command: shape.drawing.explorer
+      visuicmd: visCmdDrawingExplorer
+      icon: shape.drawing.explorer
+  - id: stencil.tools
+    label: Tools
+    access: "t"
+    items:
+    - id: stencil.tools.macro
+      kind: submenu
+      label: Macro
+      access: "m"
+      begin_group: true
+      items:
+      - id: stencil.tools.macro.macros
+        kind: button
+        label: Macros...
+        access: "m"
+        command: tools.macro.dlg
+        visuicmd: visCmdToolsMacroDlg
+        shortcut: Alt+F8
+        icon: tools.macro.dlg
+      - id: stencil.tools.macro.record_new_macro
+        kind: button
+        label: Record New Macro...
+        access: "r"
+        command: developer.record.new.macro
+        visuicmd: visCmdRecordNewMacro
+        icon: developer.record.new.macro
+      - id: stencil.tools.macro.stop_recording
+        kind: button
+        label: Stop Recording
+        access: "r"
+        command: tools.stop.recording.macro
+        visuicmd: visCmdStopRecordingMacro
+        icon: tools.stop.recording.macro
+      - id: stencil.tools.macro.visual_basic_editor
+        kind: button
+        label: Visual Basic Editor
+        access: "v"
+        command: tools.run.vbe
+        visuicmd: visCmdToolsRunVBE
+        shortcut: Alt+F11
+        icon: tools.run.vbe
+        begin_group: true
+      - id: stencil.tools.macro.macros_2
+        kind: list
+        list: macros
+        begin_group: true
+    - id: stencil.tools.add_ons
+      kind: submenu
+      label: Add-ons
+      access: "n"
+      command: developer.run.addon.menu
+      visuicmd: visCmdRunAddonMenu
+      items:
+      - id: stencil.tools.add_ons.run_add_on
+        kind: button
+        label: Run Add-On...
+        access: "r"
+        command: developer.run.add.on.dlg
+        visuicmd: visCmdRunAddOnDlg
+      - id: stencil.tools.add_ons.add_ons
+        kind: list
+        list: add_ons
+        begin_group: true
+    - id: stencil.tools.customize
+      kind: button
+      label: Customize...
+      access: "u"
+      command: view.toolbars.dlg
+      visuicmd: visCmdToolbarsDlg
+      begin_group: true
+    - id: stencil.tools.options
+      kind: button
+      label: Options...
+      access: "o"
+      command: tools.options.preferences
+      visuicmd: visCmdOptionsPreferences
+  - id: stencil.master
+    label: Master
+    access: "m"
+    items:
+    - id: stencil.master.new_master
+      kind: button
+      label: New Master...
+      access: "n"
+      command: shape.sten.new.master
+    - id: stencil.master.master_properties
+      kind: button
+      label: Master Properties...
+      access: "m"
+      command: shape.master.properties
+      begin_group: true
+    - id: stencil.master.edit_master_shape
+      kind: button
+      label: Edit Master Shape
+      access: "e"
+      command: shape.edit_master_shape
+      new_command: true
+      icon: shape.edit_master_shape
+    - id: stencil.master.edit_icon_image
+      kind: button
+      label: Edit Icon Image
+      access: "i"
+      command: shape.edit_icon_image
+      new_command: true
+      begin_group: true
+    - id: stencil.master.update_icon_image
+      kind: button
+      label: Update Icon Image
+      access: "u"
+      command: shape.update_icon_image
+      new_command: true
+  - id: stencil.window
+    label: Window
+    access: "w"
+    items:
+    - id: stencil.window.new_window
+      kind: button
+      label: New Window
+      access: "n"
+      command: view.window.new.window
+      visuicmd: visCmdWindowNewWindow
+      icon: view.window.new.window
+    - id: stencil.window.tile
+      kind: button
+      label: Tile
+      access: "t"
+      command: view.tile_all
+      visuicmd: visCmdWindowTileAll
+      icon: view.tile_all
+    - id: stencil.window.cascade
+      kind: button
+      label: Cascade
+      access: "c"
+      command: view.cascade_all
+      visuicmd: visCmdWindowCascadeAll
+      icon: view.cascade_all
+    - id: stencil.window.show_drawing_page
+      kind: button
+      label: Show Drawing Page...
+      access: "s"
+      command: view.show_drawing_page
+      new_command: true
+      begin_group: true
+    - id: stencil.window.windows
+      kind: list
+      list: windows
+      begin_group: true
+  - id: stencil.help
+    label: Help
+    access: "h"
+    items:
+    - id: stencil.help.ferrogram_help
+      kind: button
+      label: Larrygram Help
+      access: "h"
+      command: help.contents
+      visuicmd: visCmdHelpContents
+      icon: help.contents
+    - id: stencil.help.developer_reference
+      kind: button
+      label: Developer Reference
+      access: "d"
+      command: developer.prog.ref.help
+      visuicmd: visCmdProgRefHelp
+      icon: developer.prog.ref.help
+    - id: stencil.help.sample_diagrams
+      kind: button
+      label: Sample Diagrams
+      access: "s"
+      command: help.sample_diagrams
+      begin_group: true
+    - id: stencil.help.welcome
+      kind: button
+      label: Welcome
+      access: "w"
+      command: help.welcome
+      new_command: true
+      begin_group: true
+    - id: stencil.help.about_ferrogram
+      kind: button
+      label: About Larrygram
+      access: "a"
+      command: help.about
+      new_command: true
+      visuicmd: visCmdHelpAboutVisio
+    - id: stencil.help.hyperlinks
+      kind: list
+      list: hyperlinks
+      begin_group: true
+toolbars:
+- id: toolbar.standard
+  label: Standard
+  visible: true
+  dock: top
+  row: 0
+  items:
+  - id: toolbar.standard.new
+    kind: split
+    label: New
+    command: file.new.blank.drawing
+    visuicmd: visCmdFileNewBlankDrawing
+    icon: file.new.blank.drawing
+    items:
+    - id: toolbar.standard.new.getting_started
+      kind: button
+      label: Getting Started...
+      command: file.create.new.drawing
+      visuicmd: visCmdCreateNewDrawing
+    - id: toolbar.standard.new.template_categories
+      kind: list
+      list: template_categories
+  - id: toolbar.standard.open
+    kind: button
+    label: Open
+    command: file.open
+    visuicmd: visCmdFileOpen
+    shortcut: Ctrl+O
+    icon: file.open
+  - id: toolbar.standard.save
+    kind: button
+    label: Save
+    command: file.save
+    visuicmd: visCmdFileSave
+    shortcut: Ctrl+S
+    icon: file.save
+  - id: toolbar.standard.mail_recipient_as_attachment
+    kind: button
+    label: Mail Recipient (as Attachment)...
+    command: file.send.as.mail
+    visuicmd: visCmdSendAsMail
+    icon: file.send.as.mail
+  - id: toolbar.standard.print_page
+    kind: button
+    label: Print Page
+    command: file.print.page
+    visuicmd: visCmdPrintPage
+    icon: file.print.page
+    begin_group: true
+  - id: toolbar.standard.print_preview
+    kind: button
+    label: Print Preview
+    command: file.print_preview
+    visuicmd: visCmdPrintPreview
+    shortcut: Ctrl+F2
+    icon: file.print_preview
+  - id: toolbar.standard.spelling
+    kind: button
+    label: Spelling
+    command: tools.spelling
+    visuicmd: visCmdToolsSpelling
+    shortcut: F7
+    icon: tools.spelling
+    begin_group: true
+  - id: toolbar.standard.cut
+    kind: button
+    label: Cut
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    shortcut: Ctrl+X
+    icon: edit.cut
+    begin_group: true
+  - id: toolbar.standard.copy_drawing
+    kind: button
+    label: Copy Drawing
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    shortcut: Ctrl+C
+    icon: edit.copy
+  - id: toolbar.standard.paste
+    kind: button
+    label: Paste
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    shortcut: Ctrl+V
+    icon: edit.paste
+  - id: toolbar.standard.delete
+    kind: button
+    label: Delete
+    command: edit.clear
+    visuicmd: visCmdUFEditClear
+    shortcut: Delete
+    icon: edit.clear
+  - id: toolbar.standard.format_painter
+    kind: button
+    label: Format Painter
+    command: tools.format_painter
+    visuicmd: visCmdFormatPainter
+    shortcut: Shift+Ctrl+P
+    icon: tools.format_painter
+  - id: toolbar.standard.undo
+    kind: split
+    label: Undo
+    command: edit.undo
+    visuicmd: visCmdEditUndo
+    icon: edit.undo
+    begin_group: true
+  - id: toolbar.standard.redo
+    kind: split
+    label: Redo
+    command: edit.redo
+    visuicmd: visCmdEditRedo
+    icon: edit.redo
+  - id: toolbar.standard.shapes
+    kind: submenu
+    label: Shapes
+    icon: classic.toolbar.standard.shapes
+    begin_group: true
+    items:
+    - id: toolbar.standard.shapes.my_shapes
+      kind: submenu
+      label: My Shapes
+      items:
+      - id: toolbar.standard.shapes.my_shapes.my_shapes
+        kind: list
+        list: my_shapes
+      - id: toolbar.standard.shapes.my_shapes.organize_my_shapes
+        kind: button
+        label: Organize My Shapes
+        command: file.shapes.organize_my_shapes
+        begin_group: true
+    - id: toolbar.standard.shapes.stencil_categories
+      kind: list
+      list: stencil_categories
+      begin_group: true
+    - id: toolbar.standard.shapes.open_stencil
+      kind: button
+      label: Open Stencil...
+      command: file.open.stencil
+      visuicmd: visCmdFileOpenStencil
+      icon: file.open.stencil
+      begin_group: true
+    - id: toolbar.standard.shapes.new_stencil
+      kind: button
+      label: New Stencil
+      command: file.new.blank.stencil
+      visuicmd: visCmdFileNewBlankStencil
+      icon: file.new.blank.stencil
+    - id: toolbar.standard.shapes.new_stencil_metric
+      kind: button
+      label: New Stencil (Metric)
+      command: file.new.blank.stencil.metric
+      visuicmd: visCmdFileNewBlankStencilMetric
+      icon: file.new.blank.stencil.metric
+    - id: toolbar.standard.shapes.new_stencil_us_units
+      kind: button
+      label: New Stencil (US Units)
+      command: file.new.blank.stencil.us
+      visuicmd: visCmdFileNewBlankStencilUS
+      icon: file.new.blank.stencil.us
+    - id: toolbar.standard.shapes.show_document_stencil
+      kind: button
+      label: Show Document Stencil
+      command: view.window.show.master.objects
+      visuicmd: visCmdWindowShowMasterObjects
+  - id: toolbar.standard.pointer_tool
+    kind: split
+    label: Pointer Tool
+    command: tools.pointer
+    visuicmd: visCmdDRPointerTool
+    icon: tools.pointer
+    begin_group: true
+    items:
+    - id: toolbar.standard.pointer_tool.area_select
+      kind: button
+      label: Area Select
+      command: tools.area.select
+      icon: tools.area.select
+    - id: toolbar.standard.pointer_tool.lasso_select
+      kind: button
+      label: Lasso Select
+      command: tools.lasso.select.visio
+      icon: tools.lasso.select.visio
+    - id: toolbar.standard.pointer_tool.multiple_select
+      kind: button
+      label: Multiple Select
+      command: tools.pointer_tool.multiple_select
+      new_command: true
+      icon: tools.pointer_tool.multiple_select
+      begin_group: true
+  - id: toolbar.standard.connector_tool
+    kind: split_recent
+    label: Connector Tool
+    command: tools.connector
+    visuicmd: visCmdDRConnectorTool
+    icon: tools.connector
+    items:
+    - id: toolbar.standard.connector_tool.connector_tool
+      kind: button
+      label: Connector Tool
+      command: tools.connector
+      visuicmd: visCmdDRConnectorTool
+      icon: tools.connector
+    - id: toolbar.standard.connector_tool.connection_point_tool
+      kind: button
+      label: Connection Point Tool
+      command: tools.connection.point
+      icon: tools.connection.point
+  - id: toolbar.standard.text_tool
+    kind: split_recent
+    label: Text Tool
+    command: tools.text
+    visuicmd: visCmdDRTextTool
+    icon: tools.text
+    items:
+    - id: toolbar.standard.text_tool.text_tool
+      kind: button
+      label: Text Tool
+      command: tools.text
+      visuicmd: visCmdDRTextTool
+      icon: tools.text
+    - id: toolbar.standard.text_tool.text_block_tool
+      kind: button
+      label: Text Block Tool
+      command: tools.text_block
+      icon: tools.text_block
+  - id: toolbar.standard.drawing_tools
+    kind: button
+    label: Drawing Tools
+    command: shape.drawing.tools
+    visuicmd: visCmdDrawingTools
+    icon: shape.drawing.tools
+  - id: toolbar.standard.autoconnect
+    kind: check
+    label: AutoConnect
+    command: connector.auto_connect
+    icon: connector.auto_connect
+    begin_group: true
+  - id: toolbar.standard.zoom
+    kind: combo
+    label: Zoom
+    command: shape.draw.zoom
+    visuicmd: visCmdDrawZoom
+  - id: toolbar.standard.ferrogram_help
+    kind: button
+    label: Larrygram Help
+    command: help.contents
+    visuicmd: visCmdHelpContents
+    icon: help.contents
+    begin_group: true
+- id: toolbar.formatting
+  label: Formatting
+  visible: true
+  dock: top
+  row: 1
+  items:
+  - id: toolbar.formatting.font
+    kind: combo
+    label: Font
+    command: text.font
+  - id: toolbar.formatting.font_size
+    kind: combo
+    label: Font Size
+    command: text.font.size
+  - id: toolbar.formatting.bold
+    kind: button
+    label: Bold
+    command: format.text.bold
+    shortcut: Ctrl+B
+    icon: format.text.bold
+    begin_group: true
+  - id: toolbar.formatting.italic
+    kind: button
+    label: Italic
+    command: format.text.italic
+    shortcut: Ctrl+I
+    icon: format.text.italic
+  - id: toolbar.formatting.underline
+    kind: button
+    label: Underline
+    command: format.text.underline
+    shortcut: Ctrl+U
+    icon: format.text.underline
+  - id: toolbar.formatting.align_left
+    kind: check
+    label: Align Left
+    command: format.text.align_left
+    shortcut: Shift+Ctrl+L
+    icon: format.text.align_left
+    begin_group: true
+  - id: toolbar.formatting.align_center
+    kind: button
+    label: Align Center
+    command: format.text.align_center
+    shortcut: Shift+Ctrl+C
+    icon: format.text.align_center
+  - id: toolbar.formatting.align_right
+    kind: button
+    label: Align Right
+    command: format.text.align_right
+    shortcut: Shift+Ctrl+R
+    icon: format.text.align_right
+  - id: toolbar.formatting.change_text_direction
+    kind: button
+    label: Change Text Direction
+    command: format.change_text_direction
+    new_command: true
+    icon: format.change_text_direction
+    hidden: true
+  - id: toolbar.formatting.left_to_right
+    kind: button
+    label: Left-to-Right
+    command: text.direction.left.to.right
+    shortcut: Left Ctrl + Shift
+    icon: text.direction.left.to.right
+    hidden: true
+  - id: toolbar.formatting.right_to_left
+    kind: button
+    label: Right-to-Left
+    command: text.direction.right.to.left
+    shortcut: Right Ctrl + Shift
+    icon: text.direction.right.to.left
+    hidden: true
+  - id: toolbar.formatting.bullets
+    kind: button
+    label: Bullets
+    command: text.bullets
+    icon: text.bullets
+    begin_group: true
+  - id: toolbar.formatting.decrease_indent
+    kind: button
+    label: Decrease Indent
+    command: format.decrease.indent
+    icon: format.decrease.indent
+  - id: toolbar.formatting.increase_indent
+    kind: button
+    label: Increase Indent
+    command: format.increase.indent
+    icon: format.increase.indent
+  - id: toolbar.formatting.text_color
+    kind: split
+    label: Text Color
+    command: text.font.color
+    icon: text.font.color
+    begin_group: true
+    items:
+    - id: toolbar.formatting.text_color.use_default
+      kind: button
+      label: Use Default
+      command: format.text_color.use_default
+      new_command: true
+      display: text
+    - id: toolbar.formatting.text_color.theme_colors
+      kind: heading
+      label: Theme Colors
+      begin_group: true
+    - id: toolbar.formatting.text_color.theme_colors_2
+      kind: list
+      list: theme_colors
+    - id: toolbar.formatting.text_color.theme_tints
+      kind: list
+      list: theme_tints
+    - id: toolbar.formatting.text_color.standard_colors
+      kind: heading
+      label: Standard Colors
+      begin_group: true
+    - id: toolbar.formatting.text_color.standard_colors_2
+      kind: list
+      list: standard_colors
+    - id: toolbar.formatting.text_color.recent_colors
+      kind: heading
+      label: Recent Colors
+      begin_group: true
+    - id: toolbar.formatting.text_color.recent_colors_2
+      kind: list
+      list: recent_colors
+    - id: toolbar.formatting.text_color.more_text_colors
+      kind: button
+      label: More Text Colors...
+      command: text.font.color
+      display: text
+  - id: toolbar.formatting.line_color
+    kind: split
+    label: Line Color
+    command: format.set.line.color
+    icon: format.set.line.color
+    items:
+    - id: toolbar.formatting.line_color.use_default
+      kind: button
+      label: Use Default
+      command: format.line_color.use_default
+      new_command: true
+      display: text
+    - id: toolbar.formatting.line_color.no_line
+      kind: button
+      label: No Line
+      command: format.line_color.no_line
+      new_command: true
+      display: text
+      begin_group: true
+    - id: toolbar.formatting.line_color.theme_colors
+      kind: heading
+      label: Theme Colors
+      begin_group: true
+    - id: toolbar.formatting.line_color.theme_colors_2
+      kind: list
+      list: theme_colors
+    - id: toolbar.formatting.line_color.theme_tints
+      kind: list
+      list: theme_tints
+    - id: toolbar.formatting.line_color.standard_colors
+      kind: heading
+      label: Standard Colors
+      begin_group: true
+    - id: toolbar.formatting.line_color.standard_colors_2
+      kind: list
+      list: standard_colors
+    - id: toolbar.formatting.line_color.recent_colors
+      kind: heading
+      label: Recent Colors
+      begin_group: true
+    - id: toolbar.formatting.line_color.recent_colors_2
+      kind: list
+      list: recent_colors
+    - id: toolbar.formatting.line_color.more_line_colors
+      kind: button
+      label: More Line Colors...
+      command: format.line
+      display: text
+  - id: toolbar.formatting.fill_color
+    kind: split
+    label: Fill Color
+    command: format.set.fill.color
+    icon: format.set.fill.color
+    items:
+    - id: toolbar.formatting.fill_color.use_default
+      kind: button
+      label: Use Default
+      command: format.fill_color.use_default
+      new_command: true
+      display: text
+    - id: toolbar.formatting.fill_color.no_fill
+      kind: button
+      label: No Fill
+      command: format.fill_color.no_fill
+      new_command: true
+      display: text
+      begin_group: true
+    - id: toolbar.formatting.fill_color.theme_colors
+      kind: heading
+      label: Theme Colors
+      begin_group: true
+    - id: toolbar.formatting.fill_color.theme_colors_2
+      kind: list
+      list: theme_colors
+    - id: toolbar.formatting.fill_color.theme_tints
+      kind: list
+      list: theme_tints
+    - id: toolbar.formatting.fill_color.standard_colors
+      kind: heading
+      label: Standard Colors
+      begin_group: true
+    - id: toolbar.formatting.fill_color.standard_colors_2
+      kind: list
+      list: standard_colors
+    - id: toolbar.formatting.fill_color.recent_colors
+      kind: heading
+      label: Recent Colors
+      begin_group: true
+    - id: toolbar.formatting.fill_color.recent_colors_2
+      kind: list
+      list: recent_colors
+    - id: toolbar.formatting.fill_color.more_fill_colors
+      kind: button
+      label: More Fill Colors...
+      command: format.fill
+      display: text
+  - id: toolbar.formatting.theme
+    kind: button
+    label: Theme
+    command: format.theme
+    new_command: true
+    icon: format.theme
+    display: icon_text
+  - id: toolbar.formatting.line_weight
+    kind: split
+    label: Line Weight
+    command: format.set.line.weight
+    visuicmd: visCmdSetLineWeight
+    icon: format.set.line.weight
+    begin_group: true
+    items:
+    - id: toolbar.formatting.line_weight.no_line
+      kind: button
+      label: No Line
+      command: format.set.line.weight
+      visuicmd: visCmdSetLineWeight
+      display: text
+    - id: toolbar.formatting.line_weight.line_weights
+      kind: list
+      list: line_weights
+    - id: toolbar.formatting.line_weight.more_line_weights
+      kind: button
+      label: More Line Weights...
+      command: format.line
+      visuicmd: visCmdFormatLine
+      shortcut: Shift+F3
+      display: text
+      begin_group: true
+  - id: toolbar.formatting.line_pattern
+    kind: split
+    label: Line Pattern
+    command: format.set.line.pattern
+    icon: format.set.line.pattern
+    items:
+    - id: toolbar.formatting.line_pattern.no_line
+      kind: button
+      label: No Line
+      command: format.line_pattern.no_line
+      new_command: true
+      display: text
+    - id: toolbar.formatting.line_pattern.line_patterns
+      kind: list
+      list: line_patterns
+    - id: toolbar.formatting.line_pattern.more_line_patterns
+      kind: button
+      label: More Line Patterns...
+      command: format.line
+      visuicmd: visCmdFormatLine
+      shortcut: Shift+F3
+      display: text
+      begin_group: true
+  - id: toolbar.formatting.line_ends
+    kind: split
+    label: Line Ends
+    command: format.set.line.ends
+    icon: format.set.line.ends
+    items:
+    - id: toolbar.formatting.line_ends.no_line_ends
+      kind: button
+      label: No Line Ends
+      command: format.line_ends.no_line_ends
+      new_command: true
+      display: text
+    - id: toolbar.formatting.line_ends.line_ends
+      kind: list
+      list: line_ends
+    - id: toolbar.formatting.line_ends.more_line_ends
+      kind: button
+      label: More Line Ends...
+      command: format.line
+      visuicmd: visCmdFormatLine
+      shortcut: Shift+F3
+      display: text
+      begin_group: true
+- id: toolbar.action
+  label: Action
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.action.align_shapes
+    kind: split
+    label: Align Shapes...
+    command: arrange.align_objects
+    visuicmd: visCmdObjectAlignObjects
+    icon: arrange.align_objects
+    items:
+    - id: toolbar.action.align_shapes.align_left
+      kind: button
+      label: Align Left
+      command: arrange.align.left
+      icon: arrange.align.left
+    - id: toolbar.action.align_shapes.align_center
+      kind: button
+      label: Align Center
+      command: arrange.align.center
+      icon: arrange.align.center
+    - id: toolbar.action.align_shapes.align_right
+      kind: button
+      label: Align Right
+      command: arrange.align.right
+      icon: arrange.align.right
+    - id: toolbar.action.align_shapes.align_top
+      kind: button
+      label: Align Top
+      command: arrange.align.top
+      icon: arrange.align.top
+    - id: toolbar.action.align_shapes.align_middle
+      kind: button
+      label: Align Middle
+      command: arrange.align.middle
+      icon: arrange.align.middle
+    - id: toolbar.action.align_shapes.align_bottom
+      kind: button
+      label: Align Bottom
+      command: arrange.align.bottom
+      icon: arrange.align.bottom
+  - id: toolbar.action.distribute_shapes
+    kind: split
+    label: Distribute Shapes...
+    command: arrange.object.distribute.dlg
+    visuicmd: visCmdObjectDistributeDlg
+    icon: arrange.object.distribute.dlg
+    items:
+    - id: toolbar.action.distribute_shapes.distribute_horizontal_spacing
+      kind: button
+      label: Distribute Horizontal Spacing
+      command: arrange.distribute_shapes.distribute_horizontal_spacing
+      new_command: true
+      icon: arrange.distribute_shapes.distribute_horizontal_spacing
+    - id: toolbar.action.distribute_shapes.distribute_center
+      kind: button
+      label: Distribute Center
+      command: arrange.distribute_shapes.distribute_center
+      new_command: true
+      icon: arrange.distribute_shapes.distribute_center
+    - id: toolbar.action.distribute_shapes.distribute_vertical_spacing
+      kind: button
+      label: Distribute Vertical Spacing
+      command: arrange.distribute_shapes.distribute_vertical_spacing
+      new_command: true
+      icon: arrange.distribute_shapes.distribute_vertical_spacing
+    - id: toolbar.action.distribute_shapes.distribute_middle
+      kind: button
+      label: Distribute Middle
+      command: arrange.distribute_shapes.distribute_middle
+      new_command: true
+      icon: arrange.distribute_shapes.distribute_middle
+  - id: toolbar.action.connect_shapes
+    kind: button
+    label: Connect Shapes
+    command: arrange.object.connect.objects
+    visuicmd: visCmdObjectConnectObjects
+    icon: arrange.object.connect.objects
+  - id: toolbar.action.lay_out_shapes
+    kind: button
+    label: Lay Out Shapes...
+    command: tools.layout.shapes.dlg
+    visuicmd: visCmdToolsLayoutShapesDlg
+    icon: tools.layout.shapes.dlg
+  - id: toolbar.action.flip_horizontal
+    kind: button
+    label: Flip Horizontal
+    command: arrange.flip_horizontal
+    visuicmd: visCmdObjectFlipHorizontal
+    shortcut: Ctrl+H
+    icon: arrange.flip_horizontal
+    begin_group: true
+  - id: toolbar.action.flip_vertical
+    kind: button
+    label: Flip Vertical
+    command: arrange.flip_vertical
+    visuicmd: visCmdObjectFlipVertical
+    shortcut: Ctrl+J
+    icon: arrange.flip_vertical
+  - id: toolbar.action.rotate_right
+    kind: button
+    label: Rotate Right
+    command: arrange.rotate90.clockwise
+    visuicmd: visCmdRotate90Clockwise
+    shortcut: Ctrl+R
+    icon: arrange.rotate90.clockwise
+  - id: toolbar.action.rotate_left
+    kind: button
+    label: Rotate Left
+    command: arrange.object.rotate90
+    visuicmd: visCmdObjectRotate90
+    shortcut: Ctrl+L
+    icon: arrange.object.rotate90
+  - id: toolbar.action.rotate_text_90
+    kind: button
+    label: Rotate Text 90°
+    command: text.rotate90
+    visuicmd: visCmdTextRotate90
+    icon: text.rotate90
+  - id: toolbar.action.bring_to_front
+    kind: button
+    label: Bring to Front
+    command: arrange.bring_to_front
+    visuicmd: visCmdObjectBringToFront
+    shortcut: Shift+Ctrl+F
+    icon: arrange.bring_to_front
+    begin_group: true
+  - id: toolbar.action.send_to_back
+    kind: button
+    label: Send to Back
+    command: arrange.send_to_back
+    visuicmd: visCmdObjectSendToBack
+    shortcut: Shift+Ctrl+B
+    icon: arrange.send_to_back
+  - id: toolbar.action.group
+    kind: button
+    label: Group
+    command: arrange.group
+    visuicmd: visCmdObjectGroup
+    shortcut: Shift+Ctrl+G
+    icon: arrange.group
+  - id: toolbar.action.ungroup
+    kind: button
+    label: Ungroup
+    command: arrange.ungroup
+    visuicmd: visCmdObjectUngroup
+    shortcut: Shift+Ctrl+U
+    icon: arrange.ungroup
+  - id: toolbar.action.shape_data
+    kind: button
+    label: Shape Data...
+    command: format.cust.prop.edit
+    visuicmd: visCmdFormatCustPropEdit
+    icon: format.cust.prop.edit
+    begin_group: true
+- id: toolbar.data
+  label: Data
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.data.shape_data
+    kind: button
+    label: Shape Data
+    command: format.cust.prop.edit
+    visuicmd: visCmdFormatCustPropEdit
+    icon: format.cust.prop.edit
+  - id: toolbar.data.link_data_to_shapes
+    kind: button
+    label: Link Data to Shapes
+    command: data.link.data.to.shapes
+    icon: data.link.data.to.shapes
+    begin_group: true
+  - id: toolbar.data.automatically_link
+    kind: button
+    label: Automatically Link
+    command: data.automatically.link
+    icon: data.automatically.link
+  - id: toolbar.data.refresh_all
+    kind: button
+    label: Refresh All
+    command: data.refresh_all
+    new_command: true
+    icon: data.refresh_all
+  - id: toolbar.data.display_data_on_shapes
+    kind: button
+    label: Display Data on Shapes
+    command: view.task.pane.data.graphic
+    visuicmd: visCmdTaskPaneDataGraphic
+    icon: view.task.pane.data.graphic
+    begin_group: true
+- id: toolbar.developer
+  label: Developer
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.developer.run_macro
+    kind: button
+    label: Run Macro
+    command: tools.macro.dlg
+    visuicmd: visCmdToolsMacroDlg
+    shortcut: Alt+F8
+    icon: tools.macro.dlg
+  - id: toolbar.developer.record_new_macro
+    kind: button
+    label: Record New Macro...
+    command: developer.record.new.macro
+    visuicmd: visCmdRecordNewMacro
+    icon: developer.record.new.macro
+  - id: toolbar.developer.stop_recording
+    kind: button
+    label: Stop Recording
+    command: tools.stop.recording.macro
+    visuicmd: visCmdStopRecordingMacro
+    icon: tools.stop.recording.macro
+  - id: toolbar.developer.visual_basic_editor
+    kind: button
+    label: Visual Basic Editor
+    command: tools.run.vbe
+    visuicmd: visCmdToolsRunVBE
+    shortcut: Alt+F11
+    icon: tools.run.vbe
+  - id: toolbar.developer.insert_control
+    kind: button
+    label: Insert Control
+    command: insert.control.dlg
+    visuicmd: visCmdInsertControlDlg
+    icon: insert.control.dlg
+  - id: toolbar.developer.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    command: view.window.show.shape.sheet
+    visuicmd: visCmdWindowShowShapeSheet
+    icon: view.window.show.shape.sheet
+  - id: toolbar.developer.design_mode
+    kind: button
+    label: Design Mode
+    command: tools.design.mode
+    visuicmd: visCmdDesignMode
+    icon: tools.design.mode
+- id: toolbar.drawing
+  label: Drawing
+  visible: false
+  dock: floating
+  items:
+  - id: toolbar.drawing.rectangle_tool
+    kind: button
+    label: Rectangle Tool
+    command: shape.rectangle
+    visuicmd: visCmdDRRectTool
+    shortcut: Ctrl+8
+    icon: shape.rectangle
+  - id: toolbar.drawing.ellipse_tool
+    kind: button
+    label: Ellipse Tool
+    command: shape.ellipse
+    visuicmd: visCmdDROvalTool
+    shortcut: Ctrl+9
+    icon: shape.ellipse
+  - id: toolbar.drawing.line_tool
+    kind: button
+    label: Line Tool
+    command: shape.line
+    visuicmd: visCmdDRLineTool
+    shortcut: Ctrl+6
+    icon: shape.line
+  - id: toolbar.drawing.arc_tool
+    kind: button
+    label: Arc Tool
+    command: shape.arc
+    visuicmd: visCmdDRQtrArcTool
+    shortcut: Ctrl+7
+    icon: shape.arc
+  - id: toolbar.drawing.freeform_tool
+    kind: button
+    label: Freeform Tool
+    command: shape.spline
+    visuicmd: visCmdDRSplineTool
+    shortcut: Ctrl+5
+    icon: shape.spline
+  - id: toolbar.drawing.pencil_tool
+    kind: button
+    label: Pencil Tool
+    command: tools.pencil
+    visuicmd: visCmdDRPencilTool
+    shortcut: Ctrl+4
+    icon: tools.pencil
+- id: toolbar.format_shape
+  label: Format Shape
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.format_shape.layer
+    kind: dropdown
+    label: Layer
+    command: shape.layer.toolbar
+    visuicmd: visCmdShapeLayerToolbar
+  - id: toolbar.format_shape.corner_rounding
+    kind: split
+    label: Corner Rounding
+    command: format.set.line.corner.style
+    visuicmd: visCmdSetLineCornerStyle
+    icon: format.set.line.corner.style
+    items:
+    - id: toolbar.format_shape.corner_rounding.corner_roundings
+      kind: list
+      list: corner_roundings
+    - id: toolbar.format_shape.corner_rounding.more_corner_roundings
+      kind: button
+      label: More Corner Roundings...
+      command: format.corners
+      visuicmd: visCmdFormatCorners
+      display: text
+      begin_group: true
+  - id: toolbar.format_shape.transparency
+    kind: split
+    label: Transparency
+    command: shape.transparency.dlg
+    visuicmd: visCmdShapeTransparencyDlg
+    icon: shape.transparency.dlg
+    items:
+    - id: toolbar.format_shape.transparency.no_transparency
+      kind: button
+      label: No Transparency
+      command: format.transparency.no_transparency
+      new_command: true
+      display: text
+    - id: toolbar.format_shape.transparency.transparency_levels
+      kind: list
+      list: transparency_levels
+    - id: toolbar.format_shape.transparency.more_transparency_levels
+      kind: button
+      label: More Transparency Levels...
+      command: shape.transparency.dlg
+      visuicmd: visCmdShapeTransparencyDlg
+      display: text
+      begin_group: true
+  - id: toolbar.format_shape.fill_pattern
+    kind: split
+    label: Fill Pattern
+    command: format.set.fill.pattern
+    visuicmd: visCmdSetFillPattern
+    icon: format.set.fill.pattern
+    items:
+    - id: toolbar.format_shape.fill_pattern.no_fill
+      kind: button
+      label: No Fill
+      command: format.set.fill.pattern
+      visuicmd: visCmdSetFillPattern
+      display: text
+    - id: toolbar.format_shape.fill_pattern.fill_patterns
+      kind: list
+      list: fill_patterns
+    - id: toolbar.format_shape.fill_pattern.more_fill_patterns
+      kind: button
+      label: More Fill Patterns...
+      command: format.fill
+      visuicmd: visCmdFormatFill
+      shortcut: F3
+      display: text
+      begin_group: true
+  - id: toolbar.format_shape.shadow_color
+    kind: split
+    label: Shadow Color
+    command: format.set.fill.shadow
+    visuicmd: visCmdSetFillShadow
+    icon: format.set.fill.shadow
+    items:
+    - id: toolbar.format_shape.shadow_color.no_shadow
+      kind: button
+      label: No Shadow
+      command: format.set.fill.shadow
+      visuicmd: visCmdSetFillShadow
+      display: text
+    - id: toolbar.format_shape.shadow_color.shadow_styles
+      kind: list
+      list: shadow_styles
+    - id: toolbar.format_shape.shadow_color.more_shadow_settings
+      kind: button
+      label: More Shadow Settings...
+      command: format.shadow
+      visuicmd: visCmdFormatShadow
+      display: text
+    - id: toolbar.format_shape.shadow_color.use_default
+      kind: button
+      label: Use Default
+      command: format.set.fill.shadow
+      visuicmd: visCmdSetFillShadow
+      display: text
+      begin_group: true
+    - id: toolbar.format_shape.shadow_color.theme_colors
+      kind: heading
+      label: Theme Colors
+      begin_group: true
+    - id: toolbar.format_shape.shadow_color.theme_colors_2
+      kind: list
+      list: theme_colors
+    - id: toolbar.format_shape.shadow_color.theme_tints
+      kind: list
+      list: theme_tints
+    - id: toolbar.format_shape.shadow_color.standard_colors
+      kind: heading
+      label: Standard Colors
+      begin_group: true
+    - id: toolbar.format_shape.shadow_color.standard_colors_2
+      kind: list
+      list: standard_colors
+    - id: toolbar.format_shape.shadow_color.recent_colors
+      kind: heading
+      label: Recent Colors
+      begin_group: true
+    - id: toolbar.format_shape.shadow_color.recent_colors_2
+      kind: list
+      list: recent_colors
+    - id: toolbar.format_shape.shadow_color.more_shadow_colors
+      kind: button
+      label: More Shadow Colors...
+      command: format.set.fill.shadow
+      visuicmd: visCmdSetFillShadow
+      display: text
+- id: toolbar.format_text
+  label: Format Text
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.format_text.increase_font_size
+    kind: button
+    label: Increase Font Size
+    command: format.text.increase_size
+    visuicmd: visCmdSetCharSizeUp
+    shortcut: Shift+Ctrl+.
+    icon: format.text.increase_size
+    begin_group: true
+  - id: toolbar.format_text.decrease_font_size
+    kind: button
+    label: Decrease Font Size
+    command: format.text.decrease_size
+    visuicmd: visCmdSetCharSizeDown
+    shortcut: Shift+Ctrl+,
+    icon: format.text.decrease_size
+  - id: toolbar.format_text.strikethrough
+    kind: button
+    label: Strikethrough
+    command: text.strike.through
+    visuicmd: visCmdTextStrikeThrough
+    icon: text.strike.through
+    begin_group: true
+  - id: toolbar.format_text.small_caps
+    kind: button
+    label: Small Caps
+    command: format.text.small_caps
+    visuicmd: visCmdTextSmallCaps
+    shortcut: Shift+Ctrl+K
+    icon: format.text.small_caps
+  - id: toolbar.format_text.superscript
+    kind: button
+    label: Superscript
+    command: text.super.script
+    visuicmd: visCmdTextSuperScript
+    shortcut: Shift+Ctrl++
+    icon: text.super.script
+  - id: toolbar.format_text.subscript
+    kind: button
+    label: Subscript
+    command: format.text.subscript
+    visuicmd: visCmdTextSubscript
+    shortcut: Ctrl++
+    icon: format.text.subscript
+  - id: toolbar.format_text.align_bottom
+    kind: button
+    label: Align Bottom
+    command: format.text.align_bottom
+    visuicmd: visCmdTextVAlignBottom
+    shortcut: Shift+Ctrl+V
+    icon: format.text.align_bottom
+    begin_group: true
+  - id: toolbar.format_text.align_middle
+    kind: button
+    label: Align Middle
+    command: format.text.align_middle
+    visuicmd: visCmdTextVAlignMiddle
+    shortcut: Shift+Ctrl+M
+    icon: format.text.align_middle
+  - id: toolbar.format_text.align_top
+    kind: button
+    label: Align Top
+    command: format.text.align_top
+    visuicmd: visCmdTextVAlignTop
+    shortcut: Shift+Ctrl+T
+    icon: format.text.align_top
+  - id: toolbar.format_text.decrease_paragraph_spacing
+    kind: button
+    label: Decrease Paragraph Spacing
+    command: format.decrease.para.spacing
+    visuicmd: visCmdDecreaseParaSpacing
+    icon: format.decrease.para.spacing
+    begin_group: true
+  - id: toolbar.format_text.increase_paragraph_spacing
+    kind: button
+    label: Increase Paragraph Spacing
+    command: format.increase.para.spacing
+    visuicmd: visCmdIncreaseParaSpacing
+    icon: format.increase.para.spacing
+- id: toolbar.ink
+  label: Ink
+  visible: false
+  dock: floating
+  items:
+  - id: toolbar.ink.ink_pen_1
+    kind: button
+    label: Ink Pen 1
+    command: tools.ink.stock.pen0
+    visuicmd: visCmdInkStockPen0
+    icon: tools.ink.stock.pen0
+  - id: toolbar.ink.ink_pen_2
+    kind: button
+    label: Ink Pen 2
+    command: tools.ink.stock.pen1
+    visuicmd: visCmdInkStockPen1
+    icon: tools.ink.stock.pen1
+  - id: toolbar.ink.ink_pen_3
+    kind: button
+    label: Ink Pen 3
+    command: tools.ink.ink_pen_3
+    new_command: true
+    icon: tools.ink.ink_pen_3
+  - id: toolbar.ink.ink_pen_4
+    kind: button
+    label: Ink Pen 4
+    command: tools.ink.ink_pen_4
+    new_command: true
+    icon: tools.ink.ink_pen_4
+  - id: toolbar.ink.ink_pen_5
+    kind: button
+    label: Ink Pen 5
+    command: tools.ink.ink_pen_5
+    new_command: true
+    icon: tools.ink.ink_pen_5
+  - id: toolbar.ink.eraser
+    kind: button
+    label: Eraser
+    command: tools.ink.eraser
+    visuicmd: visCmdInkEraser
+    icon: tools.ink.eraser
+    begin_group: true
+  - id: toolbar.ink.close_ink_shape
+    kind: button
+    label: Close Ink Shape
+    command: tools.ink.close_ink_shape
+    new_command: true
+    icon: tools.ink.close_ink_shape
+  - id: toolbar.ink.ink_color
+    kind: submenu
+    label: Ink Color
+    icon: classic.toolbar.ink.ink_color
+    begin_group: true
+    items:
+    - id: toolbar.ink.ink_color.ink_colors
+      kind: list
+      list: ink_colors
+  - id: toolbar.ink.ink_thickness
+    kind: submenu
+    label: Ink Thickness
+    icon: classic.toolbar.ink.ink_thickness
+    items:
+    - id: toolbar.ink.ink_thickness.pen_widths
+      kind: list
+      list: pen_widths
+- id: toolbar.layout_and_routing
+  label: Layout & Routing
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.layout_and_routing.routing_style
+    kind: palette
+    label: Routing Style
+    command: format.set.dyn.conn.routing.style
+    visuicmd: visCmdSetDynConnRoutingStyle
+  - id: toolbar.layout_and_routing.straight_lines
+    kind: button
+    label: Straight Lines
+    command: format.set.dyn.conn.appearance.straight
+    visuicmd: visCmdSetDynConnAppearanceStraight
+    icon: format.set.dyn.conn.appearance.straight
+  - id: toolbar.layout_and_routing.curved_lines
+    kind: button
+    label: Curved Lines
+    command: format.set.dyn.conn.appearance.curved
+    visuicmd: visCmdSetDynConnAppearanceCurved
+    icon: format.set.dyn.conn.appearance.curved
+  - id: toolbar.layout_and_routing.reset_connector
+    kind: button
+    label: Reset Connector
+    command: connector.dyn.conn.reroute
+    visuicmd: visCmdDynConnReroute
+    icon: connector.dyn.conn.reroute
+    begin_group: true
+  - id: toolbar.layout_and_routing.reroute_freely
+    kind: button
+    label: Reroute Freely
+    command: format.set.dyn.conn.reroute.freely
+    visuicmd: visCmdSetDynConnRerouteFreely
+    icon: format.set.dyn.conn.reroute.freely
+    begin_group: true
+  - id: toolbar.layout_and_routing.reroute_on_crossover
+    kind: button
+    label: Reroute on Crossover
+    command: format.set.dyn.conn.reroute.on.crossover
+    visuicmd: visCmdSetDynConnRerouteOnCrossover
+    icon: format.set.dyn.conn.reroute.on.crossover
+  - id: toolbar.layout_and_routing.never_reroute
+    kind: button
+    label: Never Reroute
+    command: format.set.dyn.conn.reroute.never
+    visuicmd: visCmdSetDynConnRerouteNever
+    icon: format.set.dyn.conn.reroute.never
+  - id: toolbar.layout_and_routing.line_jump_style
+    kind: split_recent
+    label: Line Jump Style
+    command: connector.line_jump_style
+    new_command: true
+    visuicmd: visCmdSetDynConnLineJumpStyle_Page
+    icon: connector.line_jump_style
+    begin_group: true
+    items:
+    - id: toolbar.layout_and_routing.line_jump_style.page_default
+      kind: button
+      label: Page Default
+      command: connector.line_jump_style.page_default
+      new_command: true
+      visuicmd: visCmdSetDynConnLineJumpStyle_Page
+      icon: connector.line_jump_style.page_default
+    - id: toolbar.layout_and_routing.line_jump_style.arc
+      kind: button
+      label: Arc
+      command: connector.line_jump_style.arc
+      new_command: true
+      icon: connector.line_jump_style.arc
+    - id: toolbar.layout_and_routing.line_jump_style.gap
+      kind: button
+      label: Gap
+      command: connector.line_jump_style.gap
+      new_command: true
+      icon: connector.line_jump_style.gap
+    - id: toolbar.layout_and_routing.line_jump_style.square
+      kind: button
+      label: Square
+      command: connector.line_jump_style.square
+      new_command: true
+      icon: connector.line_jump_style.square
+    - id: toolbar.layout_and_routing.line_jump_style.2_sides
+      kind: button
+      label: 2 Sides
+      command: connector.line_jump_style.sides_2
+      new_command: true
+      icon: connector.line_jump_style.sides_2
+    - id: toolbar.layout_and_routing.line_jump_style.3_sides
+      kind: button
+      label: 3 Sides
+      command: connector.line_jump_style.sides_3
+      new_command: true
+      icon: connector.line_jump_style.sides_3
+    - id: toolbar.layout_and_routing.line_jump_style.4_sides
+      kind: button
+      label: 4 Sides
+      command: connector.line_jump_style.sides_4
+      new_command: true
+      icon: connector.line_jump_style.sides_4
+    - id: toolbar.layout_and_routing.line_jump_style.5_sides
+      kind: button
+      label: 5 Sides
+      command: connector.line_jump_style.sides_5
+      new_command: true
+      icon: connector.line_jump_style.sides_5
+    - id: toolbar.layout_and_routing.line_jump_style.6_sides
+      kind: button
+      label: 6 Sides
+      command: connector.line_jump_style.sides_6
+      new_command: true
+      icon: connector.line_jump_style.sides_6
+    - id: toolbar.layout_and_routing.line_jump_style.7_sides
+      kind: button
+      label: 7 Sides
+      command: connector.line_jump_style.sides_7
+      new_command: true
+      icon: connector.line_jump_style.sides_7
+  - id: toolbar.layout_and_routing.add_line_jumps_to
+    kind: split_recent
+    label: Add Line Jumps To
+    command: connector.add_line_jumps_to
+    new_command: true
+    visuicmd: visCmdSetPageLineJumpCode_Horz
+    icon: connector.add_line_jumps_to
+    items:
+    - id: toolbar.layout_and_routing.add_line_jumps_to.no_lines
+      kind: button
+      label: No Lines
+      command: connector.add_line_jumps_to.no_lines
+      new_command: true
+      icon: connector.add_line_jumps_to.no_lines
+    - id: toolbar.layout_and_routing.add_line_jumps_to.horizontal_lines
+      kind: button
+      label: Horizontal Lines
+      command: connector.add_line_jumps_to.horizontal_lines
+      new_command: true
+      visuicmd: visCmdSetPageLineJumpCode_Horz
+      icon: connector.add_line_jumps_to.horizontal_lines
+    - id: toolbar.layout_and_routing.add_line_jumps_to.vertical_lines
+      kind: button
+      label: Vertical Lines
+      command: connector.add_line_jumps_to.vertical_lines
+      new_command: true
+      icon: connector.add_line_jumps_to.vertical_lines
+    - id: toolbar.layout_and_routing.add_line_jumps_to.last_routed_line
+      kind: button
+      label: Last Routed Line
+      command: connector.add_line_jumps_to.last_routed_line
+      new_command: true
+      icon: connector.add_line_jumps_to.last_routed_line
+    - id: toolbar.layout_and_routing.add_line_jumps_to.last_displayed_line
+      kind: button
+      label: Last Displayed Line
+      command: connector.add_line_jumps_to.last_displayed_line
+      new_command: true
+      icon: connector.add_line_jumps_to.last_displayed_line
+    - id: toolbar.layout_and_routing.add_line_jumps_to.first_displayed_line
+      kind: button
+      label: First Displayed Line
+      command: connector.add_line_jumps_to.first_displayed_line
+      new_command: true
+      icon: connector.add_line_jumps_to.first_displayed_line
+  - id: toolbar.layout_and_routing.move_other_shapes_away_on_drop
+    kind: button
+    label: Move Other Shapes Away on Drop
+    command: format.set.page.plow
+    visuicmd: visCmdSetPagePlow
+    icon: format.set.page.plow
+- id: toolbar.picture
+  label: Picture
+  visible: false
+  dock: floating
+  items:
+  - id: toolbar.picture.insert_picture
+    kind: button
+    label: Insert Picture
+    command: file.import
+    visuicmd: visCmdFileImport
+    icon: file.import
+  - id: toolbar.picture.crop_tool
+    kind: button
+    label: Crop Tool
+    command: tools.crop
+    visuicmd: visCmdCropTool
+    shortcut: Shift+Ctrl+2
+    icon: tools.crop
+    begin_group: true
+  - id: toolbar.picture.rotate_left
+    kind: button
+    label: Rotate Left
+    command: arrange.object.rotate90
+    visuicmd: visCmdObjectRotate90
+    shortcut: Ctrl+L
+    icon: arrange.object.rotate90
+  - id: toolbar.picture.line_weight
+    kind: split
+    label: Line Weight
+    command: format.set.line.weight
+    visuicmd: visCmdSetLineWeight
+    icon: format.set.line.weight
+    items:
+    - id: toolbar.picture.line_weight.no_line
+      kind: button
+      label: No Line
+      command: format.set.line.weight
+      visuicmd: visCmdSetLineWeight
+      display: text
+    - id: toolbar.picture.line_weight.line_weights
+      kind: list
+      list: line_weights
+    - id: toolbar.picture.line_weight.more_line_weights
+      kind: button
+      label: More Line Weights...
+      command: format.line
+      visuicmd: visCmdFormatLine
+      shortcut: Shift+F3
+      display: text
+      begin_group: true
+  - id: toolbar.picture.format_picture
+    kind: button
+    label: Format Picture
+    command: insert.image.properties.dlg
+    visuicmd: visCmdImagePropertiesDlg
+    icon: insert.image.properties.dlg
+  - id: toolbar.picture.transparency
+    kind: split
+    label: Transparency
+    command: shape.transparency.dlg
+    visuicmd: visCmdShapeTransparencyDlg
+    icon: shape.transparency.dlg
+    items:
+    - id: toolbar.picture.transparency.no_transparency
+      kind: button
+      label: No Transparency
+      command: format.transparency.no_transparency
+      new_command: true
+      display: text
+    - id: toolbar.picture.transparency.transparency_levels
+      kind: list
+      list: transparency_levels
+    - id: toolbar.picture.transparency.more_transparency_levels
+      kind: button
+      label: More Transparency Levels...
+      command: shape.transparency.dlg
+      visuicmd: visCmdShapeTransparencyDlg
+      display: text
+      begin_group: true
+- id: toolbar.reviewing
+  label: Reviewing
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.reviewing.show_hide_markup
+    kind: button
+    label: Show/Hide Markup
+    command: review.show_hide_markup
+    new_command: true
+    icon: review.show_hide_markup
+  - id: toolbar.reviewing.reviewers
+    kind: submenu
+    label: Reviewers
+    command: review.reviewer.visibility.all
+    visuicmd: visCmdReviewerVisibilityAll
+    begin_group: true
+    items:
+    - id: toolbar.reviewing.reviewers.show_all
+      kind: button
+      label: Show All
+      command: review.reviewer.visibility.all
+      visuicmd: visCmdReviewerVisibilityAll
+    - id: toolbar.reviewing.reviewers.hide_all
+      kind: button
+      label: Hide All
+      command: review.reviewers.hide_all
+      new_command: true
+    - id: toolbar.reviewing.reviewers.reviewers
+      kind: list
+      list: reviewers
+      begin_group: true
+  - id: toolbar.reviewing.insert_comment
+    kind: split
+    label: Insert Comment
+    command: insert.comment
+    visuicmd: visCmdInsertComment
+    icon: insert.comment
+    begin_group: true
+    items:
+    - id: toolbar.reviewing.insert_comment.insert_comment
+      kind: button
+      label: Insert Comment
+      command: insert.comment
+      visuicmd: visCmdInsertComment
+      icon: insert.comment
+    - id: toolbar.reviewing.insert_comment.edit_comment
+      kind: button
+      label: Edit Comment
+      command: review.insert_comment.edit_comment
+      new_command: true
+      icon: review.insert_comment.edit_comment
+    - id: toolbar.reviewing.insert_comment.delete_comment
+      kind: button
+      label: Delete Comment
+      command: edit.delete.comment
+      icon: edit.delete.comment
+  - id: toolbar.reviewing.ink_tool
+    kind: button
+    label: Ink Tool
+    command: tools.ink.review.pen
+    visuicmd: visCmdInkReviewPen
+    icon: tools.ink.review.pen
+  - id: toolbar.reviewing.previous_markup
+    kind: button
+    label: Previous Markup
+    command: view.previous.markup
+    visuicmd: visCmdPreviousMarkup
+    icon: view.previous.markup
+    begin_group: true
+  - id: toolbar.reviewing.next_markup
+    kind: button
+    label: Next Markup
+    command: view.next.markup
+    visuicmd: visCmdNextMarkup
+    icon: view.next.markup
+  - id: toolbar.reviewing.delete_markup
+    kind: split
+    label: Delete Markup
+    command: review.delete_markup
+    new_command: true
+    icon: review.delete_markup
+    items:
+    - id: toolbar.reviewing.delete_markup.delete_markup
+      kind: button
+      label: Delete Markup
+      command: review.delete_markup.delete_markup
+      new_command: true
+      icon: review.delete_markup.delete_markup
+    - id: toolbar.reviewing.delete_markup.delete_markup_overlays_on_current_page
+      kind: submenu
+      label: Delete Markup Overlays on Current Page
+      items:
+      - id: toolbar.reviewing.delete_markup.delete_markup_overlays_on_current_page.all_on_current_page
+        kind: button
+        label: All on Current Page
+        command: review.delete_markup.delete_markup_overlays_on_current_page.all_on_current_page
+        new_command: true
+      - id: toolbar.reviewing.delete_markup.delete_markup_overlays_on_current_page.markup_overlays
+        kind: list
+        list: markup_overlays
+        begin_group: true
+    - id: toolbar.reviewing.delete_markup.delete_all_markup_overlays_in_document
+      kind: button
+      label: Delete All Markup Overlays in Document
+      command: review.delete_markup.delete_all_markup_overlays_in_document
+      new_command: true
+  - id: toolbar.reviewing.track_markup
+    kind: button
+    label: Track Markup
+    command: format.set.add.markup
+    visuicmd: visCmdSetAddMarkup
+    icon: format.set.add.markup
+    begin_group: true
+  - id: toolbar.reviewing.reviewing_pane
+    kind: button
+    label: Reviewing Pane
+    command: view.task.pane.reviewer
+    visuicmd: visCmdTaskPaneReviewer
+    icon: view.task.pane.reviewer
+    begin_group: true
+- id: toolbar.snap_and_glue
+  label: Snap & Glue
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.snap_and_glue.toggle_snap
+    kind: button
+    label: Toggle Snap
+    command: shape.draw.snap
+    visuicmd: visCmdDrawSnap
+    shortcut: Shift+F9
+    icon: shape.draw.snap
+  - id: toolbar.snap_and_glue.toggle_glue
+    kind: button
+    label: Toggle Glue
+    command: shape.draw.glue
+    visuicmd: visCmdDrawGlue
+    shortcut: F9
+    icon: shape.draw.glue
+  - id: toolbar.snap_and_glue.snap_to_dynamic_grid
+    kind: button
+    label: Snap to Dynamic Grid
+    command: connector.dynamic.grid
+    visuicmd: visCmdDynamicGrid
+    icon: connector.dynamic.grid
+  - id: toolbar.snap_and_glue.snap_to_drawing_aids
+    kind: button
+    label: Snap to Drawing Aids
+    command: tools.tool.snap.lines
+    visuicmd: visCmdToolSnapLines
+    icon: tools.tool.snap.lines
+  - id: toolbar.snap_and_glue.snap_to_ruler_subdivisions
+    kind: button
+    label: Snap to Ruler Subdivisions
+    command: view.rul.sub
+    visuicmd: visCmdRulSub
+    icon: view.rul.sub
+    begin_group: true
+  - id: toolbar.snap_and_glue.snap_to_grid
+    kind: button
+    label: Snap to Grid
+    command: view.grid
+    visuicmd: visCmdGrid
+    icon: view.grid
+  - id: toolbar.snap_and_glue.snap_to_alignment_box
+    kind: button
+    label: Snap to Alignment Box
+    command: arrange.align.box
+    visuicmd: visCmdAlignBox
+    icon: arrange.align.box
+  - id: toolbar.snap_and_glue.snap_to_shape_intersections
+    kind: button
+    label: Snap to Shape Intersections
+    command: shape.intersect
+    visuicmd: visCmdShapeIntersect
+    icon: shape.intersect
+  - id: toolbar.snap_and_glue.glue_to_shape_geometry
+    kind: button
+    label: Glue to Shape Geometry
+    command: shape.geo
+    visuicmd: visCmdShapeGeo
+    icon: shape.geo
+  - id: toolbar.snap_and_glue.glue_to_guides
+    kind: button
+    label: Glue to Guides
+    command: view.guides
+    visuicmd: visCmdGuides
+    icon: view.guides
+  - id: toolbar.snap_and_glue.glue_to_shape_handles
+    kind: button
+    label: Glue to Shape Handles
+    command: shape.hand
+    visuicmd: visCmdShapeHand
+    icon: shape.hand
+  - id: toolbar.snap_and_glue.glue_to_shape_vertices
+    kind: button
+    label: Glue to Shape Vertices
+    command: shape.vert
+    visuicmd: visCmdShapeVert
+    icon: shape.vert
+  - id: toolbar.snap_and_glue.glue_to_connection_points
+    kind: button
+    label: Glue to Connection Points
+    command: connector.conn.points
+    visuicmd: visCmdConnPoints
+    icon: connector.conn.points
+- id: toolbar.stencil
+  label: Stencil
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.stencil.new_stencil
+    kind: button
+    label: New Stencil
+    command: file.new.blank.stencil
+    visuicmd: visCmdFileNewBlankStencil
+    icon: file.new.blank.stencil
+  - id: toolbar.stencil.show_document_stencil
+    kind: button
+    label: Show Document Stencil
+    command: view.window.show.master.objects
+    visuicmd: visCmdWindowShowMasterObjects
+    icon: view.window.show.master.objects
+  - id: toolbar.stencil.icons_and_names
+    kind: button
+    label: Icons and Names
+    command: shape.sten.icon.and.name
+    visuicmd: visCmdStenIconAndName
+    icon: shape.sten.icon.and.name
+    begin_group: true
+  - id: toolbar.stencil.names_under_icons
+    kind: button
+    label: Names Under Icons
+    command: shape.sten.names.under.icons
+    visuicmd: visCmdStenNamesUnderIcons
+    icon: shape.sten.names.under.icons
+  - id: toolbar.stencil.icons_only
+    kind: button
+    label: Icons Only
+    command: shape.sten.icon.only
+    visuicmd: visCmdStenIconOnly
+    icon: shape.sten.icon.only
+  - id: toolbar.stencil.names_only
+    kind: button
+    label: Names Only
+    command: shape.sten.name.only
+    visuicmd: visCmdStenNameOnly
+    icon: shape.sten.name.only
+  - id: toolbar.stencil.icons_and_details
+    kind: button
+    label: Icons and Details
+    command: shape.sten.icon.and.detail
+    visuicmd: visCmdStenIconAndDetail
+    icon: shape.sten.icon.and.detail
+- id: toolbar.view
+  label: View
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.view.rulers
+    kind: check
+    label: Rulers
+    command: view.rulers
+    visuicmd: visCmdViewRulers
+    icon: view.rulers
+  - id: toolbar.view.grid
+    kind: check
+    label: Grid
+    command: view.toggle_grid
+    visuicmd: visCmdViewGrid
+    icon: view.toggle_grid
+  - id: toolbar.view.guides
+    kind: check
+    label: Guides
+    command: view.toggle_guides
+    visuicmd: visCmdViewGuides
+    icon: view.toggle_guides
+  - id: toolbar.view.connection_points
+    kind: check
+    label: Connection Points
+    command: view.connections
+    visuicmd: visCmdViewConnections
+    icon: view.connections
+  - id: toolbar.view.page_breaks
+    kind: check
+    label: Page Breaks
+    command: view.page.breaks
+    visuicmd: visCmdViewPageBreaks
+    icon: view.page.breaks
+  - id: toolbar.view.shapes_window
+    kind: button
+    label: Shapes Window
+    command: shape.shapes.window
+    visuicmd: visCmdShapesWindow
+    icon: shape.shapes.window
+  - id: toolbar.view.pan_and_zoom_window
+    kind: button
+    label: Pan & Zoom Window
+    command: view.pan.zoom
+    visuicmd: visCmdPanZoom
+    icon: view.pan.zoom
+    begin_group: true
+  - id: toolbar.view.shape_data_window
+    kind: button
+    label: Shape Data Window
+    command: tools.cust.prop
+    visuicmd: visCmdCustProp
+    icon: tools.cust.prop
+  - id: toolbar.view.size_and_position_window
+    kind: button
+    label: Size & Position Window
+    command: arrange.size.pos
+    visuicmd: visCmdSizePos
+    icon: arrange.size.pos
+  - id: toolbar.view.external_data_window
+    kind: button
+    label: External Data Window
+    command: tools.external.data.window
+    icon: tools.external.data.window
+  - id: toolbar.view.drawing_explorer_window
+    kind: button
+    label: Drawing Explorer Window
+    command: shape.drawing.explorer
+    visuicmd: visCmdDrawingExplorer
+    icon: shape.drawing.explorer
+  - id: toolbar.view.master_explorer_window
+    kind: button
+    label: Master Explorer Window
+    command: shape.master.explorer
+    visuicmd: visCmdMasterExplorer
+    icon: shape.master.explorer
+  - id: toolbar.view.layer_properties
+    kind: button
+    label: Layer Properties
+    command: layer.setup.dlg
+    visuicmd: visCmdLayerSetupDlg
+    icon: layer.setup.dlg
+    begin_group: true
+- id: toolbar.web
+  label: Web
+  visible: false
+  dock: top
+  items:
+  - id: toolbar.web.insert_hyperlink
+    kind: button
+    label: Insert Hyperlink
+    command: insert.hyper.link
+    visuicmd: visCmdInsertHyperLink
+    shortcut: Ctrl+K
+    icon: insert.hyper.link
+  - id: toolbar.web.back
+    kind: button
+    label: Back
+    command: tools.inet.go.back
+    visuicmd: visCmdINETGoBack
+    shortcut: Alt+Left
+    icon: tools.inet.go.back
+  - id: toolbar.web.forward
+    kind: button
+    label: Forward
+    command: tools.inet.go.forward
+    visuicmd: visCmdINETGoForward
+    shortcut: Alt+Right
+    icon: tools.inet.go.forward
+- id: toolbar.shapesheet_standard
+  label: ShapeSheet Standard
+  visible: true
+  dock: top
+  shown_in: shapesheet_window
+  items:
+  - id: toolbar.shapesheet_standard.new
+    kind: split
+    label: New
+    command: file.new.blank.drawing
+    visuicmd: visCmdFileNewBlankDrawing
+    icon: file.new.blank.drawing
+    items:
+    - id: toolbar.shapesheet_standard.new.getting_started
+      kind: button
+      label: Getting Started...
+      command: file.create.new.drawing
+      visuicmd: visCmdCreateNewDrawing
+    - id: toolbar.shapesheet_standard.new.template_categories
+      kind: list
+      list: template_categories
+  - id: toolbar.shapesheet_standard.open
+    kind: button
+    label: Open
+    command: file.open
+    visuicmd: visCmdFileOpen
+    shortcut: Ctrl+O
+    icon: file.open
+  - id: toolbar.shapesheet_standard.save
+    kind: button
+    label: Save
+    command: file.save
+    visuicmd: visCmdFileSave
+    shortcut: Ctrl+S
+    icon: file.save
+  - id: toolbar.shapesheet_standard.e_mail
+    kind: button
+    label: E-mail
+    command: file.send.as.mail
+    visuicmd: visCmdSendAsMail
+    icon: file.send.as.mail
+  - id: toolbar.shapesheet_standard.cut
+    kind: button
+    label: Cut
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    shortcut: Ctrl+X
+    icon: edit.cut
+    begin_group: true
+  - id: toolbar.shapesheet_standard.copy
+    kind: button
+    label: Copy
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    shortcut: Ctrl+C
+    icon: edit.copy
+  - id: toolbar.shapesheet_standard.paste
+    kind: button
+    label: Paste
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    shortcut: Ctrl+V
+    icon: edit.paste
+  - id: toolbar.shapesheet_standard.undo
+    kind: split
+    label: Undo
+    command: edit.undo
+    visuicmd: visCmdEditUndo
+    begin_group: true
+  - id: toolbar.shapesheet_standard.redo
+    kind: split
+    label: Redo
+    command: edit.redo
+    visuicmd: visCmdEditRedo
+  - id: toolbar.shapesheet_standard.shapes
+    kind: submenu
+    label: Shapes
+    icon: classic.toolbar.shapesheet_standard.shapes
+    begin_group: true
+    items:
+    - id: toolbar.shapesheet_standard.shapes.my_shapes
+      kind: submenu
+      label: My Shapes
+      items:
+      - id: toolbar.shapesheet_standard.shapes.my_shapes.my_shapes
+        kind: list
+        list: my_shapes
+      - id: toolbar.shapesheet_standard.shapes.my_shapes.organize_my_shapes
+        kind: button
+        label: Organize My Shapes
+        command: file.shapes.organize_my_shapes
+        begin_group: true
+    - id: toolbar.shapesheet_standard.shapes.stencil_categories
+      kind: list
+      list: stencil_categories
+      begin_group: true
+    - id: toolbar.shapesheet_standard.shapes.open_stencil
+      kind: button
+      label: Open Stencil...
+      command: file.open.stencil
+      visuicmd: visCmdFileOpenStencil
+      icon: file.open.stencil
+      begin_group: true
+    - id: toolbar.shapesheet_standard.shapes.new_stencil
+      kind: button
+      label: New Stencil
+      command: file.new.blank.stencil
+      visuicmd: visCmdFileNewBlankStencil
+      icon: file.new.blank.stencil
+    - id: toolbar.shapesheet_standard.shapes.new_stencil_metric
+      kind: button
+      label: New Stencil (Metric)
+      command: file.new.blank.stencil.metric
+      visuicmd: visCmdFileNewBlankStencilMetric
+      icon: file.new.blank.stencil.metric
+    - id: toolbar.shapesheet_standard.shapes.new_stencil_us_units
+      kind: button
+      label: New Stencil (US Units)
+      command: file.new.blank.stencil.us
+      visuicmd: visCmdFileNewBlankStencilUS
+      icon: file.new.blank.stencil.us
+    - id: toolbar.shapesheet_standard.shapes.show_document_stencil
+      kind: button
+      label: Show Document Stencil
+      command: view.window.show.master.objects
+      visuicmd: visCmdWindowShowMasterObjects
+  - id: toolbar.shapesheet_standard.new_window
+    kind: button
+    label: New Window
+    command: view.window.new.window
+    visuicmd: visCmdWindowNewWindow
+    icon: view.window.new.window
+    begin_group: true
+  - id: toolbar.shapesheet_standard.tile_windows
+    kind: button
+    label: Tile Windows
+    command: view.tile_all
+    visuicmd: visCmdWindowTileAll
+    shortcut: Shift+F7
+    icon: view.tile_all
+  - id: toolbar.shapesheet_standard.cascade_windows
+    kind: button
+    label: Cascade Windows
+    command: view.cascade_all
+    visuicmd: visCmdWindowCascadeAll
+    shortcut: Alt+F7
+    icon: view.cascade_all
+  - id: toolbar.shapesheet_standard.ferrogram_help
+    kind: button
+    label: Larrygram Help
+    command: help.contents
+    visuicmd: visCmdHelpContents
+    icon: help.contents
+    begin_group: true
+- id: toolbar.shapesheet_formula_bar
+  label: ShapeSheet Formula Bar
+  visible: true
+  dock: top
+  shown_in: shapesheet_window
+  items:
+  - id: toolbar.shapesheet_formula_bar.cancel_change
+    kind: button
+    label: Cancel Change
+    command: edit.sw.cancel
+    icon: edit.sw.cancel
+  - id: toolbar.shapesheet_formula_bar.accept
+    kind: button
+    label: Accept
+    command: edit.sw.accept
+    icon: edit.sw.accept
+- id: toolbar.shapesheet_formula_tracing
+  label: ShapeSheet Formula Tracing
+  visible: true
+  dock: top
+  shown_in: shapesheet_window
+  items:
+  - id: toolbar.shapesheet_formula_tracing.shapesheet_formula_tracing_window
+    kind: button
+    label: ShapeSheet Formula Tracing Window
+    command: view.show.formula.tracing.window
+    icon: view.show.formula.tracing.window
+  - id: toolbar.shapesheet_formula_tracing.trace_dependents
+    kind: button
+    label: Trace Dependents
+    command: tools.formula_tracing.trace_dependents
+    new_command: true
+    icon: tools.formula_tracing.trace_dependents
+    begin_group: true
+  - id: toolbar.shapesheet_formula_tracing.trace_precedents
+    kind: button
+    label: Trace Precedents
+    command: tools.formula_tracing.trace_precedents
+    new_command: true
+    icon: tools.formula_tracing.trace_precedents
+  - id: toolbar.shapesheet_formula_tracing.back
+    kind: button
+    label: Back
+    command: tools.formula_tracing.back
+    new_command: true
+    icon: tools.formula_tracing.back
+    begin_group: true
+  - id: toolbar.shapesheet_formula_tracing.forward
+    kind: button
+    label: Forward
+    command: tools.formula_tracing.forward
+    new_command: true
+    icon: tools.formula_tracing.forward
+- id: toolbar.stencil_standard
+  label: Stencil Standard
+  visible: true
+  dock: top
+  shown_in: stencil_edit
+  items:
+  - id: toolbar.stencil_standard.new
+    kind: split
+    label: New
+    command: file.new.blank.drawing
+    visuicmd: visCmdFileNewBlankDrawing
+    icon: file.new.blank.drawing
+    items:
+    - id: toolbar.stencil_standard.new.getting_started
+      kind: button
+      label: Getting Started...
+      command: file.create.new.drawing
+      visuicmd: visCmdCreateNewDrawing
+    - id: toolbar.stencil_standard.new.template_categories
+      kind: list
+      list: template_categories
+  - id: toolbar.stencil_standard.open
+    kind: button
+    label: Open
+    command: file.open
+    visuicmd: visCmdFileOpen
+    shortcut: Ctrl+O
+    icon: file.open
+  - id: toolbar.stencil_standard.save
+    kind: button
+    label: Save
+    command: file.save
+    visuicmd: visCmdFileSave
+    shortcut: Ctrl+S
+    icon: file.save
+  - id: toolbar.stencil_standard.e_mail
+    kind: button
+    label: E-mail
+    command: file.send.as.mail
+    visuicmd: visCmdSendAsMail
+    icon: file.send.as.mail
+  - id: toolbar.stencil_standard.cut
+    kind: button
+    label: Cut
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    shortcut: Ctrl+X
+    icon: edit.cut
+    begin_group: true
+  - id: toolbar.stencil_standard.copy
+    kind: button
+    label: Copy
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    shortcut: Ctrl+C
+    icon: edit.copy
+  - id: toolbar.stencil_standard.paste
+    kind: button
+    label: Paste
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    shortcut: Ctrl+V
+    icon: edit.paste
+  - id: toolbar.stencil_standard.undo
+    kind: split
+    label: Undo
+    command: edit.undo
+    visuicmd: visCmdEditUndo
+    begin_group: true
+  - id: toolbar.stencil_standard.redo
+    kind: split
+    label: Redo
+    command: edit.redo
+    visuicmd: visCmdEditRedo
+  - id: toolbar.stencil_standard.shapes
+    kind: submenu
+    label: Shapes
+    icon: classic.toolbar.stencil_standard.shapes
+    begin_group: true
+    items:
+    - id: toolbar.stencil_standard.shapes.my_shapes
+      kind: submenu
+      label: My Shapes
+      items:
+      - id: toolbar.stencil_standard.shapes.my_shapes.my_shapes
+        kind: list
+        list: my_shapes
+      - id: toolbar.stencil_standard.shapes.my_shapes.organize_my_shapes
+        kind: button
+        label: Organize My Shapes
+        command: file.shapes.organize_my_shapes
+        begin_group: true
+    - id: toolbar.stencil_standard.shapes.stencil_categories
+      kind: list
+      list: stencil_categories
+      begin_group: true
+    - id: toolbar.stencil_standard.shapes.open_stencil
+      kind: button
+      label: Open Stencil...
+      command: file.open.stencil
+      visuicmd: visCmdFileOpenStencil
+      icon: file.open.stencil
+      begin_group: true
+    - id: toolbar.stencil_standard.shapes.new_stencil
+      kind: button
+      label: New Stencil
+      command: file.new.blank.stencil
+      visuicmd: visCmdFileNewBlankStencil
+      icon: file.new.blank.stencil
+    - id: toolbar.stencil_standard.shapes.new_stencil_metric
+      kind: button
+      label: New Stencil (Metric)
+      command: file.new.blank.stencil.metric
+      visuicmd: visCmdFileNewBlankStencilMetric
+      icon: file.new.blank.stencil.metric
+    - id: toolbar.stencil_standard.shapes.new_stencil_us_units
+      kind: button
+      label: New Stencil (US Units)
+      command: file.new.blank.stencil.us
+      visuicmd: visCmdFileNewBlankStencilUS
+      icon: file.new.blank.stencil.us
+    - id: toolbar.stencil_standard.shapes.show_document_stencil
+      kind: button
+      label: Show Document Stencil
+      command: view.window.show.master.objects
+      visuicmd: visCmdWindowShowMasterObjects
+  - id: toolbar.stencil_standard.new_window
+    kind: button
+    label: New Window
+    command: view.window.new.window
+    visuicmd: visCmdWindowNewWindow
+    icon: view.window.new.window
+    begin_group: true
+  - id: toolbar.stencil_standard.tile_windows
+    kind: button
+    label: Tile Windows
+    command: view.tile_all
+    visuicmd: visCmdWindowTileAll
+    shortcut: Shift+F7
+    icon: view.tile_all
+  - id: toolbar.stencil_standard.cascade_windows
+    kind: button
+    label: Cascade Windows
+    command: view.cascade_all
+    visuicmd: visCmdWindowCascadeAll
+    shortcut: Alt+F7
+    icon: view.cascade_all
+  - id: toolbar.stencil_standard.ferrogram_help
+    kind: button
+    label: Larrygram Help
+    command: help.contents
+    visuicmd: visCmdHelpContents
+    icon: help.contents
+    begin_group: true
+- id: toolbar.stencil_format
+  label: Stencil Format
+  visible: true
+  dock: top
+  shown_in: stencil_edit
+  items:
+  - id: toolbar.stencil_format.new_stencil
+    kind: button
+    label: New Stencil
+    command: file.new.blank.stencil
+    visuicmd: visCmdFileNewBlankStencil
+    icon: file.new.blank.stencil
+  - id: toolbar.stencil_format.icons_and_names
+    kind: button
+    label: Icons and Names
+    command: shape.sten.icon.and.name
+    visuicmd: visCmdStenIconAndName
+    icon: shape.sten.icon.and.name
+    begin_group: true
+  - id: toolbar.stencil_format.names_under_icons
+    kind: button
+    label: Names Under Icons
+    command: shape.sten.names.under.icons
+    visuicmd: visCmdStenNamesUnderIcons
+    icon: shape.sten.names.under.icons
+  - id: toolbar.stencil_format.icons_only
+    kind: button
+    label: Icons Only
+    command: shape.sten.icon.only
+    visuicmd: visCmdStenIconOnly
+    icon: shape.sten.icon.only
+  - id: toolbar.stencil_format.names_only
+    kind: button
+    label: Names Only
+    command: shape.sten.name.only
+    visuicmd: visCmdStenNameOnly
+    icon: shape.sten.name.only
+  - id: toolbar.stencil_format.icons_and_details
+    kind: button
+    label: Icons and Details
+    command: shape.sten.icon.and.detail
+    visuicmd: visCmdStenIconAndDetail
+    icon: shape.sten.icon.and.detail
+context_menus:
+- id: context.shape
+  label: Shape
+  trigger: right-click a shape
+  items:
+  - id: context.shape.hyperlinks
+    kind: list
+    list: hyperlinks
+  - id: context.shape.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.shape.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.shape.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.shape.format
+    kind: submenu
+    label: Format
+    access: "o"
+    begin_group: true
+    items:
+    - id: context.shape.format.text
+      kind: button
+      label: Text...
+      access: "t"
+      command: format.all.text.props
+      visuicmd: visCmdFormatAllTextProps
+      icon: format.all.text.props
+    - id: context.shape.format.line
+      kind: button
+      label: Line...
+      access: "l"
+      command: format.line
+      visuicmd: visCmdFormatLine
+      icon: format.line
+    - id: context.shape.format.fill
+      kind: button
+      label: Fill...
+      access: "f"
+      command: format.fill
+      visuicmd: visCmdFormatFill
+      icon: format.fill
+    - id: context.shape.format.allow_themes
+      kind: button
+      label: Allow Themes
+      access: "a"
+      command: tools.allow.themes
+      begin_group: true
+    - id: context.shape.format.remove_theme
+      kind: button
+      label: Remove Theme
+      access: "m"
+      command: edit.remove.theme.from.sel
+    - id: context.shape.format.picture
+      kind: button
+      label: Picture...
+      access: "u"
+      command: insert.image.properties.dlg
+      visuicmd: visCmdImagePropertiesDlg
+      icon: insert.image.properties.dlg
+      begin_group: true
+    - id: context.shape.format.ink
+      kind: button
+      label: Ink...
+      access: "n"
+      command: format.ink.dlg
+      visuicmd: visCmdFormatInkDlg
+    - id: context.shape.format.protection
+      kind: button
+      label: Protection...
+      access: "p"
+      command: format.protection
+      visuicmd: visCmdFormatProtection
+      begin_group: true
+    - id: context.shape.format.behavior
+      kind: button
+      label: Behavior...
+      access: "b"
+      command: format.behavior
+      visuicmd: visCmdFormatBehavior
+    - id: context.shape.format.special
+      kind: button
+      label: Special...
+      access: "e"
+      command: format.special
+      visuicmd: visCmdFormatSpecial
+    - id: context.shape.format.style
+      kind: button
+      label: Style...
+      access: "s"
+      command: format.style
+      visuicmd: visCmdFormatStyle
+      begin_group: true
+    - id: context.shape.format.layer
+      kind: button
+      label: Layer...
+      access: "r"
+      command: layer.dlg
+      visuicmd: visCmdLayerDlg
+      begin_group: true
+  - id: context.shape.data
+    kind: submenu
+    label: Data
+    access: "d"
+    items:
+    - id: context.shape.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "s"
+      command: format.cust.prop.edit
+      visuicmd: visCmdFormatCustPropEdit
+      icon: format.cust.prop.edit
+    - id: context.shape.data.edit_data_graphic
+      kind: button
+      label: Edit Data Graphic...
+      access: "e"
+      command: shape.data.edit_data_graphic
+      new_command: true
+      begin_group: true
+    - id: context.shape.data.remove_data_graphic
+      kind: button
+      label: Remove Data Graphic
+      access: "r"
+      command: edit.remove.data.graphic.from.sel
+    - id: context.shape.data.data_recordset_links
+      kind: list
+      list: data_recordset_links
+      begin_group: true
+  - id: context.shape.shape
+    kind: submenu
+    label: Shape
+    access: "e"
+    items:
+    - id: context.shape.shape.group
+      kind: button
+      label: Group
+      access: "g"
+      command: arrange.group
+      visuicmd: visCmdObjectGroup
+      icon: arrange.group
+      begin_group: true
+    - id: context.shape.shape.ungroup
+      kind: button
+      label: Ungroup
+      access: "u"
+      command: arrange.ungroup
+      visuicmd: visCmdObjectUngroup
+      icon: arrange.ungroup
+    - id: context.shape.shape.bring_to_front
+      kind: button
+      label: Bring to Front
+      access: "f"
+      command: arrange.bring_to_front
+      visuicmd: visCmdObjectBringToFront
+      icon: arrange.bring_to_front
+      begin_group: true
+    - id: context.shape.shape.send_to_back
+      kind: button
+      label: Send to Back
+      access: "b"
+      command: arrange.send_to_back
+      visuicmd: visCmdObjectSendToBack
+      icon: arrange.send_to_back
+    - id: context.shape.shape.bring_forward
+      kind: button
+      label: Bring Forward
+      access: "i"
+      command: arrange.bring_forward
+      visuicmd: visCmdObjectBringForward
+      icon: arrange.bring_forward
+    - id: context.shape.shape.send_backward
+      kind: button
+      label: Send Backward
+      access: "s"
+      command: arrange.send_backward
+      visuicmd: visCmdObjectSendBackward
+      icon: arrange.send_backward
+    - id: context.shape.shape.flip_horizontal
+      kind: button
+      label: Flip Horizontal
+      access: "h"
+      command: arrange.flip_horizontal
+      visuicmd: visCmdObjectFlipHorizontal
+      icon: arrange.flip_horizontal
+      begin_group: true
+    - id: context.shape.shape.flip_vertical
+      kind: button
+      label: Flip Vertical
+      access: "v"
+      command: arrange.flip_vertical
+      visuicmd: visCmdObjectFlipVertical
+      icon: arrange.flip_vertical
+    - id: context.shape.shape.rotate_text
+      kind: button
+      label: Rotate Text
+      access: "t"
+      command: text.rotate90
+      visuicmd: visCmdTextRotate90
+      icon: text.rotate90
+      begin_group: true
+    - id: context.shape.shape.find_similar_shapes
+      kind: button
+      label: Find Similar Shapes
+      access: "m"
+      command: shape.shape.find_similar_shapes
+      new_command: true
+  - id: context.shape.right_angle_connector
+    kind: button
+    label: Right-Angle Connector
+    access: "i"
+    command: connector.right_angle
+    icon: connector.right_angle
+    begin_group: true
+  - id: context.shape.straight_connector
+    kind: button
+    label: Straight Connector
+    access: "g"
+    command: connector.straight
+    icon: connector.straight
+  - id: context.shape.curved_connector
+    kind: button
+    label: Curved Connector
+    access: "v"
+    command: connector.curved
+    icon: connector.curved
+  - id: context.shape.reset_connector
+    kind: button
+    label: Reset Connector
+    access: "n"
+    command: connector.dyn.conn.reroute
+    visuicmd: visCmdDynConnReroute
+    icon: connector.dyn.conn.reroute
+    begin_group: true
+  - id: context.shape.convert_ink_to_text
+    kind: button
+    label: Convert Ink to Text
+    access: "i"
+    command: shape.convert_ink_to_text
+    new_command: true
+  - id: context.shape.convert_ink_to_geometry
+    kind: button
+    label: Convert Ink to Geometry
+    access: "m"
+    command: shape.convert_ink_to_geometry
+    new_command: true
+  - id: context.shape.help
+    kind: button
+    label: Help
+    access: "h"
+    command: help.contents
+    icon: help.contents
+    begin_group: true
+- id: context.page_tab
+  label: Page tab
+  trigger: right-click a page tab
+  items:
+  - id: context.page_tab.insert_page
+    kind: button
+    label: Insert Page...
+    access: "i"
+    command: tools.options.new.page
+    visuicmd: visCmdOptionsNewPage
+  - id: context.page_tab.delete_page
+    kind: button
+    label: Delete Page
+    access: "d"
+    command: page.delete
+    icon: page.delete
+  - id: context.page_tab.rename_page
+    kind: button
+    label: Rename Page
+    access: "r"
+    command: page.rename
+  - id: context.page_tab.reorder_pages
+    kind: button
+    label: Reorder Pages...
+    access: "p"
+    command: page.reorder_pages
+    new_command: true
+    shortcut: Ctrl+Alt+P
+- id: context.text_edit
+  label: Text editing
+  trigger: right-click inside text being edited
+  items:
+  - id: context.text_edit.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.text_edit.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.text_edit.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.text_edit.format_text
+    kind: button
+    label: Format Text...
+    access: "t"
+    command: format.all.text.props
+    visuicmd: visCmdFormatAllTextProps
+    icon: format.all.text.props
+    begin_group: true
+  - id: context.text_edit.insert_field
+    kind: button
+    label: Insert Field...
+    access: "f"
+    command: edit.insert.field
+    visuicmd: visCmdEditInsertField
+  - id: context.text_edit.bullets
+    kind: button
+    label: Bullets
+    access: "s"
+    command: text.bullets
+    icon: text.bullets
+  - id: context.text_edit.reconvert
+    kind: button
+    label: Reconvert
+    access: "v"
+    command: text.reconvert
+    new_command: true
+    begin_group: true
+  - id: context.text_edit.change_text_direction
+    kind: button
+    label: Change Text Direction
+    access: "c"
+    command: view.direction.toggle
+    icon: view.direction.toggle
+  - id: context.text_edit.horizontal_in_vertical
+    kind: button
+    label: Horizontal in Vertical...
+    access: "o"
+    command: text.horizontal_in_vertical
+    new_command: true
+  - id: context.text_edit.text_ruler
+    kind: button
+    label: Text Ruler
+    access: "r"
+    command: text.edit.ruler
+    begin_group: true
+- id: context.embedded_object
+  label: Embedded object
+  trigger: right-click an embedded object
+  items:
+  - id: context.embedded_object.hyperlinks
+    kind: list
+    list: hyperlinks
+  - id: context.embedded_object.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+    begin_group: true
+  - id: context.embedded_object.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.embedded_object.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.embedded_object.format
+    kind: submenu
+    label: Format
+    access: "f"
+    begin_group: true
+    items:
+    - id: context.embedded_object.format.text
+      kind: button
+      label: Text...
+      access: "t"
+      command: format.all.text.props
+      visuicmd: visCmdFormatAllTextProps
+      icon: format.all.text.props
+    - id: context.embedded_object.format.line
+      kind: button
+      label: Line...
+      access: "l"
+      command: format.line
+      visuicmd: visCmdFormatLine
+      icon: format.line
+    - id: context.embedded_object.format.fill
+      kind: button
+      label: Fill...
+      access: "f"
+      command: format.fill
+      visuicmd: visCmdFormatFill
+      icon: format.fill
+    - id: context.embedded_object.format.allow_themes
+      kind: button
+      label: Allow Themes
+      access: "a"
+      command: tools.allow.themes
+      begin_group: true
+    - id: context.embedded_object.format.remove_theme
+      kind: button
+      label: Remove Theme
+      access: "m"
+      command: edit.remove.theme.from.sel
+    - id: context.embedded_object.format.picture
+      kind: button
+      label: Picture...
+      access: "u"
+      command: insert.image.properties.dlg
+      visuicmd: visCmdImagePropertiesDlg
+      icon: insert.image.properties.dlg
+      begin_group: true
+    - id: context.embedded_object.format.ink
+      kind: button
+      label: Ink...
+      access: "n"
+      command: format.ink.dlg
+      visuicmd: visCmdFormatInkDlg
+    - id: context.embedded_object.format.protection
+      kind: button
+      label: Protection...
+      access: "p"
+      command: format.protection
+      visuicmd: visCmdFormatProtection
+      begin_group: true
+    - id: context.embedded_object.format.behavior
+      kind: button
+      label: Behavior...
+      access: "b"
+      command: format.behavior
+      visuicmd: visCmdFormatBehavior
+    - id: context.embedded_object.format.special
+      kind: button
+      label: Special...
+      access: "e"
+      command: format.special
+      visuicmd: visCmdFormatSpecial
+    - id: context.embedded_object.format.style
+      kind: button
+      label: Style...
+      access: "s"
+      command: format.style
+      visuicmd: visCmdFormatStyle
+      begin_group: true
+    - id: context.embedded_object.format.layer
+      kind: button
+      label: Layer...
+      access: "r"
+      command: layer.dlg
+      visuicmd: visCmdLayerDlg
+      begin_group: true
+  - id: context.embedded_object.data
+    kind: submenu
+    label: Data
+    access: "d"
+    items:
+    - id: context.embedded_object.data.shape_data
+      kind: button
+      label: Shape Data...
+      access: "s"
+      command: format.cust.prop.edit
+      visuicmd: visCmdFormatCustPropEdit
+      icon: format.cust.prop.edit
+    - id: context.embedded_object.data.edit_data_graphic
+      kind: button
+      label: Edit Data Graphic...
+      access: "e"
+      command: shape.data.edit_data_graphic
+      new_command: true
+      begin_group: true
+    - id: context.embedded_object.data.remove_data_graphic
+      kind: button
+      label: Remove Data Graphic
+      access: "r"
+      command: edit.remove.data.graphic.from.sel
+    - id: context.embedded_object.data.data_recordset_links
+      kind: list
+      list: data_recordset_links
+      begin_group: true
+  - id: context.embedded_object.shape
+    kind: submenu
+    label: Shape
+    access: "e"
+    items:
+    - id: context.embedded_object.shape.group
+      kind: button
+      label: Group
+      access: "g"
+      command: arrange.group
+      visuicmd: visCmdObjectGroup
+      icon: arrange.group
+      begin_group: true
+    - id: context.embedded_object.shape.ungroup
+      kind: button
+      label: Ungroup
+      access: "u"
+      command: arrange.ungroup
+      visuicmd: visCmdObjectUngroup
+      icon: arrange.ungroup
+    - id: context.embedded_object.shape.bring_to_front
+      kind: button
+      label: Bring to Front
+      access: "f"
+      command: arrange.bring_to_front
+      visuicmd: visCmdObjectBringToFront
+      icon: arrange.bring_to_front
+      begin_group: true
+    - id: context.embedded_object.shape.send_to_back
+      kind: button
+      label: Send to Back
+      access: "b"
+      command: arrange.send_to_back
+      visuicmd: visCmdObjectSendToBack
+      icon: arrange.send_to_back
+    - id: context.embedded_object.shape.bring_forward
+      kind: button
+      label: Bring Forward
+      access: "i"
+      command: arrange.bring_forward
+      visuicmd: visCmdObjectBringForward
+      icon: arrange.bring_forward
+    - id: context.embedded_object.shape.send_backward
+      kind: button
+      label: Send Backward
+      access: "s"
+      command: arrange.send_backward
+      visuicmd: visCmdObjectSendBackward
+      icon: arrange.send_backward
+    - id: context.embedded_object.shape.flip_horizontal
+      kind: button
+      label: Flip Horizontal
+      access: "h"
+      command: arrange.flip_horizontal
+      visuicmd: visCmdObjectFlipHorizontal
+      icon: arrange.flip_horizontal
+      begin_group: true
+    - id: context.embedded_object.shape.flip_vertical
+      kind: button
+      label: Flip Vertical
+      access: "v"
+      command: arrange.flip_vertical
+      visuicmd: visCmdObjectFlipVertical
+      icon: arrange.flip_vertical
+    - id: context.embedded_object.shape.rotate_text
+      kind: button
+      label: Rotate Text
+      access: "t"
+      command: text.rotate90
+      visuicmd: visCmdTextRotate90
+      icon: text.rotate90
+      begin_group: true
+    - id: context.embedded_object.shape.find_similar_shapes
+      kind: button
+      label: Find Similar Shapes
+      access: "m"
+      command: shape.shape.find_similar_shapes
+      new_command: true
+  - id: context.embedded_object.object
+    kind: button
+    label: Object...
+    access: "o"
+    command: edit.open.object
+    visuicmd: visCmdEditOpenObject
+    begin_group: true
+- id: context.hyperlink
+  label: Hyperlink
+  trigger: right-click a hyperlink in text
+  items:
+  - id: context.hyperlink.open
+    kind: button
+    label: Open
+    access: "o"
+    command: insert.hyperlink.open
+    new_command: true
+  - id: context.hyperlink.open_in_new_window
+    kind: button
+    label: Open in New Window
+    access: "n"
+    command: insert.hyperlink.open_in_new_window
+    new_command: true
+  - id: context.hyperlink.copy_hyperlink
+    kind: button
+    label: Copy Hyperlink
+    access: "c"
+    command: insert.hyperlink.copy_hyperlink
+    new_command: true
+    begin_group: true
+  - id: context.hyperlink.add_to_favorites
+    kind: button
+    label: Add to Favorites
+    access: "a"
+    command: insert.hyperlink.add_to_favorites
+    new_command: true
+  - id: context.hyperlink.edit_hyperlink
+    kind: button
+    label: Edit Hyperlink
+    access: "e"
+    command: insert.hyperlink.edit_hyperlink
+    new_command: true
+- id: context.connection_point
+  label: Connection point
+  trigger: right-click a connection point with the connection point tool
+  items:
+  - id: context.connection_point.inward
+    kind: button
+    label: Inward
+    access: "i"
+    command: edit.connection_point.inward
+    new_command: true
+  - id: context.connection_point.outward
+    kind: button
+    label: Outward
+    access: "o"
+    command: edit.connection_point.outward
+    new_command: true
+  - id: context.connection_point.inward_and_outward
+    kind: button
+    label: Inward & Outward
+    access: "w"
+    command: edit.connection_point.inward_and_outward
+    new_command: true
+- id: context.comment
+  label: Comment
+  trigger: right-click a comment mark
+  items:
+  - id: context.comment.edit_comment
+    kind: button
+    label: Edit Comment
+    access: "e"
+    command: review.edit_comment
+    new_command: true
+    icon: review.edit_comment
+  - id: context.comment.delete_comment
+    kind: button
+    label: Delete Comment
+    access: "d"
+    command: edit.delete.comment
+    icon: edit.delete.comment
+- id: context.full_screen
+  label: Full screen
+  trigger: right-click in full-screen view
+  items:
+  - id: context.full_screen.previous_page
+    kind: button
+    label: Previous Page
+    access: "p"
+    command: page.previous
+    icon: page.previous
+  - id: context.full_screen.next_page
+    kind: button
+    label: Next Page
+    access: "n"
+    command: page.next
+    icon: page.next
+  - id: context.full_screen.go_to
+    kind: submenu
+    label: Go To
+    access: "g"
+    begin_group: true
+    items:
+    - id: context.full_screen.go_to.foreground
+      kind: button
+      label: Foreground
+      access: "f"
+      command: tools.options.edit.drawing
+      visuicmd: visCmdOptionsEditDrawing
+    - id: context.full_screen.go_to.background
+      kind: button
+      label: Background
+      access: "b"
+      command: tools.options.edit.background
+      visuicmd: visCmdOptionsEditBackground
+    - id: context.full_screen.go_to.pages
+      kind: list
+      list: pages
+      begin_group: true
+    - id: context.full_screen.go_to.page
+      kind: button
+      label: Page...
+      access: "p"
+      command: tools.options.go.to.drawing
+      visuicmd: visCmdOptionsGoToDrawing
+      begin_group: true
+  - id: context.full_screen.close
+    kind: button
+    label: Close
+    access: "c"
+    command: view.full_screen_mode
+    visuicmd: visCmdFullScreenMode
+- id: context.shapesheet
+  label: ShapeSheet
+  trigger: right-click in a ShapeSheet window
+  items:
+  - id: context.shapesheet.values
+    kind: button
+    label: Values
+    access: "v"
+    command: edit.sw.show.values
+  - id: context.shapesheet.formulas
+    kind: button
+    label: Formulas
+    access: "f"
+    command: edit.sw.show.formulas
+  - id: context.shapesheet.view_sections
+    kind: button
+    label: View Sections...
+    access: "n"
+    command: edit.sw.show.sections.dlg
+    begin_group: true
+  - id: context.shapesheet.insert_section
+    kind: button
+    label: Insert Section...
+    access: "s"
+    command: edit.sw.add.section.dlg
+  - id: context.shapesheet.delete_section
+    kind: button
+    label: Delete Section
+    access: "e"
+    command: edit.sw.delete.section
+  - id: context.shapesheet.insert_row
+    kind: button
+    label: Insert Row
+    access: "r"
+    command: edit.sw.insert.row
+    begin_group: true
+  - id: context.shapesheet.insert_row_after
+    kind: button
+    label: Insert Row After
+    access: "a"
+    command: edit.sw.insert.row.after
+  - id: context.shapesheet.delete_row
+    kind: button
+    label: Delete Row
+    access: "d"
+    command: edit.sw.delete.row
+  - id: context.shapesheet.expand_row
+    kind: button
+    label: Expand Row
+    access: "x"
+    command: edit.sw.expand.row
+  - id: context.shapesheet.change_row_type
+    kind: button
+    label: Change Row Type
+    access: "c"
+    command: edit.sw.change.row.type.dlg
+- id: context.master_edit
+  label: Master editing
+  trigger: right-click the page of a master being edited
+  items:
+  - id: context.master_edit.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    visuicmd: visCmdUFEditCut
+    icon: edit.cut
+  - id: context.master_edit.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    visuicmd: visCmdUFEditCopy
+    icon: edit.copy
+  - id: context.master_edit.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    visuicmd: visCmdUFEditPaste
+    icon: edit.paste
+  - id: context.master_edit.paste_shortcut
+    kind: button
+    label: Paste Shortcut
+    access: "o"
+    command: edit.paste.shortcut
+  - id: context.master_edit.add_to_my_shapes
+    kind: submenu
+    label: Add to My Shapes
+    access: "m"
+    begin_group: true
+    items:
+    - id: context.master_edit.add_to_my_shapes.my_shapes
+      kind: list
+      list: my_shapes
+    - id: context.master_edit.add_to_my_shapes.add_to_new_stencil
+      kind: button
+      label: Add To New Stencil...
+      access: "n"
+      command: shape.master.add_to_my_shapes.add_to_new_stencil
+      new_command: true
+      begin_group: true
+    - id: context.master_edit.add_to_my_shapes.add_to_existing_stencil
+      kind: button
+      label: Add To Existing Stencil...
+      access: "e"
+      command: shape.master.add_to_my_shapes.add_to_existing_stencil
+      new_command: true
+    - id: context.master_edit.add_to_my_shapes.organize_my_shapes
+      kind: button
+      label: Organize My Shapes
+      access: "o"
+      command: file.shapes.organize_my_shapes
+      begin_group: true
+  - id: context.master_edit.new_master
+    kind: button
+    label: New Master...
+    access: "n"
+    command: shape.sten.new.master
+    begin_group: true
+  - id: context.master_edit.delete_master
+    kind: button
+    label: Delete Master
+    access: "l"
+    command: shape.master.delete_master
+    new_command: true
+    icon: shape.master.delete_master
+  - id: context.master_edit.rename_master
+    kind: button
+    label: Rename Master
+    access: "r"
+    command: shape.master.rename_master
+    new_command: true
+  - id: context.master_edit.edit_master
+    kind: submenu
+    label: Edit Master
+    access: "e"
+    items:
+    - id: context.master_edit.edit_master.properties
+      kind: button
+      label: Properties...
+      access: "p"
+      command: shape.master.edit_master.properties
+      new_command: true
+    - id: context.master_edit.edit_master.edit_master_shape
+      kind: button
+      label: Edit Master Shape
+      access: "e"
+      command: shape.master.edit_master.edit_master_shape
+      new_command: true
+      icon: shape.master.edit_master.edit_master_shape
+      begin_group: true
+    - id: context.master_edit.edit_master.edit_icon_image
+      kind: button
+      label: Edit Icon Image
+      access: "i"
+      command: shape.master.edit_master.edit_icon_image
+      new_command: true
+  - id: context.master_edit.help
+    kind: button
+    label: Help
+    access: "h"
+    command: help.contents
+    icon: help.contents
+    begin_group: true
+- id: context.stencil_edit
+  label: Stencil editing
+  trigger: right-click a master in an editable stencil
+  items:
+  - id: context.stencil_edit.edit_stencil
+    kind: button
+    label: Edit Stencil
+    access: "e"
+    command: shape.stencil.edit_stencil
+    new_command: true
+    icon: shape.stencil.edit_stencil
+  - id: context.stencil_edit.save
+    kind: button
+    label: Save
+    access: "s"
+    command: file.save
+    visuicmd: visCmdFileSave
+    icon: file.save
+  - id: context.stencil_edit.save_as
+    kind: button
+    label: Save As...
+    access: "a"
+    command: file.save_as
+  - id: context.stencil_edit.properties
+    kind: button
+    label: Properties...
+    access: "i"
+    command: shape.stencil.properties
+    new_command: true
+    icon: shape.stencil.properties
+  - id: context.stencil_edit.view
+    kind: submenu
+    label: View
+    access: "v"
+    begin_group: true
+    items:
+    - id: context.stencil_edit.view.icons_and_names
+      kind: button
+      label: Icons and Names
+      access: "m"
+      command: shape.sten.icon.and.name
+      visuicmd: visCmdStenIconAndName
+      icon: shape.sten.icon.and.name
+    - id: context.stencil_edit.view.names_under_icons
+      kind: button
+      label: Names Under Icons
+      access: "u"
+      command: shape.sten.names.under.icons
+      visuicmd: visCmdStenNamesUnderIcons
+      icon: shape.sten.names.under.icons
+    - id: context.stencil_edit.view.icons_only
+      kind: button
+      label: Icons Only
+      access: "o"
+      command: shape.sten.icon.only
+      visuicmd: visCmdStenIconOnly
+      icon: shape.sten.icon.only
+    - id: context.stencil_edit.view.names_only
+      kind: button
+      label: Names Only
+      access: "n"
+      command: shape.sten.name.only
+      visuicmd: visCmdStenNameOnly
+      icon: shape.sten.name.only
+    - id: context.stencil_edit.view.icons_and_details
+      kind: button
+      label: Icons and Details
+      access: "t"
+      command: shape.sten.icon.and.detail
+      visuicmd: visCmdStenIconAndDetail
+      icon: shape.sten.icon.and.detail
+  - id: context.stencil_edit.drawing_explorer_window
+    kind: button
+    label: Drawing Explorer Window
+    access: "d"
+    command: shape.drawing.explorer
+    visuicmd: visCmdDrawingExplorer
+    icon: shape.drawing.explorer
+  - id: context.stencil_edit.collapse_all_groups
+    kind: button
+    label: Collapse All Groups
+    access: "l"
+    command: shape.stencil.collapse_all_groups
+    new_command: true
+    icon: shape.stencil.collapse_all_groups
+    begin_group: true
+  - id: context.stencil_edit.expand_all_groups
+    kind: button
+    label: Expand All Groups
+    access: "x"
+    command: shape.stencil.expand_all_groups
+    new_command: true
+    icon: shape.stencil.expand_all_groups
+  - id: context.stencil_edit.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    command: shape.stencil.float_window
+    new_command: true
+    begin_group: true
+  - id: context.stencil_edit.close
+    kind: button
+    label: Close
+    access: "c"
+    command: shape.stencil.close
+    new_command: true
+    icon: shape.stencil.close
+- id: context.window_title
+  label: Docked window title
+  trigger: right-click the title of a docked window
+  items:
+  - id: context.window_title.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    command: view.pane.float_window
+    new_command: true
+  - id: context.window_title.autohide
+    kind: button
+    label: AutoHide
+    access: "h"
+    command: view.pane.autohide
+    new_command: true
+  - id: context.window_title.close
+    kind: button
+    label: Close
+    access: "c"
+    command: view.pane.close
+    new_command: true
+    icon: view.pane.close
+    begin_group: true
+- id: context.shape_data_window
+  label: Shape Data window
+  trigger: right-click in the Shape Data window
+  items:
+  - id: context.shape_data_window.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    command: view.pane.float_window
+    new_command: true
+  - id: context.shape_data_window.autohide
+    kind: button
+    label: AutoHide
+    access: "h"
+    command: view.pane.autohide
+    new_command: true
+  - id: context.shape_data_window.autofit
+    kind: button
+    label: AutoFit
+    access: "f"
+    command: view.pane.autofit
+    new_command: true
+  - id: context.shape_data_window.link_data_to_shapes
+    kind: button
+    label: Link Data to Shapes...
+    access: "l"
+    command: data.link.data.to.shapes
+    icon: data.link.data.to.shapes
+    begin_group: true
+  - id: context.shape_data_window.display_data_on_shapes
+    kind: button
+    label: Display Data on Shapes...
+    access: "s"
+    command: view.task.pane.data.graphic
+    visuicmd: visCmdTaskPaneDataGraphic
+    icon: view.task.pane.data.graphic
+  - id: context.shape_data_window.define_shape_data
+    kind: button
+    label: Define Shape Data...
+    access: "d"
+    command: view.pane.define_shape_data
+    new_command: true
+    icon: view.pane.define_shape_data
+  - id: context.shape_data_window.shape_data_sets
+    kind: button
+    label: Shape Data Sets...
+    access: "t"
+    command: view.pane.shape_data_sets
+    new_command: true
+  - id: context.shape_data_window.close
+    kind: button
+    label: Close
+    access: "c"
+    command: view.pane.close
+    new_command: true
+    icon: view.pane.close
+    begin_group: true
+- id: context.shapes_window
+  label: Shapes window
+  trigger: right-click the Shapes window title
+  items:
+  - id: context.shapes_window.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    command: view.pane.float_window
+    new_command: true
+  - id: context.shapes_window.autohide
+    kind: button
+    label: AutoHide
+    access: "h"
+    command: view.pane.autohide
+    new_command: true
+  - id: context.shapes_window.icons_and_names
+    kind: button
+    label: Icons and Names
+    access: "m"
+    command: shape.sten.icon.and.name
+    visuicmd: visCmdStenIconAndName
+    icon: shape.sten.icon.and.name
+    begin_group: true
+  - id: context.shapes_window.names_under_icons
+    kind: button
+    label: Names Under Icons
+    access: "u"
+    command: shape.sten.names.under.icons
+    visuicmd: visCmdStenNamesUnderIcons
+    icon: shape.sten.names.under.icons
+  - id: context.shapes_window.icons_only
+    kind: button
+    label: Icons Only
+    access: "o"
+    command: shape.sten.icon.only
+    visuicmd: visCmdStenIconOnly
+    icon: shape.sten.icon.only
+  - id: context.shapes_window.names_only
+    kind: button
+    label: Names Only
+    access: "n"
+    command: shape.sten.name.only
+    visuicmd: visCmdStenNameOnly
+    icon: shape.sten.name.only
+  - id: context.shapes_window.icons_and_details
+    kind: button
+    label: Icons and Details
+    access: "t"
+    command: shape.sten.icon.and.detail
+    visuicmd: visCmdStenIconAndDetail
+    icon: shape.sten.icon.and.detail
+  - id: context.shapes_window.search_options
+    kind: button
+    label: Search Options...
+    access: "a"
+    command: view.pane.search_options
+    new_command: true
+    begin_group: true
+  - id: context.shapes_window.close_all_stencils
+    kind: button
+    label: Close All Stencils
+    access: "e"
+    command: view.pane.close_all_stencils
+    new_command: true
+    begin_group: true
+  - id: context.shapes_window.hide_window
+    kind: button
+    label: Hide Window
+    access: "w"
+    command: view.pane.hide_window
+    new_command: true
+    icon: view.pane.hide_window
+- id: context.size_position_window
+  label: Size & Position window
+  trigger: right-click in the Size & Position window
+  items:
+  - id: context.size_position_window.float_window
+    kind: button
+    label: Float Window
+    access: "f"
+    command: view.pane.float_window
+    new_command: true
+  - id: context.size_position_window.autohide
+    kind: button
+    label: AutoHide
+    access: "h"
+    command: view.pane.autohide
+    new_command: true
+  - id: context.size_position_window.autofit
+    kind: button
+    label: AutoFit
+    access: "f"
+    command: view.pane.autofit
+    new_command: true
+  - id: context.size_position_window.close
+    kind: button
+    label: Close
+    access: "c"
+    command: view.pane.close
+    new_command: true
+    icon: view.pane.close
+    begin_group: true
+- id: context.external_data_list
+  label: External Data list
+  trigger: right-click a row in the External Data window
+  items:
+  - id: context.external_data_list.select_all
+    kind: button
+    label: Select All
+    access: "a"
+    command: edit.select_all
+  - id: context.external_data_list.link_to_selected_shapes
+    kind: button
+    label: Link to Selected Shapes
+    access: "s"
+    command: data.external.link_to_selected_shapes
+    new_command: true
+    begin_group: true
+  - id: context.external_data_list.unlink
+    kind: button
+    label: Unlink
+    access: "u"
+    command: data.external.unlink
+    new_command: true
+  - id: context.external_data_list.linked_shapes
+    kind: button
+    label: Linked Shapes
+    access: "l"
+    command: data.external.linked_shapes
+    new_command: true
+  - id: context.external_data_list.automatically_link
+    kind: button
+    label: Automatically Link...
+    access: "k"
+    command: data.automatically.link
+  - id: context.external_data_list.refresh_data
+    kind: button
+    label: Refresh Data...
+    access: "f"
+    command: data.refresh
+    begin_group: true
+  - id: context.external_data_list.configure_refresh
+    kind: button
+    label: Configure Refresh...
+    access: "c"
+    command: data.external.configure_refresh
+    new_command: true
+  - id: context.external_data_list.column_settings
+    kind: button
+    label: Column Settings...
+    access: "o"
+    command: data.external.column_settings
+    new_command: true
+    begin_group: true
+  - id: context.external_data_list.arrange_by
+    kind: button
+    label: Arrange by
+    access: "r"
+    command: data.external.arrange_by
+    new_command: true
+  - id: context.external_data_list.data_source
+    kind: submenu
+    label: Data Source
+    access: "d"
+    items:
+    - id: context.external_data_list.data_source.add
+      kind: button
+      label: Add...
+      access: "a"
+      command: data.external.data_source.add
+      new_command: true
+    - id: context.external_data_list.data_source.rename
+      kind: button
+      label: Rename
+      access: "r"
+      command: data.external.data_source.rename
+      new_command: true
+    - id: context.external_data_list.data_source.remove
+      kind: button
+      label: Remove
+      access: "e"
+      command: data.external.data_source.remove
+      new_command: true
+      icon: data.external.data_source.remove
+    - id: context.external_data_list.data_source.properties
+      kind: button
+      label: Properties...
+      access: "p"
+      command: data.external.data_source.properties
+      new_command: true
+  - id: context.external_data_list.help
+    kind: button
+    label: Help
+    access: "h"
+    command: help.contents
+    icon: help.contents
+    begin_group: true
+- id: context.external_data_tab
+  label: External Data tab
+  trigger: right-click a tab in the External Data window
+  items:
+  - id: context.external_data_tab.add
+    kind: button
+    label: Add...
+    access: "a"
+    command: data.external.add
+    new_command: true
+  - id: context.external_data_tab.rename
+    kind: button
+    label: Rename
+    access: "r"
+    command: data.external.rename
+    new_command: true
+  - id: context.external_data_tab.remove
+    kind: button
+    label: Remove
+    access: "e"
+    command: data.external.remove
+    new_command: true
+    icon: data.external.remove
+  - id: context.external_data_tab.properties
+    kind: button
+    label: Properties...
+    access: "p"
+    command: data.external.properties
+    new_command: true
+  - id: context.external_data_tab.help
+    kind: button
+    label: Help
+    access: "h"
+    command: help.contents
+    icon: help.contents
+    begin_group: true
+- id: context.explorer_document
+  label: 'Drawing Explorer: document'
+  trigger: right-click the document in the Drawing Explorer
+  items:
+  - id: context.explorer_document.properties
+    kind: button
+    label: Properties
+    access: "i"
+    command: file.summary.info.dlg
+  - id: context.explorer_document.header_and_footer
+    kind: button
+    label: Header and Footer...
+    access: "h"
+    command: file.header.footer
+    begin_group: true
+  - id: context.explorer_document.color_palette
+    kind: button
+    label: Color Palette...
+    access: "c"
+    command: tools.options.color.palette.dlg
+    begin_group: true
+  - id: context.explorer_document.protect_document
+    kind: button
+    label: Protect Document...
+    access: "p"
+    command: view.explorer.protect_document
+    new_command: true
+  - id: context.explorer_document.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.show.shape.sheet.document
+    icon: view.show.shape.sheet.document
+    begin_group: true
+- id: context.explorer_pages
+  label: 'Drawing Explorer: pages'
+  trigger: right-click the Pages folder
+  items:
+  - id: context.explorer_pages.insert_page
+    kind: button
+    label: Insert Page...
+    access: "i"
+    command: tools.options.new.page
+  - id: context.explorer_pages.reorder_pages
+    kind: button
+    label: Reorder Pages...
+    access: "r"
+    command: view.explorer.reorder_pages
+    new_command: true
+- id: context.explorer_page
+  label: 'Drawing Explorer: page'
+  trigger: right-click a page
+  items:
+  - id: context.explorer_page.page_setup
+    kind: button
+    label: Page Setup...
+    access: "u"
+    command: tools.options.page.setup
+  - id: context.explorer_page.ruler_and_grid
+    kind: button
+    label: Ruler & Grid...
+    access: "r"
+    command: view.explorer.ruler_and_grid
+    new_command: true
+  - id: context.explorer_page.delete_page
+    kind: button
+    label: Delete Page
+    access: "d"
+    command: page.delete
+    icon: page.delete
+  - id: context.explorer_page.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.show.shape.sheet.page
+    icon: view.show.shape.sheet.page
+    begin_group: true
+- id: context.explorer_layers
+  label: 'Drawing Explorer: layers'
+  trigger: right-click the Layers folder
+  items:
+  - id: context.explorer_layers.layer_properties
+    kind: button
+    label: Layer Properties...
+    access: "l"
+    command: layer.setup.dlg
+    visuicmd: visCmdLayerSetupDlg
+    icon: layer.setup.dlg
+- id: context.explorer_layer
+  label: 'Drawing Explorer: layer'
+  trigger: right-click a layer
+  items:
+  - id: context.explorer_layer.visible
+    kind: button
+    label: Visible
+    access: "v"
+    command: view.explorer.visible
+    new_command: true
+  - id: context.explorer_layer.active
+    kind: button
+    label: Active
+    access: "a"
+    command: view.explorer.active
+    new_command: true
+  - id: context.explorer_layer.delete_layer
+    kind: button
+    label: Delete Layer
+    access: "d"
+    command: view.explorer.delete_layer
+    new_command: true
+    icon: view.explorer.delete_layer
+- id: context.explorer_shape
+  label: 'Drawing Explorer: shape'
+  trigger: right-click a shape
+  items:
+  - id: context.explorer_shape.shape_data
+    kind: button
+    label: Shape Data...
+    access: "s"
+    command: format.cust.prop.edit
+    icon: format.cust.prop.edit
+  - id: context.explorer_shape.layer
+    kind: button
+    label: Layer...
+    access: "l"
+    command: layer.dlg
+  - id: context.explorer_shape.delete_shape
+    kind: button
+    label: Delete Shape
+    access: "d"
+    command: view.explorer.delete_shape
+    new_command: true
+    icon: view.explorer.delete_shape
+  - id: context.explorer_shape.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.show.shape.sheet.shape
+    icon: view.show.shape.sheet.shape
+    begin_group: true
+- id: context.explorer_masters
+  label: 'Drawing Explorer: masters'
+  trigger: right-click the Masters folder
+  items:
+  - id: context.explorer_masters.new_master
+    kind: button
+    label: New Master...
+    access: "n"
+    command: shape.sten.new.master
+  - id: context.explorer_masters.show_document_stencil
+    kind: button
+    label: Show Document Stencil
+    access: "d"
+    command: view.window.show.master.objects
+- id: context.explorer_master
+  label: 'Drawing Explorer: master'
+  trigger: right-click a master
+  items:
+  - id: context.explorer_master.cut
+    kind: button
+    label: Cut
+    access: "t"
+    command: edit.cut
+    icon: edit.cut
+  - id: context.explorer_master.copy
+    kind: button
+    label: Copy
+    access: "c"
+    command: edit.copy
+    icon: edit.copy
+  - id: context.explorer_master.paste
+    kind: button
+    label: Paste
+    access: "p"
+    command: edit.paste
+    icon: edit.paste
+  - id: context.explorer_master.paste_shortcut
+    kind: button
+    label: Paste Shortcut
+    access: "o"
+    command: edit.paste.shortcut
+  - id: context.explorer_master.delete
+    kind: button
+    label: Delete
+    access: "l"
+    command: view.explorer.delete
+    new_command: true
+    icon: view.explorer.delete
+    begin_group: true
+  - id: context.explorer_master.duplicate
+    kind: button
+    label: Duplicate
+    access: "d"
+    command: edit.duplicate
+  - id: context.explorer_master.create_shortcut
+    kind: button
+    label: Create Shortcut
+    access: "s"
+    command: view.explorer.create_shortcut
+    new_command: true
+  - id: context.explorer_master.master_properties
+    kind: button
+    label: Master Properties...
+    access: "m"
+    command: shape.master.properties
+    begin_group: true
+  - id: context.explorer_master.edit_master_shape
+    kind: button
+    label: Edit Master Shape
+    access: "e"
+    command: view.explorer.edit_master_shape
+    new_command: true
+  - id: context.explorer_master.edit_icon_image
+    kind: button
+    label: Edit Icon Image
+    access: "i"
+    command: view.explorer.edit_icon_image
+    new_command: true
+- id: context.explorer_styles
+  label: 'Drawing Explorer: styles'
+  trigger: right-click the Styles folder
+  items:
+  - id: context.explorer_styles.define_styles
+    kind: button
+    label: Define Styles...
+    access: "d"
+    command: format.define.styles
+- id: context.explorer_style
+  label: 'Drawing Explorer: style'
+  trigger: right-click a style
+  items:
+  - id: context.explorer_style.define_styles
+    kind: button
+    label: Define Styles...
+    access: "e"
+    command: format.define.styles
+  - id: context.explorer_style.delete_style
+    kind: button
+    label: Delete Style
+    access: "d"
+    command: view.explorer.delete_style
+    new_command: true
+    icon: view.explorer.delete_style
+  - id: context.explorer_style.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.explorer.show_shapesheet
+    new_command: true
+    icon: view.explorer.show_shapesheet
+    begin_group: true
+- id: context.explorer_patterns
+  label: 'Drawing Explorer: patterns'
+  trigger: right-click a pattern folder
+  items:
+  - id: context.explorer_patterns.new_pattern
+    kind: button
+    label: New Pattern...
+    access: "n"
+    command: view.explorer.new_pattern
+    new_command: true
+- id: context.master_explorer_document
+  label: 'Master Explorer: document'
+  trigger: right-click the document in the Master Explorer
+  items:
+  - id: context.master_explorer_document.properties
+    kind: button
+    label: Properties
+    access: "i"
+    command: file.summary.info.dlg
+  - id: context.master_explorer_document.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.master_explorer.show_shapesheet
+    new_command: true
+    icon: view.master_explorer.show_shapesheet
+    begin_group: true
+- id: context.master_explorer_masters
+  label: 'Master Explorer: masters'
+  trigger: right-click a master
+  items:
+  - id: context.master_explorer_masters.page_setup
+    kind: button
+    label: Page Setup...
+    access: "u"
+    command: view.master_explorer.page_setup
+    new_command: true
+  - id: context.master_explorer_masters.ruler_and_grid
+    kind: button
+    label: Ruler & Grid...
+    access: "r"
+    command: view.master_explorer.ruler_and_grid
+    new_command: true
+  - id: context.master_explorer_masters.show_shapesheet
+    kind: button
+    label: Show ShapeSheet
+    access: "s"
+    command: view.master_explorer.show_shapesheet
+    new_command: true
+    icon: view.master_explorer.show_shapesheet
+    begin_group: true

@@ -1,4 +1,4 @@
-//! The egui user interface (L6, ADR 0002): ribbon, canvas, panels,
+//! The egui user interface (L6, ADR 0002): the command bar, canvas, panes,
 //! shapes window, shortcuts and the shell that hosts them.
 //!
 //! The widgets read the ui-spec layouts (ADR 0031) and the application
@@ -12,10 +12,14 @@
 
 #![forbid(unsafe_code)]
 
+pub mod about;
 pub mod canvas;
+pub mod contexts;
 pub mod dialogs;
 pub mod handles;
 pub mod icons;
+pub mod panel_classic;
+pub mod panel_modern;
 pub mod panels;
 pub mod ribbon;
 pub mod settings;
@@ -24,7 +28,9 @@ pub mod shell;
 pub mod shortcuts;
 pub mod snap;
 pub mod text_edit;
+pub mod theme;
 pub mod tools;
+pub mod wizard;
 
 use std::fmt;
 

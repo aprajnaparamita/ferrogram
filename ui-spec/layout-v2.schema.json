@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ferrogram.dev/schemas/ui-layout-v2.json",
+  "title": "Larrygram layout, format v2",
+  "description": "Schema for ui-spec/layouts/*.yaml (docs/ui/layout-format.md, ADR 0061). One file per layout; `kind` selects the surfaces it has.",
+  "type": "object",
+  "required": ["schema_version", "id", "name", "kind", "theme", "window", "context_menus"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "id": {"$ref": "#/definitions/token"},
+    "name": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["panel-classic", "panel-modern"]},
+    "description": {"type": "string"},
+    "theme": {"$ref": "#/definitions/token"},
+    "window": {"$ref": "#/definitions/window"},
+    "menu_bars": {"type": "array", "items": {"$ref": "#/definitions/menuBar"}},
+    "toolbars": {"type": "array", "items": {"$ref": "#/definitions/toolbar"}},
+    "quick_access_toolbar": {"type": "array", "items": {"$ref": "#/definitions/item"}},
+    "file_button": {
+      "type": "object",
+      "required": ["label", "opens"],
+      "properties": {"label": {"type": "string"}, "opens": {"const": "file_view"}},
+      "additionalProperties": false
+    },
+    "tabs": {"type": "array", "items": {"$ref": "#/definitions/tab"}},
+    "contextual_tabs": {"type": "array", "items": {"$ref": "#/definitions/tab"}},
+    "file_view": {"$ref": "#/definitions/fileView"},
+    "context_menus": {"type": "array", "items": {"$ref": "#/definitions/contextMenu"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "panel-classic"}}},
+      "then": {"required": ["menu_bars", "toolbars"]}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "panel-modern"}}},
+      "then": {"required": ["quick_access_toolbar", "file_button", "tabs", "contextual_tabs", "file_view"]}
+    }
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "token": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+    "itemId": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9][a-z0-9_-]*)*$"},
+    "commandId": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},
+    "fluentId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+    "context": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "window": {
+      "type": "object",
+      "required": ["regions"],
+      "properties": {
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "edge"],
+            "properties": {
+              "id": {"$ref": "#/definitions/token"},
+              "edge": {"enum": ["top", "bottom", "left", "right", "fill", "top_left_of_drawing", "bottom_of_drawing"]},
+              "size": {"type": "integer", "minimum": 0},
+              "per_row": {"type": "boolean"},
+              "collapsible": {"type": "boolean"},
+              "notes": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "item": {
+      "description": "One control. Items nest through `items` (submenus, dropdown and split-button menus).",
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": {"$ref": "#/definitions/itemId"},
+        "kind": {
+          "enum": ["button", "toggle", "check", "split", "split_recent", "dropdown", "submenu", "gallery", "combo", "palette", "launcher", "heading", "list", "options"]
+        },
+        "label": {"type": "string"},
+        "access": {"type": "string", "minLength": 1, "maxLength": 1, "description": "Access key letter, drawn underlined in menus. Always quoted in YAML: unquoted `f` and `n` parse as booleans."},
+        "shortcut": {"type": "string"},
+        "command": {"$ref": "#/definitions/commandId"},
+        "new_command": {"const": true, "description": "The command id is proposed by Phase 7 and not yet in commands.yaml."},
+        "fluent": {"$ref": "#/definitions/fluentId"},
+        "visuicmd": {"type": "string", "pattern": "^visCmd[A-Za-z0-9_]+$"},
+        "icon": {"type": "string", "description": "Key into ui-spec/icons.yaml."},
+        "display": {"enum": ["icon", "text", "icon_text"]},
+        "size": {"enum": ["small", "medium", "large"]},
+        "column": {"type": "integer", "minimum": 0},
+        "row": {"type": "integer", "minimum": 0},
+        "width": {"type": "integer", "minimum": 1},
+        "begin_group": {"const": true},
+        "hidden": {"const": true},
+        "dynamic_label": {"const": true},
+        "list": {"$ref": "#/definitions/token", "description": "A run-time list the app fills (recent files, colours, themes...)."},
+        "options": {"type": "array", "items": {"type": "string"}},
+        "items": {"type": "array", "items": {"$ref": "#/definitions/item"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "list"}}}, "then": {"required": ["list"]}},
+        {"if": {"properties": {"kind": {"const": "options"}}}, "then": {"required": ["options"]}},
+        {"if": {"properties": {"kind": {"enum": ["button", "toggle", "check", "split", "split_recent", "dropdown", "gallery", "combo", "palette", "launcher"]}}}, "then": {"required": ["label", "command"]}}
+      ],
+      "additionalProperties": false
+    },
+    "menuBar": {
+      "type": "object",
+      "required": ["id", "label", "menus"],
+      "properties": {
+        "id": {"$ref": "#/definitions/token"},
+        "label": {"type": "string"},
+        "shown_in": {"$ref": "#/definitions/context"},
+        "menus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "items"],
+            "properties": {
+              "id": {"$ref": "#/definitions/itemId"},
+              "label": {"type": "string"},
+              "access": {"type": ["string", "null"]},
+              "items": {"type": "array", "items": {"$ref": "#/definitions/item"}}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolbar": {
+      "type": "object",
+      "required": ["id", "label", "visible", "dock", "items"],
+      "properties": {
+        "id": {"$ref": "#/definitions/itemId"},
+        "label": {"type": "string"},
+        "visible": {"type": "boolean"},
+        "dock": {"enum": ["top", "bottom", "left", "right", "floating"]},
+        "row": {"type": "integer", "minimum": 0},
+        "shown_in": {"$ref": "#/definitions/context"},
+        "items": {"type": "array", "items": {"$ref": "#/definitions/item"}}
+      },
+      "additionalProperties": false
+    },
+    "group": {
+      "type": "object",
+      "required": ["id", "label", "layout", "controls"],
+      "properties": {
+        "id": {"$ref": "#/definitions/itemId"},
+        "label": {"type": "string"},
+        "fluent": {"$ref": "#/definitions/fluentId"},
+        "layout": {"enum": ["stack", "rows"]},
+        "rows": {"type": "integer", "minimum": 1, "maximum": 3},
+        "controls": {"type": "array", "items": {"$ref": "#/definitions/item"}},
+        "launcher": {
+          "type": "object",
+          "required": ["label", "command"],
+          "properties": {
+            "label": {"type": "string"},
+            "command": {"$ref": "#/definitions/commandId"},
+            "fluent": {"$ref": "#/definitions/fluentId"},
+            "new_command": {"const": true}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "tab": {
+      "type": "object",
+      "required": ["id", "label", "groups"],
+      "properties": {
+        "id": {"$ref": "#/definitions/itemId"},
+        "label": {"type": "string"},
+        "fluent": {"anyOf": [{"$ref": "#/definitions/fluentId"}, {"type": "null"}]},
+        "tab_set": {"type": "string"},
+        "shown_in": {"$ref": "#/definitions/context"},
+        "groups": {"type": "array", "items": {"$ref": "#/definitions/group"}}
+      },
+      "additionalProperties": false
+    },
+    "fileView": {
+      "type": "object",
+      "required": ["back_button", "nav", "default_page"],
+      "properties": {
+        "back_button": {"type": "boolean"},
+        "default_page": {"$ref": "#/definitions/itemId"},
+        "nav": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "kind", "label"],
+            "properties": {
+              "id": {"$ref": "#/definitions/itemId"},
+              "kind": {"enum": ["page", "command"]},
+              "label": {"type": "string"},
+              "command": {"$ref": "#/definitions/commandId"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "contextMenu": {
+      "type": "object",
+      "required": ["id", "label", "trigger", "items"],
+      "properties": {
+        "id": {"$ref": "#/definitions/itemId"},
+        "label": {"type": "string"},
+        "trigger": {"type": "string"},
+        "items": {"type": "array", "items": {"$ref": "#/definitions/item"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

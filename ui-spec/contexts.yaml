@@ -1,0 +1,2404 @@
+# Selection contexts and where each command is available (docs/ui/contexts.md).
+# Keyed by ui-spec/commands.yaml id; shared by every layout.
+schema_version: 1
+contexts:
+- id: empty_page
+  description: A drawing page with no shapes; nothing selected.
+- id: shape_selected
+  description: One ordinary 2-D shape selected.
+  status: pending
+- id: shapes_selected
+  description: Two ordinary shapes selected.
+- id: text_editing
+  description: The text of one shape open for editing.
+- id: connector_selected
+  description: One dynamic connector, glued at both ends, selected.
+  status: pending
+- id: group_selected
+  description: One group of two shapes selected.
+- id: second_page
+  description: A second, empty page is active; nothing selected.
+- id: picture_selected
+  description: One imported picture selected.
+- id: container_selected
+  description: One container selected.
+- id: shapesheet_window
+  description: A ShapeSheet window is the active window.
+notes:
+- enabled_in lists the contexts where the command is available. A context not listed means the command
+  is greyed out there. Contexts marked pending have no data yet; until they do, treat shape_selected like
+  group_selected minus the group-only commands, and connector_selected like shape_selected.
+- 'This table is a target for the command registry''s enabled predicates, not a replacement for them:
+  the registry stays the single source at run time (AGENTS.md section 6).'
+commands:
+  arrange.align.box:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.bring_forward:
+    enabled_in:
+    - shapes_selected
+    - container_selected
+  arrange.bring_to_front:
+    enabled_in:
+    - shapes_selected
+    - container_selected
+  arrange.diagram.check:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  arrange.disband.container:
+    enabled_in: []
+  arrange.group:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.intersect:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.join:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.layout.apply.to.shape.style:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  arrange.layout.more.options:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.combine:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.effect.glow:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.effect.shadow:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.effect.soft.edges:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.fragment:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.object.union:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.position:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  arrange.rotate.object:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.rotate_left:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.send_backward:
+    enabled_in:
+    - shapes_selected
+    - container_selected
+  arrange.send_to_back:
+    enabled_in:
+    - shapes_selected
+    - container_selected
+  arrange.size.and.position.window:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  arrange.subtract:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.trim:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  arrange.ungroup:
+    enabled_in:
+    - group_selected
+    - picture_selected
+  connector.auto_connect:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  connector.curved.lines:
+    enabled_in:
+    - empty_page
+    - second_page
+  connector.dynamic.grid:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  connector.right_angle:
+    enabled_in:
+    - empty_page
+    - second_page
+  connector.show.line.jumps:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  connector.straight.lines:
+    enabled_in:
+    - empty_page
+    - second_page
+  connector.style:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  data.automatically.link:
+    enabled_in: []
+  data.graphic.create.new:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  data.graphic.edit:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  data.graphics.gallery.visio:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  data.link.data.to.shapes:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  data.refresh:
+    enabled_in: []
+  data.update.icon:
+    enabled_in: []
+  developer.record.new.macro:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.copy:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.cut:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.duplicate.page:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  edit.find:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  edit.insert.field:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  edit.paste:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.paste.duplicate:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  edit.paste.special.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  edit.redo.or.repeat:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+  edit.remove.theme.from.sel:
+    enabled_in: []
+  edit.replace.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  edit.replace.shape:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  edit.right.button.icon.color:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.right.button.icon.transparent:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  edit.select.by.type.dialog:
+    enabled_in:
+    - shapes_selected
+    - group_selected
+    - picture_selected
+    - container_selected
+  edit.select.contents:
+    enabled_in:
+    - container_selected
+  edit.select.special:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  edit.select_all:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  edit.sw.show.formulas:
+    enabled_in:
+    - shapesheet_window
+  edit.sw.show.sections.dlg:
+    enabled_in:
+    - shapesheet_window
+  edit.sw.show.values:
+    enabled_in:
+    - shapesheet_window
+  edit.undo:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.close.ink.tools.tab:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  file.create.edit.master:
+    enabled_in: []
+  file.create.stage.view.diagram:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  file.create.workflow.diagram:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  file.new:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.new.blank.stencil:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.new.blank.stencil.metric:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.new.blank.stencil.us:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.new.theme.colors:
+    enabled_in: []
+  file.open:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.open.stencil:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.print:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  file.print.shape.sheet:
+    enabled_in: []
+  file.save:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  file.send.as.attachment:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.apply.data.graphic:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  format.apply.theme.to.new.shapes.toggle:
+    enabled_in:
+    - shapesheet_window
+  format.cust.prop.edit:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  format.decrease.indent:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.increase.indent:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.line:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.set.fill.color:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.set.language.dlg:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  format.set.line.color:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.set.line.pattern:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.set.line.weight:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.set.page.orientation:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.style.explorer:
+    enabled_in:
+    - shapesheet_window
+  format.text.align_bottom:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.align_center:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  format.text.align_justify:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.align_left:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.align_middle:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  format.text.align_right:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.align_top:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.all_caps:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.bold:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.italic:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.small_caps:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  format.text.underline:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  help.research.thesaurus:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  help.research.translate:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.add.ons:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  insert.add.to.new.container:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.clip.art:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.legend.horizontal:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.new.background.page:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.text.box:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  insert.vert.text.box:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  layer.dialog:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  layer.properties.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  page.auto.size.toggle:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  page.relayout:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  page.size.dlg:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  page.size.to.fit.drawing:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  review.ignore.this.issue:
+    enabled_in: []
+  review.ignore.validation.rule:
+    enabled_in: []
+  review.new.comment:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  review.spelling.change:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  review.validation.issues.window.toggle:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.arc:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.associate.callout:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.behavior:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.container.heading.styles:
+    enabled_in:
+    - container_selected
+  shape.container.margins:
+    enabled_in:
+    - container_selected
+    - shapesheet_window
+  shape.container.styles:
+    enabled_in:
+    - container_selected
+  shape.data.window:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.data.window.show.hide:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.drawing.explorer:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.drawing.tools:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.effects:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.icon.bucket.tool:
+    enabled_in: []
+  shape.icon.edit.close:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  shape.icon.left.color:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  shape.icon.pencil.tool:
+    enabled_in: []
+  shape.icon.select.area:
+    enabled_in: []
+  shape.icon.select.lasso:
+    enabled_in: []
+  shape.lock.container:
+    enabled_in:
+    - container_selected
+  shape.master.explorer:
+    enabled_in: []
+  shape.master.properties:
+    enabled_in: []
+  shape.name:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.protection:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.reports:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.shapes.object.offset:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.shapes.object.update.alignment:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - container_selected
+  shape.shapes.rotate:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  shape.shapes.window:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  shape.sheet.delete.row:
+    enabled_in: []
+  shape.sheet.delete.section:
+    enabled_in: []
+  shape.sheet.edit.formula:
+    enabled_in:
+    - shapesheet_window
+  shape.sheet.insert.row:
+    enabled_in: []
+  shape.sheet.insert.section:
+    enabled_in:
+    - shapesheet_window
+  shape.sheet.shape.action:
+    enabled_in: []
+  shape.sten.edit.icon:
+    enabled_in: []
+  shape.sten.names.under.icons:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  shape.sten.new.master:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  shape.styles:
+    enabled_in: []
+  text.bullets:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.direction.left.to.right:
+    enabled_in: []
+  text.direction.right.to.left:
+    enabled_in: []
+  text.direction.vertical:
+    enabled_in: []
+  text.font:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.font.color:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.font.size:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.font.size.decrease:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.font.size.increase:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.initial.caps:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  text.normal.case:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  text.rotate90:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.allow.themes:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.area.select:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  tools.arrows.more:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.automatic.resize:
+    enabled_in:
+    - container_selected
+  tools.automatic.resize.always.fit.to.contents:
+    enabled_in:
+    - container_selected
+  tools.automatic.resize.expand.as.needed:
+    enabled_in:
+    - container_selected
+  tools.automatic.resize.none:
+    enabled_in:
+    - container_selected
+  tools.background.color:
+    enabled_in: []
+  tools.backgrounds:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.bevel.shape:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.bevel_options_3d:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.blank.page.insert:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.blank.page.insert.visio:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.borders.and.titles:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.cad.drawing:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.change.case.dialog.classic:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.chart.insert:
+    enabled_in: []
+  tools.clear.icon.colors:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.com.add.ins.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.commenting:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.comments.pane:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.connection.point:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.connection.points:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  tools.connector:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.control.properties:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.controls:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.crop:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.design.mode:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.ellipse:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.embellishment:
+    enabled_in: []
+  tools.event.monitor:
+    enabled_in: []
+  tools.external.data.window:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.fill.dialog:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.find.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.format_painter:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.freeform:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.glows.more.options:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.hyperlink.insert:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.icons.and.details:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.icons.and.names:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+    on_by_default: true
+  tools.icons.only:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.inet.paste.as.hyperlink:
+    enabled_in: []
+  tools.ink.auto.create.shapes:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  tools.ink.ballpoint.pen:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.ink.color.picker:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.ink.covert.to.geometry:
+    enabled_in: []
+  tools.ink.covert.to.text.visio:
+    enabled_in: []
+  tools.ink.eraser:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.ink.highlighter:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.ink.shape.close:
+    enabled_in: []
+  tools.ink.tool:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.language.commands:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.language.preferences.dlg:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.lasso.select.visio:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.layers:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.left.button.icon.transparent:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.line.arrows:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.line.dialog:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.line.styles.dialog:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.macro.play:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.macro.recorder.pause:
+    enabled_in: []
+  tools.macro.security:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.more.page.sizes:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.mso.insert.symbol:
+    enabled_in:
+    - text_editing
+  tools.names.only:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.objects.add.to:
+    enabled_in: []
+  tools.objects.convert.to:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - container_selected
+  tools.objects.remove.from:
+    enabled_in: []
+  tools.ole.objectct.insert:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.operations:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.org.chart.change.style:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.copy.create:
+    enabled_in: []
+  tools.org.chart.data.compare:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.data.export:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.data.import:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.fit.to.page:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.increase.height:
+    enabled_in:
+    - empty_page
+    - second_page
+  tools.org.chart.increase.width:
+    enabled_in:
+    - empty_page
+    - second_page
+  tools.org.chart.layout:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.picture.change:
+    enabled_in: []
+  tools.org.chart.picture.delete:
+    enabled_in: []
+  tools.org.chart.picture.hide:
+    enabled_in: []
+  tools.org.chart.picture.insert:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.picture.insert.multiple:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.picture.insert.one:
+    enabled_in: []
+  tools.org.chart.position.type.change:
+    enabled_in: []
+  tools.org.chart.reduce.height:
+    enabled_in:
+    - empty_page
+    - second_page
+  tools.org.chart.reduce.width:
+    enabled_in:
+    - empty_page
+    - second_page
+  tools.org.chart.relayout:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.report.move.closer:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.report.move.further:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.org.chart.report.move.left:
+    enabled_in: []
+  tools.org.chart.report.move.right:
+    enabled_in: []
+  tools.org.chart.subordinates.expand:
+    enabled_in: []
+  tools.org.chart.subordinates.show.hide:
+    enabled_in: []
+  tools.org.chart.synchronize:
+    enabled_in: []
+  tools.outline.weight:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.pen.pressure:
+    enabled_in: []
+  tools.pencil:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.persistent.events:
+    enabled_in: []
+  tools.picture.auto.balance:
+    enabled_in:
+    - picture_selected
+  tools.picture.brightness:
+    enabled_in:
+    - picture_selected
+  tools.picture.compress:
+    enabled_in:
+    - picture_selected
+  tools.picture.contrast:
+    enabled_in:
+    - picture_selected
+  tools.picture.corrections.dialog:
+    enabled_in:
+    - picture_selected
+  tools.picture.insert.from.file:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.pointer:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  tools.pointer.mode.options:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.quick.connector:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.recorder.resume:
+    enabled_in: []
+  tools.recorder.stop.visio:
+    enabled_in: []
+  tools.rectangle:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.reflection:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.reflections.more.options:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.rotation_3d:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.rotation_3d_options:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.rules.import.from:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.rules.to.check:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.screen.tip:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.shadow.options.dialog:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.share.point.workflow.export:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.share.point.workflow.import:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.soft.edges.more.options:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.stencil.close:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.stencil.explorer:
+    enabled_in: []
+  tools.stop.ignoring.this.issue:
+    enabled_in: []
+  tools.stop.ignoring.validation.rule:
+    enabled_in: []
+  tools.strikethrough:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.subprocess.browse.to.other.document:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.subprocess.create.from.selection:
+    enabled_in: []
+  tools.subprocess.create.new:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.subprocess.edit.link:
+    enabled_in: []
+  tools.subprocess.link.to.existing:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  tools.symbols.dialog:
+    enabled_in:
+    - text_editing
+  tools.text:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.text_block:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.theme.colors.gallery.visio:
+    enabled_in: []
+  tools.theme.connectors:
+    enabled_in: []
+  tools.theme.effects.gallery.visio:
+    enabled_in: []
+  tools.theme.variants:
+    enabled_in: []
+  tools.themes.gallery.visio:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  tools.themes.gallery.visio.legacy:
+    enabled_in: []
+  tools.trace.back:
+    enabled_in: []
+  tools.trace.dependent.cells:
+    enabled_in: []
+  tools.trace.forward:
+    enabled_in: []
+  tools.trace.precedent.cells:
+    enabled_in: []
+  tools.visual.basic:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.windows.arrange.all:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  tools.windows.cascade:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  view.direction.toggle:
+    enabled_in: []
+  view.fit.container.to.contents:
+    enabled_in:
+    - container_selected
+  view.full.screen.view:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.guides:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  view.hide.document.stencil:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.left.to.right:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.pan.zoom:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.rulers:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  view.show.comments:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.show.formula.tracing.window:
+    enabled_in:
+    - shapesheet_window
+  view.show.ignored.issues.toggle:
+    enabled_in: []
+  view.show.page.breaks:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  view.show.shape.sheet.document:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.show.shape.sheet.page:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.show.shape.sheet.shape:
+    enabled_in:
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - picture_selected
+    - container_selected
+  view.show.tags:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    on_by_default: true
+  view.task.pane.research:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  view.task.panes.menu.visio:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.toggle_grid:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.visual.basic.code:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  view.window.more.windows.dialog:
+    enabled_in: []
+  view.window.new.window:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.window.show.shape.sheet:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.window.switch.windows.menu.word:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+    - shapesheet_window
+  view.zoom.dialog:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.zoom.fit:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected
+  view.zoom.page.width:
+    enabled_in:
+    - empty_page
+    - shapes_selected
+    - text_editing
+    - group_selected
+    - second_page
+    - picture_selected
+    - container_selected

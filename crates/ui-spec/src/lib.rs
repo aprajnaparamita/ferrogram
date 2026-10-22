@@ -1,4 +1,4 @@
-//! Loader for ribbon, backstage, context-menu and shortcut layout data.
+//! Loader for command-bar, backstage, context-menu and shortcut layout data.
 //!
 //! The public types below are the contract of `ui-spec/schema.json`
 //! (ADR 0007 format, ADR 0008 ShapeSheet table). The loader itself
@@ -22,6 +22,7 @@ pub mod embedded;
 pub mod error;
 pub mod loader;
 pub mod lookup;
+pub mod v2;
 
 pub use error::{IdError, LoadError};
 pub use loader::Loader;
@@ -40,7 +41,7 @@ pub use loader::Loader;
 /// qualifier   := [a-z][a-z0-9_]*
 /// ```
 ///
-/// Scopes are **functional**, not ribbon tabs. The same command may be
+/// Scopes are **functional**, not command-bar tabs. The same command may be
 /// surfaced on the Home tab in 2016 and on the Arrange tab in 365; the
 /// id does not change. The `Control` type's `command` field is the
 /// link from a Fluent control to one of these ids.
@@ -196,9 +197,9 @@ impl AsRef<str> for FluentId {
 /// `ui-spec/schema.json` under `definitions/controlType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ControlType {
-    /// A top-level ribbon tab.
+    /// A top-level command-bar tab.
     Tab,
-    /// A tab set inside a ribbon (rarely used in Visio).
+    /// A tab set inside a command bar (rarely used in Visio).
     TabSet,
     /// A group of controls inside a tab.
     Group,
@@ -325,7 +326,7 @@ pub struct Bounds {
     pub h: f32,
 }
 
-/// A control in a ribbon, backstage, or context menu. See
+/// A control in a command bar, backstage, or context menu. See
 /// `ui-spec/schema.json#/definitions/control`.
 ///
 /// `id` is the Fluent control name (e.g. `FileSave`); `command` is
@@ -350,9 +351,9 @@ pub struct Control {
     /// the control is non-actionable or its mapping is unknown.
     #[serde(default)]
     pub command: Option<CommandId>,
-    /// Alternate Fluent ids for the same control across ribbon
+    /// Alternate Fluent ids for the same control across command-bar
     /// placements (e.g. when `ConnectorTool` appears on both the
-    /// Home and Insert ribbons in 365). P1-03 picks a primary
+    /// Home and Insert tabs in 365). P1-03 picks a primary
     /// parent by `tab` match; the others are recorded here.
     #[serde(default)]
     pub aliases: Vec<FluentId>,
@@ -459,7 +460,7 @@ pub struct Group {
     pub controls: Vec<Control>,
 }
 
-/// A top-level ribbon tab.
+/// A top-level command-bar tab.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Tab {
     /// Tab Fluent id.
@@ -591,7 +592,7 @@ pub struct Layout {
     /// Pinning info (commit, channel, date).
     #[serde(default)]
     pub source_revision: String,
-    /// Top-level ribbon tabs (excludes the File tab's backstage).
+    /// Top-level command-bar tabs (excludes the File tab's backstage).
     pub tabs: Vec<Tab>,
     /// Backstage tabs under the File button.
     pub backstage: Backstage,
@@ -692,7 +693,7 @@ impl serde::Serialize for MappingConfidence {
 ///
 /// `sequence` is the list of chords the user types in order. A
 /// single-chord shortcut (e.g. Ctrl+Z) has a one-element sequence;
-/// a multi-chord ribbon keytip (e.g. Alt+H, F, O) is a three-element
+/// a multi-chord command-bar keytip (e.g. Alt+H, F, O) is a three-element
 /// sequence. Each chord is a set of keys pressed simultaneously.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Shortcut {
@@ -713,7 +714,7 @@ pub struct Shortcut {
 pub enum ShortcutScope {
     /// Always available.
     Global,
-    /// Only when the ribbon has focus.
+    /// Only when the command bar has focus.
     Ribbon,
     /// Only when a drawing page has focus.
     Page,
@@ -823,7 +824,7 @@ impl<'de> serde::Deserialize<'de> for Shortcuts {
 /// The full set of data loaded for a single layout (e.g. 2016).
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct LayoutSet {
-    /// The ribbon + backstage + context menus + QAT.
+    /// The command bar + backstage + context menus + QAT.
     pub layout: Layout,
     /// The commands referenced by the layout.
     pub commands: Commands,
