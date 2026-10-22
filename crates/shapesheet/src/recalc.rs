@@ -20,6 +20,7 @@ use ferrogram_model::{CellValue, CellWrite, Document, SheetRef};
 
 use crate::Error;
 use crate::ast::{Expr, ExprKind};
+use crate::error::SyntaxKind;
 use crate::eval::{EvalContext, EvalWarning, EvalWarningKind};
 use crate::formula::{CellRef, Formula};
 use crate::graph::{self, CellAddress, DepGraph, EffectiveCell};
@@ -115,6 +116,10 @@ pub enum RecalcWarningKind {
     Coercion(String),
     /// A computed number was not finite; it became `#NUM!` (P3-11).
     NonFinite,
+    /// The formula text does not parse ([`SyntaxKind`]); the cell keeps
+    /// its cached value, the ADR 0053 rule for a formula the engine
+    /// cannot compute.
+    Syntax(SyntaxKind),
 }
 
 /// What one recalc pass did (ADR 0055).
@@ -146,7 +151,8 @@ pub struct Evaluation {
     /// The cached value to store for the cell.
     pub value: CellValue,
     /// What the evaluation could not do. A [`RecalcWarningKind::UnknownFunction`]
-    /// warning means the cell keeps its cached value (ADR 0053).
+    /// or [`RecalcWarningKind::Syntax`] warning means the cell keeps its
+    /// cached value (ADR 0053).
     pub warnings: Vec<RecalcWarning>,
     /// The cells the formula wrote (`SETF`). The pass applies them in
     /// order and dirties their dependents within the same budget.
@@ -207,7 +213,25 @@ impl FormulaEngine for DocumentEngine {
                 resolver: &mut resolver,
                 writes: Vec::new(),
             };
-            let value = crate::eval::eval_formula(formula, sheet, &mut recording)?;
+            let value = match crate::eval::eval_formula(formula, sheet, &mut recording) {
+                Ok(value) => value,
+                Err(Error::Syntax { kind, .. }) => {
+                    // A formula the parser rejects is document data, not
+                    // a broken engine: the cell keeps its cached value
+                    // (the ADR 0053 rule) and one warning says why.
+                    return Ok(Evaluation {
+                        // Never written: the warning keeps the cell's
+                        // cached value.
+                        value: CellValue::Error(String::from("#VALUE!")),
+                        warnings: vec![RecalcWarning {
+                            target: None,
+                            kind: RecalcWarningKind::Syntax(kind),
+                        }],
+                        writes: Vec::new(),
+                    });
+                }
+                Err(error) => return Err(error),
+            };
             let RecordingContext { writes, .. } = recording;
             (value, writes, resolver.into_warnings())
         };
@@ -417,10 +441,12 @@ pub fn recalc_with(
             &Formula::new(effective.formula.as_str()),
             address.sheet,
         )?;
-        let keep_cached = evaluation
-            .warnings
-            .iter()
-            .any(|warning| matches!(warning.kind, RecalcWarningKind::UnknownFunction(_)));
+        let keep_cached = evaluation.warnings.iter().any(|warning| {
+            matches!(
+                warning.kind,
+                RecalcWarningKind::UnknownFunction(_) | RecalcWarningKind::Syntax(_)
+            )
+        });
         for mut warning in evaluation.warnings {
             if warning.target.is_none() {
                 warning.target = Some(address.clone());
