@@ -16,26 +16,21 @@
 //!
 //! ADR 0048 defines its equality over `model::Document` values,
 //! ignoring the volatile document properties, `Preserved` attribute
-//! order and `AppCtx` state. Two things the model *can* differ on are
-//! not content and are ignored here as well (the documented deviation,
+//! order and `AppCtx` state. One thing the model *can* differ on is
+//! not content and is ignored here as well (the documented deviation,
 //! see the P5-10 Result):
 //!
 //! - **arena addressing**: `Document::shapes` is an id-addressed arena
 //!   and the writer/reader renumber it (the reader fills masters'
 //!   shapes first, a model built in memory interleaves them with
 //!   instances), so [`canonical`] renames every `ShapeId` into
-//!   document order before comparing;
-//! - **relationship plumbing**: a read `Master`/`Page` keeps its
-//!   `<Rel>` child in `Preserved` (it names the contents part), while a
-//!   model built in memory has none; the relationship is not model
-//!   content, so [`normalised`] drops preserved `Rel` children;
-//! - **the cell `U` spelling**: the writer writes `U="BOOL"`/`U="STR"`
-//!   for boolean and number-like string values (task P2-14) and the
-//!   reader keeps that kind spelling in the cell's `Preserved` instead
-//!   of consuming it (an Open issue for the `vsdx` crate, see the
-//!   P5-10 Result), while the model holds the kind in `value` and
-//!   `unit` already; [`normalised`] drops preserved cell `U`
-//!   attributes.
+//!   document order before comparing.
+//!
+//! The two reader artefacts earlier versions of this comparison also
+//! dropped are gone (task P6-16): a read `Page`/`Master` no longer
+//! keeps the `<Rel>` child that names its contents part (the writer
+//! writes it again) and a cell keeps its `U` spelling only when the
+//! writer cannot re-derive it, so the comparison drops neither.
 //!
 //! The ADR's own identity (`read(write(read(write(d)))) ==
 //! read(write(d))`) is asserted literally as well: the reopened
@@ -512,50 +507,39 @@ fn sort_node(node: &mut XmlNode) {
     }
 }
 
-/// Sorts the preserved fragment and drops its `Rel` children (the
-/// relationship plumbing; see the module docs).
+/// Sorts the preserved fragment (attribute order is not semantic, ADR
+/// 0012).
 fn sort_preserved(preserved: &mut Preserved) {
     preserved
         .attributes
         .sort_by(|a, b| (&a.name.uri, &a.name.local).cmp(&(&b.name.uri, &b.name.local)));
-    preserved.children.retain(|child| child.name.local != "Rel");
     for child in &mut preserved.children {
         sort_node(child);
     }
 }
 
-/// The preserved fragment of one cell: [`sort_preserved`] plus the
-/// `U` kind/unit spelling dropped (writer-managed; module docs).
-fn sort_cell_preserved(preserved: &mut Preserved) {
-    preserved
-        .attributes
-        .retain(|attribute| attribute.name.local != "U");
-    sort_preserved(preserved);
-}
-
 /// Sorts the preserved fragments of one sheet.
 fn sort_sheet(sheet: &mut Sheet) {
     for cell in &mut sheet.cells {
-        sort_cell_preserved(&mut cell.preserved);
+        sort_preserved(&mut cell.preserved);
     }
     for section in &mut sheet.sections {
         sort_preserved(&mut section.preserved);
         for cell in &mut section.cells {
-            sort_cell_preserved(&mut cell.preserved);
+            sort_preserved(&mut cell.preserved);
         }
         for row in &mut section.rows {
             sort_preserved(&mut row.preserved);
             for cell in &mut row.cells {
-                sort_cell_preserved(&mut cell.preserved);
+                sort_preserved(&mut cell.preserved);
             }
         }
     }
 }
 
 /// Normalises a document for the ADR 0048 model comparison: `Preserved`
-/// attribute order is not semantic, `Rel` plumbing children and a
-/// cell's `U` kind spelling are not content (module docs), and the
-/// volatile document properties are not compared.
+/// attribute order is not semantic and the volatile document properties are
+/// not compared.
 fn normalised(document: &Document) -> Document {
     let mut document = document.clone();
     sort_preserved(&mut document.preserved);
@@ -890,10 +874,10 @@ fn box_shape(document: &mut Document, page: PageId, name: &str) -> ShapeId {
     document.insert_shape(page, shape, None).expect("shape")
 }
 
-/// Two documents that differ only in arena order and `Rel` plumbing
-/// compare equal; a content difference does not.
+/// Two documents that differ only in arena order compare equal; a
+/// content difference does not.
 #[test]
-fn the_model_comparison_ignores_addressing_and_plumbing() {
+fn the_model_comparison_ignores_addressing() {
     // Base: one page, Alpha then Beta in the arena and on the page.
     let mut base = Document::new();
     let page = base.add_page("Page-1").expect("page");
@@ -909,7 +893,15 @@ fn the_model_comparison_ignores_addressing_and_plumbing() {
     renumbered.pages[0].shapes = vec![ShapeId { index: 1 }, ShapeId { index: 0 }];
     assert!(model_equal(&base, &renumbered));
 
-    // A `Rel` plumbing child (a reader artefact) is not content.
+    // A real difference is one. A preserved `Rel` child or a cell `U`
+    // spelling is a real difference too now: the reader produces
+    // neither (task P6-16).
+    let mut changed = base.clone();
+    changed.pages[0].name = "Other".to_owned();
+    assert!(!model_equal(&base, &changed));
+    let mut changed = base.clone();
+    changed.shapes[0].name_u = "Gamma".to_owned();
+    assert!(!model_equal(&base, &changed));
     let mut plumbed = base.clone();
     plumbed.pages[0].preserved.children.push(XmlNode {
         name: QName::local("Rel"),
@@ -920,29 +912,14 @@ fn the_model_comparison_ignores_addressing_and_plumbing() {
         children: Vec::new(),
         self_closing: true,
     });
-    assert!(model_equal(&base, &plumbed));
-
-    // A cell's `U` kind spelling (a reader artefact) is not content:
-    // both sides hold the boolean, only one spells it in `U`.
+    assert!(!model_equal(&base, &plumbed));
     let mut spelled = base.clone();
-    for (document, with_u) in [(&mut base, false), (&mut spelled, true)] {
-        let mut cell = Cell::new(CellName::from_static("FlipX"));
-        cell.value = Some(CellValue::Bool(false));
-        if with_u {
-            cell.preserved.attributes.push(XmlAttribute {
-                name: QName::local("U"),
-                value: "BOOL".to_owned(),
-            });
-        }
-        document.shapes[0].sheet.cells.push(cell);
-    }
-    assert!(model_equal(&base, &spelled));
-
-    // A real difference is one.
-    let mut changed = base.clone();
-    changed.pages[0].name = "Other".to_owned();
-    assert!(!model_equal(&base, &changed));
-    let mut changed = base.clone();
-    changed.shapes[0].name_u = "Gamma".to_owned();
-    assert!(!model_equal(&base, &changed));
+    let mut cell = Cell::new(CellName::from_static("FlipX"));
+    cell.value = Some(CellValue::Bool(false));
+    cell.preserved.attributes.push(XmlAttribute {
+        name: QName::local("U"),
+        value: "BOOL".to_owned(),
+    });
+    spelled.shapes[0].sheet.cells.push(cell);
+    assert!(!model_equal(&base, &spelled));
 }

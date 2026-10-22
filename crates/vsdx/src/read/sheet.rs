@@ -51,13 +51,31 @@ pub(crate) fn map_sheet(
     Ok(())
 }
 
+/// Whether the writer writes the `U` code `code` back unchanged for a cell
+/// holding `value` in `unit` (task P6-16).
+///
+/// The writer re-derives the spelling of a value kind (`BOOL`, `STR`,
+/// `COLOR`, `LIST`) and of a [`Unit`] (see [`crate::write::value`]); every
+/// other spelling is one it cannot produce again. The reader asks the
+/// writer's own decision function here, so the two rules cannot drift: a
+/// code the writer reproduces needs no place in `Preserved`, and one it
+/// would drop (or overwrite) does.
+fn writer_spells_code(code: &str, value: Option<&CellValue>, unit: Unit) -> bool {
+    match crate::write::value::unit_spelling(value, unit, Some(code)) {
+        crate::write::value::UnitSpelling::Keep => true,
+        crate::write::value::UnitSpelling::Code(written) => written == code,
+        crate::write::value::UnitSpelling::Absent => false,
+    }
+}
+
 /// Maps one `Cell` element, or returns `None` when the element cannot be
 /// modeled and must be kept verbatim by the caller.
 ///
 /// `N` is the name, `F` the formula, `V` the cached value, `U` the declared
 /// unit and `E` the cached error (see [`value`]). When `E` is present the
-/// value is the error and `V` and `U` stay preserved. A `U` code with no
-/// [`Unit`] spelling stays preserved too.
+/// value is the error and `V` and `U` stay preserved. A `U` code stays
+/// preserved only when the writer does not spell it back for this cell
+/// ([`writer_spells_code`]); codes it re-derives are consumed here.
 pub(crate) fn map_cell(node: &XmlNode, part: &str) -> Result<Option<Cell>, Error> {
     let Some(name) = node::attribute(node, "N") else {
         return Ok(None);
@@ -70,6 +88,16 @@ pub(crate) fn map_cell(node: &XmlNode, part: &str) -> Result<Option<Cell>, Error
     let v = node::attribute(node, "V").map(str::to_owned);
     let u = node::attribute(node, "U").map(str::to_owned);
     let mut cell = Cell::new(CellName::new(name.clone()));
+    cell.value = match (&error, &v) {
+        (Some(error), _) => Some(CellValue::Error(error.clone())),
+        (None, Some(v)) => Some(value::value(v, u.as_deref(), part, &name)?),
+        (None, None) => None,
+    };
+    cell.unit = if error.is_some() {
+        Unit::Unitsless
+    } else {
+        value::unit(u.as_deref()).unwrap_or(Unit::Unitsless)
+    };
     for attribute in &node.attributes {
         if is_namespace_declaration(attribute) {
             continue;
@@ -84,23 +112,15 @@ pub(crate) fn map_cell(node: &XmlNode, part: &str) -> Result<Option<Cell>, Error
                 }
             }
             "U" => {
-                if error.is_some() || value::unit(u.as_deref()).is_none() {
+                if error.is_some()
+                    || !writer_spells_code(&attribute.value, cell.value.as_ref(), cell.unit)
+                {
                     cell.preserved.attributes.push(attribute.clone());
                 }
             }
             _ => cell.preserved.attributes.push(attribute.clone()),
         }
     }
-    cell.value = match (&error, &v) {
-        (Some(error), _) => Some(CellValue::Error(error.clone())),
-        (None, Some(v)) => Some(value::value(v, u.as_deref(), part, &name)?),
-        (None, None) => None,
-    };
-    cell.unit = if error.is_some() {
-        Unit::Unitsless
-    } else {
-        value::unit(u.as_deref()).unwrap_or(Unit::Unitsless)
-    };
     for element in elements(node) {
         cell.preserved.children.push(element.clone());
     }
@@ -236,14 +256,112 @@ mod tests {
     }
 
     #[test]
-    fn a_u_code_without_a_unit_spelling_stays_preserved() {
+    fn a_re_derived_u_code_is_consumed() {
+        // The writer spells `BOOL` back from the boolean (task P6-16), so
+        // the code needs no place in `Preserved`.
         let cell = map_cell(&cell(&[("N", "Value"), ("U", "BOOL"), ("V", "1")]), "/p")
             .expect("cell")
             .expect("modeled");
         assert_eq!(cell.value, Some(CellValue::Bool(true)));
         assert_eq!(cell.unit, Unit::Unitsless);
+        assert!(cell.preserved.attributes.is_empty());
+    }
+
+    #[test]
+    fn a_str_code_is_consumed_only_when_the_writer_spells_it_back() {
+        // A number-like string reads back the `STR` the writer would spell
+        // for it; a plain string is not re-derived (`kind_code` fires only
+        // for a value whose shape would misread), so its code stays.
+        let number_like = map_cell(&cell(&[("N", "Value"), ("U", "STR"), ("V", "2")]), "/p")
+            .expect("cell")
+            .expect("modeled");
+        assert_eq!(number_like.value, Some(CellValue::Str("2".to_owned())));
+        assert!(number_like.preserved.attributes.is_empty());
+        let plain = map_cell(
+            &cell(&[("N", "Value"), ("U", "STR"), ("V", "Bottom")]),
+            "/p",
+        )
+        .expect("cell")
+        .expect("modeled");
+        assert_eq!(plain.value, Some(CellValue::Str("Bottom".to_owned())));
+        assert_eq!(plain.preserved.attributes.len(), 1);
+        assert_eq!(plain.preserved.attributes[0].name.local, "U");
+    }
+
+    #[test]
+    fn a_color_code_is_kept_for_a_color_without_a_unit() {
+        // `COLOR` is re-derived only for a colour that carries a unit
+        // (`write::value::kind_code`); a read `COLOR` cell has none, and the
+        // corpus spells four such cells (`U='COLOR' V='#ffffff'`).
+        let cell = map_cell(
+            &cell(&[("N", "Fill"), ("U", "COLOR"), ("V", "#ffffff")]),
+            "/p",
+        )
+        .expect("cell")
+        .expect("modeled");
+        assert_eq!(
+            cell.value,
+            Some(CellValue::Color(Color::new(255, 255, 255)))
+        );
         assert_eq!(cell.preserved.attributes.len(), 1);
         assert_eq!(cell.preserved.attributes[0].name.local, "U");
+    }
+
+    #[test]
+    fn a_code_the_writer_would_overwrite_stays_preserved() {
+        // `U='MM' V='Themed'`: the theme marker reads as a string and the
+        // writer would spell `STR` over the `MM`, so the file's code is
+        // kept (`writer_spells_code` only consumes a code the writer
+        // writes back unchanged).
+        let cell = map_cell(&cell(&[("N", "Fill"), ("U", "MM"), ("V", "Themed")]), "/p")
+            .expect("cell")
+            .expect("modeled");
+        assert_eq!(cell.value, Some(CellValue::Str("Themed".to_owned())));
+        assert_eq!(cell.preserved.attributes.len(), 1);
+        assert_eq!(cell.preserved.attributes[0].value, "MM");
+    }
+
+    #[test]
+    fn a_list_code_is_consumed() {
+        let cell = map_cell(
+            &cell(&[("N", "LayerMember"), ("U", "LIST"), ("V", "1;0")]),
+            "/p",
+        )
+        .expect("cell")
+        .expect("modeled");
+        assert_eq!(cell.value, Some(CellValue::List("1;0".to_owned())));
+        assert!(cell.preserved.attributes.is_empty());
+    }
+
+    #[test]
+    fn a_unit_code_the_writer_re_derives_is_consumed() {
+        let cell = map_cell(&cell(&[("N", "PinX"), ("U", "MM"), ("V", "2")]), "/p")
+            .expect("cell")
+            .expect("modeled");
+        assert_eq!(cell.unit, Unit::Millimeters);
+        assert!(cell.preserved.attributes.is_empty());
+    }
+
+    #[test]
+    fn a_code_the_writer_never_spells_stays_preserved() {
+        // `DATE`, `GUID`, `PNT`, `DT`, `DL` and any unknown code have no
+        // spelling in `write::value`; the code is the only place that keeps
+        // them (task P6-16).
+        for (code, v) in [
+            ("DATE", "2015-07-06T11:05:49"),
+            ("GUID", "{EFB4EACD-BEFB-4ECD-A226-1282E88A7BE7}"),
+            ("PNT", "2;3"),
+            ("DT", "0.01041666666666667"),
+            ("DL", "1.082677165354331"),
+            ("XYZ", "word"),
+        ] {
+            let cell = map_cell(&cell(&[("N", "Value"), ("U", code), ("V", v)]), "/p")
+                .expect("cell")
+                .expect("modeled");
+            assert_eq!(cell.preserved.attributes.len(), 1, "code {code}");
+            assert_eq!(cell.preserved.attributes[0].name.local, "U");
+            assert_eq!(cell.preserved.attributes[0].value, code);
+        }
     }
 
     #[test]
