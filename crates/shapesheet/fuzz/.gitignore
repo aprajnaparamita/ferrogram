@@ -1,0 +1,9 @@
+# cargo-fuzz output; never committed. The seed corpus IS committed (ADR 0060),
+# so it is re-included here over the root `**/fuzz/corpus/` rule: the seeds are
+# our own formula strings in the shapes the corpus writes (docs/sources.md
+# source 20) plus malformed inputs. One directory per fuzz target
+# (`corpus/parse/`, task P6-02).
+!corpus/
+artifacts
+coverage
+target

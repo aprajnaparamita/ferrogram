@@ -13,5 +13,9 @@ publish = false
 ferrogram-geom = { path = "../geom" }
 ferrogram-model = { path = "../model" }
 
+[dev-dependencies]
+# The parser round-trip property tests (ADR 0060).
+proptest = "1"
+
 [lints]
 workspace = true

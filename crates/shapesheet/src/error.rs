@@ -110,6 +110,16 @@ pub enum Error {
     ///
     /// The payload names the conversion in one line.
     Conversion(&'static str),
+    /// A `SETF` write was refused: its target names no cell the write
+    /// can land on (ADR 0056).
+    ///
+    /// The payload names the target in one line. Requested by P6-05.
+    SetfRefused(&'static str),
+    /// The evaluation context broke: a cell it must read or write is
+    /// not available (ADR 0055).
+    ///
+    /// The payload names the step in one line. Requested by P6-05.
+    BrokenContext(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -120,6 +130,8 @@ impl fmt::Display for Error {
                 write!(f, "syntax error at {}..{}: {kind}", span.start, span.end)
             }
             Error::Conversion(what) => write!(f, "conversion failed: {what}"),
+            Error::SetfRefused(target) => write!(f, "SETF refused: {target}"),
+            Error::BrokenContext(step) => write!(f, "broken context: {step}"),
         }
     }
 }
@@ -150,6 +162,22 @@ mod tests {
         assert_eq!(
             Error::Conversion("list with a unit").to_string(),
             "conversion failed: list with a unit"
+        );
+    }
+
+    #[test]
+    fn display_names_the_refused_setf_target() {
+        assert_eq!(
+            Error::SetfRefused("PinX of Sheet.8").to_string(),
+            "SETF refused: PinX of Sheet.8"
+        );
+    }
+
+    #[test]
+    fn display_names_the_broken_context_step() {
+        assert_eq!(
+            Error::BrokenContext("read of User.Direction").to_string(),
+            "broken context: read of User.Direction"
         );
     }
 

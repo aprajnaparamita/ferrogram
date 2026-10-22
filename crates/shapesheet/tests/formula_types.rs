@@ -1,15 +1,16 @@
 //! Behavior of the formula and cell-reference types (task P2-10, extended
-//! by the Phase 6 stubs of P6-01).
+//! by task P6-02).
 //!
-//! They are value types until the parser lands (ADR 0014, ADR 0051):
-//! these tests pin construction, the `Display`/`Debug` spellings and the
-//! derived equality and hashing, so the parser (task P6-02) can rely on
-//! them.
+//! These tests pin construction, the `Display`/`Debug` spellings and the
+//! derived equality and hashing, so the parser and the printer can rely
+//! on them. The parser's own behavior lives in `tests/parser.rs`.
 
+// Test code: a failing `expect` is the bug under test.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use ferrogram_shapesheet::{CellRef, Error, Expr, Formula, parse};
+use ferrogram_shapesheet::{BinaryOp, CellRef, Expr, ExprKind, Formula, parse};
 
 #[test]
 fn a_formula_keeps_its_source_verbatim() {
@@ -59,11 +60,19 @@ fn bare_cell_refs_compare_and_hash_by_value() {
 }
 
 #[test]
-fn parsing_still_reports_the_stub_error() {
-    assert_eq!(parse("1+1"), Err(Error::NotImplemented("parse")));
+fn parsing_reads_a_formula_into_a_tree() {
+    let expr = parse("1+1").expect("the formula parses");
+    assert!(matches!(
+        expr.kind,
+        ExprKind::Binary {
+            op: BinaryOp::Add,
+            ..
+        }
+    ));
+    let empty = parse("").expect_err("an empty formula names no expression");
     assert_eq!(
-        parse("").unwrap_err().to_string(),
-        "not implemented: parse".to_owned()
+        empty.to_string(),
+        "syntax error at 0..0: unexpected end of formula"
     );
 }
 
