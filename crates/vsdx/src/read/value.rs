@@ -31,6 +31,15 @@
 //! | `BOOL` | `Bool`, from `0`/`1` (also `true`/`FALSE`); anything else is `Error::InvalidPackage` |
 //! | `COLOR` | `Color` for a `#RGB`/`#RRGGBB` literal, `Str` otherwise (a themed or indexed color is kept as written) |
 //! | `STR`, `DATE`, `GUID`, `PNT` | `Str` |
+//! | `LIST` | `List`, kept as its raw `;`-separated text |
+//!
+//! `LIST` is **our own spelling** (task P6-08, P2-14): [MS-VSDX] has no
+//! `U` code for a list value and Visio writes list strings (the
+//! `LayerMember` layer index list, a `Property` row's `Format` choices)
+//! without any code, so a list and a string would read back as the same
+//! kind. The writer spells `U="LIST"` only for a model-built
+//! [`CellValue::List`] (see [`crate::write::value`]); a code-less `V`
+//! keeps reading by its shape, exactly as the corpus files spell it.
 //!
 //! One spelling overrides every kind rule: a `V` of exactly `Themed` is the
 //! theme marker and maps to `Str("Themed")` whatever `U` declares (ADR 0021
@@ -58,6 +67,8 @@ pub(crate) enum Kind {
     Color,
     /// A string.
     Str,
+    /// A list, kept as its raw `;`-separated text.
+    List,
     /// No declared kind: the value is classified by its own shape.
     Unknown,
 }
@@ -76,6 +87,7 @@ pub(crate) fn kind(unit_code: Option<&str>) -> Kind {
         None => Kind::Unknown,
         Some("BOOL") => Kind::Bool,
         Some("COLOR") => Kind::Color,
+        Some("LIST") => Kind::List,
         Some("STR") | Some("DATE") | Some("GUID") | Some("PNT") => Kind::Str,
         Some(code) if NUMBER_CODES.contains(&code) => Kind::Number,
         Some(_) => Kind::Unknown,
@@ -125,8 +137,11 @@ pub(crate) fn value(
 ) -> Result<CellValue, Error> {
     // The `Themed` marker: the value comes from the theme whatever the
     // declared kind (ADR 0021 amendment). It is kept as the string and
-    // resolved later by `ferrogram_model::CellReader`.
-    if v.trim() == THEMED {
+    // resolved later by `ferrogram_model::CellReader`. Our own `LIST`
+    // spelling is the one exception: its `V` is a raw list spelling, and
+    // the writer only emits the code for a model-built list (P6-08), so
+    // `V='Themed' U='LIST'` is a one-entry list, not a theme marker.
+    if v.trim() == THEMED && kind(unit_code) != Kind::List {
         return Ok(CellValue::Str(THEMED.to_owned()));
     }
     match kind(unit_code) {
@@ -144,6 +159,7 @@ pub(crate) fn value(
             None => CellValue::Str(v.to_owned()),
         }),
         Kind::Str => Ok(CellValue::Str(v.to_owned())),
+        Kind::List => Ok(CellValue::List(v.to_owned())),
         Kind::Unknown => Ok(match shape(v) {
             Shaped::Number(number) => CellValue::Number(number),
             Shaped::Color(color) => CellValue::Color(color),
@@ -208,7 +224,7 @@ mod tests {
         // `NM` is nautical miles, not nanometers; the fractional and
         // compound codes have no `Unit` variant at all.
         for code in [
-            "NM", "IN_F", "F_I", "DT", "DA", "DL", "BOOL", "STR", "COLOR", "?",
+            "NM", "IN_F", "F_I", "DT", "DA", "DL", "BOOL", "STR", "COLOR", "LIST", "?",
         ] {
             assert_eq!(unit(Some(code)), None, "code {code}");
         }
@@ -325,6 +341,42 @@ mod tests {
         assert_eq!(
             value(";Not Started;Done", Some("XYZ"), "p", "c"),
             Ok(CellValue::Str(";Not Started;Done".to_owned()))
+        );
+    }
+
+    #[test]
+    fn the_list_code_reads_a_raw_list() {
+        // Our own kind spelling (P6-08): `LIST` keeps the raw text as a
+        // list, whatever shape the text has.
+        assert_eq!(kind(Some("LIST")), Kind::List);
+        assert_eq!(
+            value("1;0", Some("LIST"), "p", "LayerMember"),
+            Ok(CellValue::List("1;0".to_owned()))
+        );
+        assert_eq!(
+            value("x", Some("LIST"), "p", "c"),
+            Ok(CellValue::List("x".to_owned()))
+        );
+        assert_eq!(
+            value("", Some("LIST"), "p", "c"),
+            Ok(CellValue::List(String::new()))
+        );
+        // A one-entry list of `Themed` stays a list: the theme-marker
+        // rule covers the codes a file writes, not our own one.
+        assert_eq!(
+            value("Themed", Some("LIST"), "p", "c"),
+            Ok(CellValue::List("Themed".to_owned()))
+        );
+    }
+
+    #[test]
+    fn a_code_less_list_spelling_stays_a_string() {
+        // Visio writes list strings without a code (`LayerMember
+        // V='1;0'`, a `Format` choice list); the corpus spelling is
+        // kept as written (the module docs).
+        assert_eq!(
+            value("1;0", None, "p", "c"),
+            Ok(CellValue::Str("1;0".to_owned()))
         );
     }
 
