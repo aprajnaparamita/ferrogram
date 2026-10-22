@@ -10,7 +10,7 @@
 //! [`AppCtx::warnings`](ferrogram_commands::AppCtx) so the status bar
 //! shows it.
 //!
-//! [`show_options`] draws the View/Options dialog body: the ribbon
+//! [`show_options`] draws the View/Options dialog body: the panel
 //! layout radio choice (ADR 0032), the grid and rulers toggles and the
 //! display units. The dialog never mutates [`Settings`] (the ADR 0032
 //! amendment): it returns the [`Intent`]s for the rows the user
@@ -101,6 +101,34 @@ const UNIT_CHOICES: &[(DisplayUnits, &str)] = &[
     (DisplayUnits::Feet, "Feet"),
 ];
 
+/// The first-run settings the welcome wizard owns (ADR 0066).
+///
+/// `welcome_seen` decides whether the wizard opens on launch, and
+/// `default_layout` is the layout the wizard chose. Task P7-01 defines
+/// the fields as an interface stub here, because the persisted
+/// [`Settings`] type lives in `crates/commands` and Phase 6 owns that
+/// crate; task P7-09 moves the two fields onto
+/// `ferrogram_commands::Settings` (with serde defaults, so old stores
+/// still load) and deletes this type.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct WelcomeSettings {
+    /// Whether the welcome wizard has been shown. It opens on launch
+    /// only while this is `false`, and both Cancel and Start set it.
+    pub welcome_seen: bool,
+    /// The layout the wizard chose as the default (ADR 0066).
+    pub default_layout: ferrogram_ui_spec::v2::LayoutKind,
+}
+
+impl Default for WelcomeSettings {
+    fn default() -> Self {
+        Self {
+            welcome_seen: false,
+            default_layout: ferrogram_ui_spec::v2::LayoutKind::PanelModern,
+        }
+    }
+}
+
 /// Loads settings through a [`SettingsStore`], falling back to
 /// [`Settings::default`] on any [`SettingsError`] (ADR 0032: a corrupt
 /// or missing store warns, never crashes).
@@ -125,7 +153,7 @@ pub fn save_settings(store: &mut dyn SettingsStore, settings: &Settings) -> Resu
 }
 
 /// Draws the View/Options dialog body (ADR 0032 as amended): the
-/// ribbon layout radio choice, grid and rulers toggles, display units.
+/// panel layout radio choice, grid and rulers toggles, display units.
 ///
 /// The dialog draws its rows over a draft copy of `settings` and
 /// returns one [`Intent`] per row the user changed
@@ -137,16 +165,16 @@ pub fn show_options(ui: &mut Ui, settings: &Settings) -> Result<Vec<Intent>, UiE
 
     ui.heading("Options");
     ui.separator();
-    ui.label("Ribbon layout");
+    ui.label("Panel layout");
     ui.radio_value(
         &mut draft.ui_layout,
         LayoutKind::Visio2016,
-        "Visio 2016 ribbon",
+        "Panel (2016 data)",
     );
     ui.radio_value(
         &mut draft.ui_layout,
         LayoutKind::Visio365,
-        "Microsoft 365 ribbon",
+        "Panel (365 data)",
     );
     ui.separator();
     ui.checkbox(&mut draft.show_grid, "Show grid");
@@ -328,7 +356,7 @@ mod tests {
         {
             let root = harness.root();
             let node = root
-                .query_all_by_role_and_label(Role::RadioButton, "Microsoft 365 ribbon")
+                .query_all_by_role_and_label(Role::RadioButton, "Panel (365 data)")
                 .next()
                 .expect("the 365 radio");
             node.click();
@@ -445,5 +473,26 @@ mod tests {
             message: "truncated".into(),
         });
         assert_eq!(error.to_string(), "io error: settings format: truncated");
+    }
+}
+
+#[cfg(test)]
+mod welcome_settings_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_are_first_run_and_panel_modern() {
+        let settings = WelcomeSettings::default();
+        assert!(!settings.welcome_seen);
+        assert_eq!(
+            settings.default_layout,
+            ferrogram_ui_spec::v2::LayoutKind::PanelModern
+        );
+    }
+
+    #[test]
+    fn a_missing_store_slot_reads_as_the_defaults() {
+        let settings: WelcomeSettings = serde_json::from_str("{}").expect("defaults fill in");
+        assert_eq!(settings, WelcomeSettings::default());
     }
 }

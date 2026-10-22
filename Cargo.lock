@@ -1465,6 +1465,7 @@ dependencies = [
  "js-sys",
  "proptest",
  "rfd",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",

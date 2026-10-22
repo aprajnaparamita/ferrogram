@@ -1,6 +1,6 @@
 [package]
 name = "ferrogram-ui"
-description = "egui user interface: ribbon, canvas, panels"
+description = "egui user interface: the command bar, canvas, panes"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -27,6 +27,9 @@ ferrogram-ui-spec = { path = "../ui-spec" }
 # The settings slot format (ADR 0032): `Settings` as JSON in the
 # eframe storage key. MIT OR Apache-2.0 (already in the tree).
 serde_json = "1"
+# `serde` derives for the settings seams (`WelcomeSettings`, task
+# P7-01). MIT OR Apache-2.0 (already in the tree).
+serde = { version = "1", features = ["derive"] }
 
 # The wasm picker bridge (ADR 0036): `wasm-bindgen-futures` completes
 # rfd's async upload dialog on the browser event loop and `web-sys`

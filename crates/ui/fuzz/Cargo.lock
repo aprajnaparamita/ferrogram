@@ -470,6 +470,7 @@ dependencies = [
  "ferrogram-ui-spec",
  "js-sys",
  "rfd",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
