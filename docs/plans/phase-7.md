@@ -14,7 +14,7 @@
 | Layout names | **Panel** (follows the 2013 style) and **Classic** (follows the 2007 style). "Ribbon" is not used in any doc, UI text or code identifier. The only exceptions are verbatim third-party identifiers and titles, such as the Fluent control id `RibbonAndQuickAccess` or a `visCmd…Ribbon…` constant. |
 | Side panels | The Shape Data and Size & Position side panels become **panes** (`panels.rs` becomes `panes.rs`), so "Panel" names only the layout. |
 | Default layout | Panel. |
-| Art licence | `about_screen.svg`, `panel-layout.svg`, `classic-layout.svg` and `icon.svg`: © 2026 Janet Jeffus, made in VectorCraft, all rights reserved, used in Larrygram with permission. `larry.jpg`: used with Larry Jeffus's permission, all rights reserved. Not covered by the MIT licence. `ATTRIBUTION.md` and the README say so, and forks must replace them. |
+| Art licence | `about_screen.svg`, `panel-layout.svg`, `classic-layout.svg` and `icon.svg`: © 2026 Janet Jeffus, made in VectorCraft, all rights reserved, used in Larrygram with permission. `larry.png`: used with Larry Jeffus's permission, all rights reserved. Not covered by the MIT licence. `ATTRIBUTION.md` and the README say so, and forks must replace them. |
 | Earlier layout records | Removed from the tree, then purged from history with `git filter-repo` before the first push (section 4, step R4). |
 
 ## 2. What the user sees
@@ -56,7 +56,7 @@ launch.
 It opens from **Why Larrygram?** and from **Help > About Larrygram** in
 every layout.
 
-- Left half: `larry.jpg`, scaled to fit.
+- Left half: `larry.png`, scaled to fit.
 - Right half, with generous padding, this text (corrected from the
   brief):
 
@@ -84,15 +84,17 @@ every layout.
 
 ## 3. Points for the user to confirm
 
-1. **`larry.jpg` is 180 × 180 pixels.** At half of a 1000-pixel-wide
-   window it is scaled up about 2.8 times and looks soft. A version of at
-   least 900 pixels on its short side would stay sharp.
+1. **`larry.png` is 360 × 360 pixels** (it replaced the 180-pixel
+   `larry.jpg`). At half of a 1000-pixel-wide window it is scaled up
+   about 1.4 times; a 900-pixel version would stay fully sharp.
 2. **The button label "Watch Larry's story"** and the proposed short
    description in 2.1.
-3. **The 2016 and 365 layouts from Phase 4.** They stay available in
-   Options, but their names cite Microsoft products. Proposed: list them
-   as "Panel (2016 data)" and "Panel (365 data)", or retire them once
-   Panel ships.
+3. **The 2016 and 365 layouts from Phase 4** (decided). They are renamed
+   **Panel (2016 data)** and **Panel (365 data)**: the files
+   `ui-spec/panel-2016.yaml` and `panel-365.yaml` become
+   `ui-spec/panel-2016.yaml` and `panel-365.yaml`, and the layout ids,
+   CLI values, settings values and labels follow (P7-00). The old names
+   are culled from the git history in R4 as well.
 4. **History rewrite** (R4). It runs only after an explicit "go", at the
    boundary, with a backup bundle kept outside the repo until the first
    push.
@@ -133,7 +135,7 @@ only. It does not touch the Phase 6 crates (`shapesheet`, `commands`,
   - prose names Larrygram, while code paths keep today's crate names
     until P7-00.
 - **Brand assets.** Move `graphics/` to `crates/ui/assets/brand/`
-  (`ibbon-layout.svg` is renamed `panel-layout.svg`). Add the
+  (`ibbon-layout.svg`, meant as `ribbon-layout.svg`, is renamed `panel-layout.svg`; `.DS_Store` is not copied). Add the
   `ATTRIBUTION.md` rows with the all-rights-reserved terms, and the
   README licence note.
 - **ADRs.**
@@ -142,7 +144,7 @@ only. It does not touch the Phase 6 crates (`shapesheet`, `commands`,
     flag, settings, the Help menu entries.
   - Add 0067, the brand assets and their licence, and the image loading.
     The proposed loader is `egui_extras` image loaders with the `svg`
-    and `jpeg` features; check their licences with `cargo deny`.
+    and `png` features; check their licences with `cargo deny`.
 - **Stubs.**
   - `crates/ui/src/wizard.rs` and `crates/ui/src/about.rs`: the types
     and the `show` functions, as "not implemented" stubs.
@@ -170,11 +172,17 @@ Nothing else runs during the boundary, because every file changes.
   3. Ferrogram becomes Larrygram in every case form: crate and directory
      names, `use` paths, snapshot file names, environment variables, the
      settings storage key, the web page title and the version.
-  4. The full gate is green, and so are the corpus tests.
+  4. The 2016 and 365 layouts become Panel (2016 data) and Panel (365
+     data): `ui-spec/panel-2016.yaml` and `panel-365.yaml`, with the
+     layout ids, CLI values (`--ui-layout panel-2016|panel-365`),
+     settings values, labels and the extractor output paths.
+  5. The full gate is green, and so are the corpus tests.
 - **R4 (master, after the user's "go").**
   - Write a backup bundle.
   - Run `git filter-repo` to drop the earlier layout records from every
-    commit and commit message.
+    commit and commit message, and to cull the old layout file names
+    (`panel-2016.yaml`, `panel-365.yaml`) from history: their paths are
+    renamed to `panel-2016.yaml` and `panel-365.yaml` in every commit.
   - Re-tag `phase-0` to `phase-6`.
   - Move `/Users/dara/ferrogram` to `/Users/dara/larrygram` and
     `/Volumes/Dara/ferrogram` to `/Volumes/Dara/larrygram`.
