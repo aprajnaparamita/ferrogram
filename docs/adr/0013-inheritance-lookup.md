@@ -154,3 +154,26 @@ the local cell's cached value, snapshot included, and falls back to the
 defining rung's cached value. Provenance is unchanged, so a snapshot can
 no longer hide a resolution bug than it could before: it is pinned by a
 test in task P6-05.
+
+## Amendments
+
+### Amended 2026-10-22, P6-15: the style rung starts at the effective style link
+
+Rule 3's entry link is the **effective** one. When the shape has no
+`LineStyle`/`FillStyle`/`TextStyle` of its own, the lookup uses the link
+of its master shape — the same master shapes the master rung consults
+(the sub-shape rule and the position rule included), in rung order, so a
+master that is itself an instance continues the search at its own
+master — and then runs the chain from there as before (each style's own
+link of the same kind). A link the shape sets wins, even one that names
+no stylesheet row: the style chain then ends where it starts, as for any
+dangling link. The cycle guards are unchanged: a cyclic master chain is
+cut in the link search too, and a cyclic style chain still terminates.
+
+Why: [MS-VSDX] 2.2.5.4.1 — an instance inherits whatever it does not
+specify from its master, and the style links are part of that. Without
+this rule a master instance that sets no link resolves
+`FillPattern`/`LinePattern` through the hard default 0 and draws
+nothing (the corpus files `dwg`, `fdo86664` and `testfile5` before
+P6-15). Provenance (`via`) is unchanged: it still records the style
+rungs consulted, not where the entry link came from.
