@@ -1,0 +1,1 @@
+IF(User.HeadingPos=1,270DEG,IF(User.HeadingPos=3,90DEG,0DEG))-37%

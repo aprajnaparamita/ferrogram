@@ -1,0 +1,1 @@
+IF(OR(STRSAME(TheText,""),HideText),5,0)
