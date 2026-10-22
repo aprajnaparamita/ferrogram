@@ -1054,6 +1054,59 @@ impl Document {
         Ok(())
     }
 
+    /// Writes one **section-level** cell of a repeated section (the
+    /// `NoFill` family of `Geometry`, ADR 0019): a cell the section holds
+    /// directly, not in a row.
+    ///
+    /// The section must exist in the sheet's own sections (a missing
+    /// section is [`Error::BadCell`]); the cell's unit follows the
+    /// ShapeSheet table's kind.
+    pub fn write_section_cell(
+        &mut self,
+        sheet: SheetRef,
+        section: &SectionName,
+        cell: &CellName,
+        write: &CellWrite,
+    ) -> Result<(), Error> {
+        checked_number(write)?;
+        let target = match sheet {
+            SheetRef::Shape(id) => self
+                .shape_mut(id)
+                .map(|entity| &mut entity.sheet)
+                .ok_or(Error::UnknownShape(id))?,
+            SheetRef::Page(id) => self
+                .pages
+                .get_mut(id.index as usize)
+                .map(|entity| &mut entity.sheet)
+                .ok_or(Error::UnknownPage(id))?,
+        };
+        let section_slot = target
+            .sections
+            .iter_mut()
+            .find(|entry| entry.name.as_str() == section.as_str())
+            .ok_or(Error::BadCell("no such section"))?;
+        let unit = cell_unit(cell.as_str());
+        match section_slot
+            .cells
+            .iter_mut()
+            .find(|existing| existing.name.as_str() == cell.as_str())
+        {
+            Some(existing) => {
+                existing.formula = Some(write.formula.clone());
+                existing.value = Some(write.value.clone());
+                existing.unit = unit;
+            }
+            None => section_slot.cells.push(Cell {
+                name: cell.clone(),
+                formula: Some(write.formula.clone()),
+                value: Some(write.value.clone()),
+                unit,
+                preserved: Preserved::new(),
+            }),
+        }
+        Ok(())
+    }
+
     /// Scales the shape's own geometry rows from the `from` box to the
     /// `to` box (resize without a formula engine, ADR 0038): `Rel*` rows
     /// keep their values, absolute rows scale linearly per axis, and rows

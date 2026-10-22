@@ -522,10 +522,8 @@ fn apply_write(
     let write = CellWrite::new(formula, value.clone());
     match (&address.section, &address.row) {
         (None, None) => document.write_cell(address.sheet, &address.cell, &write)?,
-        (Some(_), None) => {
-            return Err(ferrogram_model::Error::BadCell(
-                "section cell without a row",
-            ));
+        (Some(section), None) => {
+            document.write_section_cell(address.sheet, section, &address.cell, &write)?
         }
         (Some(section), Some(row)) => {
             document.write_row_cell(address.sheet, section, *row, &address.cell, &write)?
@@ -1170,8 +1168,11 @@ mod tests {
         );
     }
 
+    /// P6-11: a section-level cell (a section, no row) is evaluated and
+    /// written through the section write, not skipped as an unresolvable
+    /// direct cell (the P6-08 open issue).
     #[test]
-    fn a_section_cell_without_a_row_reports_an_unwritable_target() {
+    fn a_section_cell_is_evaluated_and_written_in_place() {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 1);
         shape.sheet.sections.push({
@@ -1201,12 +1202,20 @@ mod tests {
             &mut engine,
         );
         assert_eq!(
-            outcome.warnings,
-            vec![RecalcWarning {
-                target: Some(target),
-                kind: RecalcWarningKind::MissingReference(String::from("NoFill")),
+            engine.evaluated,
+            vec!["0", "NoFill+1"],
+            "the section cell evaluates, and its row reads it"
+        );
+        assert_eq!(value_of(&doc, &target), Some(num(0.0)));
+        assert_eq!(
+            outcome.updates,
+            vec![CellUpdate {
+                target: target.clone(),
+                before: Some(num(1.0)),
+                after: Some(num(0.0)),
             }]
         );
+        assert_eq!(outcome.warnings, Vec::new(), "nothing is unwritable");
     }
 
     #[test]
