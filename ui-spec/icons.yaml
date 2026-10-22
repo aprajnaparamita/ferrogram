@@ -1,0 +1,939 @@
+# Icon map: icon key (a command id, or a layout item id) -> Tabler outline icon.
+# Icons chosen by meaning; tint names a theme token (ui-spec/themes/*.yaml).
+# Keys without a row draw the placeholder mark (crates/ui/src/icons.rs).
+schema_version: 1
+set:
+  name: Tabler Icons
+  version: 3.49.0
+  license: MIT
+  style: outline
+  source: https://registry.npmjs.org/@tabler/icons/-/icons-3.49.0.tgz
+  path: crates/ui/assets/icons/tabler
+fallback: placeholder
+tints:
+  icon.neutral: draw with the theme's icon colour (default)
+  icon.blue: accent blue
+  icon.green: accent green
+  icon.red: accent red
+  icon.orange: accent orange
+  icon.yellow: accent yellow
+  icon.purple: accent purple
+icons:
+  arrange.align.bottom:
+    icon: layout-align-bottom
+  arrange.align.box:
+    icon: layout-align-left
+    tint: icon.orange
+  arrange.align.center:
+    icon: layout-align-center
+  arrange.align.left:
+    icon: layout-align-left
+  arrange.align.middle:
+    icon: layout-align-middle
+  arrange.align.right:
+    icon: layout-align-right
+  arrange.align.top:
+    icon: layout-align-top
+  arrange.align_objects:
+    icon: layout-align-left
+  arrange.bring_forward:
+    icon: stack-forward
+    tint: icon.orange
+  arrange.bring_to_front:
+    icon: stack-front
+    tint: icon.orange
+  arrange.diagram.check:
+    icon: checklist
+    tint: icon.green
+  arrange.disband.container:
+    icon: box-off
+    tint: icon.red
+  arrange.distribute_shapes.distribute_center:
+    icon: layout-distribute-horizontal
+  arrange.distribute_shapes.distribute_horizontal_spacing:
+    icon: layout-distribute-horizontal
+  arrange.distribute_shapes.distribute_middle:
+    icon: layout-distribute-vertical
+  arrange.distribute_shapes.distribute_vertical_spacing:
+    icon: layout-distribute-vertical
+  arrange.flip_horizontal:
+    icon: flip-horizontal
+  arrange.flip_vertical:
+    icon: flip-vertical
+  arrange.group:
+    icon: box-multiple
+    tint: icon.blue
+  arrange.intersect:
+    icon: layers-intersect
+  arrange.join:
+    icon: vector-spline
+  arrange.layout.more.options:
+    icon: settings
+    tint: icon.blue
+  arrange.object.combine:
+    icon: layers-linked
+  arrange.object.connect.objects:
+    icon: arrows-join-2
+  arrange.object.distribute.dlg:
+    icon: layout-distribute-horizontal
+  arrange.object.fragment:
+    icon: layers-difference
+  arrange.object.rotate90:
+    icon: rotate
+  arrange.object.union:
+    icon: layers-union
+  arrange.offset.dlg:
+    icon: border-outer
+  arrange.position:
+    icon: arrows-move
+    tint: icon.red
+  arrange.rotate.object:
+    icon: rotate-clockwise
+    tint: icon.blue
+  arrange.rotate90.clockwise:
+    icon: rotate-clockwise
+  arrange.send_backward:
+    icon: stack-backward
+  arrange.send_to_back:
+    icon: stack-back
+    tint: icon.orange
+  arrange.size.and.position.window:
+    icon: dimensions
+    tint: icon.blue
+  arrange.size.pos:
+    icon: dimensions
+  arrange.subtract:
+    icon: layers-subtract
+  arrange.trim:
+    icon: scissors
+  arrange.ungroup:
+    icon: layers-off
+  classic.drawing.file.new:
+    icon: file-plus
+  classic.drawing.file.shapes:
+    icon: category
+  classic.shapesheet.file.new:
+    icon: file-plus
+  classic.stencil.file.new:
+    icon: file-plus
+  classic.toolbar.ink.ink_color:
+    icon: palette
+  classic.toolbar.ink.ink_thickness:
+    icon: line-height
+  classic.toolbar.shapesheet_standard.shapes:
+    icon: category
+  classic.toolbar.standard.shapes:
+    icon: category
+  classic.toolbar.stencil_standard.shapes:
+    icon: category
+  connector.add_line_jumps_to:
+    icon: arrows-cross
+  connector.add_line_jumps_to.first_displayed_line:
+    icon: arrow-bar-up
+  connector.add_line_jumps_to.horizontal_lines:
+    icon: arrows-horizontal
+  connector.add_line_jumps_to.last_displayed_line:
+    icon: arrow-bar-down
+  connector.add_line_jumps_to.last_routed_line:
+    icon: arrow-bar-down
+  connector.add_line_jumps_to.no_lines:
+    icon: minus
+  connector.add_line_jumps_to.vertical_lines:
+    icon: arrows-vertical
+  connector.auto_connect:
+    icon: plug-connected
+    tint: icon.blue
+  connector.conn.points:
+    icon: circle-dot
+  connector.curved:
+    icon: arrow-curve-right
+  connector.curved.lines:
+    icon: vector-spline
+  connector.dyn.conn.reroute:
+    icon: refresh
+  connector.dynamic.grid:
+    icon: grid-dots
+    tint: icon.blue
+  connector.line_jump_style:
+    icon: arrow-curve-right
+  connector.line_jump_style.arc:
+    icon: arrow-curve-right
+  connector.line_jump_style.gap:
+    icon: separator
+  connector.line_jump_style.page_default:
+    icon: file
+  connector.line_jump_style.sides_2:
+    icon: triangle
+  connector.line_jump_style.sides_3:
+    icon: square
+  connector.line_jump_style.sides_4:
+    icon: pentagon
+  connector.line_jump_style.sides_5:
+    icon: hexagon
+  connector.line_jump_style.sides_6:
+    icon: polygon
+  connector.line_jump_style.sides_7:
+    icon: polygon
+  connector.line_jump_style.square:
+    icon: square
+  connector.right_angle:
+    icon: arrow-elbow-right
+  connector.straight:
+    icon: line
+  connector.straight.lines:
+    icon: line
+  connector.style:
+    icon: route
+  data.automatically.link:
+    icon: affiliate
+    tint: icon.orange
+  data.external.data_source.remove:
+    icon: trash
+  data.external.remove:
+    icon: trash
+  data.graphic.create.new:
+    icon: chart-dots
+    tint: icon.orange
+  data.graphic.edit:
+    icon: edit
+    tint: icon.blue
+  data.graphics.gallery.visio:
+    icon: chart-infographic
+  data.link.data.to.shapes:
+    icon: link-plus
+    tint: icon.orange
+  data.refresh:
+    icon: refresh
+  data.refresh_all:
+    icon: refresh
+  developer.prog.ref.help:
+    icon: book
+  developer.record.new.macro:
+    icon: player-record
+  edit.clear:
+    icon: x
+  edit.copy:
+    icon: copy
+    tint: icon.blue
+  edit.cut:
+    icon: scissors
+    tint: icon.blue
+  edit.delete.comment:
+    icon: message-x
+  edit.duplicate.page:
+    icon: copy
+    tint: icon.orange
+  edit.find:
+    icon: search
+  edit.insert.field:
+    icon: forms
+  edit.paste:
+    icon: clipboard
+    tint: icon.orange
+  edit.paste.duplicate:
+    icon: copy-plus
+    tint: icon.orange
+  edit.paste.special:
+    icon: clipboard-text
+  edit.paste.special.dialog:
+    icon: clipboard-text
+    tint: icon.orange
+  edit.redo:
+    icon: arrow-forward-up
+  edit.replace.dialog:
+    icon: arrows-exchange
+    tint: icon.blue
+  edit.replace.shape:
+    icon: transform
+    tint: icon.blue
+  edit.select.contents:
+    icon: select-all
+    tint: icon.blue
+  edit.select.special:
+    icon: pointer
+  edit.select_all:
+    icon: select-all
+    tint: icon.blue
+  edit.sw.accept:
+    icon: check
+  edit.sw.cancel:
+    icon: x
+  edit.sw.show.formulas:
+    icon: math-function
+  edit.sw.show.sections.dlg:
+    icon: list
+    tint: icon.blue
+  edit.sw.show.values:
+    icon: number-123
+  edit.undo:
+    icon: arrow-back-up
+    tint: icon.blue
+  file.close:
+    icon: x
+  file.import:
+    icon: photo
+  file.new:
+    icon: template
+  file.new.blank.drawing:
+    icon: file-plus
+  file.new.blank.drawing.metric:
+    icon: file-plus
+  file.new.blank.drawing.us:
+    icon: file-plus
+  file.new.blank.stencil:
+    icon: category-plus
+  file.new.blank.stencil.metric:
+    icon: category-plus
+  file.new.blank.stencil.us:
+    icon: category-plus
+  file.open:
+    icon: folder-open
+  file.open.stencil:
+    icon: folder-open
+  file.print:
+    icon: printer
+  file.print.page:
+    icon: printer
+  file.print_preview:
+    icon: file-search
+  file.save:
+    icon: device-floppy
+    tint: icon.purple
+  file.save.as.web.page:
+    icon: world-www
+  file.send.as.mail:
+    icon: mail-forward
+  format.all.text.props:
+    icon: typography
+  format.change_text_direction:
+    icon: text-orientation
+  format.corners:
+    icon: border-radius
+  format.cust.prop.edit:
+    icon: table-options
+    tint: icon.blue
+  format.decrease.indent:
+    icon: indent-decrease
+    tint: icon.blue
+  format.decrease.para.spacing:
+    icon: line-height
+  format.fill:
+    icon: paint
+  format.increase.indent:
+    icon: indent-increase
+    tint: icon.blue
+  format.increase.para.spacing:
+    icon: line-height
+  format.line:
+    icon: line
+  format.set.add.markup:
+    icon: file-pencil
+  format.set.dyn.conn.appearance.curved:
+    icon: vector-spline
+  format.set.dyn.conn.appearance.straight:
+    icon: line
+  format.set.dyn.conn.reroute.freely:
+    icon: route
+  format.set.dyn.conn.reroute.never:
+    icon: route-off
+  format.set.dyn.conn.reroute.on.crossover:
+    icon: route-alt-left
+  format.set.fill.color:
+    icon: bucket-droplet
+    tint: icon.yellow
+  format.set.fill.pattern:
+    icon: texture
+  format.set.fill.shadow:
+    icon: shadow
+  format.set.language.dlg:
+    icon: abc
+    tint: icon.blue
+  format.set.line.color:
+    icon: pencil
+    tint: icon.blue
+  format.set.line.corner.style:
+    icon: border-radius
+  format.set.line.ends:
+    icon: arrow-narrow-right
+  format.set.line.pattern:
+    icon: line-dashed
+  format.set.line.weight:
+    icon: baseline-density-medium
+  format.set.page.orientation:
+    icon: rotate-rectangle
+    tint: icon.blue
+  format.set.page.plow:
+    icon: arrows-move
+  format.shadow:
+    icon: shadow
+  format.style.explorer:
+    icon: palette
+    tint: icon.blue
+  format.text.align_bottom:
+    icon: box-align-bottom
+  format.text.align_center:
+    icon: align-center
+  format.text.align_justify:
+    icon: align-justified
+  format.text.align_left:
+    icon: align-left
+  format.text.align_middle:
+    icon: align-box-center-middle
+  format.text.align_right:
+    icon: align-right
+  format.text.align_top:
+    icon: box-align-top
+  format.text.all_caps:
+    icon: letter-case-upper
+    tint: icon.blue
+  format.text.bold:
+    icon: bold
+  format.text.decrease_size:
+    icon: text-decrease
+  format.text.increase_size:
+    icon: text-increase
+  format.text.italic:
+    icon: italic
+  format.text.small_caps:
+    icon: letter-case-upper
+  format.text.subscript:
+    icon: subscript
+  format.text.underline:
+    icon: underline
+  format.theme:
+    icon: palette
+  help.contents:
+    icon: help-circle
+  help.research.thesaurus:
+    icon: vocabulary
+    tint: icon.blue
+  help.research.translate:
+    icon: language
+    tint: icon.blue
+  insert.add.ons:
+    icon: puzzle
+    tint: icon.blue
+  insert.add.to.new.container:
+    icon: container
+    tint: icon.blue
+  insert.clip.art:
+    icon: photo-search
+    tint: icon.blue
+  insert.comment:
+    icon: message-plus
+  insert.control.dlg:
+    icon: components
+  insert.hyper.link:
+    icon: link
+  insert.image.properties.dlg:
+    icon: photo-edit
+  insert.legend.horizontal:
+    icon: list-details
+    tint: icon.blue
+  insert.microsoft.graph:
+    icon: chart-bar
+  insert.new.background.page:
+    icon: file-stack
+    tint: icon.orange
+  insert.text.box:
+    icon: forms
+    tint: icon.blue
+  insert.vert.text.box:
+    icon: text-orientation
+    tint: icon.blue
+  insert.word.art:
+    icon: typography
+  layer.dialog:
+    icon: stack-push
+    tint: icon.blue
+  layer.properties.dialog:
+    icon: stack-2
+    tint: icon.orange
+  layer.setup.dlg:
+    icon: stack-2
+  page.auto.size.toggle:
+    icon: arrow-autofit-content
+    tint: icon.blue
+  page.delete:
+    icon: trash
+  page.next:
+    icon: chevron-right
+  page.previous:
+    icon: chevron-left
+  page.relayout:
+    icon: hierarchy-2
+    tint: icon.blue
+  page.size.dlg:
+    icon: dimensions
+    tint: icon.blue
+  page.size.to.fit.drawing:
+    icon: arrows-minimize
+    tint: icon.blue
+  review.delete_markup:
+    icon: trash
+  review.delete_markup.delete_markup:
+    icon: trash
+  review.edit_comment:
+    icon: message-2
+  review.ignore.this.issue:
+    icon: eye-off
+    tint: icon.red
+  review.insert_comment.edit_comment:
+    icon: message-2
+  review.new.comment:
+    icon: message-plus
+    tint: icon.orange
+  review.show_hide_markup:
+    icon: eye
+  review.spelling.change:
+    icon: text-spellcheck
+    tint: icon.blue
+  shape.arc:
+    icon: vector-spline
+  shape.associate.callout:
+    icon: message
+  shape.container.heading.styles:
+    icon: heading
+    tint: icon.blue
+  shape.container.margins:
+    icon: box-margin
+    tint: icon.blue
+  shape.data.window:
+    icon: table
+    tint: icon.blue
+  shape.data.window.show.hide:
+    icon: table
+    tint: icon.blue
+  shape.draw.glue:
+    icon: link
+  shape.draw.snap:
+    icon: magnet
+  shape.drawing.explorer:
+    icon: sitemap
+  shape.drawing.tools:
+    icon: vector
+  shape.edit_master_shape:
+    icon: edit
+  shape.effects:
+    icon: sparkles
+  shape.ellipse:
+    icon: circle
+  shape.geo:
+    icon: vector
+  shape.hand:
+    icon: square-dot
+  shape.intersect:
+    icon: circles-relation
+  shape.line:
+    icon: line
+  shape.lock.container:
+    icon: lock
+    tint: icon.orange
+  shape.master.delete_master:
+    icon: trash
+  shape.master.edit_master.edit_master_shape:
+    icon: edit
+  shape.master.explorer:
+    icon: list-tree
+  shape.rectangle:
+    icon: square
+  shape.reports:
+    icon: report
+    tint: icon.blue
+  shape.shapes.window:
+    icon: category-2
+  shape.sheet.delete.row:
+    icon: row-remove
+    tint: icon.red
+  shape.sheet.delete.section:
+    icon: table-minus
+    tint: icon.blue
+  shape.sheet.edit.formula:
+    icon: math-function
+  shape.sheet.insert.row:
+    icon: row-insert-bottom
+    tint: icon.blue
+  shape.sheet.insert.section:
+    icon: table-plus
+    tint: icon.blue
+  shape.sheet.shape.action:
+    icon: click
+    tint: icon.blue
+  shape.spline:
+    icon: scribble
+  shape.sten.icon.and.detail:
+    icon: list-details
+  shape.sten.icon.and.name:
+    icon: layout-list
+  shape.sten.icon.only:
+    icon: apps
+  shape.sten.name.only:
+    icon: list
+  shape.sten.names.under.icons:
+    icon: layout-grid
+  shape.stencil.close:
+    icon: x
+  shape.stencil.collapse_all_groups:
+    icon: fold-up
+  shape.stencil.edit_stencil:
+    icon: edit
+  shape.stencil.expand_all_groups:
+    icon: fold-down
+  shape.stencil.properties:
+    icon: info-circle
+  shape.styles:
+    icon: color-swatch
+    tint: icon.blue
+  shape.transparency.dlg:
+    icon: droplet-half
+  shape.vert:
+    icon: vector-triangle
+  text.begin:
+    icon: cursor-text
+  text.bullets:
+    icon: list
+    tint: icon.blue
+  text.direction.left.to.right:
+    icon: text-direction-ltr
+    tint: icon.blue
+  text.direction.right.to.left:
+    icon: text-direction-rtl
+    tint: icon.blue
+  text.direction.vertical:
+    icon: text-orientation
+    tint: icon.blue
+  text.font.color:
+    icon: text-color
+  text.font.size.decrease:
+    icon: text-decrease
+    tint: icon.blue
+  text.font.size.increase:
+    icon: text-increase
+    tint: icon.blue
+  text.normal.case:
+    icon: letter-case-lower
+  text.rotate90:
+    icon: rotate-rectangle
+    tint: icon.blue
+  text.strike.through:
+    icon: strikethrough
+  text.super.script:
+    icon: superscript
+  tools.area.select:
+    icon: marquee-2
+    tint: icon.blue
+  tools.arrows.more:
+    icon: arrow-narrow-right
+    tint: icon.blue
+  tools.automatic.resize:
+    icon: arrow-autofit-height
+    tint: icon.blue
+  tools.backgrounds:
+    icon: background
+    tint: icon.blue
+  tools.blank.page.insert:
+    icon: new-section
+    tint: icon.orange
+  tools.blank.page.insert.visio:
+    icon: file
+    tint: icon.orange
+  tools.borders.and.titles:
+    icon: border-outer
+    tint: icon.orange
+  tools.cad.drawing:
+    icon: ruler-measure
+    tint: icon.blue
+  tools.change.case.dialog.classic:
+    icon: letter-case
+  tools.chart.insert:
+    icon: chart-bar
+    tint: icon.orange
+  tools.commenting:
+    icon: messages
+    tint: icon.blue
+  tools.connection.point:
+    icon: circle-dot
+    tint: icon.blue
+  tools.connection.points:
+    icon: circle-dot
+    tint: icon.blue
+  tools.connector:
+    icon: route-2
+    tint: icon.blue
+  tools.crop:
+    icon: crop
+    tint: icon.blue
+  tools.cust.prop:
+    icon: table
+  tools.design.mode:
+    icon: tools
+  tools.ellipse:
+    icon: circle
+  tools.external.data.window:
+    icon: database
+    tint: icon.orange
+  tools.find.dialog:
+    icon: search
+  tools.format_painter:
+    icon: brush
+    tint: icon.orange
+  tools.formula_tracing.back:
+    icon: arrow-left
+  tools.formula_tracing.forward:
+    icon: arrow-right
+  tools.formula_tracing.shapesheet_formula_tracing_window:
+    icon: arrows-split
+  tools.formula_tracing.trace_dependents:
+    icon: arrow-bar-to-right
+  tools.formula_tracing.trace_precedents:
+    icon: arrow-bar-to-left
+  tools.freeform:
+    icon: scribble
+  tools.glows.more.options:
+    icon: sun
+  tools.hyperlink.insert:
+    icon: link
+    tint: icon.blue
+  tools.inet.go.back:
+    icon: arrow-left
+  tools.inet.go.forward:
+    icon: arrow-right
+  tools.inet.paste.as.hyperlink:
+    icon: link
+    tint: icon.orange
+  tools.ink.close_ink_shape:
+    icon: writing-sign
+  tools.ink.eraser:
+    icon: eraser
+  tools.ink.ink_pen_3:
+    icon: ballpen
+  tools.ink.ink_pen_4:
+    icon: ballpen
+  tools.ink.ink_pen_5:
+    icon: ballpen
+  tools.ink.review.pen:
+    icon: ballpen
+  tools.ink.stock.pen0:
+    icon: ballpen
+  tools.ink.stock.pen1:
+    icon: ballpen
+  tools.ink.tool:
+    icon: ballpen
+    tint: icon.red
+  tools.language.commands:
+    icon: world
+    tint: icon.blue
+  tools.lasso.select.visio:
+    icon: lasso
+    tint: icon.blue
+  tools.layers:
+    icon: stack-2
+    tint: icon.orange
+  tools.layout.shapes.dlg:
+    icon: hierarchy
+  tools.macro.dlg:
+    icon: player-play
+  tools.macro.play:
+    icon: player-play
+  tools.more.page.sizes:
+    icon: dots
+    tint: icon.blue
+  tools.mso.auto.correct.dlg:
+    icon: wand
+  tools.mso.insert.equation:
+    icon: math
+  tools.mso.insert.symbol:
+    icon: omega
+    tint: icon.blue
+  tools.mso.media.gallery:
+    icon: photo-search
+  tools.ole.objectct.insert:
+    icon: box
+    tint: icon.blue
+  tools.options.new.page:
+    icon: new-section
+  tools.pencil:
+    icon: pencil
+    tint: icon.blue
+  tools.picture.auto.balance:
+    icon: wand
+    tint: icon.orange
+  tools.picture.brightness:
+    icon: brightness
+    tint: icon.orange
+  tools.picture.compress:
+    icon: file-zip
+    tint: icon.blue
+  tools.picture.contrast:
+    icon: contrast
+  tools.picture.corrections.dialog:
+    icon: adjustments
+    tint: icon.blue
+  tools.picture.insert.from.file:
+    icon: photo
+    tint: icon.blue
+  tools.pointer:
+    icon: pointer
+  tools.pointer_tool.multiple_select:
+    icon: pointer-plus
+  tools.quick.connector:
+    icon: route-2
+    tint: icon.blue
+  tools.rectangle:
+    icon: square
+  tools.reflections.more.options:
+    icon: flip-vertical
+  tools.rotation_3d_options:
+    icon: rotate-3d
+    tint: icon.blue
+  tools.run.vbe:
+    icon: code
+  tools.screen.tip:
+    icon: info-square
+    tint: icon.blue
+  tools.shadow.options.dialog:
+    icon: shadow
+  tools.soft.edges.more.options:
+    icon: blur
+  tools.spelling:
+    icon: text-spellcheck
+  tools.stop.recording.macro:
+    icon: player-stop
+  tools.strikethrough:
+    icon: strikethrough
+  tools.subprocess.create.from.selection:
+    icon: subtask
+    tint: icon.orange
+  tools.subprocess.create.new:
+    icon: subtask
+    tint: icon.orange
+  tools.subprocess.link.to.existing:
+    icon: link
+    tint: icon.blue
+  tools.text:
+    icon: letter-a
+  tools.text_block:
+    icon: text-resize
+    tint: icon.blue
+  tools.theme.variants:
+    icon: color-filter
+  tools.themes.gallery.visio.legacy:
+    icon: palette
+  tools.tool.snap.lines:
+    icon: ruler-2
+  tools.trace.back:
+    icon: arrow-left
+    tint: icon.blue
+  tools.trace.dependent.cells:
+    icon: arrow-bar-to-right
+    tint: icon.blue
+  tools.trace.forward:
+    icon: arrow-right
+    tint: icon.blue
+  tools.trace.precedent.cells:
+    icon: arrow-bar-to-left
+    tint: icon.blue
+  tools.windows.arrange.all:
+    icon: layout-grid
+    tint: icon.blue
+  tools.windows.cascade:
+    icon: versions
+    tint: icon.blue
+  view.cascade_all:
+    icon: versions
+  view.connections:
+    icon: circle-dot
+  view.direction.toggle:
+    icon: text-orientation
+  view.explorer.delete:
+    icon: trash
+  view.explorer.delete_layer:
+    icon: trash
+  view.explorer.delete_shape:
+    icon: trash
+  view.explorer.delete_style:
+    icon: trash
+  view.explorer.show_shapesheet:
+    icon: file-spreadsheet
+  view.fit.container.to.contents:
+    icon: arrows-minimize
+    tint: icon.orange
+  view.formula_tracing_window:
+    icon: arrows-split
+  view.full_screen_mode:
+    icon: maximize
+  view.grid:
+    icon: grid-4x4
+  view.guides:
+    icon: separator-vertical
+  view.markup:
+    icon: file-pencil
+  view.master_explorer.show_shapesheet:
+    icon: file-spreadsheet
+  view.next.markup:
+    icon: chevron-right
+  view.page.breaks:
+    icon: page-break
+  view.pan.zoom:
+    icon: zoom-pan
+    tint: icon.blue
+  view.pane.close:
+    icon: x
+  view.pane.define_shape_data:
+    icon: table-plus
+  view.pane.hide_window:
+    icon: eye-off
+  view.previous.markup:
+    icon: chevron-left
+  view.rul.sub:
+    icon: ruler
+  view.rulers:
+    icon: ruler
+  view.show.comments:
+    icon: messages
+    tint: icon.blue
+  view.show.formula.tracing.window:
+    icon: arrows-split
+    tint: icon.blue
+  view.show.page.breaks:
+    icon: page-break
+  view.show.shape.sheet.document:
+    icon: file-spreadsheet
+  view.show.shape.sheet.page:
+    icon: file-spreadsheet
+  view.show.shape.sheet.shape:
+    icon: file-spreadsheet
+  view.task.pane.data.graphic:
+    icon: chart-infographic
+  view.task.pane.research:
+    icon: book
+    tint: icon.orange
+  view.task.pane.reviewer:
+    icon: layout-sidebar-right
+  view.task.panes.menu.visio:
+    icon: layout-sidebar
+    tint: icon.blue
+  view.tile_all:
+    icon: layout-grid
+  view.toggle_grid:
+    icon: grid-4x4
+  view.toggle_guides:
+    icon: separator-vertical
+  view.window.new.window:
+    icon: app-window
+    tint: icon.blue
+  view.window.show.master.objects:
+    icon: category
+  view.window.show.shape.sheet:
+    icon: file-spreadsheet
+  view.window.switch.windows.menu.word:
+    icon: switch-horizontal
+    tint: icon.blue
+  view.zoom.dialog:
+    icon: zoom
+  view.zoom.fit:
+    icon: aspect-ratio
+    tint: icon.blue
+  view.zoom.page.width:
+    icon: arrows-horizontal
+    tint: icon.blue

@@ -1,0 +1,77 @@
+# Larrygram Panel Classic theme tokens (docs/ui/themes.md).
+# Colours are sRGB hex; sizes are logical pixels at 100% scaling.
+schema_version: 1
+id: panel-classic
+name: Panel Classic
+fonts:
+  ui: {family: Selawik, size_px: 12}
+  menu: {family: Selawik, size_px: 12}
+  status: {family: Selawik, size_px: 12}
+colors:
+  # Window chrome
+  chrome.background: '#bfdbff'        # menu bar, toolbar rows, status bar
+  chrome.title_bar: '#ffffff'
+  chrome.text: '#000000'
+  chrome.text_disabled: '#8d8d8d'
+  chrome.separator: '#9ac6ff'         # between toolbar groups and menu sections
+  chrome.border: '#6593cf'
+  # Menus
+  menu.background: '#f6f6f6'
+  menu.gutter: '#e9eeee'              # icon column at the left of a menu
+  menu.border: '#6593cf'
+  menu.separator: '#9ac6ff'
+  menu.highlight.fill: '#ffe7a2'      # hovered item
+  menu.highlight.border: '#ffbd69'
+  menu.bar.open.fill: '#b5d1f5'       # the open top-level menu title
+  menu.bar.open.border: '#6593cf'
+  # Toolbar buttons
+  button.pressed.fill: '#ffbd69'      # a latched tool or toggle (Pointer Tool, Align Center)
+  button.pressed.border: '#ffab3f'
+  button.hover.fill: '#ffe7a2'        # same as menu.highlight
+  button.hover.border: '#ffbd69'
+  # Panes and drawing area
+  pane.background: '#eeeef4'          # Shapes window body, page-tab strip
+  pane.title.fill: '#b8cfe9'
+  pane.border: '#7699c7'
+  canvas.background: '#9b9ab3'        # area around the page
+  page.background: '#ffffff'
+  page.border: '#000000'
+  ruler.background: '#ffffff'
+  ruler.ticks: '#000000'
+  scroll.track: '#cdcdcd'
+  tooltip.background: '#ffffe1'
+  tooltip.border: '#000000'           # provisional
+  field.background: '#ffffff'         # combo boxes and search boxes
+  # Icon tints (ui-spec/icons.yaml): our own palette.
+  icon.neutral: '#1f3864'
+  icon.blue: '#2b6cc4'
+  icon.green: '#3a8a2e'
+  icon.red: '#c8322a'
+  icon.orange: '#d9831f'
+  icon.yellow: '#d4a514'
+  icon.purple: '#7b4bb3'
+metrics:
+  title_bar.height: 23
+  menu_bar.height: 24
+  menu_bar.item.padding_x: 7
+  toolbar.row.height: 26
+  toolbar.button: {width: 23, height: 22}
+  toolbar.split_arrow.width: 11
+  toolbar.separator: {width: 1, margin: 3}
+  toolbar.gripper.width: 7            # drag handle at the left end of a docked toolbar
+  combo.font.width: 144
+  combo.font_size.width: 86
+  combo.zoom.width: 65
+  menu.row.height: 23
+  menu.separator.height: 3
+  menu.gutter.width: 24
+  menu.icon: 16
+  menu.padding_x: 8
+  menu.shortcut.gap: 24
+  menu.submenu_arrow.width: 12
+  shapes_window.width: 190
+  ruler.size: 16
+  page_tabs.height: 18
+  status_bar.height: 20
+  icon.small: 16
+  icon.large: 32
