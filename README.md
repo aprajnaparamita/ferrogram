@@ -2,7 +2,7 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 5 of 8 complete, Phase 6 in progress.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. The ShapeSheet formula engine exists as a library but is not yet wired into editing, opening or saving. It is not ready for real work: `.vsd` import and the control channel are not built, and visual fidelity is approximate.
+> **Status: pre-alpha, Phase 6 of 9 in progress.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. The ShapeSheet formula engine exists as a library but is not yet wired into editing, opening or saving. It is not ready for real work: `.vsd` import and the control channel are not built, and visual fidelity is approximate.
 
 ## Build status
 
@@ -31,10 +31,10 @@ Line coverage per crate (`cargo xtask coverage`):
 
 ## What works today
 
-- **UI and ShapeSheet definitions** (Phase 1), generated from Microsoft's published data by `cargo xtask extract`: Visio 2016 and Microsoft 365 ribbon layouts, 977 command ids, the keyboard shortcut table and the ShapeSheet table.
+- **UI and ShapeSheet definitions** (Phase 1), generated from Microsoft's published data by `cargo xtask extract`: the Panel (2016 data) and Panel (365 data) layouts, 977 command ids, the keyboard shortcut table and the ShapeSheet table.
 - **Document model and `.vsdx` I/O** (Phase 2): pages, masters, shapes, styles and ShapeSheet cells; lossless read and write, with content the model does not cover kept in place. Every corpus file round-trips.
 - **Rendering and CLI** (Phase 3): pages render from cached cell values to PNG (`tiny-skia`) and SVG, with text shaping and bundled open fonts (Carlito, Selawik). `ferrogram-cli inspect`, `render` and `export`.
-- **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a ribbon generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the ribbon, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panels; original stencils; file open, save and export.
+- **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a command bar generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the command bar, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panels; original stencils; file open, save and export.
 - **Editing core** (Phase 5):
   - select, marquee, move, resize and rotate with handles and snapping;
   - pointer, rectangle, ellipse, line, text and connector tools, chosen through registry commands;
@@ -58,11 +58,11 @@ Line coverage per crate (`cargo xtask coverage`):
 
 Phase 6 continues: wire the engine into editing and undo, into opening, rendering and saving, and into the Shape Data and Size & Position panels. Then compare its results with the values Visio saved in the corpus files, and prove that resizing a master-based shape recomputes its geometry. Group A (the engine library) is merged; the integration tasks are running.
 
-The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the ribbon is in [docs/parity/controls.md](docs/parity/controls.md).
+The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the command bar is in [docs/parity/controls.md](docs/parity/controls.md).
 
 ## What does not work yet
 
-Formula evaluation in the app (edits still write fixed values, and shapes whose cells have no cached values render blank until Phase 6 wires the engine in), `.vsd` import, the MCP/control channel, and most ribbon commands (they are listed but stubbed).
+Formula evaluation in the app (edits still write fixed values, and shapes whose cells have no cached values render blank until Phase 6 wires the engine in), `.vsd` import, the MCP/control channel, and most command-bar commands (they are listed but stubbed).
 
 ## Plan (alpha MVP)
 
@@ -72,11 +72,12 @@ Formula evaluation in the app (edits still write fixed values, and shapes whose 
 | 1 | Sources and UI/ShapeSheet definitions | done |
 | 2 | Document model and .vsdx I/O (lossless round-trip) | done |
 | 3 | Rendering (PNG/SVG) and CLI | done |
-| 4 | App shell, switchable 2016/365 ribbon | done |
+| 4 | App shell, switchable 2016/365 panels | done |
 | 5 | Editing core | done |
 | 6 | ShapeSheet engine (core subset) | in progress |
-| 7 | Binary .vsd import (read-only) | planned |
-| 8 | Control channel and MCP | planned |
+| 7 | Panel Modern and Panel Classic layouts, the Larrygram rename, the welcome wizard | in progress |
+| 8 | Binary .vsd import (read-only) | planned |
+| 9 | Control channel and MCP | paused |
 
 Out of scope for the alpha: visual fidelity, data linking, containers/lists beyond preservation, VBA/macros, coauthoring, printing, writing .vsd, large stencil libraries.
 
@@ -101,3 +102,5 @@ The gate needs `cargo-deny`, `cargo-llvm-cov`, a nightly toolchain with `cargo-f
 ## License
 
 MIT (see [LICENSE](LICENSE)), except `crates/vsd-binary`, which is MPL-2.0 (see [NOTICE](NOTICE)).
+
+The brand assets in `crates/ui/assets/brand/` (`about_screen.svg`, `panel-layout.svg`, `classic-layout.svg`, `icon.svg`, `larry.png`) are **not** covered by the MIT licence: the four SVGs are © 2026 Janet Jeffus, made in VectorCraft, all rights reserved, used in Larrygram with permission; `larry.png` is used with Larry Jeffus's permission, all rights reserved. See [ATTRIBUTION.md](ATTRIBUTION.md). A fork must replace these five files before shipping.

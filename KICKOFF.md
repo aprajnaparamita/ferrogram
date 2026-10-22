@@ -12,9 +12,9 @@ You are the lead engineer and orchestrator for a new open-source project: a clea
 
 ## Goal of this run
 
-Ship an alpha MVP with basic, working functionality: open, render, edit and save diagrams, with a familiar ribbon UI.
+Ship an alpha MVP with basic, working functionality: open, render, edit and save diagrams, with a familiar tabbed command-bar UI.
 
-The UI structure comes from Microsoft's published control-identifier data, with a runtime switch between the Visio 2016 and Microsoft 365 ribbon layouts.
+The UI structure comes from Microsoft's published control-identifier data, with a runtime switch between the Panel (2016 data) and Panel (365 data) layouts.
 
 
 ## Ground rules
@@ -38,7 +38,7 @@ due to limited space on the main drive.
    - Microsoft support articles, e.g. keyboard shortcuts.
    - libvisio, under the rules below.
    - Observed behavior.
-2. Never disassemble, decompile or debug any Microsoft binary or installer, and never extract resources from one (ribbon XML, strings, icons, images, fonts).
+2. Never disassemble, decompile or debug any Microsoft binary or installer, and never extract resources from one (command-bar XML, strings, icons, images, fonts).
 3. Never commit Microsoft-owned content. That includes spec documents, icons, images, stencils (.vss/.vssx), templates, sample drawings and fonts (Calibri, Segoe UI).
    - Raw downloads live in `reference/`, which is gitignored.
    - Commit only derived facts (IDs, names, structure, enumerations) and our own summaries.
@@ -73,7 +73,7 @@ For .vsdx, the MS-VSDX spec is the source of truth, not libvisio.
   - `indexing_slicing` is denied in the parser crates (vsdx, vsd-binary, shapesheet).
   - These are allowed in tests via clippy.toml.
 - **No unsafe code.** Every crate has `#![forbid(unsafe_code)]` unless an ADR justifies an exception.
-- **One command registry.** Every user action is a command in a single registry, with an id, a label, an enabled-state predicate and undo support. Menus, ribbon, shortcuts, CLI, the JSON control channel and MCP all call the same commands. This is the ArtCraft pattern.
+- **One command registry.** Every user action is a command in a single registry, with an id, a label, an enabled-state predicate and undo support. Menus, the command bar, shortcuts, CLI, the JSON control channel and MCP all call the same commands. This is the ArtCraft pattern.
 - **Units.** Internal units follow Visio's (inches); convert at the edges.
 - **Decisions.** Record each decision in `docs/adr/NNNN-title.md`.
 - **Commits.** Small commits with conventional commit messages, one logical change each.
@@ -141,7 +141,7 @@ crates/
   text/          text layout (cosmic-text or parley; decide via ADR)
   render/        scene graph shared with the UI, tiny-skia PNG renderer, SVG writer
   commands/      command registry, undo/redo, selection model
-  ui-spec/       loader for ribbon/menu/shortcut layout data, layout switching
+  ui-spec/       loader for command-bar, menu and shortcut layout data, layout switching
   control/       JSON control channel + MCP server
 apps/
   {{app}}/       desktop app (eframe/egui)
@@ -246,10 +246,10 @@ Tests:
 
 Exit: every corpus file renders without panics, and every geometry row type has tests.
 
-### Phase 4: App shell and switchable ribbon
+### Phase 4: App shell and switchable panels
 
 Build the eframe desktop app:
-- **Ribbon:** generated from `ui-spec`, covering tabs, groups and controls. Galleries can start as basic dropdowns.
+- **Command bar:** generated from `ui-spec`, covering tabs, groups and controls. Galleries can start as basic dropdowns.
 - **Quick access toolbar.**
 - **Shapes window:** with original "Basic Shapes" and "Basic Flowchart" stencils.
 - **Drawing canvas:** pan, zoom, rulers and grid.
@@ -267,7 +267,7 @@ Also:
 - Open and save use native dialogs.
 - The wasm build uses file upload and download.
 
-Tests: egui_kittest tests for ribbon generation, layout switching, enabled/disabled state and shortcut dispatch.
+Tests: egui_kittest tests for command-bar generation, layout switching, enabled/disabled state and shortcut dispatch.
 
 Exit: both layouts load and switch without a restart, and opening corpus files shows them on the canvas.
 
@@ -326,7 +326,80 @@ Exit:
 - Resizing master-based shapes from the corpus recomputes geometry correctly for supported functions.
 - The phase report includes the agreement rate with cached values.
 
-### Phase 7: Binary .vsd import (read-only)
+### Phase 7: Panel Modern and Panel Classic layouts, the rename, the welcome wizard
+
+Two complete, designed layouts on top of the command registry:
+
+- **Panel Classic**: a menu bar with access keys, docked toolbars (Standard
+  and Formatting shown; 14 more under View > Toolbars) and context
+  menus. Separate menu bars apply when a ShapeSheet window is active or
+  a stencil is being edited.
+- **Panel Modern**: tabs whose groups place every control in a stack or rows
+  slot at a large, medium or small size. It also has:
+  - contextual tabs (Picture Tools, Container Tools, ShapeSheet Tools)
+    that follow the selection;
+  - a Quick Access Toolbar;
+  - a collapsible command bar;
+  - a File view.
+
+Both layouts are data (`ui-spec/layouts/*.yaml`, layout format v2, ADR
+0061) and are drawn by one set of widgets. The Phase 4 Fluent-data
+layouts become **Panel (2016 data)** and **Panel (365 data)** and are
+converted to the same model on load. All four layouts switch at run
+time without a restart.
+
+Also:
+
+- **The rename:** Ferrogram becomes **Larrygram** at the rename
+  boundary: crates, binaries, environment variables, docs, the
+  settings storage key, the web page title and the version
+  (`1.0.0-alpha.1`, "Larrygram v1.0 alpha"). Side panels become
+  panes, so "Panel" names only the layouts.
+- **The welcome wizard:** two pages (Welcome, then Choose your
+  layout), opened on the first launch and again from Help >
+  Welcome (ADR 0066).
+- **The About window:** the dedication to Larry Jeffus, the video
+  link and Close, from **Why Larrygram?** and **Help > About
+  Larrygram** (ADR 0066).
+- **Brand assets:** `about_screen.svg`, `panel-layout.svg`,
+  `classic-layout.svg`, `icon.svg` and `larry.png` under
+  `crates/ui/assets/brand/`, all rights reserved, used with
+  permission (ADR 0067). `icon.svg` is the window icon and the
+  favicon. Forks must replace them.
+- **Icons:** Tabler outline icons (MIT), chosen by meaning, mapped in
+  `ui-spec/icons.yaml` and tinted with theme tokens (ADR 0062). No
+  third-party application artwork.
+- **Themes:** per-layout colour, font and metric tokens (ADR 0063).
+  Selawik is the UI font.
+- **Selection contexts:** ten named contexts drive contextual tabs,
+  context menus and a target availability table for every command (ADR
+  0064).
+- **New commands:** the commands the new controls need, added as stubs.
+  Controls without an implemented command stay disabled with "Not yet
+  implemented".
+
+Tests:
+
+- data validation and cross-references;
+- count pins per layout;
+- egui_kittest tests that open every menu and dispatch every enabled
+  item;
+- a command-bar placement test;
+- golden PNGs of both layouts, both wizard pages and the About window;
+- the context cross-check against the registry predicates;
+- the wasm build.
+
+Exit:
+
+- all four layouts load and switch without a restart;
+- every icon key draws its icon;
+- every control dispatches its command;
+- contextual tabs appear exactly in their contexts;
+- a fresh install opens the wizard and the next launch skips it;
+- the About window and its video link work from every layout;
+- the phase report shows Larrygram's own renders of both layouts.
+
+### Phase 8: Binary .vsd import (read-only)
 
 In `crates/vsd-binary` (MPL-2.0), import .vsd/.vss/.vst into `model`, using libvisio as the reference. The workflow is open → edit → save as .vsdx.
 
@@ -334,7 +407,9 @@ Tests: an oracle comparison with libvisio dumps, a fuzz target, and malformed-in
 
 Exit: corpus .vsd files open without panics, and the report includes parity against libvisio.
 
-### Phase 8: Agents (control channel and MCP)
+### Phase 9: Agents (control channel and MCP) — paused
+
+Paused; it starts after Phase 8 at the earliest.
 
 Build a JSON control channel and an MCP server that expose:
 - Every registered command.
@@ -351,7 +426,7 @@ Tests: protocol tests, plus an end-to-end script that builds a flowchart over MC
 - Corpus .vsdx and .vsd files open without crashes and render recognizably.
 - The Phase 5 flowchart workflow works end to end.
 - Saved .vsdx files validate against the MS-VSDX schemas.
-- Both ribbon layouts switch at runtime.
+- All four Panel layouts switch at runtime.
 - The parity matrix is regenerated and honest.
 - The README states the alpha status and lists what does not work yet.
 
