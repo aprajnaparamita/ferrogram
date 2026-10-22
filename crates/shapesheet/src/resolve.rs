@@ -336,7 +336,7 @@ impl<'d> DocumentResolver<'d> {
                 // An `Inh` snapshot is this sheet's own value (ADR 0054).
                 return Some(Found {
                     formula: None,
-                    source: ValueSource::HardDefault,
+                    source: ValueSource::Local,
                     value,
                 });
             }
@@ -562,15 +562,24 @@ impl<'d> DocumentResolver<'d> {
     /// sheet it is evaluated *for*).
     fn eval_reference(&mut self, sheet: SheetRef, reference: &CellRef) -> Result<Value, Error> {
         let resolved = self.resolve(sheet, reference)?;
+        // The value side prefers the cell's cached value (ADR 0054, the
+        // `Inh` snapshot rule): reading a cell never re-runs its
+        // formula, so a referenced unknown function keeps that cell's
+        // cached value (ADR 0053) and a read is idempotent (ADR 0055's
+        // determinism). The formula is evaluated only when nothing is
+        // cached (the fill-in case of ADR 0057).
+        if let Some(value) = resolved.value {
+            return Ok(value);
+        }
         if let Some(source) = resolved.formula.as_deref() {
             let formula = Formula::new(source);
             if let Ok(value) = crate::eval::eval_formula(&formula, sheet, self) {
                 return Ok(value);
             }
-            // An engine that is not ready yet, or a stored formula that
-            // does not parse: keep the cached value (ADR 0053's rule).
+            // A stored formula that does not parse, on a cell that
+            // caches nothing: there is no value to answer with.
         }
-        Ok(resolved.value.unwrap_or(Value::Err(ErrorCode::Ref)))
+        Ok(Value::Err(ErrorCode::Ref))
     }
 }
 
@@ -755,7 +764,9 @@ fn split_row_name(part: &str) -> NameParts {
 }
 
 /// Splits a written section name into its base and its instance index
-/// (`Geometry1` is the second `Geometry` section).
+/// (`Geometry1` is the first `Geometry` section; a name with no number
+/// is the first, [`section_instance_position`] turns both into the same
+/// slot).
 fn split_section_name(part: &str) -> (String, usize) {
     let digits = part
         .chars()
@@ -769,6 +780,14 @@ fn split_section_name(part: &str) -> (String, usize) {
         }
     }
     (part.to_owned(), 0)
+}
+
+/// The 0-based slot of the section a written instance number names:
+/// `Geometry` and `Geometry1` both name the first `Geometry` section and
+/// `Geometry2` the second (ADR 0054's `Geometry1.X2` row, and the
+/// `graph::split_section_number` rule the dependency graph uses).
+fn section_instance_position(instance: usize) -> usize {
+    instance.saturating_sub(1)
 }
 
 /// The section a written section name names: the file spelling and the
@@ -923,28 +942,24 @@ fn sections_named<'a>(sheet: &'a Sheet, canon: &str) -> impl Iterator<Item = &'a
 }
 
 /// The section instance a section-form name names (`Geometry1` is the
-/// second `Geometry` section).
+/// first `Geometry` section).
 fn match_section<'a>(sheet: &'a Sheet, canon: &str, instance: usize) -> Option<&'a Section> {
-    sections_named(sheet, canon).nth(instance)
+    sections_named(sheet, canon).nth(section_instance_position(instance))
 }
 
 /// The row index a [`RowKind`] names in one section (ADR 0054): a row
-/// index is the row at that position, or the row carrying its `IX`; a
-/// named row is the row with that `N`.
+/// index is the row carrying that `IX` (the corpus writes `X1` for the
+/// row with `IX` 1, and `graph::find_row_with_position` links the same
+/// row), then the row at that position; a named row is the row with
+/// that `N`.
 fn row_index_of(section: &Section, kind: &RowKind) -> Option<usize> {
     match kind {
         RowKind::Column { index, .. } => {
-            let candidate = section.rows.get(*index)?;
-            match candidate.ix {
-                Some(ix) => Some(
-                    section
-                        .rows
-                        .iter()
-                        .position(|row| row.ix == Some(ix))
-                        .unwrap_or(*index),
-                ),
-                None => Some(*index),
+            let ix = i32::try_from(*index).unwrap_or(i32::MAX);
+            if let Some(found) = section.rows.iter().position(|row| row.ix == Some(ix)) {
+                return Some(found);
             }
+            section.rows.get(*index).map(|_| *index)
         }
         RowKind::Named(name) => section
             .rows
@@ -995,7 +1010,9 @@ fn section_slot(
     explicit: Option<&str>,
 ) -> Option<Slot> {
     let name = explicit.unwrap_or_else(|| kind.cell_name());
-    let (section_index, section) = sections_named(sheet, canon).enumerate().nth(instance)?;
+    let (section_index, section) = sections_named(sheet, canon)
+        .enumerate()
+        .nth(section_instance_position(instance))?;
     if let Some(cell) = section
         .cells
         .iter()
@@ -1290,7 +1307,7 @@ fn write_slot(sheet: &mut Sheet, slot: &Slot, cached: crate::value::CachedValue)
 mod tests {
     use super::*;
     use crate::eval::EvalWarningKind;
-    use ferrogram_model::{Page, PageId, Section, SectionName, Shape};
+    use ferrogram_model::{Page, PageId, Section, SectionName, Shape, Sheet};
 
     fn sheet() -> SheetRef {
         SheetRef::Page(PageId { index: 0 })
@@ -1506,16 +1523,58 @@ mod tests {
             row.cells.push(number_cell("X", (position as u32).into()));
             section.rows.push(row);
         }
-        // Row 0 carries `IX` 7: the row with `IX` 7 matches wherever it
-        // sits (here, row 0 itself).
+        // The written index is the row's `IX` wherever the row sits.
+        for (index, expected) in [(3usize, 2.0), (7, 0.0)] {
+            let kind = RowKind::Column {
+                column: String::from("X"),
+                index,
+            };
+            assert_eq!(
+                section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
+                Some(CellValue::Number(expected)),
+                "index {index}"
+            );
+        }
+        // A row no `IX` names falls back to the row at that position.
         let kind = RowKind::Column {
             column: String::from("X"),
-            index: 0,
+            index: 1,
         };
         assert_eq!(
             section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
-            Some(CellValue::Number(0.0))
+            Some(CellValue::Number(1.0))
         );
+        // Out of range is no row at all.
+        let kind = RowKind::Column {
+            column: String::from("X"),
+            index: 9,
+        };
+        assert_eq!(section_cell(&section, &kind, None), None);
+    }
+
+    #[test]
+    fn a_section_instance_names_the_nth_section_of_that_name() {
+        let mut sheet = Sheet::new();
+        for _ in 0..2 {
+            let mut section = Section::new(SectionName::from_static("Geometry"));
+            let mut row = Row::new();
+            row.ix = Some(1);
+            row.cells.push(number_cell("X", 0.0));
+            section.rows.push(row);
+            sheet.sections.push(section);
+        }
+        // `Geometry` and `Geometry1` are the first section, `Geometry2`
+        // the second (ADR 0054's `Geometry1.X2`).
+        for (instance, wanted) in [(0usize, 0usize), (1, 0), (2, 1)] {
+            let found = match_section(&sheet, "Geometry", instance).expect("section");
+            let position = sheet
+                .sections
+                .iter()
+                .position(|section| std::ptr::eq(section, found))
+                .expect("in the sheet");
+            assert_eq!(position, wanted, "instance {instance}");
+        }
+        assert!(match_section(&sheet, "Geometry", 3).is_none());
     }
 
     #[test]
@@ -1577,6 +1636,58 @@ mod tests {
                 .set_cell(sheet(), &CellRef::new("PinX"), value)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_read_prefers_the_cached_value_over_the_stored_formula() {
+        // `PinX`'s stored formula would compute 2 and `Width`'s calls an
+        // unknown function; the file's snapshots are 9 and 4. A read
+        // answers the snapshot (ADR 0054) and an unknown function keeps
+        // its cached value (ADR 0053), so `PinX` reads 9.
+        let mut doc = Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        let mut pin = Cell::new(CellName::new("PinX"));
+        pin.formula = Some(String::from("Width*0.5"));
+        pin.value = Some(CellValue::Number(9.0));
+        page.sheet.cells.push(pin);
+        let mut width = Cell::new(CellName::new("Width"));
+        width.formula = Some(String::from("FOO(4)"));
+        width.value = Some(CellValue::Number(4.0));
+        page.sheet.cells.push(width);
+        doc.pages.push(page);
+
+        let mut resolver = DocumentResolver::new(&mut doc);
+        for (name, expected) in [("PinX", 9.0), ("Width", 4.0)] {
+            let value = resolver
+                .cell_value(sheet(), &CellRef::new(name))
+                .expect("value");
+            match value {
+                Value::Number(number) => assert_eq!(number.magnitude, expected, "{name}"),
+                other => panic!("{name}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_read_evaluates_the_formula_when_nothing_is_cached() {
+        // The fill-in case (ADR 0057): a formula with no cached value
+        // computes, reading the cached values around it.
+        let mut doc = Document::new();
+        let mut page = Page::new(PageId { index: 0 }, 1);
+        let mut pin = Cell::new(CellName::new("PinX"));
+        pin.formula = Some(String::from("Width*0.5"));
+        page.sheet.cells.push(pin);
+        page.sheet.cells.push(number_cell("Width", 4.0));
+        doc.pages.push(page);
+
+        let mut resolver = DocumentResolver::new(&mut doc);
+        let value = resolver
+            .cell_value(sheet(), &CellRef::new("PinX"))
+            .expect("value");
+        match value {
+            Value::Number(number) => assert_eq!(number.magnitude, 2.0),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]
