@@ -1,6 +1,6 @@
 # Phase 7 plan: Larrygram, the Panel Modern and Panel Classic layouts, the welcome wizard
 
-- Status: proposed (2026-10-23), for the user's review
+- Status: accepted (2026-10-23); the wizard copy and the button label confirmed by the user
 - Inputs: the Phase 7 package (`/Volumes/Dara/ferrogram-phase7/`, its
   `docs/phase-7/README.md` and draft tasks P7-01 to P7-14), the user's
   brief of 2026-10-23 and the graphics in `graphics/`
@@ -30,7 +30,7 @@ again from Help > Welcome (proposed).
   ratio.
 - Right half, with generous padding, top to bottom:
   - the title **Larrygram v1.0 alpha**;
-  - a short description (proposed): "Larrygram is a free, open-source
+  - a short description (confirmed): "Larrygram is a free, open-source
     diagramming app. Draw flowcharts and diagrams with shapes and
     connectors, and open, edit and save `.vsdx` drawings, on the
     desktop or in your browser.";
@@ -87,8 +87,8 @@ every layout.
 1. **`larry.png` is 360 × 360 pixels** (it replaced the 180-pixel
    `larry.jpg`). At half of a 1000-pixel-wide window it is scaled up
    about 1.4 times; a 900-pixel version would stay fully sharp.
-2. **The button label "Watch Larry's story"** and the proposed short
-   description in 2.1.
+2. **The button label "Watch Larry's story"** and the short
+   description in 2.1: confirmed by the user on 2026-10-23.
 3. **The 2016 and 365 layouts from Phase 4** (decided). They are renamed
    **Panel (2016 data)** and **Panel (365 data)**: the files
    `ui-spec/panel-2016.yaml` and `panel-365.yaml` become
