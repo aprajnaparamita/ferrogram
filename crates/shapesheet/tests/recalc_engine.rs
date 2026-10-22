@@ -21,7 +21,7 @@
 use ferrogram_geom::Unit;
 use ferrogram_model::{
     Cell, CellName, CellValue, Document, Master, MasterId, Preserved, Row, Section, SectionName,
-    Shape, ShapeId, SheetRef,
+    Shape, ShapeId, SheetRef, Style, StyleId,
 };
 use ferrogram_shapesheet::{CellAddress, RecalcOptions, RecalcWarningKind, recalc};
 
@@ -116,6 +116,32 @@ fn value_of(doc: &Document, address: &CellAddress) -> Option<CellValue> {
 fn number_of(doc: &Document, address: &CellAddress) -> Option<f64> {
     match value_of(doc, address) {
         Some(CellValue::Number(number)) => Some(number),
+        _ => None,
+    }
+}
+
+/// The formula text of `address`, or `None`.
+fn formula_of(doc: &Document, address: &CellAddress) -> Option<String> {
+    let name = address.cell.as_str();
+    match (address.sheet, &address.section) {
+        (SheetRef::Shape(id), None) => doc
+            .shape(id)?
+            .sheet
+            .cells
+            .iter()
+            .find(|entry| entry.name.as_str() == name)?
+            .formula
+            .clone(),
+        (SheetRef::Shape(id), Some(section)) => {
+            let sheet = &doc.shape(id)?.sheet;
+            let section = sheet.sections.iter().find(|entry| entry.name == *section)?;
+            section
+                .cells
+                .iter()
+                .find(|entry| entry.name.as_str() == name)?
+                .formula
+                .clone()
+        }
         _ => None,
     }
 }
@@ -328,6 +354,62 @@ fn a_cyclic_master_chain_is_cut() {
     )
     .expect("recalc");
     assert_eq!(outcome.updates, Vec::new());
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Style rungs (P6-15's rule through the engine)
+// ---------------------------------------------------------------------------
+
+/// P6-15's rule through the engine (ADR 0013 amendment): a formula the
+/// master's **style link** supplies is what the pass evaluates for an
+/// instance whose master defines nothing, and the instance materialises
+/// it (ADR 0056). The link is the shape's own when it sets one; here
+/// only the master sets it.
+#[test]
+fn a_style_formula_reaches_the_instance_through_the_masters_style_link() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The style the master links to: `LineWeight = 0.5*2`.
+    let mut style = Style::new(StyleId { index: 0 });
+    style.name = "Normal".to_owned();
+    style.name_u = "Normal".to_owned();
+    style.visio_id = 1;
+    style.sheet.cells = vec![cell("LineWeight", Some("0.5*2"), Some(1.0))];
+    doc.stylesheet.styles.push(style);
+
+    // The master: no `LineWeight`, one `LineStyle` link to the style.
+    let mut master_shape = shape_with(1, &[]);
+    master_shape.line_style = Some(1);
+    let master_root = doc.add_shape(master_shape);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name_u = "Box".to_owned();
+    master.shapes = vec![master_root];
+    let master = doc.add_master(master).expect("master");
+
+    // The instance: an `Inh` `LineWeight` its master defines nothing for.
+    let mut instance = shape_with(2, &[]);
+    instance.master = Some(master);
+    instance.sheet.cells = vec![cell("LineWeight", Some("Inh"), None)];
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = at(instance, "LineWeight");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &target),
+        Some(1.0),
+        "the style's formula computed at the instance"
+    );
+    assert_eq!(
+        formula_of(&doc, &target).as_deref(),
+        Some("0.5*2"),
+        "the instance materialises the style's formula (ADR 0056)"
+    );
     assert_eq!(outcome.warnings, Vec::new());
 }
 
