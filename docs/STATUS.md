@@ -20,12 +20,12 @@ Task board. Only the master agent edits this file, on `main`.
 | [P6-04](tasks/P6-04.md) | implementer | P6-01 | A | merged (42 functions, evaluator) | — |
 | [P6-05](tasks/P6-05.md) | implementer | P6-01 | A | merged (reference resolution, inheritance; P3-15 closed) | — |
 | [P6-06](tasks/P6-06.md) | implementer | P6-01 | A | merged (dependency graph, recalc; exports added by the master) | — |
-| [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | ready (edits with recalc and undo) | — |
+| [P6-07](tasks/P6-07.md) | implementer | P6-02..P6-06 | B | merged (recalc after edits, snapshot undo; `scale_geometry` retired in commands) | — |
 | [P6-08](tasks/P6-08.md) | implementer | P6-05, P6-06 | B | merged (U spelling for every value kind, fill-in on open; P2-14 closed) | — |
 | [P6-15](tasks/P6-15.md) | implementer | P6-08 | B | ready (instances inherit master style links; 3 blank corpus files) | — |
 | [P6-16](tasks/P6-16.md) | implementer | P6-08 | B | ready (reader drops the P5-10 artefacts) | — |
-| [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | waiting (typed panels) | — |
-| [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | waiting (cross-check, exit test) | — |
+| [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | ready (typed panels) | — |
+| [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | ready (cross-check, exit test) | — |
 | [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | waiting | — |
 | [P6-12](tasks/P6-12.md) | reviewer | P6-11 | E | waiting | — |
 | [P6-13](tasks/P6-13.md) | coverage-auditor | P6-11 | E | waiting | — |
@@ -247,3 +247,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P6-04 (open): an unknown function keeps the cached value through a warning plus an `#N/A!` placeholder (the evaluator signature has no keep-cached channel). `EvalWarningKind::UnsupportedReference` is ADR 0054's `MissingReference` (name kept). Four warning kinds do not reach `RecalcOutcome` (P6-11 note). Black-box checks: `MODULUS` sign, `CEILING`/`FLOOR` on negatives, unit-ed number to string (`1 in & ""`), string to boolean. `MOD` is an alias of `MODULUS`; `EXP` has no reference page and is kept per ADR 0053.
 - P6-02 (open): 976 of 994 unique corpus formulas parse and all of those round-trip; the 18 others are `FORMATEX` calls with omitted arguments, rejected by decision. `37%` is the percent operator; the `%` unit needs brackets (`5 [%]`). `Expr` equality includes spans, unlike ADR 0051 (P6-12 rules). The master switched `resolve.rs`'s refused-`SETF` errors to the new `Error::SetfRefused`.
 - P6-08 (open): the fill-in pass is a no-op on the corpus (no cell has a formula without a cached value). The blank `dwg`, `fdo86664` and `testfile5` come from the model's style lookup ignoring the master's style links (P6-15). `tab-short-prefix` and `recursion-cycle` have nothing to draw by construction. The `Value::to_cached` round-trip test lives in `crates/commands/tests/` (vsdx may not depend on shapesheet). P6-16 removes the P5-10 reader artefacts; P6-11 fixes section-level cells in `graph::effective`.
+- P6-07 (open): an edit's undo entry restores sheet snapshots taken before the recalc pass (so derived refreshes and `SETF` targets revert too); redo re-runs the pass. Our catalog masters have constant geometry, so catalog and drawn shapes still scale their rows literally on resize (formula geometry for the masters is a model task). An instance with no own geometry rows cannot be materialised (needs a row-insertion mutation). Page add and delete recalculate nothing. `Document::scale_geometry` has no caller in `commands`. `builtins/file.rs` still runs the fill-in pass inline; switch it to `recalc::fill_missing` in the fix task. Black-box check: does Visio scale literal-constant geometry rows on resize?
