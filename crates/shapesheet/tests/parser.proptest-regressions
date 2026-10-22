@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c4199140939347f3e354b8c8192ffc839c6790d74cadd90c0aeb6f00d78d7aaf # shrinks to expr = Expr { span: Span { start: 0, end: 0 }, kind: Binary { op: Add, left: Expr { span: Span { start: 0, end: 0 }, kind: Literal(Number(NumberLiteral { value: 0.0, unit: None, flag: None })) }, right: Expr { span: Span { start: 0, end: 0 }, kind: Ref(CellRef { sheets: [], section: None, names: ["SheetRef()"] }) } } }
