@@ -409,6 +409,7 @@ dependencies = [
  "ferrogram-geom",
  "ferrogram-model",
  "ferrogram-render",
+ "ferrogram-shapesheet",
  "ferrogram-ui-spec",
  "ferrogram-vsdx",
  "serde",
@@ -436,6 +437,14 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "tiny-skia",
+]
+
+[[package]]
+name = "ferrogram-shapesheet"
+version = "0.0.1"
+dependencies = [
+ "ferrogram-geom",
+ "ferrogram-model",
 ]
 
 [[package]]
