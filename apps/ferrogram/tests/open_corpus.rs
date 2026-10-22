@@ -98,28 +98,39 @@ const SKIP_RASTER: &[(&str, &str)] = &[(
     "the package has no page part (visio/pages is empty), so there is no page raster",
 )];
 
-/// Files whose page rasterizes to nothing with the current renderer:
-/// the shape cells carry no cached values, so `FillPattern`/
-/// `LinePattern`/`LineWeight` substitute 0 and the shapes draw
-/// nothing (the P3-15/P3-16 open item "cells with no documented
-/// default"). Only the non-blank check skips; the open, frame and
-/// raster-match assertions still run. Tracked in the P4-09 Result.
+/// Files whose page rasterizes to nothing with the current renderer.
+/// Only the non-blank check skips; the open, frame and raster-match
+/// assertions still run. The causes are **not** missing cached values
+/// (task P6-08 proved the fill-in pass finds no cell to fill in any
+/// corpus file: no corpus `Cell` has a formula without a cached
+/// value):
+///
+/// - `dwg`, `fdo86664`, `testfile5`: the shapes are master instances
+///   with no `FillStyle`/`LineStyle`/`TextStyle` of their own, and
+///   `Document::resolve` never consults the **master's** style chain,
+///   so `FillPattern`/`LinePattern` fall through to the hard default 0
+///   and the shapes draw nothing. Copying the master's style links onto
+///   the instances makes all three rasterize non-blank (P6-08 Result,
+///   open issue 1; a `model` change, not a value-pipeline one).
+/// - `tab-short-prefix`: the shape has no size, geometry or text cells
+///   and no formula anywhere (its only section is `Tabs`), so there is
+///   nothing to draw and nothing a fill-in pass could evaluate.
 const KNOWN_BLANK: &[(&str, &str)] = &[
     (
         "dwg.vsdx",
-        "shape cells have no cached values; FillPattern/LinePattern substitute 0 (P3-15 open item)",
+        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
     ),
     (
         "fdo86664.vsdx",
-        "shape cells have no cached values; FillPattern/LinePattern substitute 0 (P3-15 open item)",
+        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
     ),
     (
         "tab-short-prefix.vsdx",
-        "shape cells have no cached values; Width/Height/PinX/PinY substitute 0 (P3-15 open item)",
+        "the shape has no size, geometry or text cells and no formula; nothing draws (P6-08 open issue 2)",
     ),
     (
         "testfile5.vsdx",
-        "shape cells have no cached values; FillPattern/LinePattern substitute 0 (P3-15 open item)",
+        "the instance does not resolve FillPattern/LinePattern through its master's style chain (P6-08 open issue 1)",
     ),
 ];
 
