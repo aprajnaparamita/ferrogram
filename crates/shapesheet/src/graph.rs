@@ -493,8 +493,11 @@ fn section_rung(
     section: &SectionName,
     cell: &CellName,
 ) -> Option<(String, ValueSource)> {
-    let own = find_cell(&find_section(sheet_of(document, sheet)?, section)?.cells, cell);
-    if let Some(formula) = own.and_then(defining_formula) {
+    let own = sheet_of(document, sheet)
+        .and_then(|data| find_section(data, section))
+        .and_then(|found| find_cell(&found.cells, cell))
+        .and_then(defining_formula);
+    if let Some(formula) = own {
         return Some((formula.to_owned(), ValueSource::Local));
     }
     let mut master_id = match sheet {
@@ -509,9 +512,12 @@ fn section_rung(
         }
         visited.push(master);
         let rung = document.shape(*document.master(master)?.shapes.first()?)?;
-        if let Some(formula) =
-            find_cell(&find_section(&rung.sheet, section)?.cells, cell).and_then(defining_formula)
-        {
+        // A rung that has no such section or cell defines nothing; the
+        // chain continues at that rung's own master.
+        let defined = find_section(&rung.sheet, section)
+            .and_then(|found| find_cell(&found.cells, cell))
+            .and_then(defining_formula);
+        if let Some(formula) = defined {
             return Some((formula.to_owned(), ValueSource::Master(master)));
         }
         master_id = rung.master;

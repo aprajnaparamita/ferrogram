@@ -255,6 +255,52 @@ fn a_section_level_cell_walks_a_master_chain() {
     assert_eq!(outcome.warnings, Vec::new());
 }
 
+/// A rung that has no such section defines nothing but does not stop
+/// the chain: the walk continues at that rung's own master.
+#[test]
+fn a_rung_without_the_section_does_not_stop_the_chain() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The top master: `Geometry!NoFill = 7`.
+    let mut top_shape = shape_with(1, &[]);
+    top_shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("7"), Some(7.0)));
+    let top_root = doc.add_shape(top_shape);
+    let mut top = Master::new(MasterId { index: 0 }, 1);
+    top.name_u = "Top".to_owned();
+    top.shapes = vec![top_root];
+    let top = doc.add_master(top).expect("top master");
+
+    // The middle master: an instance of the top master with **no**
+    // `Geometry` section at all.
+    let mut middle_shape = shape_with(2, &[]);
+    middle_shape.master = Some(top);
+    let middle_root = doc.add_shape(middle_shape);
+    let mut middle = Master::new(MasterId { index: 1 }, 2);
+    middle.name_u = "Middle".to_owned();
+    middle.shapes = vec![middle_root];
+    let middle = doc.add_master(middle).expect("middle master");
+
+    // The instance: an instance of the middle master, an empty
+    // `Geometry` section so the write has somewhere to land.
+    let mut instance = shape_with(3, &[]);
+    instance.master = Some(middle);
+    instance.sheet.sections.push(geometry_section(None, None));
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = section_at(instance, "Geometry", "NoFill");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(number_of(&doc, &target), Some(7.0));
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
 /// A cyclic master chain is cut (ADR 0013), never looped on: the pass
 /// finds no formula, writes nothing and does not hang.
 #[test]
