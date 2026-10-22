@@ -17,6 +17,11 @@ rfd = "0.17"
 ferrogram-commands = { path = "../commands" }
 ferrogram-geom = { path = "../geom" }
 ferrogram-model = { path = "../model" }
+# The ShapeSheet engine (ADR 0052): the panels type a cached value with
+# `Value::from_cached` and parse a typed entry with the formula grammar
+# and the engine's unit table (ADR 0058, task P6-09; requested here
+# because the panels need the typed mapping in their own code).
+ferrogram-shapesheet = { path = "../shapesheet" }
 ferrogram-render = { path = "../render" }
 ferrogram-ui-spec = { path = "../ui-spec" }
 # The settings slot format (ADR 0032): `Settings` as JSON in the
