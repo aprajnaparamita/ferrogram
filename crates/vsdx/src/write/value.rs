@@ -8,11 +8,14 @@
 //! code in `Preserved`), so a write restores the file's own spelling.
 //!
 //! A value the model built (not one read from a file with its `U`) needs the
-//! `U` the reader classifies it with (task P2-14): `U="BOOL"` for `Bool` and
-//! `U="STR"` for a `Str` whose text would otherwise read as a number or a
-//! colour. A [`CellValue::List`] is out of scope here: no `U` code maps back
-//! to a list, so one is written as its raw text and reads back by shape; the
-//! formula engine owns that kind.
+//! `U` the reader classifies it with (task P2-14): `U="BOOL"` for `Bool`,
+//! `U="STR"` for a `Str` whose text would otherwise read as another kind,
+//! `U="COLOR"` for a `Color` whose unit would otherwise write a numeric
+//! code over it, and `U="LIST"` for a [`CellValue::List`] (our own
+//! spelling; [`crate::read::value`] maps it back). The unit of a
+//! non-numeric kind is dropped on write: a unit on a `Bool`, `Str`, `Color`
+//! or `List` is meaningless and would write a numeric `U` over a
+//! non-numeric `V` (the P2-14 fix, ADR 0052).
 //!
 //! A cached value compares equal to its written attribute when the attribute
 //! still spells it, under the same rules the reader parses with: a number may
@@ -98,13 +101,13 @@ pub(crate) fn unit_spelling(
 }
 
 /// The `U` code a value's kind needs for the reader to classify it the same
-/// way: `BOOL` for `Bool`, `STR` for a `Str` whose text would read as a
-/// number or a colour, or whose unit would otherwise write a numeric code.
-/// `None` when the value's own shape already reads back the same kind.
+/// way: `BOOL` for `Bool`, `STR` for a `Str` whose text would read as
+/// another kind, `COLOR` for a `Color` whose unit would otherwise write a
+/// numeric code, `LIST` for a [`CellValue::List`]. `None` when the value's
+/// own shape already reads back the same kind.
 ///
-/// Kind fidelity wins over the unit for `Bool` and `Str`: the reader gives
-/// neither kind a unit back. A [`CellValue::List`] has no code the reader
-/// maps back to a list: out of scope (the formula engine owns it).
+/// Kind fidelity wins over the unit for every non-numeric kind: the reader
+/// gives no such kind a unit back (the P2-14 unit drop).
 pub(crate) fn kind_code(value: &CellValue, unit: Unit) -> Option<&'static str> {
     match value {
         CellValue::Bool(_) => Some("BOOL"),
@@ -113,6 +116,8 @@ pub(crate) fn kind_code(value: &CellValue, unit: Unit) -> Option<&'static str> {
         {
             Some("STR")
         }
+        CellValue::Color(_) if unit_code(unit).is_some() => Some("COLOR"),
+        CellValue::List(_) => Some("LIST"),
         _ => None,
     }
 }
@@ -120,13 +125,14 @@ pub(crate) fn kind_code(value: &CellValue, unit: Unit) -> Option<&'static str> {
 /// Whether the `U` spelling `code` makes the reader classify the written `V`
 /// of `value` as the value's kind (the rules of [`crate::read::value`]).
 ///
-/// Only called for values whose [`kind_code`] fires (`Bool`, misreading
-/// `Str`); without a `U` such a value never reads back the same kind, so
-/// `None` never declares it.
+/// Only called for values whose [`kind_code`] fires; without a `U` such a
+/// value never reads back the same kind, so `None` never declares it.
 fn declares_kind(code: Option<&str>, value: &CellValue) -> bool {
     let want = match value {
         CellValue::Bool(_) => Kind::Bool,
         CellValue::Str(_) => Kind::Str,
+        CellValue::Color(_) => Kind::Color,
+        CellValue::List(_) => Kind::List,
         _ => return false,
     };
     code.is_some_and(|code| kind(Some(code)) == want)
@@ -309,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn kind_codes_cover_bool_and_misreading_strings() {
+    fn kind_codes_cover_the_non_numeric_kinds() {
         assert_eq!(
             kind_code(&CellValue::Bool(true), Unit::Unitsless),
             Some("BOOL")
@@ -333,14 +339,23 @@ mod tests {
             None
         );
         assert_eq!(kind_code(&CellValue::Number(2.0), Unit::Inches), None);
+        // A colour reads back by shape when no unit would lie about it.
         assert_eq!(
             kind_code(&CellValue::Color(Color::new(0, 0, 0)), Unit::Unitsless),
             None
         );
-        // `List` is out of scope: no code maps back to a list.
+        assert_eq!(
+            kind_code(&CellValue::Color(Color::new(0, 0, 0)), Unit::Inches),
+            Some("COLOR")
+        );
+        // A list always spells `LIST` (our own code, P6-08).
         assert_eq!(
             kind_code(&CellValue::List("a;b".to_owned()), Unit::Unitsless),
-            None
+            Some("LIST")
+        );
+        assert_eq!(
+            kind_code(&CellValue::List("a;b".to_owned()), Unit::Inches),
+            Some("LIST")
         );
     }
 
@@ -353,6 +368,25 @@ mod tests {
         assert_eq!(
             unit_spelling(Some(&CellValue::Str("2".to_owned())), Unit::Unitsless, None),
             UnitSpelling::Code("STR")
+        );
+        // The unit of a non-numeric kind is dropped for its kind code
+        // (P2-14): a numeric `U` over a list or colour `V` would make the
+        // reader reject the value.
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::List("1;0".to_owned())),
+                Unit::Inches,
+                Some("IN")
+            ),
+            UnitSpelling::Code("LIST")
+        );
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::Color(Color::new(1, 2, 3))),
+                Unit::Inches,
+                None
+            ),
+            UnitSpelling::Code("COLOR")
         );
         assert_eq!(
             unit_spelling(Some(&CellValue::Number(2.0)), Unit::Inches, None),
@@ -372,6 +406,14 @@ mod tests {
     fn unit_spelling_keeps_a_spelling_that_declares_the_kind() {
         assert_eq!(
             unit_spelling(Some(&CellValue::Bool(true)), Unit::Unitsless, Some("BOOL")),
+            UnitSpelling::Keep
+        );
+        assert_eq!(
+            unit_spelling(
+                Some(&CellValue::List("1;0".to_owned())),
+                Unit::Unitsless,
+                Some("LIST")
+            ),
             UnitSpelling::Keep
         );
         // The file's `DATE` spelling stays; the kind reads back the same.
