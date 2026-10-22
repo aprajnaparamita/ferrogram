@@ -83,6 +83,46 @@ None yet. A cell that disagrees because of a decision we accept (a
 coercion rule, a rounding rule) gets a line here with its formula and the
 reason, and the harness matches it by cell address.
 
+Task P6-10's run over the 15 corpus files counted 5 184 cells and found
+32 accepted divergences (six causes), each with its line below. The
+harness (`crates/commands/tests/crosscheck.rs`, its `EXCLUSIONS` table)
+matches them by file and cell address and reports them as
+`documented-exclusion`; every other counted cell agrees within the
+tolerance above.
+
+- `bgcolor.vsdx` `shape3!TextBkgnd` (`F=RGB(157,187,97)+1`): colour arithmetic — Visio caches the RGB unchanged where our evaluator coerces the colour to a number first (ADR 0052 has no colour arithmetic).
+- `tdf154379-QuickStyleFillMatrix.vsdx` `page0!Actions1.Action1` (`F=SETF("User.ConnectorType",NOT(User.ConnectorType))`): `SETF` takes a `GetRef(...)` target (ADR 0053's basic SETF); the string-literal target form is refused, and an action cell caches 0 whatever it evaluates to.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape84!Actions1.Action1` (`F=SETF("User.ShapeAppearance",1)`): same, `SETF`'s string-literal target.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape84!Actions1.Action2` (`F=SETF("User.ShapeAppearance",2)`): same, `SETF`'s string-literal target.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape84!Actions1.Action3` (`F=SETF("User.ShapeAppearance",3)`): same, `SETF`'s string-literal target.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape84!Actions1.Action4` (`F=SETF("User.ShapeAppearance",4)`): same, `SETF`'s string-literal target.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape17!Property1.LangID1` (`F=User.LCID`): Visio maps an LCID number to a locale tag in a `LangID` cell (1033 caches as `de-DE`); ADR 0052 has no such coercion, so we keep the number.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape17!Property1.LangID2` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape19!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping (1033 caches as `en-US`).
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape20!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape21!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape22!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape23!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape24!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape25!Character1.LangID0` (`F=User.LCID`): same, the LCID-to-locale-tag mapping.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape67!EventDblClick` (`F=NA()`): `NA()` is `#N/A!` by definition; Visio caches 0 on an event cell whatever its formula evaluates to.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape69!EventDblClick` (`F=NA()`): same, the event-cell cache.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape70!EventDblClick` (`F=NA()`): same, the event-cell cache.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape71!EventDblClick` (`F=NA()`): same, the event-cell cache.
+- `tdf154379-QuickStyleFillMatrix.vsdx` `shape73!EventDblClick` (`F=NA()`): same, the event-cell cache.
+- `testfile1.vsdx` `shape2!FillBkgndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): the theme-driven `LineColorTrans` caches the `Themed` marker the model keeps (ADR 0021 resolves theme values in the renderer), so the branch evaluates to the marker where Visio caches the theme's value.
+- `testfile1.vsdx` `shape2!FillForegndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile3.vsdx` `shape2!FillBkgndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile3.vsdx` `shape2!FillForegndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile4.vsdx` `shape0!FillBkgndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile4.vsdx` `shape0!FillForegndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile6.vsdx` `shape1!FillBkgndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile6.vsdx` `shape1!FillForegndTrans` (`F=GUARD(IF(Actions.End.Checked,LineColorTrans,0))`): same, the `Themed` marker.
+- `testfile1.vsdx` `shape4!Character1.Size0` (`F=GUARD(0)`): Visio clamps a character size to 1 pt (the file caches 0.0139 in) where the formula computes 0.
+- `testfile3.vsdx` `shape4!Character1.Size0` (`F=GUARD(0)`): same, the 1 pt clamp.
+- `testfile4.vsdx` `shape2!Character1.Size0` (`F=GUARD(0)`): same, the 1 pt clamp.
+- `testfile6.vsdx` `shape3!Character1.Size0` (`F=GUARD(0)`): same, the 1 pt clamp.
+
 ## Consequences
 
 - The phase report's number is reproducible from one command
