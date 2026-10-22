@@ -10,8 +10,11 @@
 //! master's corresponding cell (**master**, with the sub-shape rule), the
 //! style chain selected by the cell's section (**style**), the ShapeSheet
 //! table's `default_value` (**section default**) and the default of the
-//! cell's type (**hard default**). Every consulted source appears in
-//! [`Resolved::via`]; the entry that defines the value is last.
+//! cell's type (**hard default**). The style rung starts at the effective
+//! style link (P6-15): the shape's own `LineStyle`/`FillStyle`/`TextStyle`,
+//! or its master chain's first link of that kind when the shape sets none.
+//! Every consulted source appears in [`Resolved::via`]; the entry that
+//! defines the value is last.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -441,14 +444,12 @@ impl Document {
         // 3. Style chain selected by the cell's section (a Geometry cell
         // never comes from a style). A style reference is a Visio style id
         // (P2-06b decision 3) and each style continues the chain through
-        // its own link of the same kind.
+        // its own link of the same kind. The first link is the **effective**
+        // one (P6-15): the shape's own link, or the master chain's first
+        // link of this kind when the shape sets none.
         let mut visited_styles: Vec<StyleId> = Vec::new();
         if let Some(kind) = style_kind_for(table, cell.as_str(), section_hint) {
-            let mut link = match kind {
-                StyleKind::Line => entity.line_style,
-                StyleKind::Fill => entity.fill_style,
-                StyleKind::Text => entity.text_style,
-            };
+            let mut link = self.effective_style_link(shape, kind);
             while let Some(visio_id) = link {
                 let Some(style) = self.style_by_visio_id(visio_id) else {
                     // A dangling style reference ends the chain.
@@ -553,6 +554,52 @@ impl Document {
                     .and_then(|p| many.get(p))
                     .or_else(|| many.first())?;
                 self.shape(*picked)
+            }
+        }
+    }
+
+    /// The style link the style rung starts from (P6-15, ADR 0013 rule 3):
+    /// the shape's own `LineStyle`/`FillStyle`/`TextStyle` when it sets one,
+    /// else the first link of that kind on its master chain: the same
+    /// master shapes the master rung consults (the sub-shape rule and the
+    /// position rule included), in rung order, so a master that is itself
+    /// an instance continues the search at its own master.
+    ///
+    /// A link the shape sets wins, even one that names no stylesheet row
+    /// (the style chain then ends where it starts, as for any dangling
+    /// link). A cyclic master chain is cut as in [`CellLookup::resolve`]:
+    /// no link is taken from a master already visited.
+    fn effective_style_link(&self, shape: ShapeId, kind: StyleKind) -> Option<u32> {
+        if let Some(link) = self
+            .shape(shape)
+            .and_then(|entity| shape_style_link(entity, kind))
+        {
+            return Some(link);
+        }
+        let (first, root, mut path) = self.instance_chain_start(shape)?;
+        let position = self.sibling_position(root);
+        let mut visited: Vec<MasterId> = Vec::new();
+        let mut current = first;
+        loop {
+            if visited.contains(&current) {
+                return None;
+            }
+            visited.push(current);
+            let mut chained = None;
+            if let Some(content) = self
+                .master(current)
+                .and_then(|m| self.master_shape(m, position))
+            {
+                let target = walk_down(self, content, &path).unwrap_or(content);
+                if let Some(link) = shape_style_link(target, kind) {
+                    return Some(link);
+                }
+                chained = target.master;
+                path.clear();
+            }
+            match chained {
+                Some(next) => current = next,
+                None => return None,
             }
         }
     }
@@ -728,6 +775,17 @@ fn matched_row_cell<'a>(
         }
     };
     matched?.cells.iter().find(|c| c.name == *cell)
+}
+
+/// The style link of a shape for one style kind (P2-06b decision 3): the
+/// `LineStyle`/`FillStyle`/`TextStyle` attribute of the shape, the Visio
+/// `ID` of the stylesheet row it names.
+fn shape_style_link(shape: &crate::shape::Shape, kind: StyleKind) -> Option<u32> {
+    match kind {
+        StyleKind::Line => shape.line_style,
+        StyleKind::Fill => shape.fill_style,
+        StyleKind::Text => shape.text_style,
+    }
 }
 
 /// The style link of a page sheet for one style kind (ADR 0019): the
@@ -2204,6 +2262,228 @@ mod tests {
             Some("1")
         );
         assert_eq!(find_def(TWO, "Other", None), None);
+    }
+}
+
+#[cfg(test)]
+mod style_link_tests {
+    //! The effective style link (P6-15): an instance without style links
+    //! of its own resolves style-selected cells through its master's links.
+
+    use super::*;
+    use crate::master::Master;
+    use crate::page::Page;
+    use crate::style::Style;
+
+    /// A cell with a cached number value.
+    fn number_cell(name: &str, value: f64) -> Cell {
+        let mut cell = Cell::new(CellName::new(name));
+        cell.value = Some(CellValue::Number(value));
+        cell
+    }
+
+    /// A stylesheet row with arena id `index`, Visio id `visio_id`, a
+    /// `LineStyle` link and, when `weight` is set, a `LineWeight` of its
+    /// own.
+    fn line_style(index: u32, visio_id: u32, link: Option<u32>, weight: Option<f64>) -> Style {
+        let mut style = Style::new(StyleId { index });
+        style.visio_id = visio_id;
+        style.name = format!("Style{visio_id}");
+        style.line_style = link;
+        if let Some(weight) = weight {
+            style.sheet.cells.push(number_cell("LineWeight", weight));
+        }
+        style
+    }
+
+    /// A document with one master (Visio id 1) whose content shape carries
+    /// `master_link`, and one instance (Visio id 2) of it on a page.
+    /// Returns the document, the master's content shape and the instance.
+    fn instance_of_master(master_link: Option<u32>) -> (Document, ShapeId, ShapeId) {
+        let mut doc = Document::new();
+        let master_shape = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(master_shape).expect("exists").line_style = master_link;
+        doc.masters.push(Master::new(MasterId { index: 0 }, 1));
+        doc.masters[0].shapes.push(master_shape);
+        let instance = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 2));
+        doc.shape_mut(instance).expect("exists").master = Some(MasterId { index: 0 });
+        let mut page = Page::new(crate::id::PageId { index: 0 }, 1);
+        page.shapes.push(instance);
+        doc.pages.push(page);
+        (doc, master_shape, instance)
+    }
+
+    #[test]
+    fn an_instance_inherits_the_style_link_of_its_master() {
+        // Acceptance: an instance without style links resolves `LineWeight`
+        // through its master's `LineStyle`.
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(0.05)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 0 }));
+        assert_eq!(
+            r.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 0 }),
+                ValueSource::Style(StyleId { index: 0 })
+            ]
+        );
+    }
+
+    #[test]
+    fn an_instance_with_its_own_link_uses_it() {
+        // Acceptance: a link the instance sets wins over the master's.
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        doc.stylesheet
+            .styles
+            .push(line_style(1, 2, None, Some(0.1)));
+        doc.shape_mut(instance).expect("exists").line_style = Some(2);
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(0.1)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 1 }));
+    }
+
+    #[test]
+    fn a_dangling_link_of_the_instance_wins_over_the_masters() {
+        // A link the instance sets wins even when it names no stylesheet
+        // row: the style rung ends where it starts (pinned choice, P6-15).
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        doc.shape_mut(instance).expect("exists").line_style = Some(99);
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert!(
+            !r.via.iter().any(|s| matches!(s, ValueSource::Style(_))),
+            "the master's link is not used: {:?}",
+            r.via
+        );
+        assert!(matches!(
+            r.source,
+            ValueSource::SectionDefault | ValueSource::HardDefault
+        ));
+    }
+
+    #[test]
+    fn the_link_search_walks_a_chained_master() {
+        // A master that is itself an instance with no link of its own: the
+        // search continues at the master's own master.
+        let (mut doc, master_shape, instance) = instance_of_master(None);
+        doc.shape_mut(master_shape).expect("exists").master = Some(MasterId { index: 1 });
+        doc.masters.push(Master::new(MasterId { index: 1 }, 3));
+        let outer = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 1 }, 4));
+        doc.shape_mut(outer).expect("exists").line_style = Some(1);
+        doc.masters[1].shapes.push(outer);
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(0.05)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 0 }));
+    }
+
+    #[test]
+    fn a_structure_mismatch_still_reads_the_master_shapes_link() {
+        // The sub-shape rule: a child resolves against the master's shape
+        // at the same position; a structure mismatch degrades to the
+        // master's own shape, whose link still applies.
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        let child = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 1 }, 3));
+        doc.shape_mut(instance)
+            .expect("exists")
+            .children
+            .push(child);
+        doc.shape_mut(child).expect("exists").parent = Some(instance);
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        let r = doc
+            .resolve(child, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(0.05)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 0 }));
+    }
+
+    #[test]
+    fn a_cyclic_master_chain_finds_no_style_link() {
+        // The link search walks the master chain: a cycle is cut and no
+        // style rung applies (never a hang, P6-15).
+        let (mut doc, master_shape, instance) = instance_of_master(None);
+        doc.shape_mut(master_shape).expect("exists").master = Some(MasterId { index: 0 });
+        doc.stylesheet
+            .styles
+            .push(line_style(0, 1, None, Some(0.05)));
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves without hanging");
+        assert!(
+            !r.via.iter().any(|s| matches!(s, ValueSource::Style(_))),
+            "no style rung applies: {:?}",
+            r.via
+        );
+        assert!(matches!(
+            r.source,
+            ValueSource::SectionDefault | ValueSource::HardDefault
+        ));
+    }
+
+    #[test]
+    fn a_master_style_chain_with_a_cycle_terminates() {
+        // Acceptance: a style chain entered through the master's link and
+        // cycling (1 -> 2 -> 1) stops at the repeat and falls through.
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        doc.stylesheet.styles.push(line_style(0, 1, Some(2), None));
+        doc.stylesheet.styles.push(line_style(1, 2, Some(1), None));
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves without hanging");
+        assert_eq!(
+            r.via,
+            vec![
+                ValueSource::Local,
+                ValueSource::Master(MasterId { index: 0 }),
+                ValueSource::Style(StyleId { index: 0 }),
+                ValueSource::Style(StyleId { index: 1 }),
+                ValueSource::Style(StyleId { index: 0 }),
+                ValueSource::SectionDefault,
+                ValueSource::HardDefault,
+            ]
+        );
+        assert!(matches!(
+            r.source,
+            ValueSource::SectionDefault | ValueSource::HardDefault
+        ));
+    }
+
+    #[test]
+    fn the_style_chain_continues_from_the_masters_link() {
+        // The chain runs from the effective link through each style's own
+        // link of the same kind, as it does from a shape's own link.
+        let (mut doc, _master, instance) = instance_of_master(Some(1));
+        doc.stylesheet.styles.push(line_style(0, 1, Some(2), None));
+        doc.stylesheet
+            .styles
+            .push(line_style(1, 2, None, Some(0.05)));
+        let r = doc
+            .resolve(instance, &CellName::from_static("LineWeight"))
+            .expect("resolves");
+        assert_eq!(r.value, Some(&CellValue::Number(0.05)));
+        assert_eq!(r.source, ValueSource::Style(StyleId { index: 1 }));
     }
 }
 
