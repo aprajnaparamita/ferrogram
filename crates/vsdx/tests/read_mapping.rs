@@ -222,6 +222,13 @@ fn sparse_geometry_rows_merge_with_the_master_rows() {
     // `MoveTo` + the closing rows at `IX` 1..5. The union is the master's
     // closed rectangle, not the instance's open polyline (ADR 0019
     // amendment).
+    //
+    // The `Inh` rows carry this sheet's own snapshots (ADR 0054
+    // amendment, ADR 0057): the instance is 6.98818897637795 in wide
+    // against its master's 1.574803149606299 in, and the snapshots are
+    // the geometry Visio computed at the instance's size (the P3-15 gap
+    // closed). The rows the instance does not carry (`MoveTo`, the `Y`
+    // cells, the closing row) still come from the master's rung.
     let doc = corpus_document!("bgcolor.vsdx");
     let shape = doc
         .shape_by_visio_id(PageId { index: 0 }, 1)
@@ -235,8 +242,8 @@ fn sparse_geometry_rows_merge_with_the_master_rows() {
         ferrogram_model::GeometryRow::MoveTo { x: 0.0, y: 0.0 }
     );
     for (index, (x, y)) in [
-        (1, (1.574803149606299, 0.0)),
-        (2, (1.574803149606299, 1.181102362204724)),
+        (1, (6.98818897637795, 0.0)),
+        (2, (6.98818897637795, 1.181102362204724)),
         (3, (0.0, 1.181102362204724)),
         (4, (0.0, 0.0)),
     ] {
