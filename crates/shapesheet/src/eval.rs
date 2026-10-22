@@ -18,8 +18,9 @@
 //!   value's `#...` becomes the result). `IF` and `IFERROR` are the
 //!   exceptions: `IF` evaluates only the taken branch, `IFERROR` returns
 //!   its alternate expression when the primary one errors.
-//! - **Coercion** follows `about-operators.md` (ADR 0052): an operand
-//!   converts to the type an operator needs when it can, and becomes the
+//! - **Coercion** is [`crate::coerce::coerce`], the one rule of
+//!   `about-operators.md` (ADR 0052): an operand converts to the type an
+//!   operator needs when it can, and becomes the
 //!   typed default of that type (0, `""`, `FALSE`, black) with a
 //!   [`EvalWarningKind::Coercion`] warning when it cannot. A comparison
 //!   converts both sides to numbers, so `"10" > "9"` is `TRUE`.
@@ -35,8 +36,9 @@
 //!   ([`EvalWarningKind::NonFinite`]), a division by zero `#DIV/0!`.
 //! - **Unknown functions** (ADR 0053): a call the [`crate::FUNCTIONS`]
 //!   table does not hold records one [`EvalWarningKind::UnknownFunction`]
-//!   warning (or [`EvalWarningKind::ReservedFunction`] for a reserved
-//!   `_`-prefixed internal name) and the whole evaluation stands back:
+//!   warning and the whole evaluation stands back. A reserved internal
+//!   name (`_MOD`, `ELLIPSE_THETA`) gets the same treatment with its own
+//!   warning text (ADR 0053).
 //!   the caller keeps the cell's cached value. The placeholder value
 //!   [`ErrorCode::Na`] carries that result through [`Result`]; a caller
 //!   must not write it when the warning was recorded. `IFERROR` does not
@@ -55,9 +57,10 @@ use ferrogram_model::{Color, SheetRef};
 
 use crate::Error;
 use crate::ast::{BinaryOp, Expr, ExprKind, Literal, NumberLiteral, UnaryOp};
+use crate::coerce::{ValueKind, coerce};
 use crate::formula::{CellRef, Formula};
 use crate::functions::lookup_function;
-use crate::units::Unit;
+use crate::units::{Unit, UnitFamily, parse_unit};
 use crate::value::{ErrorCode, Number, Value};
 
 /// The deepest expression tree [`eval`] walks (AGENTS.md section 6:
@@ -82,13 +85,11 @@ pub struct EvalWarning {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum EvalWarningKind {
-    /// A function the table does not implement; the cell keeps its cached
-    /// value.
+    /// A function the table does not implement (or a reserved
+    /// `_`-prefixed internal name, ADR 0053); the cell keeps its cached
+    /// value. This is the kind `recalc` maps to the keep-cached rule
+    /// (ADR 0053), so the reserved case carries its own text here.
     UnknownFunction(String),
-    /// A reserved internal name (`_MOD`, `_ELLIPSE_THETA`); the same
-    /// treatment as [`EvalWarningKind::UnknownFunction`] with its own
-    /// warning text (ADR 0053).
-    ReservedFunction(String),
     /// A reference form the resolver cannot answer; the operand becomes
     /// `#REF!`.
     UnsupportedReference(String),
@@ -137,8 +138,7 @@ pub trait EvalContext {
 ///
 /// Evaluation problems are [`Value::Err`] values; `Err` is reserved for
 /// a broken context. When the evaluation records an
-/// [`EvalWarningKind::UnknownFunction`] (or
-/// [`EvalWarningKind::ReservedFunction`]) warning, the caller keeps the
+/// [`EvalWarningKind::UnknownFunction`] warning, the caller keeps the
 /// cell's cached value (ADR 0053) and ignores the returned placeholder.
 pub fn eval(expr: &Expr, sheet: SheetRef, ctx: &mut dyn EvalContext) -> Result<Value, Error> {
     let mut evaluator = Evaluator {
@@ -248,9 +248,9 @@ impl Evaluator<'_> {
         let Some(spelling) = number.unit.as_deref() else {
             return Value::Number(Number::new(number.value, Unit::Unitsless));
         };
-        match unit_from_spelling(spelling) {
-            Some(unit) => Value::Number(Number::new(number.value, unit)),
-            None => {
+        match parse_unit(spelling) {
+            Ok(unit) => Value::Number(Number::new(number.value, unit)),
+            Err(_) => {
                 // The parser rejects unknown units (`SyntaxKind::
                 // InvalidUnit`); only a hand-built tree can reach this.
                 self.warn(EvalWarningKind::Coercion(format!(
@@ -265,8 +265,8 @@ impl Evaluator<'_> {
         let Flow::Value(value) = self.eval_expr(operand, depth + 1)? else {
             return Ok(Flow::KeepCached);
         };
-        if let Value::Err(code) = value {
-            return Ok(Flow::Value(Value::Err(code)));
+        if let Some(blocked) = self.blocked(&value) {
+            return Ok(Flow::Value(blocked));
         }
         let out = match op {
             // A no-op on the value (ADR 0051).
@@ -296,11 +296,11 @@ impl Evaluator<'_> {
         let Flow::Value(r) = self.eval_expr(right, depth + 1)? else {
             return Ok(Flow::KeepCached);
         };
-        if let Value::Err(code) = l {
-            return Ok(Flow::Value(Value::Err(code)));
+        if let Some(blocked) = self.blocked(&l) {
+            return Ok(Flow::Value(blocked));
         }
-        if let Value::Err(code) = r {
-            return Ok(Flow::Value(Value::Err(code)));
+        if let Some(blocked) = self.blocked(&r) {
+            return Ok(Flow::Value(blocked));
         }
         let out = match op {
             BinaryOp::Concat => self.concat(&l, &r),
@@ -441,26 +441,29 @@ impl Evaluator<'_> {
             }
         }
         for value in &values {
-            if let Value::Err(code) = value {
-                return Ok(Flow::Value(Value::Err(*code)));
+            if let Some(blocked) = self.blocked(value) {
+                return Ok(Flow::Value(blocked));
             }
         }
         Ok(Flow::Value(self.apply(def.name, &values)))
     }
 
     /// Records the one warning of an evaluation that stands back (ADR
-    /// 0053): one per formula, naming the first offending function.
+    /// 0053): one per formula, naming the first offending function. A
+    /// reserved internal name carries its own warning text, but stays an
+    /// [`EvalWarningKind::UnknownFunction`] so the caller's keep-cached
+    /// rule sees it.
     fn stand_back(&mut self, name: &str, reserved: bool) {
         if self.unknown.is_some() {
             return;
         }
         self.unknown = Some(String::from(name));
-        let text = String::from(name);
-        self.warn(if reserved {
-            EvalWarningKind::ReservedFunction(text)
+        let text = if reserved {
+            format!("{name} (reserved internal name)")
         } else {
-            EvalWarningKind::UnknownFunction(text)
-        });
+            String::from(name)
+        };
+        self.warn(EvalWarningKind::UnknownFunction(text));
     }
 
     fn eval_if(&mut self, args: &[Expr], depth: u32) -> Result<Flow, Error> {
@@ -470,8 +473,8 @@ impl Evaluator<'_> {
         let Flow::Value(cond) = self.eval_expr(cond, depth + 1)? else {
             return Ok(Flow::KeepCached);
         };
-        if let Value::Err(code) = cond {
-            return Ok(Flow::Value(Value::Err(code)));
+        if let Some(blocked) = self.blocked(&cond) {
+            return Ok(Flow::Value(blocked));
         }
         let taken = if self.coerce_bool(&cond) {
             branches.first()
@@ -508,9 +511,9 @@ impl Evaluator<'_> {
         let Flow::Value(value) = self.eval_expr(value_expr, depth + 1)? else {
             return Ok(Flow::KeepCached);
         };
-        // An error value is not written into another cell.
-        if let Value::Err(code) = value {
-            return Ok(Flow::Value(Value::Err(code)));
+        // An error or non-finite value is not written into another cell.
+        if let Some(blocked) = self.blocked(&value) {
+            return Ok(Flow::Value(blocked));
         }
         if let ExprKind::Ref(reference) = &target.kind {
             return match self.ctx.set_cell(self.sheet, reference, value.clone()) {
@@ -898,81 +901,68 @@ impl Evaluator<'_> {
         ))
     }
 
-    /// Coerces a value to a numeric operand (ADR 0052): the magnitude in
-    /// the family's canonical unit. A value that cannot convert becomes
-    /// zero with a [`EvalWarningKind::Coercion`] warning.
-    fn coerce_num(&mut self, value: &Value) -> Num {
+    /// Error values propagate and a non-finite number is `#NUM!` at the
+    /// source (ADR 0052); both short-circuit the caller. `Some` carries
+    /// the value to return instead of computing.
+    fn blocked(&mut self, value: &Value) -> Option<Value> {
         match value {
-            Value::Number(number) => Num {
-                magnitude: number.magnitude * canonical_scale(number.unit),
-                family: family_of(number.unit),
-            },
-            Value::Str(text) => match text.trim().parse::<f64>() {
-                Ok(magnitude) => Num {
-                    magnitude,
-                    family: None,
-                },
-                Err(_) => {
-                    self.warn(EvalWarningKind::Coercion(format!(
-                        "string {text:?} defaults to zero"
-                    )));
-                    Num {
-                        magnitude: 0.0,
-                        family: None,
-                    }
-                }
-            },
-            Value::Bool(flag) => Num {
-                magnitude: if *flag { 1.0 } else { 0.0 },
-                family: None,
-            },
-            Value::Color(color) => Num {
-                magnitude: pack_color(*color),
-                family: None,
-            },
-            Value::List(_) => {
-                self.warn(EvalWarningKind::Coercion(String::from(
-                    "list defaults to zero",
-                )));
-                Num {
-                    magnitude: 0.0,
-                    family: None,
-                }
+            Value::Err(code) => Some(Value::Err(*code)),
+            Value::Number(number) if !number.magnitude.is_finite() => {
+                self.warn(EvalWarningKind::NonFinite);
+                Some(Value::Err(ErrorCode::Num))
             }
-            Value::Err(_) => {
-                self.warn(EvalWarningKind::Coercion(String::from(
-                    "error value defaults to zero",
-                )));
-                Num {
-                    magnitude: 0.0,
-                    family: None,
-                }
-            }
+            _ => None,
         }
     }
 
-    /// Coerces a value to a boolean (ADR 0052: zero is `FALSE`).
-    fn coerce_bool(&mut self, value: &Value) -> bool {
-        match value {
-            Value::Bool(flag) => *flag,
-            Value::Number(number) => number.magnitude * canonical_scale(number.unit) != 0.0,
-            Value::Str(text) => match text.trim().to_ascii_uppercase().as_str() {
-                "TRUE" => true,
-                "FALSE" => false,
-                _ => {
-                    self.warn(EvalWarningKind::Coercion(format!(
-                        "string {text:?} defaults to FALSE"
-                    )));
-                    false
-                }
+    /// Coerces a value to a numeric operand through [`crate::coerce::coerce`]
+    /// (ADR 0052): the magnitude in the family's canonical unit. A value
+    /// that cannot convert becomes zero with one
+    /// [`EvalWarningKind::Coercion`] warning.
+    fn coerce_num(&mut self, value: &Value) -> Num {
+        let coerced = coerce(value, ValueKind::Number);
+        if coerced.defaulted {
+            self.warn(EvalWarningKind::Coercion(String::from(
+                "value defaults to zero",
+            )));
+            return Num {
+                magnitude: 0.0,
+                family: None,
+            };
+        }
+        match coerced.value {
+            Value::Number(number) => Num {
+                // `to_canonical` cannot fail (ADR 0052).
+                magnitude: number
+                    .unit
+                    .to_canonical(number.magnitude)
+                    .unwrap_or(number.magnitude),
+                family: family_of(number.unit),
             },
-            Value::Color(color) => pack_color(*color) != 0.0,
-            Value::List(_) | Value::Err(_) => {
-                self.warn(EvalWarningKind::Coercion(String::from(
-                    "value defaults to FALSE",
-                )));
-                false
-            }
+            // `coerce` passes an error value through; the callers filter
+            // those first, so only a non-finite numeric string lands
+            // here. Its `NaN` makes every computation non-finite, which
+            // `number_result` turns into `#NUM!`.
+            _ => Num {
+                magnitude: f64::NAN,
+                family: None,
+            },
+        }
+    }
+
+    /// Coerces a value to a boolean through [`crate::coerce::coerce`]
+    /// (ADR 0052: zero is `FALSE`; anything that cannot convert is
+    /// `FALSE` with one [`EvalWarningKind::Coercion`] warning).
+    fn coerce_bool(&mut self, value: &Value) -> bool {
+        let coerced = coerce(value, ValueKind::Bool);
+        if coerced.defaulted {
+            self.warn(EvalWarningKind::Coercion(String::from(
+                "value defaults to FALSE",
+            )));
+        }
+        match coerced.value {
+            Value::Bool(flag) => flag,
+            _ => false,
         }
     }
 
@@ -1010,175 +1000,29 @@ fn split_list<'a>(text: &'a str, delimiter: &str) -> Vec<&'a str> {
     text.split(delimiter).collect()
 }
 
-/// The text of a value for `&`, `STRSAME` and the list functions
-/// (ADR 0052's number-to-string conversion).
+/// The text of a value for `&`, `STRSAME` and the list functions: the
+/// one number-to-string conversion of ADR 0052, through
+/// [`crate::coerce::coerce`] to [`ValueKind::Str`].
 fn text_of(value: &Value) -> String {
-    match value {
-        Value::Str(text) => text.clone(),
-        Value::Number(number) => display_number(number.magnitude),
-        Value::Bool(true) => String::from("TRUE"),
-        Value::Bool(false) => String::from("FALSE"),
-        Value::Color(color) => display_number(pack_color(*color)),
-        Value::List(items) => {
-            let mut out = String::new();
-            for (index, item) in items.iter().enumerate() {
-                if index > 0 {
-                    out.push(';');
-                }
-                out.push_str(&text_of(item));
-            }
-            out
-        }
-        // Callers propagate error values before they stringify.
+    match coerce(value, ValueKind::Str).value {
+        Value::Str(text) => text,
         Value::Err(code) => String::from(code.as_str()),
+        // `coerce` to a string yields one of the two arms above.
+        _ => String::new(),
     }
 }
 
-/// Prints a magnitude the way a number converts to a string: no
-/// decimals for a whole number, the shortest round-trip form otherwise.
-fn display_number(magnitude: f64) -> String {
-    if magnitude == 0.0 {
-        return String::from("0");
+/// The computation family of a unit (ADR 0052): typographic units
+/// compute as lengths (points for display, inches for computation) and a
+/// percent computes as a plain fraction.
+fn family_of(unit: Unit) -> Option<Family> {
+    match unit.family() {
+        Ok(UnitFamily::Length) | Ok(UnitFamily::Typographic) => Some(Family::Length),
+        Ok(UnitFamily::Angle) => Some(Family::Angle),
+        Ok(UnitFamily::Duration) => Some(Family::Duration),
+        Ok(UnitFamily::Ratio) | Ok(UnitFamily::Dimensionless) => None,
+        Err(_) => None,
     }
-    if magnitude.fract() == 0.0 && magnitude.abs() < 1e15 {
-        format!("{magnitude:.0}")
-    } else {
-        format!("{magnitude}")
-    }
-}
-
-/// A colour as the number Visio's `RGB` spellings carry: red, then
-/// green, then blue in the high byte.
-fn pack_color(color: Color) -> f64 {
-    f64::from(color.r) + f64::from(color.g) * 256.0 + f64::from(color.b) * 65_536.0
-}
-
-/// The family a unit measures (ADR 0052). Typographic units compute as
-/// lengths (points for display, inches for computation).
-const fn family_of(unit: Unit) -> Option<Family> {
-    match unit {
-        Unit::Inches
-        | Unit::Feet
-        | Unit::Yards
-        | Unit::Miles
-        | Unit::NauticalMiles
-        | Unit::Millimeters
-        | Unit::Centimeters
-        | Unit::Meters
-        | Unit::Kilometers
-        | Unit::Points
-        | Unit::Picas
-        | Unit::Ciceros
-        | Unit::Didots
-        | Unit::InchesFractional
-        | Unit::MilesFractional
-        | Unit::FeetAndInches
-        | Unit::PicasAndPoints
-        | Unit::CicerosAndDidots
-        | Unit::ImplicitDrawing
-        | Unit::ImplicitPage
-        | Unit::ImplicitType => Some(Family::Length),
-        Unit::Degrees
-        | Unit::Radians
-        | Unit::Minutes
-        | Unit::Seconds
-        | Unit::DegreeMinSec
-        | Unit::ImplicitAngle => Some(Family::Angle),
-        Unit::ElapsedWeeks
-        | Unit::ElapsedDays
-        | Unit::ElapsedHours
-        | Unit::ElapsedMinutes
-        | Unit::ElapsedSeconds
-        | Unit::DateTime
-        | Unit::ImplicitDuration => Some(Family::Duration),
-        Unit::Percent | Unit::Unitsless => None,
-    }
-}
-
-/// The factor that turns a magnitude into the family's canonical unit
-/// (inches, radians, fraction, seconds; ADR 0052).
-///
-/// The typographic factors are the international typographic ones (1 pt
-/// = 1/72 in, 1 didot = 0.375 971 5 mm) and the nautical mile is the
-/// international one (1852 m): the reference names the units but gives
-/// no factors, so these are our own constants (flagged in the P6-04
-/// Result). The compound spellings carry the scale of the first unit
-/// they name and are display spellings no corpus formula computes with.
-const fn canonical_scale(unit: Unit) -> f64 {
-    match unit {
-        Unit::Inches
-        | Unit::InchesFractional
-        | Unit::ImplicitDrawing
-        | Unit::ImplicitPage
-        | Unit::ImplicitType
-        | Unit::Unitsless => 1.0,
-        Unit::Feet | Unit::FeetAndInches => 12.0,
-        Unit::Yards => 36.0,
-        Unit::Miles | Unit::MilesFractional => 63_360.0,
-        Unit::NauticalMiles => 72_913.385_826_771_65,
-        Unit::Millimeters => 1.0 / 25.4,
-        Unit::Centimeters => 1.0 / 2.54,
-        Unit::Meters => 100.0 / 2.54,
-        Unit::Kilometers => 100_000.0 / 25.4,
-        Unit::Points => 1.0 / 72.0,
-        Unit::Picas | Unit::PicasAndPoints => 1.0 / 6.0,
-        Unit::Ciceros | Unit::CicerosAndDidots => 12.0 * 0.375_971_5 / 25.4,
-        Unit::Didots => 0.375_971_5 / 25.4,
-        Unit::Degrees | Unit::DegreeMinSec => std::f64::consts::PI / 180.0,
-        Unit::Radians | Unit::ImplicitAngle => 1.0,
-        Unit::Minutes => std::f64::consts::PI / 10_800.0,
-        Unit::Seconds => std::f64::consts::PI / 64_800.0,
-        Unit::Percent => 0.01,
-        Unit::ElapsedWeeks => 604_800.0,
-        Unit::ElapsedDays | Unit::DateTime => 86_400.0,
-        Unit::ElapsedHours => 3_600.0,
-        Unit::ElapsedMinutes => 60.0,
-        Unit::ElapsedSeconds | Unit::ImplicitDuration => 1.0,
-    }
-}
-
-/// The unit a unit spelling names (`in`, `DEG`, `%`; ADR 0052). Case
-/// matches the universal strings of `about-units-of-measure.md`.
-fn unit_from_spelling(spelling: &str) -> Option<Unit> {
-    let upper = spelling.to_ascii_uppercase();
-    Some(match upper.as_str() {
-        "IN" => Unit::Inches,
-        "FT" => Unit::Feet,
-        "YD" => Unit::Yards,
-        "MI" => Unit::Miles,
-        "NM" => Unit::NauticalMiles,
-        "MM" => Unit::Millimeters,
-        "CM" => Unit::Centimeters,
-        "M" => Unit::Meters,
-        "KM" => Unit::Kilometers,
-        "PT" => Unit::Points,
-        "P" => Unit::Picas,
-        "C" => Unit::Ciceros,
-        "D" => Unit::Didots,
-        "DEG" => Unit::Degrees,
-        "RAD" => Unit::Radians,
-        "'" => Unit::Minutes,
-        "\"" => Unit::Seconds,
-        "°" => Unit::DegreeMinSec,
-        "%" => Unit::Percent,
-        "EW" => Unit::ElapsedWeeks,
-        "ED" => Unit::ElapsedDays,
-        "EH" => Unit::ElapsedHours,
-        "EM" => Unit::ElapsedMinutes,
-        "ES" => Unit::ElapsedSeconds,
-        "DATE" => Unit::DateTime,
-        "IN_F" => Unit::InchesFractional,
-        "MI_F" => Unit::MilesFractional,
-        "FEET/INCH" => Unit::FeetAndInches,
-        "PICAPOINTS" => Unit::PicasAndPoints,
-        "CICERO/DIDOT" => Unit::CicerosAndDidots,
-        "DL" => Unit::ImplicitDrawing,
-        "DP" => Unit::ImplicitPage,
-        "DT" => Unit::ImplicitType,
-        "DA" => Unit::ImplicitAngle,
-        "DE" => Unit::ImplicitDuration,
-        _ => return None,
-    })
 }
 
 #[cfg(test)]
@@ -1254,21 +1098,17 @@ mod tests {
     }
 
     #[test]
-    fn unit_spellings_name_every_unit_the_value_type_carries() {
-        assert_eq!(unit_from_spelling("in"), Some(Unit::Inches));
-        assert_eq!(unit_from_spelling("DEG"), Some(Unit::Degrees));
-        assert_eq!(unit_from_spelling("°"), Some(Unit::DegreeMinSec));
-        assert_eq!(unit_from_spelling("FEET/INCH"), Some(Unit::FeetAndInches));
-        assert_eq!(unit_from_spelling("sq in"), None);
-    }
-
-    #[test]
-    fn canonical_scales_convert_to_inches_radians_and_seconds() {
-        assert_eq!(canonical_scale(Unit::Feet), 12.0);
-        assert_eq!(canonical_scale(Unit::Points), 1.0 / 72.0);
-        assert!((canonical_scale(Unit::Degrees) - std::f64::consts::PI / 180.0).abs() < 1e-12);
-        assert_eq!(canonical_scale(Unit::ElapsedHours), 3_600.0);
-        assert_eq!(canonical_scale(Unit::Percent), 0.01);
+    fn a_number_literal_reads_its_unit_through_the_unit_table() {
+        let mut ctx = NullContext;
+        let expr = literal(Literal::Number(NumberLiteral {
+            value: 5.0,
+            unit: Some(String::from("ft")),
+            flag: Some('d'),
+        }));
+        assert_eq!(
+            eval(&expr, sheet(), &mut ctx),
+            Ok(Value::Number(Number::new(5.0, Unit::Feet)))
+        );
     }
 
     #[test]
@@ -1278,21 +1118,19 @@ mod tests {
         assert_eq!(Family::Duration.canonical_unit(), Unit::ElapsedSeconds);
         assert_eq!(family_of(Unit::Points), Some(Family::Length));
         assert_eq!(family_of(Unit::Percent), None);
+        assert_eq!(family_of(Unit::Radians), Some(Family::Angle));
+        assert_eq!(family_of(Unit::ElapsedDays), Some(Family::Duration));
     }
 
     #[test]
-    fn a_number_prints_without_decimals_when_whole() {
-        assert_eq!(display_number(10.0), "10");
-        assert_eq!(display_number(2.5), "2.5");
-        assert_eq!(display_number(-0.0), "0");
-        assert_eq!(display_number(1.0 / 3.0), "0.3333333333333333");
-    }
-
-    #[test]
-    fn colours_pack_like_visio_rgb_values() {
-        let blue = Color::new(0, 0, 255);
-        assert_eq!(pack_color(blue), 16_711_680.0);
-        assert_eq!(pack_color(Color::new(0, 0, 0)), 0.0);
+    fn text_of_follows_the_one_string_conversion() {
+        assert_eq!(
+            text_of(&Value::Number(Number::new(10.0, Unit::Unitsless))),
+            "10"
+        );
+        assert_eq!(text_of(&Value::Bool(true)), "TRUE");
+        assert_eq!(text_of(&Value::Color(Color::new(0, 0, 255))), "#0000FF");
+        assert_eq!(text_of(&Value::Err(ErrorCode::Value)), "#VALUE!");
     }
 
     #[test]
@@ -1318,7 +1156,6 @@ mod tests {
     fn warning_kinds_cover_the_evaluator_events() {
         let kinds = [
             EvalWarningKind::UnknownFunction(String::from("THEMEVAL")),
-            EvalWarningKind::ReservedFunction(String::from("_MOD")),
             EvalWarningKind::UnsupportedReference(String::from("Pages[1]!Width")),
             EvalWarningKind::Coercion(String::from("defaults to zero")),
             EvalWarningKind::NonFinite,
@@ -1331,6 +1168,6 @@ mod tests {
             EvalWarningKind::SetfRefused(String::from("PinX")),
             EvalWarningKind::Cycle,
         ];
-        assert_eq!(kinds.len(), 8);
+        assert_eq!(kinds.len(), 7);
     }
 }

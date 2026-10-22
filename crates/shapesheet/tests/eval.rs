@@ -925,13 +925,15 @@ fn iferror_does_not_catch_the_unknown_function_path() {
 }
 
 #[test]
-fn a_reserved_internal_name_warns_with_its_own_kind() {
+fn a_reserved_internal_name_keeps_the_cached_value_path_with_its_own_text() {
     let mut ctx = Ctx::new();
     let out = run(&call("_MOD", vec![plain(1.0), plain(2.0)]), &mut ctx);
     assert_eq!(out, Value::Err(ErrorCode::Na));
+    // The reserved case is the same keep-cached rule with its own
+    // warning text (ADR 0053).
     assert!(matches!(
         one_warning(&ctx),
-        EvalWarningKind::ReservedFunction(name) if name == "_MOD"
+        EvalWarningKind::UnknownFunction(name) if name == "_MOD (reserved internal name)"
     ));
 }
 
