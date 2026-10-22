@@ -365,7 +365,9 @@ fn a_named_row_resolves_to_its_default_cell() {
 
 #[test]
 fn a_numbered_section_names_the_section_instance() {
-    // `Geometry1.X2` -> `Geometry` section 1, row 2, `X` cell.
+    // `Geometry1.X2` -> the **first** `Geometry` section, the row with
+    // `IX` 2, `X` cell (ADR 0054's table; the corpus' cached values pin
+    // both: `Geometry1.X1` caches the first section's `IX` 1 row).
     let mut fixture = Fixture::new();
     let first = section(
         "Geometry",
@@ -385,22 +387,32 @@ fn a_numbered_section_names_the_section_instance() {
     );
     {
         let sheet = &mut fixture.doc.shape_mut(fixture.target).expect("target").sheet;
-        sheet.sections.push(first);
-        sheet.sections.push(second);
+        for mut section in [first, second] {
+            for (position, row) in section.rows.iter_mut().enumerate() {
+                row.ix = Some(i32::try_from(position.saturating_add(1)).unwrap_or(i32::MAX));
+            }
+            sheet.sections.push(section);
+        }
     }
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
-    for (section_name, expected_value) in [("Geometry", 2.0), ("Geometry1", 11.0)] {
+    for (section_name, row_name, expected_value) in [
+        ("Geometry", "X2", 1.5),
+        ("Geometry1", "X2", 1.5),
+        ("Geometry2", "X2", 10.5),
+        ("Geometry2", "X3", 11.0),
+    ] {
         let reference = CellRef {
             sheets: Vec::new(),
             section: Some(section_name.to_owned()),
-            names: vec![String::from("X2")],
+            names: vec![String::from(row_name)],
         };
         let resolved = resolver
             .resolve(SheetRef::Shape(fixture.target), &reference)
             .expect("resolves");
         assert_eq!(
             resolved.value,
-            expected(CellValue::Number(expected_value), Unit::Inches)
+            expected(CellValue::Number(expected_value), Unit::Inches),
+            "{section_name}.{row_name}"
         );
     }
 }
@@ -456,14 +468,18 @@ fn a_masters_named_sub_shape_resolves() {
     );
     {
         let sheet = &mut fixture.doc.shape_mut(shaft).expect("shaft").sheet;
-        sheet.sections.push(first);
-        sheet.sections.push(second);
+        for mut section in [first, second] {
+            for (position, row) in section.rows.iter_mut().enumerate() {
+                row.ix = Some(i32::try_from(position.saturating_add(1)).unwrap_or(i32::MAX));
+            }
+            sheet.sections.push(section);
+        }
     }
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
         sheets: vec![String::from("Masters[Gear]"), String::from("Shaft")],
-        section: Some(String::from("Geometry1")),
-        names: vec![String::from("X1")],
+        section: Some(String::from("Geometry2")),
+        names: vec![String::from("X2")],
     };
     let resolved = resolver
         .resolve(SheetRef::Shape(fixture.target), &reference)
