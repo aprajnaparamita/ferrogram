@@ -5,10 +5,11 @@
 //! literal that does not parse is [`Error::InvalidPackage`] naming the
 //! part and the cell (never the value), every other bad or extreme
 //! spelling degrades to a value of another kind, and **nothing panics**.
-//! Huge numeric literals are the interesting corner: they parse to the
-//! IEEE infinity (the doc's "does not parse" rule sees them as parsed),
-//! and the suite pins that outcome so a future hardening (rejecting
-//! non-finite literals as the writer does) shows up as a test change.
+//! A numeric literal must be **finite** (task P6-18 F9, the P6-11
+//! hardening): `1e999999`, `inf` and `nan` parse to the IEEE infinity
+//! or NaN and are rejected like a literal that does not parse — the
+//! writer refuses to write a non-finite number and the evaluator maps
+//! one to `#NUM!`, so a file holding one is malformed for us.
 
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
@@ -157,34 +158,59 @@ fn a_boolean_that_is_neither_zero_nor_one_is_an_error() {
     }
 }
 
-/// P6-11: a huge numeric literal parses to the IEEE infinity and the
-/// reader keeps it as a number (see the module docs: this is the pinned
-/// outcome of today's parser, not a recommendation).
+/// Task P6-18 F9 (the P6-11 hardening, changed deliberately): a huge
+/// numeric literal parses to the IEEE infinity and is **rejected** —
+/// one `InvalidPackage` naming the part and the cell, never the value.
 #[test]
-fn a_huge_numeric_literal_keeps_the_ieee_infinity() {
+fn a_huge_numeric_literal_is_rejected() {
     let mut huge = String::from("9");
     huge.push_str(&"0".repeat(400));
     for v in ["1e999999", "-1e999999", huge.as_str()] {
-        let cell = read_cell(&[("N", "Width"), ("U", "IN"), ("V", v)]).expect("reads");
-        match cell.value {
-            Some(CellValue::Number(number)) => assert!(number.is_infinite(), "V={v:?} -> {number}"),
-            other => panic!("expected a number for V={v:?}, got {other:?}"),
-        }
+        let message = message(&[("N", "Width"), ("U", "IN"), ("V", v)]);
+        assert!(message.contains("page1.xml"), "{message}");
+        assert!(message.contains("Width"), "{message}");
+        assert!(message.contains("not finite"), "{message}");
+        assert!(!message.contains(v), "the value is never quoted: {message}");
     }
 }
 
-/// P6-11: `nan` and `inf` parse under a numeric code too: the value is
-/// kept as the parsed float, whatever it is, and nothing panics.
+/// Task P6-18 F9 (the P6-11 hardening, changed deliberately): `nan`
+/// and `inf` spellings are rejected the same way, and the no-`U` code
+/// path classifies by shape and rejects a non-finite number there too.
 #[test]
-fn a_non_finite_spelling_keeps_the_parsed_float() {
+fn a_non_finite_spelling_is_rejected() {
     for v in ["nan", "inf", "-inf", "NaN", "INF"] {
-        let cell = read_cell(&[("N", "Width"), ("U", "IN"), ("V", v)]).expect("reads");
         assert!(
-            matches!(cell.value, Some(CellValue::Number(number)) if !number.is_finite()),
-            "V={v:?} -> {:?}",
-            cell.value
+            message(&[("N", "Width"), ("U", "IN"), ("V", v)]).contains("not finite"),
+            "U=IN V={v:?}"
+        );
+        assert!(
+            message(&[("N", "Width"), ("V", v)]).contains("not finite"),
+            "no U code V={v:?}"
         );
     }
+}
+
+/// Task P6-18 (the coverage report's reader item): a `V` declared
+/// `COLOR` whose text is no `#RGB`/`#RRGGBB` literal keeps the raw text
+/// as a `Str` — a themed or indexed colour is data, and a junk text is
+/// kept the same way (the kind degrades, the read never fails).
+#[test]
+fn junk_colour_text_keeps_the_raw_text_as_a_string() {
+    for v in ["ThemeColor5", "3", "", "#12345", "#GGGGGG"] {
+        let cell = read_cell(&[("N", "FillForegnd"), ("U", "COLOR"), ("V", v)]).expect("reads");
+        assert_eq!(
+            cell.value,
+            Some(CellValue::Str(v.to_owned())),
+            "U=COLOR V={v:?}"
+        );
+    }
+    // A real colour literal still parses.
+    let cell = read_cell(&[("N", "FillForegnd"), ("U", "COLOR"), ("V", "#FF8000")]).expect("reads");
+    assert_eq!(
+        cell.value,
+        Some(CellValue::Color(ferrogram_model::Color::new(255, 128, 0)))
+    );
 }
 
 /// P6-11: an error cell keeps its `E` text verbatim and preserves the
