@@ -34,7 +34,7 @@ Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard.
 | [P7-13](tasks/P7-13.md) | cleanroom-auditor | P7-10 | E | waiting | — |
 | [P7-14](tasks/P7-14.md) | implementer | P7-11..P7-13 | F | waiting (fixes, phase report) | — |
 
-Tasks start as soon as their own dependencies merge (no whole-group waits); run at most six workers at once across Phase 7 and Phase 8.
+Tasks start as soon as their own dependencies merge (no whole-group waits); run at most twelve workers at once across Phase 7 and Phase 8.
 
 ## Phase 8 task board (plan: written by P8-01)
 

@@ -135,10 +135,13 @@ image loader before any worker starts. So:
   P7-03, never an edit to `crates/ui-spec`.
 - P7-08 still waits for P7-02, because both touch command predicates.
 
-**Machine load.** Eight Phase 7 workers plus the Phase 8 workers are
-more builds than one machine runs well (the P6-13 audit found it at 0%
-idle). Run at most six workers at once; start the large-tier tasks
-first (P7-03, P7-06, P7-07 and the biggest Phase 8 tasks).
+**Machine load.** Run at most twelve workers at once across Phase 7
+and Phase 8 (the user's limit, 2026-10-23). That fits wave 1's eight
+Phase 7 tasks plus four Phase 8 tasks. When more are ready, start the
+large-tier tasks first (P7-03, P7-06, P7-07 and the biggest Phase 8
+tasks). Orphaned processes left by other tools can still starve the
+machine (the P6-13 audit found it at 0% idle); check before blaming a
+slow worker.
 
 **Merging.** The master merges in arrival order. When several branches
 wait, it merges up to three rebased branches and runs one full gate
