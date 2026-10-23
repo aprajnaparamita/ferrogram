@@ -19,7 +19,7 @@ pub enum Error {
     /// The mutation would make a shape its own ancestor (ADR 0039).
     WouldCycle,
     /// A cell write names a cell, row or value that is not valid (a missing
-    /// row, a non-finite number, a zero-size `scale_geometry` source).
+    /// row, a non-finite number, a stale Shape Data row key).
     BadCell(&'static str),
     /// A mutation would grow a document past its cap on input-derived
     /// counts (AGENTS.md section 6).

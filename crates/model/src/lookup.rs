@@ -1090,6 +1090,133 @@ fn unit_from_name(name: &str) -> Option<Unit> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shape Data (`Property`) rows: the row union of a shape and its masters
+// (task P6-18, the P6-09 note).
+// ---------------------------------------------------------------------------
+
+/// The section name of a shape's Shape Data rows.
+pub(crate) const PROPERTY_SECTION: &str = "Property";
+
+/// The deepest master chain [`Document::property_rows`] walks.
+const MAX_PROPERTY_CHAIN: usize = 32;
+
+/// One Shape Data (`Property`) row of a shape: its own row, or one it
+/// inherits from its master chain (ADR 0019's row union at the row
+/// granularity, task P6-18).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyRow {
+    /// The row's key (`Prop.<row>.Value`): its `N` name, or `Row_<n>`
+    /// for the row at 1-based position `n` when it has no name.
+    pub key: String,
+    /// The row itself (a copy: own and master rows are different shapes).
+    pub row: crate::section::Row,
+    /// The row's position in its section's rows.
+    pub position: usize,
+    /// Whether the master chain defines the row (an edit writes a local
+    /// row on the instance, the P6-09 note).
+    pub inherited: bool,
+}
+
+impl Document {
+    /// The `Property` rows of `shape`: its own rows in file order, then
+    /// the rows of its master chain (ADR 0013's rung order) that no own
+    /// row claims. The shape's own row wins on a key clash; a deleted own
+    /// row claims its key and hides the inherited row (the ADR 0019 row
+    /// union rule). A cyclic master chain is cut as in [`CellLookup`]
+    /// and the walk is bounded (32 rungs).
+    pub fn property_rows(&self, shape: ShapeId) -> Vec<PropertyRow> {
+        let mut rows = Vec::new();
+        let mut claimed: Vec<String> = Vec::new();
+        if let Some(entity) = self.shape(shape) {
+            for section in &entity.sheet.sections {
+                if section.name.as_str() != PROPERTY_SECTION {
+                    continue;
+                }
+                for (position, row) in section.rows.iter().enumerate() {
+                    let key = property_row_key(row, position);
+                    claimed.push(key.clone());
+                    if row.is_deleted() {
+                        continue;
+                    }
+                    rows.push(PropertyRow {
+                        key,
+                        row: row.clone(),
+                        position,
+                        inherited: false,
+                    });
+                }
+            }
+        }
+        for rung in self.master_chain_shapes(shape, MAX_PROPERTY_CHAIN) {
+            let Some(entity) = self.shape(rung) else {
+                continue;
+            };
+            for section in &entity.sheet.sections {
+                if section.name.as_str() != PROPERTY_SECTION {
+                    continue;
+                }
+                for (position, row) in section.rows.iter().enumerate() {
+                    let key = property_row_key(row, position);
+                    if row.is_deleted()
+                        || claimed.iter().any(|seen| seen.eq_ignore_ascii_case(&key))
+                    {
+                        continue;
+                    }
+                    claimed.push(key.clone());
+                    rows.push(PropertyRow {
+                        key,
+                        row: row.clone(),
+                        position,
+                        inherited: true,
+                    });
+                }
+            }
+        }
+        rows
+    }
+}
+
+/// The key of one Shape Data row: its `N` name, or `Row_<n>` for the row
+/// at 1-based position `n` when it has no name.
+pub(crate) fn property_row_key(row: &crate::section::Row, position: usize) -> String {
+    match row.name.as_deref() {
+        Some(name) => name.to_owned(),
+        None => format!("Row_{}", position.saturating_add(1)),
+    }
+}
+
+/// The position of the live `Property` row of `sheet` whose key is
+/// `key`: a row-name match first, then the `Row_<n>` position form.
+/// Names match case-insensitively (ADR 0054); a deleted row never
+/// matches (it hides the inherited row instead).
+pub(crate) fn find_property_row(sheet: &Sheet, key: &str) -> Option<usize> {
+    let section = sheet
+        .sections
+        .iter()
+        .find(|entry| entry.name.as_str() == PROPERTY_SECTION)?;
+    let mut by_position = None;
+    for (position, row) in section.rows.iter().enumerate() {
+        if row.is_deleted() {
+            continue;
+        }
+        if row
+            .name
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case(key))
+        {
+            return Some(position);
+        }
+        if by_position.is_none()
+            && row.name.is_none()
+            && property_row_key(row, position).eq_ignore_ascii_case(key)
+        {
+            by_position = Some(position);
+        }
+    }
+    by_position
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3424,5 +3551,117 @@ mod phase3_tests {
 
         // A shape of no master has no rungs.
         assert!(doc.master_chain_shapes(many, 128).is_empty());
+    }
+
+    /// A `Property` row with the given name (or none) and cells.
+    fn property_row(name: Option<&str>, cells: Vec<Cell>) -> crate::section::Row {
+        let mut row = crate::section::Row::new();
+        row.name = name.map(str::to_owned);
+        row.cells = cells;
+        row
+    }
+
+    /// A `Property` section holding `rows`.
+    fn property_section(rows: Vec<crate::section::Row>) -> Section {
+        let mut section = Section::new(crate::name::SectionName::from_static("Property"));
+        section.rows = rows;
+        section
+    }
+
+    /// A shape with `rows` as its `Property` section.
+    fn shape_with_properties(doc: &mut Document, rows: Vec<crate::section::Row>) -> ShapeId {
+        let id = doc.add_shape(crate::shape::Shape::new(ShapeId { index: 0 }, 1));
+        doc.shape_mut(id)
+            .expect("shape")
+            .sheet
+            .sections
+            .push(property_section(rows));
+        id
+    }
+
+    #[test]
+    fn property_rows_carry_keys_and_skip_deleted_rows() {
+        let mut doc = Document::new();
+        let named = property_row(Some("Cost"), vec![number_cell("Value", 2.0)]);
+        let unnamed = property_row(None, vec![number_cell("Value", 3.0)]);
+        let mut gone = property_row(Some("Gone"), Vec::new());
+        gone.preserved.attributes.push(crate::raw::XmlAttribute {
+            name: crate::raw::QName::local("Del"),
+            value: "1".to_owned(),
+        });
+        let shape = shape_with_properties(&mut doc, vec![named, unnamed, gone]);
+        let rows = doc.property_rows(shape);
+        let keys: Vec<&str> = rows.iter().map(|entry| entry.key.as_str()).collect();
+        assert_eq!(keys, vec!["Cost", "Row_2"]);
+        assert!(rows.iter().all(|entry| !entry.inherited));
+    }
+
+    #[test]
+    fn property_rows_add_the_master_chain_rows_the_shape_does_not_claim() {
+        let mut doc = Document::new();
+        let own = property_row(Some("Cost"), vec![number_cell("Value", 2.0)]);
+        let mut gone = property_row(Some("Gone"), Vec::new());
+        gone.preserved.attributes.push(crate::raw::XmlAttribute {
+            name: crate::raw::QName::local("Del"),
+            value: "1".to_owned(),
+        });
+        let instance = shape_with_properties(&mut doc, vec![own, gone]);
+        let rung = shape_with_properties(
+            &mut doc,
+            vec![
+                property_row(Some("Cost"), vec![number_cell("Value", 9.0)]),
+                property_row(Some("Label"), Vec::new()),
+                property_row(Some("Gone"), Vec::new()),
+            ],
+        );
+        let mut master = crate::master::Master::new(MasterId { index: 0 }, 1);
+        master.shapes = vec![rung];
+        doc.masters.push(master);
+        doc.shape_mut(instance).expect("shape").master = Some(MasterId { index: 0 });
+
+        let rows = doc.property_rows(instance);
+        let keys: Vec<&str> = rows.iter().map(|entry| entry.key.as_str()).collect();
+        // The own `Cost` wins the clash and the deleted own `Gone`
+        // hides the master's row (the ADR 0019 row union rule).
+        assert_eq!(keys, vec!["Cost", "Label"]);
+        assert!(!rows[0].inherited);
+        assert!(rows[1].inherited);
+        assert_eq!(
+            rows[0].row.cells.first().map(|cell| cell.value.clone()),
+            Some(Some(CellValue::Number(2.0)))
+        );
+
+        // A stale shape id lists nothing.
+        assert!(doc.property_rows(ShapeId { index: 999 }).is_empty());
+    }
+
+    #[test]
+    fn find_property_row_matches_a_name_before_a_position_key() {
+        let mut doc = Document::new();
+        let named = property_row(Some("Cost"), Vec::new());
+        let first = property_row(None, Vec::new());
+        let second = property_row(None, Vec::new());
+        let shape = shape_with_properties(&mut doc, vec![named, first, second]);
+        let sheet = &doc.shape(shape).expect("shape").sheet;
+        // A named row is keyed by its name, an unnamed row by its
+        // 1-based position (`Row_<n>`).
+        assert_eq!(find_property_row(sheet, "Cost"), Some(0));
+        assert_eq!(find_property_row(sheet, "Row_2"), Some(1));
+        assert_eq!(find_property_row(sheet, "Row_3"), Some(2));
+        assert_eq!(find_property_row(sheet, "Row_1"), None);
+        assert_eq!(find_property_row(sheet, "Nope"), None);
+
+        // A row named `Row_2` claims that key over the unnamed row at
+        // position 2: a name beats the synthesized key.
+        let mut doc = Document::new();
+        let first = property_row(None, Vec::new());
+        let named = property_row(Some("Row_1"), Vec::new());
+        let shape = shape_with_properties(&mut doc, vec![first, named]);
+        let sheet = &doc.shape(shape).expect("shape").sheet;
+        assert_eq!(find_property_row(sheet, "Row_1"), Some(1));
+
+        // A sheet without the section resolves nothing.
+        let empty = crate::sheet::Sheet::new();
+        assert_eq!(find_property_row(&empty, "Row_1"), None);
     }
 }
