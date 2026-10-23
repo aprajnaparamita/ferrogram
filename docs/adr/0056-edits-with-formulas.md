@@ -79,6 +79,29 @@ value like any other cell (ADR 0057).
   cycle rule (ADR 0055). The `SETATREF` family is not evaluated (ADR
   0053) and keeps its cached value.
 
+### One write path for `SETF` (P6-17 amendment)
+
+The evaluator never writes the document. Every `SETF` write — the
+formula's own or one inside a **referenced** cell's formula that a read
+re-evaluated inline — is **recorded** during evaluation and applied by
+the recalc pass through the model's mutation API, next to the pass's own
+value writes. One write path owns the document: every write gets its
+`CellUpdate`, dirties its dependents within the same budget and sits
+inside the snapshot `RecalcEdit` takes, so undo restores the target.
+
+Two rules complete the picture:
+
+- **A standing-back evaluation writes nothing.** When an evaluation
+  stands back (an unknown function, a formula the parser refuses), the
+  cell keeps its cached value and every `SETF` write recorded during
+  that evaluation is **dropped**: a cell that keeps its value has no
+  side effects.
+- **The budget counts nested work.** A read of a cell that caches
+  nothing re-evaluates its formula inline (ADR 0057's fill-in case);
+  each such nested evaluation counts against
+  `RecalcOptions::max_evaluations`, so the budget bounds the pass's
+  total work, not just its top-level calls.
+
 ### Connector re-routing versus formula geometry (ADR 0045)
 
 Re-routing owns a connector whose path is **literal** (the Phase 5

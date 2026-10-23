@@ -38,11 +38,10 @@
 //!   table does not hold records one [`EvalWarningKind::UnknownFunction`]
 //!   warning and the whole evaluation stands back. A reserved internal
 //!   name (`_MOD`, `ELLIPSE_THETA`) gets the same treatment with its own
-//!   warning text (ADR 0053).
-//!   the caller keeps the cell's cached value. The placeholder value
-//!   [`ErrorCode::Na`] carries that result through [`Result`]; a caller
-//!   must not write it when the warning was recorded. `IFERROR` does not
-//!   catch it.
+//!   warning text (ADR 0053), and the caller keeps the cell's cached
+//!   value. The placeholder value [`ErrorCode::Na`] carries that result
+//!   through [`Result`]; a caller must not write it when the warning was
+//!   recorded. `IFERROR` does not catch it.
 //! - **Argument counts** are checked against the table before any
 //!   argument is evaluated: a wrong count is `#VALUE!` plus one
 //!   [`EvalWarningKind::WrongArgumentCount`] warning, and no side effect
@@ -51,7 +50,9 @@
 //!   protection rule is P6-07's). **`SETF(target, value)`** writes
 //!   `value` through [`EvalContext::set_cell`] and evaluates to `value`;
 //!   a target the context refuses is `#REF!` with a
-//!   [`EvalWarningKind::SetfRefused`] warning (ADR 0056).
+//!   [`EvalWarningKind::SetfRefused`] warning (ADR 0056). The context
+//!   **records** the write; the recalc pass applies it through one write
+//!   path, and an evaluation that stands back drops what it recorded.
 
 use ferrogram_model::{Color, SheetRef};
 
