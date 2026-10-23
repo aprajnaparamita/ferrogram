@@ -693,12 +693,10 @@ mod tests {
         let text = format!("{outcome:?}");
         assert!(text.contains("drawing.vsdx (2 bytes)"), "{text}");
         assert!(text.contains("PinX"), "{text}");
-        match outcome.payload {
-            Some(Payload::Bytes { name, data }) => {
-                assert_eq!(name, "drawing.vsdx");
-                assert_eq!(data, vec![0, 1]);
-            }
-            other => panic!("expected bytes, got {other:?}"),
+        assert!(matches!(outcome.payload, Some(Payload::Bytes { .. })));
+        if let Some(Payload::Bytes { name, data }) = outcome.payload {
+            assert_eq!(name, "drawing.vsdx");
+            assert_eq!(data, vec![0, 1]);
         }
     }
 }

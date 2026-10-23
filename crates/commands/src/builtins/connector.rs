@@ -409,22 +409,24 @@ fn glue(ctx: &mut AppCtx, inv: &Invocation, end: End) -> Result<Outcome, Command
         let record = glue_record(connector, target, target_visio_id, point, end, doc)?;
         (target_visio_id, record)
     };
-    let mut edit = {
+    let label = match end {
+        End::Begin => "Glue connector begin",
+        End::End => "Glue connector end",
+    };
+    let staged = {
         let doc = &ctx.active_document().ok_or_else(no_document)?.document;
         GlueEdit::new(
             doc,
             session,
-            match end {
-                End::Begin => "Glue connector begin",
-                End::End => "Glue connector end",
-            },
+            label,
             page,
             connector,
             record.from_sheet,
             end,
             Some(record),
-        )?
+        )
     };
+    let mut edit = staged?;
     edit.apply(ctx)?;
     let warnings = Vec::new();
     let _ = reroute_after_edit(ctx, page);
@@ -452,25 +454,27 @@ pub(super) fn run_unglue(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
             }));
         }
     };
+    let label = match end {
+        End::Begin => "Unglue connector begin",
+        End::End => "Unglue connector end",
+    };
     let mut edit = {
         let doc = &ctx.active_document().ok_or_else(no_document)?.document;
         let connector_visio = doc
             .shape(connector)
             .map(|entry| entry.visio_id)
             .unwrap_or_default();
-        GlueEdit::new(
+        let staged = GlueEdit::new(
             doc,
             session,
-            match end {
-                End::Begin => "Unglue connector begin",
-                End::End => "Unglue connector end",
-            },
+            label,
             page,
             connector,
             connector_visio,
             end,
             None,
-        )?
+        );
+        staged?
     };
     edit.apply(ctx)?;
     let warnings = Vec::new();
@@ -549,7 +553,7 @@ pub(super) fn run_style(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, C
     {
         let doc = &ctx.active_document().ok_or_else(no_document)?.document;
         for &shape in &targets {
-            edit.push(Box::new(CellEdit::new(
+            let step = CellEdit::new(
                 doc,
                 session,
                 "Set connector style",
@@ -559,7 +563,8 @@ pub(super) fn run_style(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, C
                     route_style.to_string(),
                     CellValue::Number(f64::from(route_style)),
                 ),
-            )?));
+            );
+            edit.push(Box::new(step?));
         }
     }
     edit.apply(ctx)?;
@@ -660,6 +665,10 @@ fn run_draw(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError>
             let Some(target_visio_id) = target else {
                 continue;
             };
+            let label = match end {
+                End::Begin => "Glue connector begin",
+                End::End => "Glue connector end",
+            };
             let mut edit = {
                 let doc = &ctx.active_document().ok_or_else(no_document)?.document;
                 let target = doc
@@ -670,19 +679,17 @@ fn run_draw(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError>
                         ))
                     })?;
                 let record = glue_record(connector, target, target_visio_id, point, end, doc)?;
-                GlueEdit::new(
+                let staged = GlueEdit::new(
                     doc,
                     session,
-                    match end {
-                        End::Begin => "Glue connector begin",
-                        End::End => "Glue connector end",
-                    },
+                    label,
                     page,
                     connector,
                     connector_visio,
                     end,
                     Some(record),
-                )?
+                );
+                staged?
             };
             edit.apply(ctx)?;
             edits.push(Box::new(edit));
@@ -693,7 +700,7 @@ fn run_draw(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError>
             let transform = page_transform(doc, connector)?;
             let current = geometry_endpoints(doc, connector, transform);
             let fallback = transform_point(transform, loc_pin(doc, connector));
-            let start = resolved_end(
+            let begin = resolved_end(
                 doc,
                 page,
                 connector,
@@ -701,8 +708,11 @@ fn run_draw(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, CommandError>
                 begin_free,
                 current,
                 fallback,
-            )?;
-            let end = resolved_end(doc, page, connector, End::End, end_free, current, fallback)?;
+            );
+            let start = begin?;
+            let resolved =
+                resolved_end(doc, page, connector, End::End, end_free, current, fallback);
+            let end = resolved?;
             let points = route(
                 start,
                 end,
