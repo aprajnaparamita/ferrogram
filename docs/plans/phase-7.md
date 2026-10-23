@@ -101,24 +101,48 @@ every layout.
 
 ## 4. Order of work
 
-Parallel work is the priority. Tasks in one group run at the same time
-on disjoint files.
+Parallel work is the priority. A task starts as soon as the tasks it
+depends on are merged; there are no whole-group waits. Tasks that run
+at the same time own disjoint files. Phase 8 (`.vsd` import) runs beside
+Phase 7 on its own track, because it lives in `crates/vsd-binary`.
 
 ```
-now ─┬─ Phase 6 tail: P6-09, P6-10, P6-15, P6-16 ─ P6-11 ─ P6-12/13/14 ─ P6-17 ─ tag phase-6
-     └─ P7-01 architect (docs, data, stubs) ─────────── merge before the boundary
+now ─┬─ Phase 6 tail: P6-17 ‖ P6-18 ─ phase report ─ tag phase-6
+     ├─ P7-01 architect (merged)
+     └─ P8-01 architect (docs, ADRs, stubs, task files) ─ merge before the boundary
 boundary (nothing else running):
      R1 master: remove the earlier layout records from the tree
      P7-00 worker: rename to Larrygram, the old layout term to Panel, panels to panes
      R4 master: history rewrite (after "go"), move the folders, re-link
-Phase 7 groups:
-     A: P7-02  P7-03  P7-04                      (3 in parallel)
-     B: P7-05  P7-06  P7-07  P7-08  P7-15  P7-16  (6 in parallel)
-     C: P7-09 shell integration
-     D: P7-10 tests and golden images
-     E: P7-11  P7-12  P7-13                      (3 in parallel)
-     F: P7-14 fixes, phase report, tag phase-7
+     R5 master: the image loaders of ADR 0067 in crates/ui/Cargo.toml
+after the boundary, two tracks at once:
+  Phase 7 wave 1: P7-02 P7-03 P7-04 P7-05 P7-06 P7-07 P7-15 P7-16  (8 in parallel)
+          P7-08 starts when P7-02 merges
+          P7-09 shell when P7-05..P7-08 merge ─ P7-10 tests ─ P7-11 ‖ P7-12 ‖ P7-13 ─ P7-14, tag phase-7
+  Phase 8: the parallel tasks P8-01 defines (vsd-binary modules, the oracle
+          harness, the open-path integration) ─ tests ─ audits ─ fixes, tag phase-8
 ```
+
+**What made the Phase 7 groups collapse.** P7-01 froze the
+`ui_spec::v2` types and the `icons::icon` call, and R5 installs the
+image loader before any worker starts. So:
+
+- P7-15 and P7-16 depend only on P7-01 and R5.
+- P7-05, P7-06 and P7-07 code against the frozen `ui_spec::v2` types
+  and today's `icons` API, and test with hand-built values. They do not
+  wait for P7-03's loader or P7-04's icon table; P7-09 wires the loaded
+  layouts and themes in. A type change they need is an Open issue for
+  P7-03, never an edit to `crates/ui-spec`.
+- P7-08 still waits for P7-02, because both touch command predicates.
+
+**Machine load.** Eight Phase 7 workers plus the Phase 8 workers are
+more builds than one machine runs well (the P6-13 audit found it at 0%
+idle). Run at most six workers at once; start the large-tier tasks
+first (P7-03, P7-06, P7-07 and the biggest Phase 8 tasks).
+
+**Merging.** The master merges in arrival order. When several branches
+wait, it merges up to three rebased branches and runs one full gate
+over the batch; a red batch is bisected.
 
 ### P7-01 architect: starts now, beside the Phase 6 tail
 
@@ -196,18 +220,24 @@ Nothing else runs during the boundary, because every file changes.
     `/Users/dara/larrygram`, and the memory files move to its project
     folder.
 
-### Phase 7 group A: 3 in parallel
+- **R5 (master, after R4).** Add the `egui_extras` image loaders with
+  the `svg` and `png` features to `crates/ui/Cargo.toml` and install
+  them at start-up (ADR 0067), with `cargo deny` and the wasm build
+  green. One commit, so that P7-04, P7-15 and P7-16 do not share the
+  manifest.
+
+### Phase 7 wave 1: 8 in parallel
 
 As in the package: P7-02 commands, P7-03 `ui-spec` layout format v2, and
-P7-04 icons. P7-04 owns `crates/ui/Cargo.toml` and adds the image
-loader of ADR 0067. P7-02 adds `help.about` and `help.welcome` if P7-01
-did not.
+P7-04 icons. P7-04 still owns `crates/ui/Cargo.toml` for the icon
+pipeline, but the image loader is already in (R5). P7-02 adds
+`help.about` and `help.welcome` if P7-01 did not, and does not touch
+`crates/commands/src/builtins/file.rs` (Phase 8 owns the open path).
 
-### Phase 7 group B: 6 in parallel
-
-- **P7-05 to P7-08**, as in the package: theme, Panel Classic widgets (menus
-  and toolbars), Panel Modern widgets (tabs and groups) and selection
-  contexts.
+- **P7-05 to P7-07**, as in the package: theme, Panel Classic widgets
+  (menus and toolbars) and Panel Modern widgets (tabs and groups), against
+  the frozen types (see above).
+- **P7-08** selection contexts, as in the package, as soon as P7-02 merges.
 - **P7-15 welcome wizard** (`wizard.rs`, medium tier).
   - Both pages, Cancel, Next, Back and Start, and the layout buttons.
   - It sets `welcome_seen` and the default layout through the settings
@@ -222,7 +252,7 @@ did not.
   - The window icon and the web favicon from `icon.svg`.
   - Tests: the text, the button opening the URL, and Close.
 
-### Group C onwards
+### After wave 1
 
 - **P7-09 shell.** As in the package, plus:
   - the wizard opens on the first launch;
