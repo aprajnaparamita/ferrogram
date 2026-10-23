@@ -115,7 +115,13 @@ Slow steps a worker adds to the hand-off gate:
 | fuzz | touches a `crates/*/fuzz` directory, or changes the public API of a crate that has one (`ui-spec`, `vsdx`, `render`, `ui`) |
 | coverage | changes any non-test code in a crate. The ratchets sit near 99%, so new untested code fails them. Give each interface stub a test of its "not implemented" contract. Skip coverage only for docs-only or test-only tasks |
 
-Skip only the untriggered steps: for example `cargo xtask gate --skip wasm,fuzz` runs coverage. If unsure, run the step. Name the steps you ran in the Result's gate summary. Use `cargo xtask gate --quick` while iterating.
+Skip only the untriggered steps: for example `cargo xtask gate --skip wasm,fuzz` runs coverage. If unsure, run the step. Name the steps you ran in the Result's gate summary.
+
+While iterating, do not run the gate after every commit. The machine runs up to twelve workers at once, and a full gate takes 30 minutes or more under that load:
+
+- After each change, check only the crates you touched: `cargo test -p <crate>` and `cargo clippy -p <crate> --all-targets --all-features -- -D warnings`.
+- Run `cargo xtask gate --quick` at milestones (before a rebase, after a large change).
+- Run the hand-off gate with its slow steps **once**, after the last code commit and the rebase. Re-run it only if code changes after that; a Result-only commit does not need it.
 
 Coverage thresholds: geom, model, vsdx, vsd-binary, shapesheet, commands, ui-spec ≥ 85%; render, text ≥ 75%; control, ui, apps ≥ 50% (UI via egui_kittest). No crate may drop below its previous-phase number (`[ratchet]` in `coverage.toml`; only the master updates it).
 
