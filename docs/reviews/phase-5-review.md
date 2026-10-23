@@ -10,7 +10,7 @@ Scope covered: `crates/model` (`mutate`, `connection`, `lookup`,
 (`hit`, `overlay`), `crates/vsdx` (`package/edit`, `write/patch`,
 `write/mod`), `crates/commands` (`undo`, `edit`, `clipboard`, `app`,
 `builtins/*`), `crates/ui` (`tools/*`, `snap`, `handles`, `text_edit`,
-`canvas`, `shell`, `panels`), the ADRs 0038-0050 and the task files.
+`canvas`, `shell`, `panels`), the ADRs 0038-0049 and the task files.
 The P5-11 product fixes were checked one by one (see "Checks that
 passed").
 

@@ -14,8 +14,7 @@ libvisio identifiers grepped outside `crates/vsd-binary`; `ATTRIBUTION.md`,
 `corpus/PROVENANCE.md` and `docs/sources.md` rows checked against the
 committed assets and the moved fuzz seeds; the `VisFromParts`/`VisToParts`
 constants in `crates/model/src/mutate.rs` checked value by value against the
-recorded Microsoft Learn pages; the black-box check plan and task files
-checked for raw captures; `crates/model/src/stencils/` checked against the
+recorded Microsoft Learn pages; `crates/model/src/stencils/` checked against the
 diff.
 
 ## Verdict
@@ -49,7 +48,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    40-character window found one match: the licence name "Creative Commons
    Attribution 4.0 International" in the new `docs/sources.md` row, which is
    a licence name (identical wording appears in the pre-existing rows), not
-   copied prose. The ADRs 0038-0050, the plan and the task files are our own
+   copied prose. The ADRs 0038-0049, the plan and the task files are our own
    words (scan: 0 matches).
 2. **Every new derived fact has a `docs/sources.md` row; raw downloads stayed
    in `reference/`.** Pass, with F1 (formatting). The only new transcription

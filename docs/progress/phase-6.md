@@ -86,7 +86,7 @@ The new ratchet is each crate's value rounded down to one decimal place. The `sh
 | [Test pass](../reviews/phase-6-tests.md) (P6-11) | — | four product bugs | Fixed in P6-11: section-level cells were never recalculated; one malformed formula failed the whole pass; four warning kinds never reached the report; a master without the section stopped the master chain. |
 | [Code review](../reviews/phase-6-review.md) (P6-12) | approve with fixes | 0 / 2 / 15 | F1 (a nested `SETF` bypassed undo) and F2 (two column-versus-row rules) fixed in P6-17, with the engine minors; the commands, model, reader and pane minors fixed in P6-18. |
 | [Coverage](../reviews/phase-6-coverage.md) (P6-13) | pass | 0 / 16 / 17 | The major paths (the hard-error abort chain, the redo arm, `SETF` into section, row and page, graph edges by name, `rung_unit`) tested in P6-17; the reader and pane paths in P6-18. |
-| [Clean-room](../reviews/phase-6-cleanroom.md) (P6-14) | pass | 0 / 0 / 6 | Two error-value glosses reworded and the reference examples replaced with our own names (P6-17); the sources and attribution rows fixed (P6-18). |
+| [Clean-room](../reviews/phase-6-cleanroom.md) (P6-14) | pass | 0 / 0 / 5 | Two error-value glosses reworded and the reference examples replaced with our own names (P6-17); the sources and attribution rows fixed (P6-18). |
 
 ## Fixes made on main by the master
 

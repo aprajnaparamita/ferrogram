@@ -18,6 +18,7 @@ The ribbon and menu layout data must be:
   fails the gate instead of crashing the app at runtime.
 - Keyed by **Fluent control names** (not by Ferrogram command ids), so
   the data round-trips with the Microsoft control-identifier spreadsheets
+  and matches the screenshot pass. This is the P1-02
   review's blocker finding B1: the earlier draft used command ids as
   control ids, which would break every cross-reference.
 
@@ -302,6 +303,7 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
   schema; the schema is committed once at `ui-spec/schema.json`.
 - **Key control ids by command ids** (the earlier draft). Rejected by
   the P1-02 review (B1): it would break the parity matrix, the
+  screenshot pass, and the cross-references between
   layouts and `commands.yaml`.
 - **Stay on `serde_yaml`.** Rejected (M5): it is archived upstream
   (`serde_yaml = "0.9.34+deprecated"`) and is flagged as unmaintained

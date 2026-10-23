@@ -23,17 +23,17 @@ census numbers in ADRs 0053-0054 checked against source 20's recording.
 
 ## Verdict
 
-**Pass with findings: 0 blocker, 0 major, 5 minor** in the Phase 6 diff
+**Pass with findings: 0 blocker, 0 major, 4 minor** in the Phase 6 diff
 (clean-room and licence rules), plus **1 minor outside it** (in the P7-01
 import, handed to P7-13). No Microsoft-owned content is committed, no
 copied long-form text exists in the function table or the panels, no
 libvisio-derived code exists outside `crates/vsd-binary`, and
 `cargo deny check` is green with `ferrogram-vsd-binary` still the only
-MPL-2.0 crate. The five minor findings are two verbatim error-value
+MPL-2.0 crate. The four minor findings are two verbatim error-value
 glosses (F1), the reference's example-column strings used verbatim as
 fixtures and fuzz seeds whose `ATTRIBUTION.md` row calls them "our own
-bytes" (F2), two provenance rows that do not name the new derived facts
-(F3, F4) and an `ATTRIBUTION.md` note that does not name the Phase 6
+bytes" (F2), a provenance row that does not name the new derived facts
+(F3) and an `ATTRIBUTION.md` note that does not name the Phase 6
 `proptest-regressions` files (F5). The outside-diff finding F6 is the
 blank line that pushes `docs/sources.md` rows 21-23 out of the sources
 table (P7-01; the same defect was P5-14's F1).
@@ -81,17 +81,16 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    The unit spelling lists (`SQ IN`, `SQ. IN.`, `IN^2`, `FEET/INCH`, ...) are
    data (the spellings themselves are the fact, row 19), and the
    relationship type URI in `crates/vsdx/src/write/mod.rs` is an
-   the separate black-box check) records structure and short labels
-   only and keeps the screenshot private (F4 for its provenance row).
+   identifier, not prose.
 2. **Every new fact derived from a Microsoft source has a
    `docs/sources.md` row; raw downloads stayed in `reference/`.** Pass,
-   with F3 and F4. Rows 19 (the ShapeSheet reference's formula pages and
+   with F3. Rows 19 (the ShapeSheet reference's formula pages and
    function pages) and 20 (the corpus formula census) were added in the
    same commit as the ADRs that use them (`4990003`) and cover the phase's
    main transcriptions: operator set and precedence, reference forms,
    unit spellings, error values, function names and arities, the census
    counts. `git ls-files reference` is empty and no diff path touches
-   `reference/`. The two gaps are the [MS-VSDX] `U`/`Rel` facts (F3) and
+   `reference/`. The gap is the [MS-VSDX] `U`/`Rel` facts (F3).
 3. **No libvisio-derived code anywhere (Phase 6 touches no `vsd`
    code).** Pass. The Phase 6 diff does not touch `crates/vsd-binary`; a
    grep for libvisio identifiers over the diff matches only the two

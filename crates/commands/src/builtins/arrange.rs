@@ -8,8 +8,8 @@
 //! Bounds are the shape frame: `PinX`/`PinY`, `LocPinX`/`LocPinY` and
 //! `Width`/`Height`, read through the inheritance lookup. Rotation is
 //! ignored (the acceptance tests use unrotated shapes); the black-box
-//! check against Visio's rotated-shape alignment is on the observation
-//! list.
+//! check against Visio's rotated-shape alignment is on the black-box
+//! check list.
 //!
 //! Group and ungroup are wrappers around `Document::group_shapes` /
 //! `Document::ungroup_shape` (ADR 0039). Their undo replays the model

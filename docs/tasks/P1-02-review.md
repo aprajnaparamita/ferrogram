@@ -7,6 +7,7 @@
 ## Blocker
 
 **B1. Layout control ids must be the Fluent control ids, not our command ids.**
+ADR 0007, `ui-spec/schema.json` and `crates/ui-spec` type `Control.id`, `Group.id` and `Tab.id` as `CommandId` (`pointer.tool`, `home.toolbox`). KICKOFF requires the layouts to come from Microsoft's control-identifier data, the parity matrix to list "every control id in both layouts", and `commands.yaml` to map our command ids *to* control ids. The later screenshot pass also needs to match controls by their Fluent id. ADR 0007 also contradicts itself ("the control id IS the command id" vs "every `fluent_ids` entry must appear in a layout file").
 
 Fix:
 - Tabs, groups, controls, backstage and context-menu entries use the Fluent control name verbatim as `id` (`FluentId`, schema pattern `^[A-Za-z][A-Za-z0-9_]*$`). Tabs and groups also come from the Fluent data (e.g. `TabHome`, `GroupClipboard`), not invented ids.

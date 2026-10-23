@@ -16,6 +16,7 @@ Ship an alpha MVP with basic, working functionality: open, render, edit and save
 
 The UI structure comes from Microsoft's published control-identifier data, with a runtime switch between the Panel (2016 data) and Panel (365 data) layouts.
 
+Visual fidelity (pixel matching, icons, exact spacing) is NOT a goal of this run. A later, separate pass may refine the app's look. Design all UI data formats so that later pass can enrich them without schema changes.
 
 ## Ground rules
 

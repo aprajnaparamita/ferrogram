@@ -187,6 +187,7 @@ because:
 
 - KICKOFF requires the layouts to come from Microsoft's control-identifier
   data, and those rows are keyed by Fluent name.
+- The later screenshot pass matches controls by their
   Fluent name.
 - A command is not always tied to one control: a single control has one
   `command` link (a `CommandId` or null), and one command may be surfaced

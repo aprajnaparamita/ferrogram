@@ -121,5 +121,5 @@ The new ratchet is each crate's exact value rounded down to one decimal place. `
 - **Arrange:** align and distribute ignore rotation; a cross-document paste can keep a `Master` link the target lacks.
 - **Tools:** the registry has no checked state for tool buttons; Escape does not return to the pointer tool; the draw, connector and stencil drags still rebuild the page scene per snap call.
 - **Reader artefacts:** `crates/vsdx` keeps the writer's `U="BOOL"`/`U="STR"` spelling and a read page's `<Rel>` child in `Preserved`, which the exit test's comparison has to drop.
-- **Black-box checks:** rotate handle offset, marquee rule, Alt as the snap modifier, `file.new` with no pages, text commit on click outside, glue cell spelling.
+- **Open black-box checks:** rotate handle offset, marquee rule, Alt as the snap modifier, `file.new` with no pages, text commit on click outside, glue cell spelling.
 - The rest of the deferred items are in `docs/STATUS.md`.

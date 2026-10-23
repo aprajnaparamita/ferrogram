@@ -90,8 +90,8 @@ The column-versus-row split of a bare name (`Char.Size` is a column,
 `Prop.Cost` is a row) is decided **against the section**: a name matches
 a column of the section's row shape first (with trailing digits or `[n]`
 as the row index, default row 0), and a named row of a named-row section
-second. Names match **case-insensitively** (flagged for the black-box
-black-box check); the file's own spelling is what gets written back.
+second. Names match **case-insensitively** (flagged for a black-box
+check); the file's own spelling is what gets written back.
 
 **One rule, one home (P6-17 amendment).** The split and the name
 splitters sit in one module (`crates/shapesheet/src/names.rs`) that both
@@ -134,7 +134,6 @@ document.
 - **Resolve `Prop.Cost` at parse time.** Rejected in ADR 0051: the split
   needs the section's row shape.
 - **Match names case-sensitively.** Rejected: the ShapeSheet window
-  treats names case-insensitively (a black-box check for the observation
-  track), and an exact-only match would report a missing reference for a
-  mere case difference. The rule is corpus-tested and flagged for the
+  treats names case-insensitively (a black-box check), and an exact-only match would report a missing reference for a
+  mere case difference. The rule is corpus-tested and flagged for a
   black-box check.

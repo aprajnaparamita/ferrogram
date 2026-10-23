@@ -59,7 +59,7 @@ Never:
 
 Always:
 - Raw downloads stay in `reference/` (gitignored). Commit only derived facts (IDs, names, structure, enumerations) and our own summaries.
-- Record every source in `reference/SOURCES.md` (local) and `docs/sources.md` (committed).
+- Record every source in `reference/SOURCES.md` (local) and `docs/sources.md` (committed). Data the project compiles itself (layouts, themes, icon mappings) is recorded as compiled by the project, with its `ATTRIBUTION.md` row.
 - Fonts: Carlito (for Calibri) and Selawik (for Segoe UI), bundled with their OFL licenses.
 - Icons: an open-licensed set with its license recorded in `ATTRIBUTION.md`, or simple placeholders. No Office icons, no traced or redrawn copies of them, and no Microsoft-published icon sets. Open icons may be recolored to match our theme palette.
 - Every stencil master we ship is original work.
