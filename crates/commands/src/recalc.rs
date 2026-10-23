@@ -46,6 +46,19 @@ pub struct RecalcReport {
     pub truncated: bool,
 }
 
+/// What one pass run left behind: its report (or the engine error) and
+/// the snapshot of every sheet it wrote.
+///
+/// The snapshots come back **even when the pass fails mid-way** (P6-12
+/// review F13): the writes a partial pass made are undone by restoring
+/// them, never by dropping them with the error.
+struct PassRun {
+    /// What the pass reported, or the engine error that stopped it.
+    report: Result<RecalcReport, CommandError>,
+    /// The sheets it wrote, in their pre-pass state.
+    before: Vec<SheetSnapshot>,
+}
+
 /// The options of the edit pass (ADR 0056): recompute the dirty cells
 /// and their dependents, materialising an inherited formula onto every
 /// cell the pass recomputes.
@@ -79,7 +92,7 @@ pub fn recalc_after_edit(
     session: SessionId,
     dirty: &[CellAddress],
 ) -> Result<RecalcReport, CommandError> {
-    run_pass(ctx, session, dirty, &edit_options()).map(|(report, _)| report)
+    run_pass(ctx, session, dirty, &edit_options()).report
 }
 
 /// Recalculates every cell that has a formula and no cached value (ADR
@@ -104,7 +117,7 @@ pub fn fill_missing_with(
         };
         document_addresses(&slot.document)
     };
-    run_pass(ctx, session, &dirty, &options).map(|(report, _)| report)
+    run_pass(ctx, session, &dirty, &options).report
 }
 
 // ---------------------------------------------------------------------------
@@ -148,28 +161,40 @@ impl RecalcEdit {
     /// cells, and the entry records what it changed.
     ///
     /// A step that writes no cell is pushed as it is (nothing to
-    /// recompute). A broken engine is one warning, never a lost step.
+    /// recompute). A broken engine is one warning, never a lost step;
+    /// the snapshots a failed pass already took are kept (P6-12 review
+    /// F13), so undo removes its partial writes.
     pub(crate) fn wrap(
         ctx: &mut AppCtx,
         session: SessionId,
         inner: Box<dyn Edit>,
     ) -> Result<Box<dyn Edit>, CommandError> {
+        let mut engine = SnapshotEngine::new(DocumentEngine);
+        Self::wrap_with(ctx, session, inner, &mut engine)
+    }
+
+    /// [`Self::wrap`] over a caller-chosen engine: the seam the tests
+    /// drive with a failing engine (the product engine cannot fail on
+    /// document data).
+    fn wrap_with<E: FormulaEngine>(
+        ctx: &mut AppCtx,
+        session: SessionId,
+        inner: Box<dyn Edit>,
+        engine: &mut SnapshotEngine<E>,
+    ) -> Result<Box<dyn Edit>, CommandError> {
         let dirty: Vec<CellAddress> = inner.dirty_cells().to_vec();
         if dirty.is_empty() {
             return Ok(inner);
         }
-        let before = match run_pass(ctx, session, &dirty, &edit_options()) {
-            Ok((_, before)) => before,
-            Err(error) => {
-                ctx.record_warning(format!("recalculation failed: {error}"));
-                Vec::new()
-            }
-        };
+        let run = run_pass_with(ctx, session, &dirty, &edit_options(), engine);
+        if let Err(error) = &run.report {
+            ctx.record_warning(format!("recalculation failed: {error}"));
+        }
         Ok(Box::new(Self {
             session,
             dirty,
             inner,
-            before,
+            before: run.before,
         }))
     }
 
@@ -206,10 +231,13 @@ impl Edit for RecalcEdit {
 
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         self.inner.apply(ctx)?;
-        match run_pass(ctx, self.session, &self.dirty.clone(), &edit_options()) {
-            Ok((_, before)) => self.before = before,
-            Err(error) => ctx.record_warning(format!("recalculation failed: {error}")),
+        let run = run_pass(ctx, self.session, &self.dirty.clone(), &edit_options());
+        if let Err(error) = &run.report {
+            ctx.record_warning(format!("recalculation failed: {error}"));
         }
+        // Even a failed pass keeps its snapshots (P6-12 review F13): a
+        // later revert removes the writes it managed to make.
+        self.before = run.before;
         Ok(())
     }
 
@@ -240,25 +268,68 @@ fn run_pass(
     session: SessionId,
     dirty: &[CellAddress],
     options: &RecalcOptions,
-) -> Result<(RecalcReport, Vec<SheetSnapshot>), CommandError> {
+) -> PassRun {
+    run_pass_with(
+        ctx,
+        session,
+        dirty,
+        options,
+        &mut SnapshotEngine::new(DocumentEngine),
+    )
+}
+
+/// [`run_pass`] over a caller-chosen engine (the failure seam the tests
+/// drive).
+fn run_pass_with<E: FormulaEngine>(
+    ctx: &mut AppCtx,
+    session: SessionId,
+    dirty: &[CellAddress],
+    options: &RecalcOptions,
+    engine: &mut SnapshotEngine<E>,
+) -> PassRun {
     let Some(slot) = ctx.documents.iter_mut().find(|slot| slot.id == session) else {
-        return Err(CommandError::failed("the document session is gone"));
+        return PassRun {
+            report: Err(CommandError::failed("the document session is gone")),
+            before: Vec::new(),
+        };
     };
     if slot.graph.is_none() {
-        let graph = DepGraph::build(&slot.document).map_err(engine_error)?;
+        let graph = match DepGraph::build(&slot.document) {
+            Ok(graph) => graph,
+            Err(error) => {
+                return PassRun {
+                    report: Err(engine_error(error)),
+                    before: Vec::new(),
+                };
+            }
+        };
         slot.graph = Some(graph);
     }
     let Some(graph) = slot.graph.as_mut() else {
-        return Err(CommandError::failed("the document has no dependency graph"));
+        return PassRun {
+            report: Err(CommandError::failed("the document has no dependency graph")),
+            before: Vec::new(),
+        };
     };
-    let mut engine = SnapshotEngine::default();
-    let outcome = recalc_with(&mut slot.document, dirty, options, graph, &mut engine)
-        .map_err(engine_error)?;
+    let outcome = match recalc_with(&mut slot.document, dirty, options, graph, engine) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            // A broken engine mid-pass: the snapshots taken so far come
+            // back with the error (P6-12 review F13).
+            return PassRun {
+                report: Err(engine_error(error)),
+                before: std::mem::take(&mut engine.before),
+            };
+        }
+    };
     let report = report_of(&outcome);
     for warning in &outcome.warnings {
         ctx.record_warning(warning_line(warning));
     }
-    Ok((report, engine.before))
+    PassRun {
+        report: Ok(report),
+        before: std::mem::take(&mut engine.before),
+    }
 }
 
 /// The report of one pass outcome.
@@ -299,6 +370,38 @@ fn warning_line(warning: &RecalcWarning) -> String {
         RecalcWarningKind::BudgetExceeded => {
             String::from("recalc: evaluation budget exceeded; some cells are stale")
         }
+        RecalcWarningKind::WrongArgumentCount {
+            function,
+            min,
+            max,
+            got,
+        } => {
+            let span = match max {
+                Some(max) if max == min => format!("exactly {min}"),
+                Some(max) => format!("{min} to {max}"),
+                None => format!("at least {min}"),
+            };
+            let noun = if Some(*min) == *max && *min == 1 {
+                "argument"
+            } else {
+                "arguments"
+            };
+            format!(
+                "recalc: {function} takes {span} {noun}, got {got}{target}; the call evaluated to #VALUE!"
+            )
+        }
+        RecalcWarningKind::SetfRefused(name) => {
+            format!("recalc: SETF refused {name}{target}; the call evaluated to #REF!")
+        }
+        RecalcWarningKind::Coercion(why) => {
+            format!("recalc: a value had to be coerced ({why}){target}")
+        }
+        RecalcWarningKind::NonFinite => {
+            format!("recalc: a number was not finite{target}; the value became #NUM!")
+        }
+        RecalcWarningKind::Syntax(kind) => {
+            format!("recalc: the formula does not parse ({kind}){target}; the value was kept")
+        }
         // `RecalcWarningKind` is `#[non_exhaustive]`.
         _ => format!("recalc: warning{target}"),
     }
@@ -307,14 +410,22 @@ fn warning_line(warning: &RecalcWarning) -> String {
 /// The [`FormulaEngine`] that snapshots every sheet before the first
 /// write to it (the pass writes through the model's mutation API, so the
 /// sight of a write's target is the last moment the sheet is pristine).
-#[derive(Default)]
-struct SnapshotEngine {
-    inner: DocumentEngine,
+struct SnapshotEngine<E> {
+    inner: E,
     seen: BTreeSet<(u8, u32)>,
     before: Vec<SheetSnapshot>,
 }
 
-impl SnapshotEngine {
+impl<E> SnapshotEngine<E> {
+    /// An engine that snapshots around `inner`.
+    fn new(inner: E) -> Self {
+        Self {
+            inner,
+            seen: BTreeSet::new(),
+            before: Vec::new(),
+        }
+    }
+
     /// Records the sheet's entries once, before any write to it.
     fn snapshot(&mut self, document: &Document, sheet: SheetRef) {
         let key = match sheet {
@@ -343,7 +454,7 @@ impl SnapshotEngine {
     }
 }
 
-impl FormulaEngine for SnapshotEngine {
+impl<E: FormulaEngine> FormulaEngine for SnapshotEngine<E> {
     fn references(
         &mut self,
         formula: &Formula,
@@ -846,7 +957,9 @@ mod tests {
             SheetRef::Shape(shape),
             CellName::new("Width"),
         )];
-        let (_, before) = run_pass(&mut ctx, id, &dirty, &edit_options()).expect("pass");
+        let run = run_pass(&mut ctx, id, &dirty, &edit_options());
+        run.report.expect("pass");
+        let before = run.before;
         assert_eq!(before.len(), 1);
         assert_eq!(before[0].sheet, SheetRef::Shape(shape));
         let names: Vec<&str> = before[0].cells.iter().map(|c| c.name.as_str()).collect();
@@ -983,8 +1096,151 @@ mod tests {
         );
     }
 
+    /// A `SETF` inside a referenced cell's formula is applied by the
+    /// pass, so the snapshot `RecalcEdit` takes covers it and undo
+    /// restores the target (P6-12 review F1).
+    #[test]
+    fn a_nested_setf_write_is_inside_the_undo_snapshot() {
+        let (mut ctx, id, shape) = fixture();
+        {
+            let doc = &mut ctx
+                .documents
+                .iter_mut()
+                .find(|slot| slot.id == id)
+                .expect("session")
+                .document;
+            if let Some(entity) = doc.shape_mut(shape) {
+                entity.sheet.cells = vec![
+                    cell("Width", None, Some(0.0)),
+                    cell("Mid", Some("SETF(Width,5)+1"), None),
+                    cell("Top", Some("Mid*2"), Some(0.0)),
+                ];
+            }
+        }
+        let dirty = vec![CellAddress::new(
+            SheetRef::Shape(shape),
+            CellName::new("Top"),
+        )];
+        let mut wrapped =
+            RecalcEdit::wrap(&mut ctx, id, Box::new(StubEdit(dirty))).expect("wrap");
+        let doc = &ctx.active_document().expect("doc").document;
+        assert_eq!(number(doc, shape, "Width"), Some(5.0), "the write landed");
+        assert_eq!(number(doc, shape, "Top"), Some(12.0), "the read saw it");
+
+        wrapped.revert(&mut ctx).expect("revert");
+        let doc = &ctx.active_document().expect("doc").document;
+        assert_eq!(
+            number(doc, shape, "Width"),
+            Some(0.0),
+            "undo restored the SETF target"
+        );
+        assert_eq!(number(doc, shape, "Top"), Some(0.0));
+    }
+
+    /// An engine that computes one evaluation and then fails (the
+    /// failure seam the product engine cannot reach).
+    struct FailAfterOne {
+        done: bool,
+    }
+
+    impl FormulaEngine for FailAfterOne {
+        fn references(
+            &mut self,
+            _formula: &Formula,
+        ) -> Result<Vec<CellRef>, ferrogram_shapesheet::Error> {
+            Ok(Vec::new())
+        }
+
+        fn evaluate(
+            &mut self,
+            _document: &mut Document,
+            _formula: &Formula,
+            _sheet: SheetRef,
+        ) -> Result<Evaluation, ferrogram_shapesheet::Error> {
+            if self.done {
+                return Err(ferrogram_shapesheet::Error::Conversion(
+                    "test engine failed",
+                ));
+            }
+            self.done = true;
+            Ok(Evaluation {
+                value: CellValue::Number(7.0),
+                warnings: Vec::new(),
+                writes: Vec::new(),
+                evaluations: 1,
+            })
+        }
+    }
+
+    /// A pass that fails mid-way keeps the snapshots it already took
+    /// (P6-12 review F13): undo removes the partial writes.
+    #[test]
+    fn a_pass_that_fails_mid_way_keeps_its_snapshots_for_undo() {
+        let (mut ctx, id, shape) = fixture();
+        let dirty = vec![
+            CellAddress::new(SheetRef::Shape(shape), CellName::new("PinX")),
+            CellAddress::new(SheetRef::Shape(shape), CellName::new("Width")),
+        ];
+        let mut engine = SnapshotEngine::new(FailAfterOne { done: false });
+        let mut wrapped =
+            RecalcEdit::wrap_with(&mut ctx, id, Box::new(StubEdit(dirty)), &mut engine)
+                .expect("wrap");
+        assert!(
+            ctx.warnings
+                .iter()
+                .any(|line| line.contains("recalculation failed")),
+            "{:?}",
+            ctx.warnings
+        );
+        {
+            let doc = &ctx.active_document().expect("doc").document;
+            assert_eq!(
+                number(doc, shape, "PinX"),
+                Some(7.0),
+                "the first evaluation wrote before the failure"
+            );
+        }
+
+        wrapped.revert(&mut ctx).expect("revert");
+        let doc = &ctx.active_document().expect("doc").document;
+        assert_eq!(
+            number(doc, shape, "PinX"),
+            Some(9.0),
+            "the kept snapshot removes the partial write"
+        );
+    }
+
+    /// The redo arm of `RecalcEdit::apply` whose re-run fails: the step
+    /// is kept and one warning records the failure (ADR 0056's "one
+    /// user action is one undo step" includes the redo direction).
+    #[test]
+    fn a_redo_whose_pass_fails_keeps_the_step_and_warns() {
+        let (mut ctx, _id, shape) = fixture();
+        let dirty = [CellAddress::new(
+            SheetRef::Shape(shape),
+            CellName::new("Width"),
+        )];
+        let mut wrapped =
+            RecalcEdit::wrap(&mut ctx, ghost_session(), Box::new(StubEdit(dirty.to_vec())))
+                .expect("wrap");
+        assert_eq!(ctx.warnings.len(), 1, "{:?}", ctx.warnings);
+
+        wrapped
+            .apply(&mut ctx)
+            .expect("a failed pass is a warning, not a failure");
+        assert_eq!(ctx.warnings.len(), 2, "{:?}", ctx.warnings);
+        assert!(
+            ctx.warnings[1].contains("recalculation failed"),
+            "{:?}",
+            ctx.warnings
+        );
+        assert_eq!(wrapped.dirty_cells().len(), 1, "the step is kept");
+        assert_eq!(wrapped.label(), "stub");
+    }
+
     #[test]
     fn warning_lines_name_the_problem() {
+        use ferrogram_shapesheet::SyntaxKind;
         let address = CellAddress::new(SheetRef::Shape(ShapeId { index: 0 }), CellName::new("X"));
         for (kind, text) in [
             (
@@ -1000,6 +1256,31 @@ mod tests {
                 "dependency cycle between X",
             ),
             (RecalcWarningKind::BudgetExceeded, "budget exceeded"),
+            (
+                RecalcWarningKind::WrongArgumentCount {
+                    function: String::from("ABS"),
+                    min: 1,
+                    max: Some(1),
+                    got: 2,
+                },
+                "ABS takes exactly 1 argument, got 2 of X",
+            ),
+            (
+                RecalcWarningKind::SetfRefused(String::from("Nope")),
+                "SETF refused Nope of X",
+            ),
+            (
+                RecalcWarningKind::Coercion(String::from("sheep")),
+                "coerced (sheep) of X",
+            ),
+            (
+                RecalcWarningKind::NonFinite,
+                "a number was not finite of X",
+            ),
+            (
+                RecalcWarningKind::Syntax(SyntaxKind::UnexpectedEnd),
+                "the formula does not parse",
+            ),
         ] {
             let line = warning_line(&RecalcWarning {
                 target: Some(address.clone()),
