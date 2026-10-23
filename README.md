@@ -2,11 +2,11 @@
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
-> **Status: pre-alpha, Phase 6 of 9 in progress.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. The ShapeSheet formula engine exists as a library but is not yet wired into editing, opening or saving. It is not ready for real work: `.vsd` import and the control channel are not built, and visual fidelity is approximate.
+> **Status: pre-alpha, Phase 6 of 9 done.** The app opens, renders, edits and saves `.vsdx` files: you can draw, move, connect and type into shapes across pages, undo it, save, reopen and keep editing. ShapeSheet formulas are evaluated: edits recalculate dependent cells, and resizing a master-based shape recomputes its geometry. It is not ready for real work: `.vsd` import and the control channel are not built, and visual fidelity is approximate.
 
 ## Build status
 
-Last full gate on `main`: **green, 2026-10-22** (Phase 6 engine merged, commit `fff98f9`, 2835 tests). There is no public CI yet; the gate runs locally.
+Last full gate on `main`: **green, 2026-10-24** (Phase 6 closed, commit `152fae3`, 3110 tests). There is no public CI yet; the gate runs locally.
 
 | Step | Result |
 |---|---|
@@ -21,13 +21,13 @@ Line coverage per crate (`cargo xtask coverage`):
 | Crate | Coverage | Crate | Coverage |
 |---|---:|---|---:|
 | geom | 100.0% | text | 98.9% |
-| shapesheet | 92.9% | commands | 98.3% |
-| model | 99.7% | vsdx | 98.1% |
+| shapesheet | 97.0% | commands | 98.4% |
+| model | 99.7% | vsdx | 98.2% |
 | ui-spec | 99.4% | ferrogram-cli | 96.8% |
-| render | 98.5% | ui | 96.8% |
+| render | 98.5% | ui | 97.0% |
 | ferrogram (desktop) | 80.0% | ferrogram-web | 77.9% |
 
-`control` and `vsd-binary` have no code yet (Phases 8 and 7). `shapesheet` dropped from 100% because Phase 6 replaced its stubs with about 6500 lines of real code; its threshold is 85%.
+`control` has no code yet (Phase 9). `vsd-binary` holds the Phase 8 skeleton, all stubs with tests (100%).
 
 ## What works today
 
@@ -45,24 +45,25 @@ Line coverage per crate (`cargo xtask coverage`):
   - undo and redo for every edit.
 
   The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). Phase report: [docs/progress/phase-5.md](docs/progress/phase-5.md).
-- **ShapeSheet engine** (Phase 6, in progress), in `crates/shapesheet`:
+- **ShapeSheet engine** (Phase 6), in `crates/shapesheet`:
   - a formula parser and printer: 976 of the 994 distinct formulas in the test corpus parse, and every one of them prints back unchanged;
   - values with units and Visio's type conversions;
   - an evaluator with 42 functions (arithmetic, logic, `IF`, `GUARD`, `SETF`, trig, rounding, string and unit helpers);
   - reference resolution across shapes, masters, pages and styles, with inheritance;
-  - a dependency graph with incremental recalculation and cycle detection.
+  - a dependency graph with incremental recalculation and cycle detection;
+  - every edit recalculates inside its undo step, missing values are filled in on open, and the Shape Data pane edits values (`data.set.property`).
 
-  Instances of a master now draw at their own size instead of the master's.
+  Against the values Visio saved in the 15 corpus files, the engine agrees on all 5 184 cells it can compute (100.0%). Resizing a master-based shape recomputes its geometry. Phase report: [docs/progress/phase-6.md](docs/progress/phase-6.md).
 
 ## Next
 
-Phase 6 continues: wire the engine into editing and undo, into opening, rendering and saving, and into the Shape Data and Size & Position panels. Then compare its results with the values Visio saved in the corpus files, and prove that resizing a master-based shape recomputes its geometry. Group A (the engine library) is merged; the integration tasks are running.
+The app is renamed to Larrygram, then Phase 7 (the Panel Modern and Panel Classic layouts and the welcome wizard) and Phase 8 (read-only `.vsd` import) run side by side.
 
 The live task board is [docs/STATUS.md](docs/STATUS.md). Phase reports are in [docs/progress/](docs/progress/). Command coverage against the command bar is in [docs/parity/controls.md](docs/parity/controls.md).
 
 ## What does not work yet
 
-Formula evaluation in the app (edits still write fixed values, and shapes whose cells have no cached values render blank until Phase 6 wires the engine in), `.vsd` import, the MCP/control channel, and most command-bar commands (they are listed but stubbed).
+Functions outside the core set (their cells keep the stored value), the document and master sheets in formulas, `.vsd` import, the MCP/control channel, and most command-bar commands (they are listed but stubbed).
 
 ## Plan (alpha MVP)
 
@@ -74,7 +75,7 @@ Formula evaluation in the app (edits still write fixed values, and shapes whose 
 | 3 | Rendering (PNG/SVG) and CLI | done |
 | 4 | App shell, switchable 2016/365 panels | done |
 | 5 | Editing core | done |
-| 6 | ShapeSheet engine (core subset) | in progress |
+| 6 | ShapeSheet engine (core subset) | done |
 | 7 | Panel Modern and Panel Classic layouts, the Larrygram rename, the welcome wizard | in progress |
 | 8 | Binary .vsd import (read-only) | planned |
 | 9 | Control channel and MCP | paused |
