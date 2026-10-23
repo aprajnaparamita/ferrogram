@@ -2,9 +2,10 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **6 (ShapeSheet engine), started 2026-10-21**
+- Current phase: **6/7 boundary** (Phase 6 closed; next: R1, P7-00 rename, R4 after the user's "go", R5; then Phase 7 and Phase 8 side by side)
 - Phase 6 goal: ShapeSheet engine, core subset (KICKOFF.md). Exit: resizing master-based shapes from the corpus recomputes geometry correctly for supported functions; the phase report gives the agreement rate with cached values.
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
+- Phase 6 complete (2026-10-24, report: [progress/phase-6.md](progress/phase-6.md), tag `phase-6`).
 - Phase 5 complete (2026-10-21, report: [progress/phase-5.md](progress/phase-5.md), tag `phase-5`).
 - Phase 4 complete (2026-10-18, report: [progress/phase-4.md](progress/phase-4.md), tag `phase-4`).
 - Phase 3 complete (2026-10-16, report: [progress/phase-3.md](progress/phase-3.md), tag `phase-3`).
@@ -211,6 +212,8 @@ States: not written · outline · ready · in progress · in review · merged ·
 | 2 | [phase-2.md](progress/phase-2.md) | green (2026-10-14) |
 | 3 | [phase-3.md](progress/phase-3.md) | green (2026-10-16) |
 | 4 | [phase-4.md](progress/phase-4.md) | green (2026-10-18) |
+| 5 | [phase-5.md](progress/phase-5.md) | green (2026-10-21) |
+| 6 | [phase-6.md](progress/phase-6.md) | green (2026-10-24) |
 
 Shared file note: P1-03, P1-04, P1-05 all add dependencies to `xtask/Cargo.toml` (and `Cargo.lock`); P1-07 adds an arm to `xtask/src/main.rs`. The master resolves these merge conflicts.
 
