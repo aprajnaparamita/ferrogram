@@ -951,3 +951,57 @@ fn a_setf_write_is_recorded_and_a_missing_target_is_refused() {
     assert_eq!(cell.value, Some(CellValue::Number(1.0)), "untouched");
     assert_eq!(cell.formula, None);
 }
+
+#[test]
+fn a_rung_unit_is_the_unit_the_defining_rung_recorded() {
+    // The coverage audit (P6-13) found `rung_unit`'s two returns dark:
+    // a master's cell that records a non-inch unit must give that unit
+    // to the value an instance reads.
+    let mut fixture = Fixture::new();
+    let (master, content) = fixture.add_master("Ruler");
+    fixture
+        .doc
+        .shape_mut(content)
+        .expect("content")
+        .sheet
+        .cells
+        .push(number_cell_in("Width", 2.0, Unit::Millimeters));
+    fixture.instance_of(fixture.target, master);
+
+    let mut resolver = DocumentResolver::new(&mut fixture.doc);
+    let resolved = resolver
+        .resolve(SheetRef::Shape(fixture.target), &CellRef::new("Width"))
+        .expect("resolves");
+    assert_eq!(
+        resolved.value,
+        expected(CellValue::Number(2.0), Unit::Millimeters),
+        "the master rung's unit comes back with the value"
+    );
+    assert_eq!(resolved.source, ValueSource::Master(master));
+}
+
+#[test]
+fn a_stored_formula_that_does_not_parse_reads_as_ref_without_a_value() {
+    // A hostile file: a formula the parser rejects on a cell that
+    // caches nothing has no value to answer with (the resolver's own
+    // eval fallback).
+    let mut fixture = Fixture::new();
+    fixture
+        .doc
+        .shape_mut(fixture.target)
+        .expect("target")
+        .sheet
+        .cells
+        .push(formula_cell("Bad", "FORMATEX(1,)", 0.0));
+    if let Some(shape) = fixture.doc.shape_mut(fixture.target) {
+        if let Some(entry) = shape.sheet.cells.first_mut() {
+            entry.value = None;
+        }
+    }
+
+    let mut resolver = DocumentResolver::new(&mut fixture.doc);
+    let value = resolver
+        .cell_value(SheetRef::Shape(fixture.target), &CellRef::new("Bad"))
+        .expect("value");
+    assert_eq!(value, Value::Err(ErrorCode::Ref));
+}
