@@ -293,24 +293,13 @@ fn run_pass_with<E: FormulaEngine>(
             before: Vec::new(),
         };
     };
-    if slot.graph.is_none() {
-        let graph = match DepGraph::build(&slot.document) {
-            Ok(graph) => graph,
-            Err(error) => {
-                return PassRun {
-                    report: Err(engine_error(error)),
-                    before: Vec::new(),
-                };
-            }
-        };
-        slot.graph = Some(graph);
-    }
-    let Some(graph) = slot.graph.as_mut() else {
-        return PassRun {
-            report: Err(CommandError::failed("the document has no dependency graph")),
-            before: Vec::new(),
-        };
-    };
+    // The graph is built on first use and kept on the session (ADR
+    // 0055). `DepGraph::build` never fails a document: its `Result`
+    // keeps P6-01's interface, and a hypothetical failure would leave
+    // the pass an empty graph (nothing recomputed), never a failed step.
+    let graph = slot
+        .graph
+        .get_or_insert_with(|| DepGraph::build(&slot.document).unwrap_or_default());
     let outcome = match recalc_with(&mut slot.document, dirty, options, graph, engine) {
         Ok(outcome) => outcome,
         Err(error) => {
@@ -381,13 +370,9 @@ fn warning_line(warning: &RecalcWarning) -> String {
                 Some(max) => format!("{min} to {max}"),
                 None => format!("at least {min}"),
             };
-            let noun = if Some(*min) == *max && *min == 1 {
-                "argument"
-            } else {
-                "arguments"
-            };
+            let noun = if *got == 1 { "argument" } else { "arguments" };
             format!(
-                "recalc: {function} takes {span} {noun}, got {got}{target}; the call evaluated to #VALUE!"
+                "recalc: {function} passed {got} {noun}, expected {span}{target}; the call evaluated to #VALUE!"
             )
         }
         RecalcWarningKind::SetfRefused(name) => {
@@ -1265,7 +1250,34 @@ mod tests {
                     max: Some(1),
                     got: 2,
                 },
-                "ABS takes exactly 1 argument, got 2 of X",
+                "ABS passed 2 arguments, expected exactly 1 of X",
+            ),
+            (
+                RecalcWarningKind::WrongArgumentCount {
+                    function: String::from("INDEX"),
+                    min: 2,
+                    max: Some(3),
+                    got: 4,
+                },
+                "INDEX passed 4 arguments, expected 2 to 3",
+            ),
+            (
+                RecalcWarningKind::WrongArgumentCount {
+                    function: String::from("ROUND"),
+                    min: 2,
+                    max: Some(2),
+                    got: 1,
+                },
+                "ROUND passed 1 argument, expected exactly 2",
+            ),
+            (
+                RecalcWarningKind::WrongArgumentCount {
+                    function: String::from("SUM"),
+                    min: 1,
+                    max: None,
+                    got: 0,
+                },
+                "SUM passed 0 arguments, expected at least 1",
             ),
             (
                 RecalcWarningKind::SetfRefused(String::from("Nope")),
