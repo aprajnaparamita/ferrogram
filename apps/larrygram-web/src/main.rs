@@ -1,11 +1,11 @@
-//! Ferrogram web app (wasm, built with trunk) (ADR 0030).
+//! Larrygram web app (wasm, built with trunk) (ADR 0030).
 //!
-//! The wasm twin of `apps/ferrogram`: same shell, same registry, with
+//! The wasm twin of `apps/larrygram`: same shell, same registry, with
 //! file upload and download instead of native dialogs (ADR 0036).
 //! Settings persist in `localStorage` through the same eframe storage
 //! slot (ADR 0032).
 //!
-//! `cargo build -p ferrogram-web --target wasm32-unknown-unknown` is
+//! `cargo build -p larrygram-web --target wasm32-unknown-unknown` is
 //! the gate step; `trunk serve` runs it from `index.html`.
 
 #![forbid(unsafe_code)]
@@ -40,10 +40,10 @@ impl std::error::Error for AppError {}
 #[cfg(any(target_arch = "wasm32", test))]
 mod app {
     use eframe::egui;
-    use ferrogram_commands::{AppCtx, Settings};
-    use ferrogram_ui::settings::TextStore;
-    use ferrogram_ui::shell::Shell;
-    use ferrogram_ui_spec::Loader;
+    use larrygram_commands::{AppCtx, Settings};
+    use larrygram_ui::settings::TextStore;
+    use larrygram_ui::shell::Shell;
+    use larrygram_ui_spec::Loader;
 
     use crate::AppError;
 
@@ -54,8 +54,8 @@ mod app {
     /// shell (ADR 0028, ADR 0031).
     pub(crate) fn build_shell(
         storage: Option<&dyn eframe::Storage>,
-        registry: ferrogram_commands::Registry,
-        layouts: ferrogram_ui_spec::LayoutSets,
+        registry: larrygram_commands::Registry,
+        layouts: larrygram_ui_spec::LayoutSets,
     ) -> Result<Shell, AppError> {
         let mut slot = TextStore::new(storage.and_then(|storage| storage.get_string(SETTINGS_KEY)));
         let settings = super::settings_from(&mut slot)?;
@@ -66,8 +66,8 @@ mod app {
         Ok(Shell::new(registry, layouts, app))
     }
 
-    /// The layouts of both ribbons (the embedded `ui-spec` data).
-    pub(crate) fn layouts() -> Result<ferrogram_ui_spec::LayoutSets, AppError> {
+    /// The layouts of both command bars (the embedded `ui-spec` data).
+    pub(crate) fn layouts() -> Result<larrygram_ui_spec::LayoutSets, AppError> {
         Loader::from_embedded().map_err(|error| AppError::new(error.to_string()))
     }
 
@@ -107,7 +107,7 @@ mod app {
         pub(crate) fn persist(&mut self, storage: &mut dyn eframe::Storage) {
             let mut slot = TextStore::new(storage.get_string(SETTINGS_KEY));
             if let Err(error) =
-                ferrogram_ui::settings::save_settings(&mut slot, &self.shell.app.settings)
+                larrygram_ui::settings::save_settings(&mut slot, &self.shell.app.settings)
             {
                 self.shell.note_error(error.to_string());
                 return;
@@ -140,14 +140,14 @@ mod app {
 /// falls back to the defaults with one warning (ADR 0021).
 #[cfg(any(target_arch = "wasm32", test))]
 fn settings_from(
-    slot: &mut ferrogram_ui::settings::TextStore,
-) -> Result<ferrogram_commands::Settings, AppError> {
-    ferrogram_ui::settings::load_settings(slot).map_err(|error| AppError::new(error.to_string()))
+    slot: &mut larrygram_ui::settings::TextStore,
+) -> Result<larrygram_commands::Settings, AppError> {
+    larrygram_ui::settings::load_settings(slot).map_err(|error| AppError::new(error.to_string()))
 }
 
 /// The canvas element id in `index.html`.
 #[cfg(target_arch = "wasm32")]
-const CANVAS_ID: &str = "ferrogram_canvas";
+const CANVAS_ID: &str = "larrygram_canvas";
 
 /// Builds the registry, loads both layouts and starts the eframe web
 /// runner (ADR 0030, ADR 0031).
@@ -155,7 +155,7 @@ const CANVAS_ID: &str = "ferrogram_canvas";
 async fn run() -> Result<(), AppError> {
     use wasm_bindgen::JsCast;
 
-    let registry = ferrogram_commands::builtins::registry()
+    let registry = larrygram_commands::builtins::registry()
         .map_err(|error| AppError::new(error.to_string()))?;
     let layouts = app::layouts()?;
     let document = web_sys::window()
@@ -232,10 +232,10 @@ mod tests {
         fn flush(&mut self) {}
     }
 
-    fn shell() -> ferrogram_ui::shell::Shell {
+    fn shell() -> larrygram_ui::shell::Shell {
         app::build_shell(
             None,
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             app::layouts().expect("layouts"),
         )
         .expect("shell")
@@ -251,7 +251,7 @@ mod tests {
     fn settings_round_trip_through_the_storage_slot() {
         let mut storage = MemoryStorage::default();
         let mut app = app::WebApp::new(shell());
-        app.shell.app.settings.units = ferrogram_commands::DisplayUnits::Feet;
+        app.shell.app.settings.units = larrygram_commands::DisplayUnits::Feet;
         app.persist(&mut storage);
         let text = storage.get_string(app::SETTINGS_KEY).expect("stored");
         assert!(text.contains("Feet"), "{text}");
@@ -259,14 +259,14 @@ mod tests {
         let mut restored = app::WebApp::new(
             app::build_shell(
                 Some(&storage),
-                ferrogram_commands::builtins::registry().expect("registry"),
+                larrygram_commands::builtins::registry().expect("registry"),
                 app::layouts().expect("layouts"),
             )
             .expect("shell"),
         );
         assert_eq!(
             restored.shell.app.settings.units,
-            ferrogram_commands::DisplayUnits::Feet
+            larrygram_commands::DisplayUnits::Feet
         );
         restored.persist(&mut storage);
     }
@@ -277,11 +277,11 @@ mod tests {
         storage.set_string(app::SETTINGS_KEY, "{not json".to_owned());
         let shell = app::build_shell(
             Some(&storage),
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             app::layouts().expect("layouts"),
         )
         .expect("shell");
-        assert_eq!(shell.app.settings, ferrogram_commands::Settings::default());
+        assert_eq!(shell.app.settings, larrygram_commands::Settings::default());
         assert_eq!(shell.app.warnings.len(), 1, "one warning");
     }
 

@@ -3,10 +3,10 @@
 //! ADR 0037 item 1: for each layout, the rendered surfaces contain
 //! one widget per placement (tabs, groups, controls, backstage tabs,
 //! context menus, QAT), by accessible name. P4-04 pins the *exact*
-//! widget sets per ribbon tab, backstage entry and QAT and the
+//! widget sets per command-bar tab, backstage entry and QAT and the
 //! per-layout counts (`layout_counts` snapshot) inside `crates/ui`;
 //! this module walks the same placements through the real builtin
-//! registry and the public `Ribbon` API (presence per placement),
+//! registry and the public `TabBar` API (presence per placement),
 //! checks the one surface P4-04 did not pin on committed data (the
 //! context menus, which still carry no controls: the P4-03 note), and
 //! pins the raw placement counts and unique-id counts of the
@@ -18,60 +18,64 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use egui_kittest::Harness;
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_ui::ribbon::Ribbon;
-use ferrogram_ui_spec::{Control, ControlType, FluentId, LayoutKind, LayoutSet};
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_ui::tab_bar::TabBar;
+use larrygram_ui_spec::{Control, ControlType, FluentId, LayoutKind, LayoutSet};
 
 use crate::{names, sets};
 
 /// The dropdown arrow of a split button (the `DROPDOWN_TIP` of
-/// `crates/ui/src/ribbon.rs`; the string is the accessible name the
+/// `crates/ui/src/tab_bar.rs`; the string is the accessible name the
 /// tests pin).
 const DROPDOWN_TIP: &str = "More items";
 
 /// Which `show` method a [`Rig`] runs each frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Surface {
-    /// [`Ribbon::show`].
-    Ribbon,
-    /// [`Ribbon::show_quick_access`].
+    /// [`TabBar::show`].
+    CommandBar,
+    /// [`TabBar::show_quick_access`].
     QuickAccess,
-    /// [`Ribbon::show_backstage`].
+    /// [`TabBar::show_backstage`].
     Backstage,
-    /// [`Ribbon::show_context_menu`].
+    /// [`TabBar::show_context_menu`].
     ContextMenu,
 }
 
-/// A ribbon driven headlessly with the real builtin registry.
+/// A command bar driven headlessly with the real builtin registry.
 struct Rig {
-    ribbon: Rc<RefCell<Ribbon>>,
+    tab_bar: Rc<RefCell<TabBar>>,
     harness: Harness<'static>,
 }
 
 impl Rig {
     fn build(kind: LayoutKind, set: &LayoutSet, surface: Surface) -> Self {
-        let ribbon = Rc::new(RefCell::new(Ribbon::new(kind)));
+        let tab_bar = Rc::new(RefCell::new(TabBar::new(kind)));
         let set = Rc::new(set.clone());
-        let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+        let registry = larrygram_commands::builtins::registry().expect("the registry builds");
         let app = AppCtx::new(Settings::default());
         let harness = Harness::builder()
             .with_size(egui::vec2(12000.0, 4000.0))
             .build_ui({
-                let ribbon = Rc::clone(&ribbon);
+                let tab_bar = Rc::clone(&tab_bar);
                 let set = Rc::clone(&set);
                 move |ui| {
-                    let mut ribbon = ribbon.borrow_mut();
+                    let mut tab_bar = tab_bar.borrow_mut();
                     let produced = match surface {
-                        Surface::Ribbon => ribbon.show(ui, &set, &registry, &app),
-                        Surface::QuickAccess => ribbon.show_quick_access(ui, &set, &registry, &app),
-                        Surface::Backstage => ribbon.show_backstage(ui, &set, &registry, &app),
-                        Surface::ContextMenu => ribbon.show_context_menu(ui, &set, &registry, &app),
+                        Surface::CommandBar => tab_bar.show(ui, &set, &registry, &app),
+                        Surface::QuickAccess => {
+                            tab_bar.show_quick_access(ui, &set, &registry, &app)
+                        }
+                        Surface::Backstage => tab_bar.show_backstage(ui, &set, &registry, &app),
+                        Surface::ContextMenu => {
+                            tab_bar.show_context_menu(ui, &set, &registry, &app)
+                        }
                     }
                     .expect("the surface renders");
                     let _ = produced;
                 }
             });
-        let mut rig = Self { ribbon, harness };
+        let mut rig = Self { tab_bar, harness };
         rig.run();
         rig
     }
@@ -81,10 +85,10 @@ impl Rig {
         self.harness.run();
     }
 
-    /// Mutates the ribbon state between frames (active tab, the open
+    /// Mutates the command bar state between frames (active tab, the open
     /// context menu).
-    fn ribbon(&self) -> std::cell::RefMut<'_, Ribbon> {
-        self.ribbon.borrow_mut()
+    fn tab_bar(&self) -> std::cell::RefMut<'_, TabBar> {
+        self.tab_bar.borrow_mut()
     }
 
     /// The widget names of the current frame, as a multiset.
@@ -243,7 +247,7 @@ fn menu_control(
         label: label.to_owned(),
         order,
         parent: parent.map(FluentId::new),
-        command: command.map(ferrogram_ui_spec::CommandId::new),
+        command: command.map(larrygram_ui_spec::CommandId::new),
         aliases: Vec::new(),
         bounds: None,
         icon_ref: None,
@@ -255,10 +259,10 @@ fn menu_control(
 
 // --- the tests -------------------------------------------------------
 
-/// ADR 0037: the rendered ribbon contains one widget per placement,
+/// ADR 0037: the rendered command bar contains one widget per placement,
 /// by accessible name, for both layouts and every surface.
 ///
-/// Exact widget sets per ribbon tab, backstage entry and QAT are
+/// Exact widget sets per command-bar tab, backstage entry and QAT are
 /// pinned by P4-04's
 /// `both_layouts_render_one_widget_per_placement`; this walk covers
 /// the same placements through the real registry (plus the context
@@ -266,14 +270,14 @@ fn menu_control(
 /// duplicates that test.
 #[test]
 fn every_placement_of_both_layouts_renders_by_accessible_name() {
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
-        let set = sets().get(kind).clone();
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
+        let set = sets().get(kind).expect("the committed set").clone();
 
-        // Every ribbon tab: the tab labels, the group labels and the
+        // Every command-bar tab: the tab labels, the group labels and the
         // placements of the active tab's groups.
-        let mut rig = Rig::build(kind, &set, Surface::Ribbon);
+        let mut rig = Rig::build(kind, &set, Surface::CommandBar);
         for (index, tab) in set.layout.tabs.iter().enumerate() {
-            rig.ribbon().set_active_tab(index);
+            rig.tab_bar().set_active_tab(index);
             rig.run();
             let names = rig.names();
             for label in tab_labels(&set) {
@@ -304,10 +308,10 @@ fn every_placement_of_both_layouts_renders_by_accessible_name() {
 
         // Every backstage entry.
         let mut rig = Rig::build(kind, &set, Surface::Backstage);
-        rig.ribbon().set_backstage_open(true);
+        rig.tab_bar().set_backstage_open(true);
         rig.run();
         for (index, tab) in set.layout.backstage.tabs.iter().enumerate() {
-            rig.ribbon().set_active_backstage_tab(index);
+            rig.tab_bar().set_active_backstage_tab(index);
             rig.run();
             let names = rig.names();
             for entry in &set.layout.backstage.tabs {
@@ -329,7 +333,7 @@ fn every_placement_of_both_layouts_renders_by_accessible_name() {
         // Every context menu.
         for menu in &set.layout.context_menus {
             let mut rig = Rig::build(kind, &set, Surface::ContextMenu);
-            rig.ribbon().set_context_menu(Some(menu.id.clone()));
+            rig.tab_bar().set_context_menu(Some(menu.id.clone()));
             rig.run();
             let names = rig.names();
             for name in expected_names(&menu.controls) {
@@ -391,7 +395,7 @@ fn a_context_menu_renders_exactly_its_placements() {
     let mut set = LayoutSet::default();
     set.layout
         .context_menus
-        .push(ferrogram_ui_spec::ContextMenu {
+        .push(larrygram_ui_spec::ContextMenu {
             id: FluentId::new("TestMenu"),
             label: "TestMenu".to_owned(),
             order: 0,
@@ -403,8 +407,8 @@ fn a_context_menu_renders_exactly_its_placements() {
             controls: menu_controls,
         });
 
-    let mut rig = Rig::build(LayoutKind::Visio2016, &set, Surface::ContextMenu);
-    rig.ribbon()
+    let mut rig = Rig::build(LayoutKind::Panel2016, &set, Surface::ContextMenu);
+    rig.tab_bar()
         .set_context_menu(Some(FluentId::new("TestMenu")));
     rig.run();
     assert_eq!(
@@ -415,15 +419,15 @@ fn a_context_menu_renders_exactly_its_placements() {
 
     // The committed menus (currently empty, P4-03): exactly their
     // placements, nothing else.
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
-        let set = sets().get(kind).clone();
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
+        let set = sets().get(kind).expect("the committed set").clone();
         assert!(
             !set.layout.context_menus.is_empty(),
             "{kind:?} has context menus to walk"
         );
         for menu in &set.layout.context_menus {
             let mut rig = Rig::build(kind, &set, Surface::ContextMenu);
-            rig.ribbon().set_context_menu(Some(menu.id.clone()));
+            rig.tab_bar().set_context_menu(Some(menu.id.clone()));
             rig.run();
             assert_eq!(
                 rig.names(),
@@ -446,17 +450,17 @@ fn a_context_menu_renders_exactly_its_placements() {
 fn the_raw_placement_counts_are_pinned() {
     let line = |label: &str, value: usize| format!("{label}: {value}");
     let mut report = String::new();
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
-        let layout = &sets().get(kind).layout;
-        let mut ribbon_controls = 0usize;
-        let mut ribbon_nested = 0usize;
-        let mut ribbon_ids: BTreeSet<&str> = BTreeSet::new();
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
+        let layout = &sets().get(kind).expect("the committed set").layout;
+        let mut tab_bar_controls = 0usize;
+        let mut tab_bar_nested = 0usize;
+        let mut tab_bar_ids: BTreeSet<&str> = BTreeSet::new();
         for tab in &layout.tabs {
             for group in &tab.groups {
                 let (roots, items) = raw_split(&group.controls);
-                ribbon_controls += roots;
-                ribbon_nested += items;
-                ribbon_ids.extend(group.controls.iter().map(|c| c.id.as_str()));
+                tab_bar_controls += roots;
+                tab_bar_nested += items;
+                tab_bar_ids.extend(group.controls.iter().map(|c| c.id.as_str()));
             }
         }
         let mut backstage_controls = 0usize;
@@ -480,14 +484,14 @@ fn the_raw_placement_counts_are_pinned() {
         let (qat_controls, qat_nested) = raw_split(&layout.quick_access_toolbar.controls);
         report.push_str(&format!("layout: {kind:?}\n"));
         for (label, value) in [
-            ("ribbon tabs", layout.tabs.len()),
+            ("command bar tabs", layout.tabs.len()),
             (
-                "ribbon groups",
+                "command bar groups",
                 layout.tabs.iter().map(|t| t.groups.len()).sum(),
             ),
-            ("ribbon controls (raw roots)", ribbon_controls),
-            ("ribbon controls (raw nested)", ribbon_nested),
-            ("ribbon controls (unique ids)", ribbon_ids.len()),
+            ("command bar controls (raw roots)", tab_bar_controls),
+            ("command bar controls (raw nested)", tab_bar_nested),
+            ("command bar controls (unique ids)", tab_bar_ids.len()),
             ("backstage tabs", layout.backstage.tabs.len()),
             ("backstage controls (raw roots)", backstage_controls),
             ("backstage controls (raw nested)", backstage_nested),

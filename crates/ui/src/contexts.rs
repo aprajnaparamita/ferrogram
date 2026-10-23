@@ -7,8 +7,8 @@
 //! UI, so the enum lives here and not in `crates/ui-spec`
 //! ([`ContextId`] there is the name used in the data files).
 
-use ferrogram_commands::AppCtx;
-use ferrogram_ui_spec::v2::ContextId;
+use larrygram_commands::AppCtx;
+use larrygram_ui_spec::v2::ContextId;
 
 use crate::UiError;
 
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn current_is_not_implemented() {
-        let app = AppCtx::new(ferrogram_commands::Settings::default());
+        let app = AppCtx::new(larrygram_commands::Settings::default());
         assert!(matches!(current(&app), Err(UiError::NotImplemented)));
     }
 }

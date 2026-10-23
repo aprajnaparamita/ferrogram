@@ -8,7 +8,7 @@
 //! inheritance is resolved through a lookup, never flattened on load
 //! (ADR 0013).
 //!
-//! Part of Ferrogram. Alpha.
+//! Part of Larrygram. Alpha.
 
 #![forbid(unsafe_code)]
 

@@ -1,0 +1,28 @@
+[package]
+name = "larrygram-cli"
+description = "Larrygram command-line tool: inspect, render, export, run-command."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+# Argument parsing and JSON output (ADR 0026); the Larrygram libraries the
+# CLI calls. `larrygram-commands` is the ADR 0026 seam: the CLI dispatches
+# `inspect`, `render` and `export` through its registry (Phase 4).
+# Licences checked by cargo deny.
+lexopt = "0.3"
+serde_json = "1"
+larrygram-commands = { path = "../../crates/commands" }
+larrygram-geom = { path = "../../crates/geom" }
+larrygram-model = { path = "../../crates/model" }
+larrygram-render = { path = "../../crates/render" }
+larrygram-vsdx = { path = "../../crates/vsdx" }
+
+[dev-dependencies]
+# Snapshot tests of the `inspect` output (AGENTS.md section 9).
+insta = "1"
+
+[lints]
+workspace = true

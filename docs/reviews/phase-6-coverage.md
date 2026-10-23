@@ -4,7 +4,7 @@
 - Scope: the whole phase, with the new surface named in the task:
   `crates/shapesheet` (the whole engine), `crates/model/src/values.rs`
   (the `Inh` snapshot policy), `crates/commands/src/recalc.rs`,
-  `crates/vsdx` value spelling, `crates/ui/src/panels.rs`.
+  `crates/vsdx` value spelling, `crates/ui/src/panes.rs`.
 - Numbers below come from this run in the worktree (quoted as required):
 
 ```sh
@@ -24,53 +24,53 @@ cargo llvm-cov --workspace --all-features
 
 | Crate | Lines | Covered | Coverage | Threshold | Phase 5 | Phase 5 ratchet | Delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| ferrogram-geom | 2501 | 2501 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
-| ferrogram-model | 11234 | 11204 | 99.7% | 85 | 99.7% | 99.7 | ±0.0 |
-| ferrogram-ui-spec | 2043 | 2031 | 99.4% | 85 | 99.4% | 99.3 | ±0.0 |
-| ferrogram-text | 1768 | 1748 | 98.9% | 75 | 98.9% | 98.8 | ±0.0 |
-| ferrogram-render | 7221 | 7114 | 98.5% | 75 | 98.5% | 98.5 | ±0.0 |
-| ferrogram-commands | 9537 | 9372 | 98.3% | 85 | 98.3% | 98.3 | ±0.0 |
-| ferrogram-vsdx | 7722 | 7583 | 98.2% | 85 | 98.1% | 98.1 | +0.1 |
-| ferrogram-cli | 1266 | 1225 | 96.8% | 50 | 96.8% | 96.7 | ±0.0 |
-| ferrogram-ui | 11671 | 11324 | 97.0% | 50 | 96.8% | 96.8 | +0.2 |
-| ferrogram-shapesheet | 6733 | 6433 | 95.5% | 85 | 100.0% (45 stub lines) | 100.0 | n/a, see below |
+| larrygram-geom | 2501 | 2501 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
+| larrygram-model | 11234 | 11204 | 99.7% | 85 | 99.7% | 99.7 | ±0.0 |
+| larrygram-ui-spec | 2043 | 2031 | 99.4% | 85 | 99.4% | 99.3 | ±0.0 |
+| larrygram-text | 1768 | 1748 | 98.9% | 75 | 98.9% | 98.8 | ±0.0 |
+| larrygram-render | 7221 | 7114 | 98.5% | 75 | 98.5% | 98.5 | ±0.0 |
+| larrygram-commands | 9537 | 9372 | 98.3% | 85 | 98.3% | 98.3 | ±0.0 |
+| larrygram-vsdx | 7722 | 7583 | 98.2% | 85 | 98.1% | 98.1 | +0.1 |
+| larrygram-cli | 1266 | 1225 | 96.8% | 50 | 96.8% | 96.7 | ±0.0 |
+| larrygram-ui | 11671 | 11324 | 97.0% | 50 | 96.8% | 96.8 | +0.2 |
+| larrygram-shapesheet | 6733 | 6433 | 95.5% | 85 | 100.0% (45 stub lines) | 100.0 | n/a, see below |
 | xtask | 10443 | 9757 | 93.4% | — | 93.4% | 93.4 | ±0.0 |
-| ferrogram | 250 | 200 | 80.0% | 50 | 80.0% | 80.0 | ±0.0 |
-| ferrogram-web | 140 | 109 | 77.9% | — | 77.9% | 77.8 | ±0.0 |
-| ferrogram-control | 0 | 0 | n/a | 50 | — | — | placeholder |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85 | — | — | placeholder |
+| larrygram | 250 | 200 | 80.0% | 50 | 80.0% | 80.0 | ±0.0 |
+| larrygram-web | 140 | 109 | 77.9% | — | 77.9% | 77.8 | ±0.0 |
+| larrygram-control | 0 | 0 | n/a | 50 | — | — | placeholder |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85 | — | — | placeholder |
 
 Phase 5 numbers are the table in `docs/progress/phase-5.md` (measured at
 the phase end, after the P5-19/P5-20 fixes); the ratchet column is
 `[ratchet]` in `coverage.toml` as of the end of Phase 5 — the
-`ferrogram-shapesheet` row shows 100.0 there because Phase 5 measured 45
+`larrygram-shapesheet` row shows 100.0 there because Phase 5 measured 45
 all-stub lines; the plan reset that one entry to 85.0 when P6-01
 merged. Deltas are against the Phase 5 recorded percentage, one decimal
-place. The `ferrogram-shapesheet` delta is meaningless on its face (100%
+place. The `larrygram-shapesheet` delta is meaningless on its face (100%
 of 45 stub lines vs 95.5% of 6 733 real lines) and is marked n/a.
 
 The run reproduces `docs/reviews/phase-6-tests.md`'s table exactly
-except `ferrogram-render` (7 114 covered here vs 7 113 there, one line;
+except `larrygram-render` (7 114 covered here vs 7 113 there, one line;
 both round to 98.5%).
 
 ## Statement per crate
 
 - **At threshold and at ratchet (exact):** geom (100.00, 2 501/2 501),
-  ferrogram (80.00), xtask (93.43 vs 93.4). Zero margin, but not below.
+  larrygram (80.00), xtask (93.43 vs 93.4). Zero margin, but not below.
 - **Above threshold and above ratchet:** model (99.73 vs 99.7),
   ui-spec (99.41 vs 99.3), text (98.87 vs 98.8), render (98.52 vs 98.5),
   vsdx (98.20 vs 98.1), cli (96.76 vs 96.7), ui (97.03 vs 96.8),
   web (77.86 vs 77.8).
 - **Above threshold, below ratchet inside the gate's 0.05 tolerance
   (blocker under the strict rule of the role file):**
-  `ferrogram-commands` 9 372/9 537 = **98.27%** against the 98.3
+  `larrygram-commands` 9 372/9 537 = **98.27%** against the 98.3
   ratchet, 0.03 pp below it. This is the same crate P5-13 flagged with
   the same 0.03 pp debt; the Phase 5 end-of-phase ratchet update moved
   the number up to the rounded measured value and kept the debt. The
   gate is green only because `cargo xtask coverage` tolerates 0.05 for
-  float noise. One uncovered line in `ferrogram-commands` is about
+  float noise. One uncovered line in `larrygram-commands` is about
   0.01 pp: the fix tasks below should give this crate its margin first.
-- **`ferrogram-shapesheet`:** 6 433/6 733 = 95.54%, far above its 85
+- **`larrygram-shapesheet`:** 6 433/6 733 = 95.54%, far above its 85
   threshold. Its ratchet (85.0) is the Phase 5 all-stub number and is
   stale: it does not describe the engine that exists now. It must move
   (proposal below). The engine's gaps are real but narrow (88.9% in
@@ -87,23 +87,23 @@ Applying that to this run and keeping a ratchet from ever dropping
 
 | Crate | Current | Proposed |
 |---|---:|---:|
-| ferrogram | 80.0 | 80.0 |
-| ferrogram-cli | 96.7 | 96.7 |
-| ferrogram-commands | 98.3 | 98.3 |
-| ferrogram-geom | 100.0 | 100.0 |
-| ferrogram-model | 99.7 | 99.7 |
-| ferrogram-render | 98.5 | 98.5 |
-| ferrogram-shapesheet | 85.0 | **95.5** |
-| ferrogram-text | 98.8 | 98.8 |
-| ferrogram-ui | 96.8 | **97.0** |
-| ferrogram-ui-spec | 99.3 | **99.4** |
-| ferrogram-vsdx | 98.1 | **98.2** |
-| ferrogram-web | 77.8 | 77.8 |
+| larrygram | 80.0 | 80.0 |
+| larrygram-cli | 96.7 | 96.7 |
+| larrygram-commands | 98.3 | 98.3 |
+| larrygram-geom | 100.0 | 100.0 |
+| larrygram-model | 99.7 | 99.7 |
+| larrygram-render | 98.5 | 98.5 |
+| larrygram-shapesheet | 85.0 | **95.5** |
+| larrygram-text | 98.8 | 98.8 |
+| larrygram-ui | 96.8 | **97.0** |
+| larrygram-ui-spec | 99.3 | **99.4** |
+| larrygram-vsdx | 98.1 | **98.2** |
+| larrygram-web | 77.8 | 77.8 |
 | xtask | 93.4 | 93.4 |
 
-The floor is below the current value only for `ferrogram-commands`
+The floor is below the current value only for `larrygram-commands`
 (98.2); keeping 98.3 there refuses to accept the 0.03 pp drop, the same
-judgement P5-13 made. The `ferrogram-shapesheet` move is the one the
+judgement P5-13 made. The `larrygram-shapesheet` move is the one the
 task names: the ratchet is the Phase 5 all-stub number and must land on
 the measured engine number (95.5).
 
@@ -314,14 +314,14 @@ line-table). Line numbers are from this worktree.
   rejects non-finite numbers (`mutate::checked_number`). A hardening
   (reject on read) should change P6-11's two pinned tests deliberately.
 
-### Panels (`crates/ui/src/panels.rs`)
+### Panes (`crates/ui/src/panes.rs`)
 
-- **major** `panels.rs:1960-1961` — the formula read-only marker
+- **major** `panes.rs:1960-1961` — the formula read-only marker
   (`FORMULA_MARKER` label with `FORMULA_HINT` on hover) never renders
   in any `egui_kittest` run. The ADR 0058 rule "formula cells are
   read-only" is tested at the policy layer; the affordance that tells
-  the *user* is untested UI. One panel test that opens a formula cell.
-- **minor** `panels.rs:795` — the entry error for a non-finite number
+  the *user* is untested UI. One pane test that opens a formula cell.
+- **minor** `panes.rs:795` — the entry error for a non-finite number
   (`"nan" is not a finite number`), the twin of the reader edge above.
   `489` ("not a number" reason for a non-finite row), `640`/`643`
   (a list-valued cell's display; the non-exhaustive `Value` kind's
@@ -329,8 +329,8 @@ line-table). Line numbers are from this worktree.
   `991` (`formula_computes`' catch-all: a future `ExprKind` counts as
   computing, keeping the cell read-only — pin it when the kind lands),
   `1036` (a stored formula that does not parse is *not* read-only).
-- **minor** `panels.rs:1467`, `1484`, `1554`, `1843` — closing braces of
-  the P6-09 panel tests (line-table artefacts, not dead code).
+- **minor** `panes.rs:1467`, `1484`, `1554`, `1843` — closing braces of
+  the P6-09 pane tests (line-table artefacts, not dead code).
 
 ### Test-code noise (minor, same class as P5-15's note)
 
@@ -359,7 +359,7 @@ line-table). Line numbers are from this worktree.
 
 - `cargo xtask coverage`: green (the per-crate table above; every crate
   at or above its threshold and, within the 0.05 tolerance, its
-  ratchet; `ferrogram-commands` is the one crate under its ratchet on
+  ratchet; `larrygram-commands` is the one crate under its ratchet on
   exact numbers).
 - `cargo xtask gate --quick`: green in the worktree (codegen, parity,
   fmt, clippy, test, doc, deny, layers). No code changed in this task,

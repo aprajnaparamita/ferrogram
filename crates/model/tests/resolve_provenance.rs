@@ -7,7 +7,7 @@
 //! reads the parent's children), a resolution that walks every rung of the
 //! chain, and stale or overflowing arena ids.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, Page, PageId, Shape,
     ShapeId, Style, StyleId, ValueSource,
 };

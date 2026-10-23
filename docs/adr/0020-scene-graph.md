@@ -8,8 +8,8 @@
 
 Phase 3 renders the model to PNG and SVG. Phase 4 draws the same content on
 an egui canvas. All three need one intermediate representation between
-`ferrogram-model` (L1) and the backends: the scene graph, in
-`ferrogram-render` (L3, ADR 0002). It must express paths, paints, strokes,
+`larrygram-model` (L1) and the backends: the scene graph, in
+`larrygram-render` (L3, ADR 0002). It must express paths, paints, strokes,
 line ends, shadows, text and clipping, and it must carry the shape hierarchy
 transforms already resolved into page coordinates.
 
@@ -89,7 +89,7 @@ pub struct Scene {
 }
 ```
 
-Paths are `ferrogram_geom::Path` (ADR 0022) in **page coordinates, in
+Paths are `larrygram_geom::Path` (ADR 0022) in **page coordinates, in
 inches**; the backend applies only its device transform (scale, y flip for
 PNG). Text glyphs carry a font index into `TextNode::fonts` and an em-unit
 outline from `text::Font::outline` (ADR 0024).
@@ -113,7 +113,7 @@ master and style values apply.
 
 ### How rendering reads cells
 
-Every cell goes through `ferrogram_model::CellReader` (ADR 0021) on the
+Every cell goes through `larrygram_model::CellReader` (ADR 0021) on the
 shape's `SheetRef`: resolved value plus a warning when the cached value is
 missing or wrong. Geometry rows come from `Document::shape_geometry`
 (ADR 0019). Layer visibility comes from the page's `Layer` rows and the

@@ -9,7 +9,7 @@
 
 use crate::app::AppCtx;
 use crate::error::CommandError;
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 /// Runs `step` with the undo-recording gate closed (ADR 0040 rule 2).
 ///
@@ -447,7 +447,7 @@ mod tests {
     fn undo_and_redo_run_with_the_recording_gate_closed() {
         let mut ctx = AppCtx::new(Settings::default());
         let index = ctx.open_document(crate::DocumentSession::new(
-            ferrogram_model::Document::new(),
+            larrygram_model::Document::new(),
             None,
         ));
         let session = ctx.documents.get(index).expect("session").id;

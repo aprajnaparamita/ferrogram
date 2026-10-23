@@ -6,7 +6,7 @@
 //! never crash the app.
 
 use egui::Context;
-use ferrogram_ui_spec::v2::Theme;
+use larrygram_ui_spec::v2::Theme;
 
 use crate::UiError;
 

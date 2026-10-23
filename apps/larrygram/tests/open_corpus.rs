@@ -2,7 +2,7 @@
 //! files shows them on the canvas.
 //!
 //! For every `corpus/vsdx/*.vsdx` (15 files, `corpus/PROVENANCE.md`):
-//! `file.open` runs through `ferrogram_commands::builtins::registry()`
+//! `file.open` runs through `larrygram_commands::builtins::registry()`
 //! in a real [`Shell`], one shell frame renders, and the canvas
 //! raster matches `render_raster` of the same page within the ADR
 //! 0027 metric (the canvas and the PNG backend share one rasterizer,
@@ -14,9 +14,9 @@
 //!
 //! The corpus is fetched, never committed (ADR 0005): the test
 //! self-skips with a message when `corpus/vsdx/` is absent and fails
-//! instead when `FERROGRAM_REQUIRE_CORPUS=1` is set (the Phase 3
+//! instead when `LARRYGRAM_REQUIRE_CORPUS=1` is set (the Phase 3
 //! convention of `crates/render/tests/common`). Run it as
-//! `FERROGRAM_REQUIRE_CORPUS=1 cargo test -p ferrogram --test
+//! `LARRYGRAM_REQUIRE_CORPUS=1 cargo test -p larrygram --test
 //! open_corpus`.
 //!
 //! Known gap (see the P4-09 Result): `Shell` keeps its `CanvasCache`
@@ -32,16 +32,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{ArgValue, Args, CommandId, Invocation, Source};
-use ferrogram_render::{
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{ArgValue, Args, CommandId, Invocation, Source};
+use larrygram_render::{
     BuildOptions, MAX_DEVICE_EXTENT, RasterImage, RasterOptions, build_scene, render_raster,
 };
-use ferrogram_ui::Intent;
-use ferrogram_ui::canvas::{self, CanvasCache, POINTS_PER_INCH};
-use ferrogram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::Loader;
+use larrygram_ui::Intent;
+use larrygram_ui::canvas::{self, CanvasCache, POINTS_PER_INCH};
+use larrygram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::Loader;
 
 // ---------------------------------------------------------------------------
 // Corpus discovery (the Phase 3 convention)
@@ -70,14 +70,14 @@ fn corpus_files() -> Vec<PathBuf> {
     files
 }
 
-/// Fails the calling test when `FERROGRAM_REQUIRE_CORPUS=1` is set
+/// Fails the calling test when `LARRYGRAM_REQUIRE_CORPUS=1` is set
 /// and the corpus is absent; returns `true` (the test returns early)
 /// when the corpus is absent and the test may skip.
 fn require_corpus_or(files: &[PathBuf]) -> bool {
     if files.is_empty() {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
         true
@@ -219,7 +219,7 @@ fn raster_scale(texture_side: usize, width_in: f64, height_in: f64, zoom: f64) -
 struct NoDialogPicker;
 
 impl FilePicker for NoDialogPicker {
-    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         panic!("the exit-criterion test must never open a dialog")
     }
 
@@ -227,7 +227,7 @@ impl FilePicker for NoDialogPicker {
         &self,
         _request: &SaveRequest,
         _data: &[u8],
-    ) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    ) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         panic!("the exit-criterion test must never open a dialog")
     }
 
@@ -257,7 +257,7 @@ fn every_corpus_file_opens_and_shows_on_the_canvas() {
 fn check_one_file(file: &Path, name: &str) {
     // The shell: the builtin registry and the committed layouts, the
     // way the app builds them.
-    let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+    let registry = larrygram_commands::builtins::registry().expect("the registry builds");
     let layouts = Loader::from_embedded().expect("the embedded ui-spec loads");
     let mut shell = Shell::new(registry, layouts, AppCtx::new(Settings::default()));
     shell.set_picker(Box::new(NoDialogPicker));

@@ -40,7 +40,7 @@ They are listed outermost first.
   bar.
 
 `notes` says what the region holds. The shell (P7-09) builds its egui
-panels in this order.
+`Panel` areas in this order.
 
 ## Items
 

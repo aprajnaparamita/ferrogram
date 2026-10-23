@@ -11,12 +11,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui_kittest::Harness;
-use ferrogram_commands::app::AppCtx;
-use ferrogram_commands::builtins;
-use ferrogram_render::Overlay;
-use ferrogram_ui::canvas::CanvasCache;
-use ferrogram_ui::shell::dispatch_one;
-use ferrogram_ui::tools::{self, Tool, ToolMachine};
+use larrygram_commands::app::AppCtx;
+use larrygram_commands::builtins;
+use larrygram_render::Overlay;
+use larrygram_ui::canvas::CanvasCache;
+use larrygram_ui::shell::dispatch_one;
+use larrygram_ui::tools::{self, Tool, ToolMachine};
 
 use crate::{CanvasRig, app_with_one_shape, screen, shape_number};
 
@@ -66,12 +66,12 @@ fn one_rectangle_drag_creates_one_shape_and_one_undo_step() {
         let app = rig.app.borrow_mut();
         let mut app = app;
         let registry = builtins::registry().expect("registry");
-        let id = ferrogram_commands::CommandId::parse("edit.undo").expect("id");
+        let id = larrygram_commands::CommandId::parse("edit.undo").expect("id");
         dispatch_one(
             &registry,
             &mut app,
             &id,
-            ferrogram_commands::Invocation::empty(ferrogram_commands::Source::Test),
+            larrygram_commands::Invocation::empty(larrygram_commands::Source::Test),
         )
         .expect("undo");
     }
@@ -117,7 +117,7 @@ impl StencilRig {
                         let Some(session) = app.active_document_mut() else {
                             return;
                         };
-                        let output = ferrogram_ui::canvas::show_with_overlay(
+                        let output = larrygram_ui::canvas::show_with_overlay(
                             ui, session, &mut cache, &overlay,
                         )
                         .expect("the canvas draws");
@@ -214,12 +214,12 @@ fn one_stencil_drop_creates_one_master_instance_and_one_undo_step() {
         let app = rig.app.borrow_mut();
         let mut app = app;
         let registry = builtins::registry().expect("registry");
-        let id = ferrogram_commands::CommandId::parse("edit.undo").expect("id");
+        let id = larrygram_commands::CommandId::parse("edit.undo").expect("id");
         dispatch_one(
             &registry,
             &mut app,
             &id,
-            ferrogram_commands::Invocation::empty(ferrogram_commands::Source::Test),
+            larrygram_commands::Invocation::empty(larrygram_commands::Source::Test),
         )
         .expect("undo");
     }

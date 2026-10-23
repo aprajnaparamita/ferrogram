@@ -27,7 +27,7 @@ For each `corpus/vsdx/*.vsdx` (15 files, `corpus/manifest.toml`):
 3. Nothing panics; every failure is an `Err` with a message.
 
 Tests skip with a clear message when `corpus/vsdx/` is absent; in CI,
-`FERROGRAM_REQUIRE_CORPUS=1` turns a missing corpus into failure (ADR 0005).
+`LARRYGRAM_REQUIRE_CORPUS=1` turns a missing corpus into failure (ADR 0005).
 
 ### 2. Property tests (`proptest`)
 
@@ -70,8 +70,8 @@ round-trips to catch write panics. The gate's `fuzz` step builds it
 
 ### 5. Oracle comparison (libvisio, ADR 0010)
 
-Dev-only tests behind `FERROGRAM_LIBVISIO_ORACLE`; skipped with a message
-when unset, mandatory with `FERROGRAM_REQUIRE_ORACLE=1`. They compare our
+Dev-only tests behind `LARRYGRAM_LIBVISIO_ORACLE`; skipped with a message
+when unset, mandatory with `LARRYGRAM_REQUIRE_ORACLE=1`. They compare our
 parse of each corpus file against `vsd2raw`'s dump: page count, master
 count, shape count per page, and a few key cell values (`PinX`, `PinY`,
 `Width`, `Height`). Where the oracle does not cover a format (libvisio's
@@ -92,7 +92,7 @@ shells out to `xmllint --schema`:
   (no annotation text leaves the source).
 - The test **skips with a message** when `reference/` is missing or
   `xmllint` is not installed; CI installs `libxml2` and sets
-  `FERROGRAM_REQUIRE_SCHEMA=1` to make it mandatory.
+  `LARRYGRAM_REQUIRE_SCHEMA=1` to make it mandatory.
 - What is validated: each part the model regenerates (`document.xml`,
   `pages/pages.xml`, `page{N}.xml`, `masters/masters.xml`, `master{N}.xml`)
   after a corpus round-trip.

@@ -8,32 +8,32 @@
 # A crate with zero instrumented lines (an empty placeholder) passes.
 
 [thresholds]
-ferrogram-geom = 85.0
-ferrogram-model = 85.0
-ferrogram-vsdx = 85.0
-ferrogram-vsd-binary = 85.0
-ferrogram-shapesheet = 85.0
-ferrogram-commands = 85.0
-ferrogram-ui-spec = 85.0
-ferrogram-render = 75.0
-ferrogram-text = 75.0
-ferrogram-control = 50.0
-ferrogram-ui = 50.0
-ferrogram = 50.0
-ferrogram-cli = 50.0
+larrygram-geom = 85.0
+larrygram-model = 85.0
+larrygram-vsdx = 85.0
+larrygram-vsd-binary = 85.0
+larrygram-shapesheet = 85.0
+larrygram-commands = 85.0
+larrygram-ui-spec = 85.0
+larrygram-render = 75.0
+larrygram-text = 75.0
+larrygram-control = 50.0
+larrygram-ui = 50.0
+larrygram = 50.0
+larrygram-cli = 50.0
 
 [ratchet]
-ferrogram = 80.0
-ferrogram-cli = 96.8
-ferrogram-commands = 98.4
-ferrogram-geom = 100.0
-ferrogram-model = 99.7
-ferrogram-render = 98.5
-ferrogram-shapesheet = 97.0
-ferrogram-text = 98.9
-ferrogram-ui = 97.0
-ferrogram-ui-spec = 99.4
-ferrogram-vsd-binary = 100.0
-ferrogram-vsdx = 98.2
-ferrogram-web = 77.9
+larrygram = 80.0
+larrygram-cli = 96.8
+larrygram-commands = 98.4
+larrygram-geom = 100.0
+larrygram-model = 99.7
+larrygram-render = 98.5
+larrygram-shapesheet = 97.0
+larrygram-text = 98.9
+larrygram-ui = 97.0
+larrygram-ui-spec = 99.4
+larrygram-vsd-binary = 100.0
+larrygram-vsdx = 98.2
+larrygram-web = 77.9
 xtask = 93.4

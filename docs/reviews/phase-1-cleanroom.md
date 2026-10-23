@@ -136,7 +136,7 @@ schema blocks wholesale.
 1. **Licences.** `cargo deny check` green (advisories, bans, licenses,
    sources). MPL-2.0 is not in the allow-list
    (`deny.toml:17-31`); the single exception is
-   `ferrogram-vsd-binary` (`deny.toml:33-35`), and workspace crates are
+   `larrygram-vsd-binary` (`deny.toml:33-35`), and workspace crates are
    licence-checked (`deny.toml:37-39`), so no other MPL crate can enter
    the graph. The only duplicate in the lock file is `winnow`
    (warn-level, `multiple-versions = "warn"`).
@@ -161,7 +161,7 @@ schema blocks wholesale.
    `crates/vsd-binary` carries the MPL-2.0 header
    (`src/lib.rs`, `tests/common/mod.rs`, `tests/oracle_smoke.rs`).
    `tools/libvisio-oracle/build.sh` only clones, configures and builds
-   into `/Volumes/Dara/ferrogram/build/libvisio-oracle` (outside the
+   into `/Volumes/Dara/larrygram/build/libvisio-oracle` (outside the
    repository); nothing from the clone is committed. `NOTICE` records
    libvisio commit `c7c970775b750a4bf7fd1b4364d69bac9815bfcb`, matching
    `build.sh` and `corpus/manifest.toml`.

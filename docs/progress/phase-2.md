@@ -22,7 +22,7 @@ Date: 2026-10-14
 
 **Every corpus `.vsdx` file round-trips without loss and without panics: met.**
 
-`FERROGRAM_REQUIRE_CORPUS=1 cargo test -p ferrogram-vsdx --test roundtrip` passes for all 15 corpus files. For each file it checks four things:
+`LARRYGRAM_REQUIRE_CORPUS=1 cargo test -p larrygram-vsdx --test roundtrip` passes for all 15 corpus files. For each file it checks four things:
 
 - read, write and read again gives no `diff` on any XML part;
 - the part lists, content types and relationships are equal;
@@ -45,7 +45,7 @@ cargo xtask gate (full, 2026-10-14, main)
   PASS  fuzz      (crates/ui-spec/fuzz, crates/vsdx/fuzz)
 gate: GREEN
 
-FERROGRAM_REQUIRE_CORPUS=1 FERROGRAM_REQUIRE_SCHEMA=1 cargo test -p ferrogram-vsdx --test roundtrip --test schema: OK
+LARRYGRAM_REQUIRE_CORPUS=1 LARRYGRAM_REQUIRE_SCHEMA=1 cargo test -p larrygram-vsdx --test roundtrip --test schema: OK
 cargo xtask extract --check: OK
 ```
 
@@ -53,13 +53,13 @@ cargo xtask extract --check: OK
 
 | Crate | Lines | Coverage | Threshold | Phase 1 ratchet | New ratchet |
 |---|---|---|---|---|---|
-| ferrogram-geom | 542 | 100.0% | 85 | — | 100.0 |
-| ferrogram-model | 2525 | 99.7% | 85 | — | 99.7 |
-| ferrogram-shapesheet | 45 | 100.0% | 85 | — | 100.0 |
-| ferrogram-vsdx | 6162 | 97.8% | 85 | — | 97.7 |
-| ferrogram-ui-spec | 1738 | 99.3% | 85 | 99.3 | 99.3 |
+| larrygram-geom | 542 | 100.0% | 85 | — | 100.0 |
+| larrygram-model | 2525 | 99.7% | 85 | — | 99.7 |
+| larrygram-shapesheet | 45 | 100.0% | 85 | — | 100.0 |
+| larrygram-vsdx | 6162 | 97.8% | 85 | — | 97.7 |
+| larrygram-ui-spec | 1738 | 99.3% | 85 | 99.3 | 99.3 |
 | xtask | 9232 | 91.6% | — | 91.3 | 91.6 |
-| ferrogram, ferrogram-cli | 9 each | 66.7% | 50 | 66.6 | 66.6 |
+| larrygram, larrygram-cli | 9 each | 66.7% | 50 | 66.6 | 66.6 |
 
 The coverage audit notes that inline `#[cfg(test)]` code counts as instrumented lines, so these numbers are "src coverage", a little above product-only coverage.
 
@@ -95,7 +95,7 @@ The major review finding was that the default XML namespace was never resolved, 
 
 ## Known issues
 
-- **CI has still never run** (no remote). When it exists, CI should install `libxml2`, provide `reference/`, and set `FERROGRAM_REQUIRE_SCHEMA=1` and `FERROGRAM_REQUIRE_CORPUS=1`.
+- **CI has still never run** (no remote). When it exists, CI should install `libxml2`, provide `reference/`, and set `LARRYGRAM_REQUIRE_SCHEMA=1` and `LARRYGRAM_REQUIRE_CORPUS=1`.
 - **Oracle:** libvisio's raw dump of `.vsdx` has no masters or shapes, so the oracle compares only page counts and page sizes. The full comparison comes with Phase 7.
 - **Deferred to Phase 4 (editing)**, all listed in `docs/STATUS.md`:
   - a deleted page or master leaves its part;

@@ -8,7 +8,7 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_shapesheet::{FUNCTIONS, FunctionDef, FunctionKind, is_supported, lookup_function};
+use larrygram_shapesheet::{FUNCTIONS, FunctionDef, FunctionKind, is_supported, lookup_function};
 
 /// The evaluated set (ADR 0053) as the reference spells it, with the
 /// argument bounds of each function's syntax line and parameter table.

@@ -8,7 +8,7 @@
 
 use core::f64::consts::FRAC_PI_2;
 
-use ferrogram_geom::{Angle, Point, Transform, Unit, UnitKind};
+use larrygram_geom::{Angle, Point, Transform, Unit, UnitKind};
 use proptest::prelude::*;
 
 /// Every unit with the canonical unit of its kind.
@@ -133,7 +133,7 @@ fn a_kind_rejects_every_other_kinds_units() {
             if unit.kind() == *kind {
                 assert!(outcome.is_ok(), "{kind:?} must accept {unit:?}");
             } else {
-                assert_eq!(outcome, Err(ferrogram_geom::Error::WrongUnit));
+                assert_eq!(outcome, Err(larrygram_geom::Error::WrongUnit));
             }
         }
     }

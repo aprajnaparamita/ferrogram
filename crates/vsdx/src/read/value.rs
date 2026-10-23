@@ -59,8 +59,8 @@
 //! the model has one value slot per cell and an error cell keeps the value
 //! and unit it was written with verbatim (task P2-06).
 
-use ferrogram_geom::Unit;
-use ferrogram_model::CellValue;
+use larrygram_geom::Unit;
+use larrygram_model::CellValue;
 
 use crate::Error;
 use crate::value_parse::{Shaped, parse_color, shape};
@@ -146,7 +146,7 @@ pub(crate) fn value(
 ) -> Result<CellValue, Error> {
     // The `Themed` marker: the value comes from the theme whatever the
     // declared kind (ADR 0021 amendment). It is kept as the string and
-    // resolved later by `ferrogram_model::CellReader`. Our own `LIST`
+    // resolved later by `larrygram_model::CellReader`. Our own `LIST`
     // spelling is the one exception: its `V` is a raw list spelling, and
     // the writer only emits the code for a model-built list (P6-08), so
     // `V='Themed' U='LIST'` is a one-entry list, not a theme marker.
@@ -205,7 +205,7 @@ pub(crate) fn bad_value(part: &str, cell: &str, why: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::Color;
+    use larrygram_model::Color;
 
     use super::*;
 

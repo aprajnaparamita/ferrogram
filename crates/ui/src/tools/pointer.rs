@@ -3,16 +3,16 @@
 //! Select, multi-select, marquee, and move, resize and rotate through the
 //! handles ([`crate::handles`], ADR 0041, ADR 0042).
 //!
-//! A pointer down hit-tests the scene (`ferrogram_render::hit`), shift
+//! A pointer down hit-tests the scene (`larrygram_render::hit`), shift
 //! toggles the selection, a drag moves or transforms with snapping
 //! ([`crate::snap`], ADR 0043), and one drag commits exactly one undo edit
 //! (ADR 0040): the tool emits one command intent on release and previews
 //! the drag with overlay marks in between.
 
-use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
-use ferrogram_geom::{Angle, Point, Rect};
-use ferrogram_model::{Document, PageId, ShapeId};
-use ferrogram_render::{
+use larrygram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
+use larrygram_geom::{Angle, Point, Rect};
+use larrygram_model::{Document, PageId, ShapeId};
+use larrygram_render::{
     HitOptions, Overlay, OverlayMark, Scene, build_selection_overlay, hit_marquee, hit_test,
 };
 
@@ -589,7 +589,7 @@ fn preview_frame(
     moving: &[ShapeId],
     alt: bool,
     zoom: f64,
-) -> Result<(Rect, Angle, Option<ferrogram_geom::SnapKind>), UiError> {
+) -> Result<(Rect, Angle, Option<larrygram_geom::SnapKind>), UiError> {
     let (bounds, angle) = frame;
     let snapper = Snapper::default();
     match kind {
@@ -734,8 +734,8 @@ fn intent(id: &'static str, args: Args) -> Result<crate::Intent, UiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{
         Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape,
     };
 

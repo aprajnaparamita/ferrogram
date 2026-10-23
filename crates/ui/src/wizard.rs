@@ -6,7 +6,7 @@
 //! interface stub; task P7-15 implements it.
 
 use egui::Ui;
-use ferrogram_ui_spec::v2::LayoutKind;
+use larrygram_ui_spec::v2::LayoutKind;
 
 use crate::UiError;
 

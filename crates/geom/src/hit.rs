@@ -3,7 +3,7 @@
 //!
 //! The functions are pure geometry in inches (ADR 0011). The hit policy
 //! (fill versus stroke, tolerance in screen pixels, z-order) lives in
-//! `ferrogram-render::hit` (L3); the drag and snap callers live in
+//! `larrygram-render::hit` (L3); the drag and snap callers live in
 //! `crates/ui` (L6).
 //!
 //! Curve segments (quadratic and cubic Béziers) flatten to chords within
@@ -13,7 +13,7 @@
 //! measures "no hit" (`f64::INFINITY` or `false`), the ADR 0021 policy
 //! style.
 //!
-//! Part of Ferrogram. Alpha.
+//! Part of Larrygram. Alpha.
 
 use crate::curve::{Cubic, Curve};
 use crate::error::Error;

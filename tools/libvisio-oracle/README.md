@@ -1,9 +1,9 @@
 # libvisio oracle
 
 Dev-only harness that builds libvisio's CLI tools so tests can compare
-Ferrogram's `.vsd` parsing against an independent implementation of the
+Larrygram's `.vsd` parsing against an independent implementation of the
 same format. libvisio is **never** a runtime dependency and is never
-linked into Ferrogram (AGENTS.md §5, ADR 0010).
+linked into Larrygram (AGENTS.md §5, ADR 0010).
 
 The directory contains a build script and this README. Nothing else:
 no git submodule and no wrapper crate — both were rejected in the
@@ -41,12 +41,12 @@ cargo xtask oracle clean
 ```
 
 The script is POSIX `sh` and works on macOS and Linux. Options:
-`--build-dir <path>` (or the `FERROGRAM_LIBVISIO_BUILD_DIR` environment
+`--build-dir <path>` (or the `LARRYGRAM_LIBVISIO_BUILD_DIR` environment
 variable) selects the build directory; `--jobs <n>` overrides make's
 parallelism.
 
 The build directory defaults to
-`/Volumes/Dara/ferrogram/build/libvisio-oracle/`, on the external
+`/Volumes/Dara/larrygram/build/libvisio-oracle/`, on the external
 drive, so it is built once and shared by every worktree (AGENTS.md
 §3). The libvisio source is cloned into `<build-dir>/src/libvisio/`
 at the commit pinned in `NOTICE` and `docs/sources.md` (source 6):
@@ -85,19 +85,19 @@ libvisio's build is heavy, version dependent on the host, and not
 portable to a clean Windows runner. Tests that need the oracle:
 
 - are `#[ignore]`d, so a plain `cargo test` never runs them;
-- find the tools via `FERROGRAM_LIBVISIO_ORACLE`, which must point at
+- find the tools via `LARRYGRAM_LIBVISIO_ORACLE`, which must point at
   the directory holding the binaries (usually `<build-dir>/bin`), and
   skip with a message when it is unset or not a directory;
 - treat a missing oracle as a **failure** when
-  `FERROGRAM_REQUIRE_ORACLE=1` is also set (CI on Linux and macOS);
+  `LARRYGRAM_REQUIRE_ORACLE=1` is also set (CI on Linux and macOS);
   Windows CI does not build the oracle and does not set it.
 
 Run the smoke test locally after building:
 
 ```sh
 cargo xtask oracle build
-FERROGRAM_LIBVISIO_ORACLE=/Volumes/Dara/ferrogram/build/libvisio-oracle/bin \
-  cargo test -p ferrogram-vsd-binary -- --ignored
+LARRYGRAM_LIBVISIO_ORACLE=/Volumes/Dara/larrygram/build/libvisio-oracle/bin \
+  cargo test -p larrygram-vsd-binary -- --ignored
 ```
 
 The helper that reads these variables is a copy-paste of ~10 lines per
@@ -108,6 +108,6 @@ consumer crate (see `crates/vsd-binary/tests/common/mod.rs`); the
 
 libvisio is MPL-2.0 (verified from its `COPYING`), commit
 `c7c970775b750a4bf7fd1b4364d69bac9815bfcb`. This harness only builds
-it; no libvisio code is copied into Ferrogram. Code derived from
+it; no libvisio code is copied into Larrygram. Code derived from
 libvisio lives exclusively in `crates/vsd-binary` (MPL-2.0, see
 `NOTICE`).

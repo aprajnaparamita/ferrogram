@@ -13,12 +13,12 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, NeededInput, Registry, SessionId,
 };
-use ferrogram_model::{
+use larrygram_model::{
     Document, PageId, Row, Section, SectionName, Shape, ShapeId, TextContent, TextPart,
 };
 
@@ -236,7 +236,7 @@ fn every_text_id_is_registered_as_implemented() {
         let id = CommandId::intern(id).expect("id");
         assert_eq!(
             registry.status(&id),
-            ferrogram_commands::CommandStatus::Implemented,
+            larrygram_commands::CommandStatus::Implemented,
             "{id}"
         );
         assert!(registry.enabled(&id, &ctx).is_enabled(), "{id}");
@@ -271,8 +271,8 @@ fn a_deleted_run_row_is_not_kept_as_a_marker() {
         {
             row.preserved
                 .attributes
-                .push(ferrogram_model::XmlAttribute {
-                    name: ferrogram_model::QName::local("Del"),
+                .push(larrygram_model::XmlAttribute {
+                    name: larrygram_model::QName::local("Del"),
                     value: "1".to_owned(),
                 });
         }

@@ -54,9 +54,9 @@ deterministic, ADR 0025's determinism rule). The exit test also keeps
 - `crates/vsdx/tests/roundtrip_edit.rs`: build a document with the
   mutation API (new shape, new page, connects, text), write, read, and
   assert the model equality above.
-- The exit-criterion harness (`apps/ferrogram/tests/flowchart.rs`) saves
+- The exit-criterion harness (`apps/larrygram/tests/flowchart.rs`) saves
   the built flowchart, reopens it through the registry and keeps editing.
-- The existing corpus round trip (`FERROGRAM_REQUIRE_CORPUS=1`) must stay
+- The existing corpus round trip (`LARRYGRAM_REQUIRE_CORPUS=1`) must stay
   green: the writer only gains *additive* behaviour.
 
 ## Consequences

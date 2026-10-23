@@ -49,7 +49,7 @@ Phase 7 is almost all UI and data. The risks are:
 6. **Context cross-check** (ADR 0064): implemented predicates against
    `contexts.yaml`. Differences fail unless they are listed with a
    reason.
-7. **Wasm**: `cargo build -p ferrogram-web --target
+7. **Wasm**: `cargo build -p larrygram-web --target
    wasm32-unknown-unknown` with the icon table embedded, plus one
    headless icon rasterisation test that also runs on wasm through
    `wasm-bindgen-test` if available. Otherwise the native test covers
@@ -60,7 +60,7 @@ Phase 7 is almost all UI and data. The risks are:
 - Most regressions show up as a failing count snapshot or a wrong
   dispatched command, without pixels.
 - The golden PNGs change whenever the theme is tuned. Regenerate them
-  with `FERROGRAM_UPDATE_GOLDEN=1`, as for the render goldens.
+  with `LARRYGRAM_UPDATE_GOLDEN=1`, as for the render goldens.
 
 ## Alternatives considered
 

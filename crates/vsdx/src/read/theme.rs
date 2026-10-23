@@ -13,7 +13,7 @@
 //! maps to `Document::color_table`; the `Colors` element itself stays in
 //! the document's preserved content as before (ADR 0012).
 
-use ferrogram_model::{
+use larrygram_model::{
     Color, ColorTableEntry, Theme, ThemeColors, ThemeFillKind, ThemeFillStyle, ThemeFonts,
     ThemeLineKind, ThemeLineStyle, ThemeVariation, ThemeVariationStyles, XmlNode,
 };
@@ -356,7 +356,7 @@ pub(crate) fn map_colors(
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{QName, XmlAttribute, XmlChild};
+    use larrygram_model::{QName, XmlAttribute, XmlChild};
 
     use super::*;
 

@@ -23,12 +23,12 @@ results must map back to model shapes, so the scene must carry identity.
 
 `Selection { shapes: Vec<ShapeId>, anchor: Option<ShapeId>, page:
 Option<PageId> }`: selected shapes of the active page in click order,
-the **anchor** (last clicked, the panels' subject) and the page they
+the **anchor** (last clicked, the panes' subject) and the page they
 belong to. It is per application (as ADR 0029 placed it); the commands
 that switch document or page clear it. Commands read it for their
 subject; `enabled` predicates gate on `!selection.is_empty()`.
 
-### 2. Hit-testing is in `ferrogram-render::hit` (L3)
+### 2. Hit-testing is in `larrygram-render::hit` (L3)
 
 The scene nodes gain `shape_id: Option<ShapeId>` (an ADR 0020 amendment:
 a synthesised node like a shadow body has `None`). The API:
@@ -66,7 +66,7 @@ the selection when it starts on empty space and adds to it with Shift.
 `ActiveScopes` gains `Selection` when the selection is non-empty, and
 `crates/ui::shell` reads keyboard focus from egui's focus state (the
 focused widget id), not from the previous frame's pointer press. A
-keyboard-only focus move (Tab, the ribbon, the canvas) therefore changes
+keyboard-only focus move (Tab, the command bar, the canvas) therefore changes
 the active shortcut scopes (ADR 0036). Owner: P5-05.
 
 ## Consequences

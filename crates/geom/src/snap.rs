@@ -13,7 +13,7 @@
 //! panic: they are skipped or leave the value unchanged (ADR 0021
 //! policy style).
 //!
-//! Part of Ferrogram. Alpha.
+//! Part of Larrygram. Alpha.
 
 use crate::error::Error;
 use crate::point::Point;

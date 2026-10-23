@@ -20,13 +20,13 @@
 //! entities that exist (a dangling `Master` or `BackPage` is preserved
 //! verbatim by design, so it does not round-trip as a reference).
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellName, CellValue, Color, Connect, Document, DocumentKind, Master, MasterId, Page,
     PageId, Preserved, Property, QName, Row, Section, SectionName, Shape, ShapeId, Style, StyleId,
     XmlAttribute, XmlChild, XmlNode, diff,
 };
-use ferrogram_vsdx::{
+use larrygram_vsdx::{
     ContentType, ContentTypeDecl, ContentTypeKind, Limits, Package, Part, PartData, PartName,
     Relationship, RelationshipId, TargetMode, from_model, read_document, read_package, to_model,
     write_document, write_package,
@@ -469,12 +469,12 @@ fn arb_section() -> impl Strategy<Value = Section> {
         })
 }
 
-fn arb_sheet() -> impl Strategy<Value = ferrogram_model::Sheet> {
+fn arb_sheet() -> impl Strategy<Value = larrygram_model::Sheet> {
     (
         proptest::collection::vec(arb_cell(), 0..3),
         proptest::collection::vec(arb_section(), 0..2),
     )
-        .prop_map(|(cells, sections)| ferrogram_model::Sheet { cells, sections })
+        .prop_map(|(cells, sections)| larrygram_model::Sheet { cells, sections })
 }
 
 /// A shape plan: the shape plus the master index it references (bounded by
@@ -488,7 +488,7 @@ struct ShapePlan {
     line_style: Option<u32>,
     fill_style: Option<u32>,
     text_style: Option<u32>,
-    sheet: ferrogram_model::Sheet,
+    sheet: larrygram_model::Sheet,
 }
 
 fn arb_shape_plan(masters: usize) -> impl Strategy<Value = ShapePlan> {
@@ -535,7 +535,7 @@ struct PagePlan {
     name: String,
     name_u: String,
     background: Option<usize>,
-    sheet: ferrogram_model::Sheet,
+    sheet: larrygram_model::Sheet,
     connects: Vec<Connect>,
     shapes: Vec<ShapePlan>,
 }
@@ -548,7 +548,7 @@ struct StylePlan {
     line_style: Option<u32>,
     fill_style: Option<u32>,
     text_style: Option<u32>,
-    sheet: ferrogram_model::Sheet,
+    sheet: larrygram_model::Sheet,
 }
 
 #[derive(Debug)]

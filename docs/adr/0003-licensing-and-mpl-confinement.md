@@ -6,13 +6,13 @@
 
 ## Context
 
-Ferrogram is MIT. Binary .vsd import uses libvisio (expected MPL-2.0, to be verified from its COPYING file in Phase 1) as the reference. MPL-2.0 is file-level copyleft: derived files must stay MPL-2.0.
+Larrygram is MIT. Binary .vsd import uses libvisio (expected MPL-2.0, to be verified from its COPYING file in Phase 1) as the reference. MPL-2.0 is file-level copyleft: derived files must stay MPL-2.0.
 
 ## Decision
 
-- All crates are MIT except `ferrogram-vsd-binary`, which is MPL-2.0. Every source file in it carries the MPL-2.0 header; NOTICE records the libvisio attribution and commit.
-- No libvisio-derived code anywhere else. libvisio's CLI tools may be built under `tools/libvisio-oracle/` as a dev-only test oracle, never linked into Ferrogram.
-- `deny.toml` does not allow MPL-2.0 globally; a single exception allows it for `ferrogram-vsd-binary`. `licenses.private.ignore = false` makes cargo-deny check our own crates too.
+- All crates are MIT except `larrygram-vsd-binary`, which is MPL-2.0. Every source file in it carries the MPL-2.0 header; NOTICE records the libvisio attribution and commit.
+- No libvisio-derived code anywhere else. libvisio's CLI tools may be built under `tools/libvisio-oracle/` as a dev-only test oracle, never linked into Larrygram.
+- `deny.toml` does not allow MPL-2.0 globally; a single exception allows it for `larrygram-vsd-binary`. `licenses.private.ignore = false` makes cargo-deny check our own crates too.
 - Third-party dependencies must use the permissive licenses listed in `deny.toml`. If a needed dependency is MPL (common in GUI stacks, e.g. via `dirs`), it requires a new ADR, because the kickoff requires vsd-binary to be the only MPL crate.
 
 ## Consequences
@@ -30,7 +30,7 @@ Ferrogram is MIT. Binary .vsd import uses libvisio (expected MPL-2.0, to be veri
 ADR 0030 (GUI stack) checked the whole egui/eframe/rfd tree for
 MPL-2.0: the wasm binding crates (`wasm-bindgen`, `js-sys`, `web-sys`)
 are `MIT OR Apache-2.0` and no MPL crate is in the tree. No exception to
-this ADR is needed; the rule that `ferrogram-vsd-binary` is the only MPL
+this ADR is needed; the rule that `larrygram-vsd-binary` is the only MPL
 crate stands and stays enforced by `cargo deny`
 (`[licenses.private] ignore = false`). If a future GUI dependency is
 MPL-licensed, this ADR's own rule applies: it takes a new ADR naming the

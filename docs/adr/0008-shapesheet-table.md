@@ -42,7 +42,7 @@ ADR:
   L0 and `model` is L1 (ADR 0002); L0 cannot depend on L1, so
   `ui-spec` cannot use the table at all. (The P1-02 reviewer's
   concern was scope creep: `ui-spec` had no real use for the table;
-  it is a ribbon-data loader, not a ShapeSheet data loader.)
+  it is a command bar-data loader, not a ShapeSheet data loader.)
 
 ## Decision
 
@@ -156,7 +156,7 @@ section = "Geometry"
   references in formulas.
 
 The P1-02 review confirmed that `crates/ui-spec` does **not** consume
-the table. `ui-spec` is a ribbon-data loader; the ShapeSheet table is
+the table. `ui-spec` is a command bar-data loader; the ShapeSheet table is
 about document content, which lives entirely below L2.
 
 ### Extractor rules (P1-04)

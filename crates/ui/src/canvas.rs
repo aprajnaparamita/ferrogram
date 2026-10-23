@@ -2,7 +2,7 @@
 //! page tabs and the status bar.
 //!
 //! Owned by task P4-05. The page renders with
-//! [`ferrogram_render::render_raster`] into one RGBA texture (the same
+//! [`larrygram_render::render_raster`] into one RGBA texture (the same
 //! pixels the PNG backend writes) and the texture is drawn in a viewport
 //! with an egui transform. The cache rules of ADR 0033:
 //!
@@ -15,7 +15,7 @@
 //!
 //! The page raster has its top-left corner at
 //! `viewport.min + pan * points_per_inch(zoom)`, where `pan` is
-//! [`ViewState::pan`](ferrogram_commands::ViewState) in inches (x right,
+//! [`ViewState::pan`](larrygram_commands::ViewState) in inches (x right,
 //! y down, the image sense) and one page inch is `96 * zoom` points at
 //! the settled zoom (ADR 0025: 96 pixels per inch at zoom 1).
 //!
@@ -29,12 +29,12 @@ use egui::{
     Align2, Color32, ColorImage, Context, FontId, PointerButton, Pos2, Rect, Sense, Stroke,
     TextureHandle, TextureId, TextureOptions, Ui,
 };
-use ferrogram_commands::{
+use larrygram_commands::{
     AppCtx, CommandId, DisplayUnits, DocumentSession, Invocation, SessionId, Source,
 };
-use ferrogram_geom::{Point, Rect as PageRect};
-use ferrogram_model::{CellName, CellReader, Document, Page, PageId, SheetRef};
-use ferrogram_render::{
+use larrygram_geom::{Point, Rect as PageRect};
+use larrygram_model::{CellName, CellReader, Document, Page, PageId, SheetRef};
+use larrygram_render::{
     BuildOptions, MAX_DEVICE_EXTENT, Overlay, OverlayMark, RasterImage, RasterOptions, build_scene,
     render_raster,
 };
@@ -59,10 +59,10 @@ const MAJOR_EVERY: i64 = 8;
 
 /// The zoom range is the view commands' range, so a wheel zoom and a
 /// `view.zoom.*` command clamp alike.
-const MIN_ZOOM: f64 = ferrogram_commands::builtins::ZOOM_MIN;
+const MIN_ZOOM: f64 = larrygram_commands::builtins::ZOOM_MIN;
 
 /// The largest zoom (see [`MIN_ZOOM`]).
-const MAX_ZOOM: f64 = ferrogram_commands::builtins::ZOOM_MAX;
+const MAX_ZOOM: f64 = larrygram_commands::builtins::ZOOM_MAX;
 
 /// Re-rasterize when the zoom moved more than this fraction from the
 /// rasterized zoom (ADR 0033).
@@ -77,7 +77,7 @@ const MAX_RASTER_BYTES: u64 = 256 * 1024 * 1024;
 
 // The page size when a page has no positive size: the scene builder's
 // own fallback.
-use ferrogram_render::FALLBACK_PAGE_SIZE;
+use larrygram_render::FALLBACK_PAGE_SIZE;
 
 /// The smallest raster scale in pixels per inch (keeps a raster of any
 /// zoomable page non-degenerate).
@@ -303,7 +303,7 @@ const HANDLE_HALF: f32 = 3.0;
 /// modifier) zooms at the pointer; the canvas keys Ctrl + `+`, Ctrl + `-`
 /// and Ctrl + `0` produce `view.zoom.in`/`view.zoom.out`/`view.zoom.fit`
 /// intents (the menu items produce the same from the shell). The grid
-/// draws behind the texture when [`ferrogram_commands::ViewState::show_grid`].
+/// draws behind the texture when [`larrygram_commands::ViewState::show_grid`].
 pub fn show(
     ui: &mut Ui,
     session: &mut DocumentSession,
@@ -760,7 +760,7 @@ pub fn show_page_tabs(ui: &mut Ui, session: &mut DocumentSession) -> Result<Vec<
 /// Draws the status bar (page, units, zoom, last warning; ADR 0033).
 ///
 /// Shows the active page's name and size (the size formatted in
-/// [`Settings::units`](ferrogram_commands::Settings)), the zoom percent
+/// [`Settings::units`](larrygram_commands::Settings)), the zoom percent
 /// and the last [`AppCtx::warnings`] entry.
 pub fn show_status_bar(ui: &mut Ui, app: &AppCtx) -> Result<(), UiError> {
     let units = app.settings.units;
@@ -791,8 +791,8 @@ pub fn show_status_bar(ui: &mut Ui, app: &AppCtx) -> Result<(), UiError> {
 /// 6: conversion at this edge only).
 ///
 /// ```
-/// # use ferrogram_commands::DisplayUnits;
-/// # use ferrogram_ui::canvas::format_length;
+/// # use larrygram_commands::DisplayUnits;
+/// # use larrygram_ui::canvas::format_length;
 /// assert_eq!(format_length(8.5, DisplayUnits::Inches), "8.5 in");
 /// assert_eq!(format_length(8.5, DisplayUnits::Millimeters), "215.9 mm");
 /// ```
@@ -1068,7 +1068,7 @@ fn rasterize_at(
         });
     }
     let image = ColorImage::from_rgba_unmultiplied([width, height], &raster.rgba);
-    let texture = ctx.load_texture("ferrogram-canvas-page", image, TextureOptions::LINEAR);
+    let texture = ctx.load_texture("larrygram-canvas-page", image, TextureOptions::LINEAR);
     cache.texture = Some(texture);
     cache.page_size = (scene.width, scene.height);
     cache.last_warning = scene
@@ -1159,7 +1159,7 @@ fn canvas_status(session: &DocumentSession, cache: &CanvasCache) -> String {
 
 /// A build or raster failure as a [`UiError`] (task P4-03 added the
 /// render variant the P4-05 Result asked for).
-fn render_error(error: ferrogram_render::Error) -> UiError {
+fn render_error(error: larrygram_render::Error) -> UiError {
     UiError::Render {
         message: format!("the canvas raster failed: {error}"),
     }
@@ -1168,7 +1168,7 @@ fn render_error(error: ferrogram_render::Error) -> UiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{Cell, CellValue, Row, Section, SectionName, Shape, ShapeId};
+    use larrygram_model::{Cell, CellValue, Row, Section, SectionName, Shape, ShapeId};
 
     /// Runs one frame over `f` on `ctx` and drops the texture deltas
     /// safely (epaint panics on unapplied deltas).
@@ -1420,7 +1420,7 @@ mod tests {
         let ctx = Context::default();
         let mut session = DocumentSession::new(filled_document(), None);
         let mut cache = CanvasCache::new();
-        let mut app = AppCtx::new(ferrogram_commands::Settings::default());
+        let mut app = AppCtx::new(larrygram_commands::Settings::default());
         app.open_document(DocumentSession::new(filled_document(), None));
         app.record_warning("last warning");
         frame(&ctx, egui::RawInput::default(), |ui| {
@@ -1543,11 +1543,11 @@ mod tests {
         let mut overlay = Overlay::new();
         overlay.marks.push(OverlayMark::SelectionOutline {
             bounds: PageRect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
-            angle: ferrogram_geom::Angle::default(),
+            angle: larrygram_geom::Angle::default(),
         });
         overlay.marks.push(OverlayMark::Handles {
             bounds: PageRect::new(Point::new(0.0, 0.0), Point::new(1.0, 1.0)),
-            angle: ferrogram_geom::Angle::default(),
+            angle: larrygram_geom::Angle::default(),
         });
         overlay.marks.push(OverlayMark::RubberBand(PageRect::new(
             Point::new(0.0, 0.0),
@@ -1569,7 +1569,7 @@ mod tests {
     #[test]
     fn render_errors_map_into_ui_errors() {
         // The `UiError::Render` mapping (P4-12 coverage major 4).
-        let error = render_error(ferrogram_render::Error::TooLarge);
+        let error = render_error(larrygram_render::Error::TooLarge);
         assert!(matches!(error, UiError::Render { .. }), "{error:?}");
         assert_eq!(
             error.to_string(),

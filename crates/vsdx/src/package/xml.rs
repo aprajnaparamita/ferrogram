@@ -13,7 +13,7 @@
 //! Malformed input returns an [`Error`], never a panic (AGENTS.md section 6);
 //! messages never carry file content.
 
-use ferrogram_model::{QName, XmlAttribute, XmlChild, XmlNode};
+use larrygram_model::{QName, XmlAttribute, XmlChild, XmlNode};
 use quick_xml::XmlVersion;
 use quick_xml::events::Event;
 use quick_xml::name::PrefixDeclaration;
@@ -433,7 +433,7 @@ pub(crate) fn write_qualified_name(name: &QName, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::diff;
+    use larrygram_model::diff;
     use proptest::prelude::*;
 
     use super::*;
@@ -646,7 +646,7 @@ mod tests {
             .children
             .iter()
             .filter_map(|child| match child {
-                ferrogram_model::XmlChild::Element(element) => Some(element),
+                larrygram_model::XmlChild::Element(element) => Some(element),
                 _ => None,
             })
             .collect();

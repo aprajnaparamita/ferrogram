@@ -9,7 +9,7 @@
 //! connection points in local coordinates.
 //!
 //! [`stencil_document`] builds the catalog as one stencil-kind
-//! [`Document`] (ADR 0016) so `ferrogram-vsdx` can write it as `.vssx`;
+//! [`Document`] (ADR 0016) so `larrygram-vsdx` can write it as `.vssx`;
 //! [`instantiate`] drops one master onto a page as a new instance for
 //! Phase 5. Nothing here traces, copies or derives from Microsoft
 //! material: the shapes are simple polygons, arcs and ellipses whose
@@ -18,7 +18,7 @@
 mod basic_flowchart;
 mod basic_shapes;
 
-use ferrogram_geom::Unit;
+use larrygram_geom::Unit;
 
 use crate::cell::{Cell, CellValue};
 use crate::document::{Document, DocumentKind};
@@ -59,7 +59,7 @@ pub struct MasterDef {
     pub line: LineDefaults,
     /// Default fill (our own visual style defaults, ADR 0023).
     pub fill: FillDefaults,
-    /// Shape Data rows shown in the Shape Data panel (ADR 0035), as
+    /// Shape Data rows shown in the Shape Data pane (ADR 0035), as
     /// `(label, value)` pairs.
     pub shape_data: Vec<(&'static str, &'static str)>,
     /// Connection points in local coordinates (Phase 5 glues to these).
@@ -135,7 +135,7 @@ pub fn catalog() -> Vec<StencilDef> {
 }
 
 /// Builds the whole catalog as one stencil-kind [`Document`] (ADR 0016),
-/// so `ferrogram-vsdx` can save it as `.vssx`.
+/// so `larrygram-vsdx` can save it as `.vssx`.
 ///
 /// Each [`MasterDef`] becomes one [`Master`] whose single shape carries
 /// the geometry rows, the line and fill cells, the Shape Data rows and
@@ -451,7 +451,7 @@ fn connection_section(points: &[(f64, f64)]) -> Section {
 
 /// The `X`/`Y` cells of one geometry row.
 fn push_xy(row: &mut Row, x: f64, y: f64) {
-    push_point(row, "X", "Y", ferrogram_geom::Point::new(x, y));
+    push_point(row, "X", "Y", larrygram_geom::Point::new(x, y));
 }
 
 /// The two numbered cells of one point.
@@ -459,7 +459,7 @@ fn push_point(
     row: &mut Row,
     x_name: &'static str,
     y_name: &'static str,
-    point: ferrogram_geom::Point,
+    point: larrygram_geom::Point,
 ) {
     push_number(row, x_name, point.x, Unit::Inches);
     push_number(row, y_name, point.y, Unit::Inches);
@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn a_geometry_row_becomes_a_typed_row() {
-        use ferrogram_geom::{Angle, Point};
+        use larrygram_geom::{Angle, Point};
         let rows = [
             GeometryRow::MoveTo { x: 1.0, y: 2.0 },
             GeometryRow::LineTo { x: 3.0, y: 4.0 },
@@ -884,9 +884,9 @@ mod tests {
             GeometryRow::ArcTo { bow, .. } => bow,
             _ => panic!("row 2 is an ArcTo"),
         };
-        let cubics = ferrogram_geom::Curve::Arc(ferrogram_geom::Arc {
-            start: ferrogram_geom::Point::new(1.8, 0.0),
-            end: ferrogram_geom::Point::new(2.0, 0.2),
+        let cubics = larrygram_geom::Curve::Arc(larrygram_geom::Arc {
+            start: larrygram_geom::Point::new(1.8, 0.0),
+            end: larrygram_geom::Point::new(2.0, 0.2),
             bow,
         })
         .to_cubics(0.001)

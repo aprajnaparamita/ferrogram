@@ -18,12 +18,12 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Master, MasterId, Preserved, Row, Section, SectionName,
     Shape, ShapeId, SheetRef, Style, StyleId,
 };
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     CellAddress, CellRef, CellWriteOp, DepGraph, Error, Evaluation, Formula, FormulaEngine,
     RecalcOptions, RecalcWarningKind, recalc, recalc_with,
 };
@@ -424,7 +424,7 @@ fn a_style_formula_reaches_the_instance_through_the_masters_style_link() {
 /// over all of them.
 fn pass_over(
     formulas: &[(&str, &str)],
-) -> (Document, ShapeId, ferrogram_shapesheet::RecalcOutcome) {
+) -> (Document, ShapeId, larrygram_shapesheet::RecalcOutcome) {
     let (mut doc, ids) = document_with(vec![shape_with(1, formulas)]);
     let dirty: Vec<CellAddress> = formulas.iter().map(|(name, _)| at(ids[0], name)).collect();
     let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
@@ -646,7 +646,7 @@ fn a_thousand_cell_page_serves_the_budget_rule() {
                 dirty.push(CellAddress::in_row(
                     SheetRef::Shape(*id),
                     SectionName::from_static("Geometry"),
-                    ferrogram_model::RowTarget {
+                    larrygram_model::RowTarget {
                         position: Some(0),
                         ix: Some(0),
                     },
@@ -906,7 +906,7 @@ fn a_setf_writes_into_a_section_a_row_and_the_page() {
     assert_eq!(row_cell.formula.as_deref(), Some("4"), "a literal write");
     // The page sheet's cell.
     let page_cell = doc
-        .page(ferrogram_model::PageId { index: 0 })
+        .page(larrygram_model::PageId { index: 0 })
         .expect("page")
         .sheet
         .cells
@@ -919,14 +919,14 @@ fn a_setf_writes_into_a_section_a_row_and_the_page() {
         CellAddress::in_row(
             SheetRef::Shape(ids[0]),
             SectionName::from_static("Geometry"),
-            ferrogram_model::RowTarget {
+            larrygram_model::RowTarget {
                 position: Some(1),
                 ix: Some(1),
             },
             CellName::from_static("X"),
         ),
         CellAddress::new(
-            SheetRef::Page(ferrogram_model::PageId { index: 0 }),
+            SheetRef::Page(larrygram_model::PageId { index: 0 }),
             CellName::from_static("Tgt"),
         ),
     ] {
@@ -994,7 +994,7 @@ fn a_row_address_without_its_section_is_a_warning_not_a_panic() {
         ) -> Result<Evaluation, Error> {
             let shape = match sheet {
                 SheetRef::Shape(id) => id,
-                SheetRef::Page(_) => ferrogram_model::ShapeId { index: 0 },
+                SheetRef::Page(_) => larrygram_model::ShapeId { index: 0 },
             };
             Ok(Evaluation {
                 value: CellValue::Number(0.0),
@@ -1003,7 +1003,7 @@ fn a_row_address_without_its_section_is_a_warning_not_a_panic() {
                     target: CellAddress {
                         sheet: SheetRef::Shape(shape),
                         section: None,
-                        row: Some(ferrogram_model::RowTarget::at(0)),
+                        row: Some(larrygram_model::RowTarget::at(0)),
                         cell: CellName::from_static("X"),
                     },
                     formula: String::from("1"),
@@ -1106,7 +1106,7 @@ fn an_edit_of_a_master_cell_reevaluates_the_dependent_formula() {
     let edited = CellAddress::in_row(
         SheetRef::Shape(master_root),
         SectionName::from_static("Character"),
-        ferrogram_model::RowTarget {
+        larrygram_model::RowTarget {
             position: Some(0),
             ix: Some(0),
         },

@@ -7,10 +7,10 @@
 //! The drag anchor lives in [`ToolMachine`]'s `draw` field; only this
 //! module reads it.
 
-use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
-use ferrogram_geom::{Point, Rect};
-use ferrogram_model::PageId;
-use ferrogram_render::{Overlay, OverlayMark};
+use larrygram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
+use larrygram_geom::{Point, Rect};
+use larrygram_model::PageId;
+use larrygram_render::{Overlay, OverlayMark};
 
 use super::{Modifiers, Tool, ToolEffect, ToolEvent};
 use crate::UiError;
@@ -49,7 +49,7 @@ pub(crate) struct State {
 pub fn handle(
     state: &mut ToolMachine,
     event: &ToolEvent,
-    ctx: &ferrogram_commands::AppCtx,
+    ctx: &larrygram_commands::AppCtx,
 ) -> Result<super::ToolEffect, UiError> {
     let tool = state.tool;
     if !matches!(tool, Tool::Rectangle | Tool::Ellipse | Tool::Line) {
@@ -295,8 +295,8 @@ fn finite(point: Point) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{Cell, CellName, CellValue, Document, Page, PageId};
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{Cell, CellName, CellValue, Document, Page, PageId};
 
     fn fixture() -> AppCtx {
         let mut doc = Document::new();
@@ -307,14 +307,14 @@ mod tests {
                 name: CellName::new("PageWidth"),
                 formula: Some("8.5".to_owned()),
                 value: Some(CellValue::Number(8.5)),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Default::default(),
             },
             Cell {
                 name: CellName::new("PageHeight"),
                 formula: Some("11".to_owned()),
                 value: Some(CellValue::Number(11.0)),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Default::default(),
             },
         ];

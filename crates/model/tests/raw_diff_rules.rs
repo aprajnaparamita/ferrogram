@@ -5,7 +5,7 @@
 //! tests pin the two edges the implementation's task called out by name:
 //! a namespace-only difference and mixed content.
 
-use ferrogram_model::{QName, XmlAttribute, XmlChild, XmlNode, diff};
+use larrygram_model::{QName, XmlAttribute, XmlChild, XmlNode, diff};
 
 fn qname(prefix: Option<&str>, uri: Option<&str>, local: &str) -> QName {
     QName {
@@ -40,7 +40,7 @@ fn a_namespace_only_difference_is_a_uri_difference_not_a_prefix_one() {
     assert_eq!(differences[0].path, "/v:Cell[1]");
     assert_eq!(
         differences[0].kind,
-        ferrogram_model::DifferenceKind::NamespaceUri
+        larrygram_model::DifferenceKind::NamespaceUri
     );
 
     // The prefix alone changing is not a difference at any depth.
@@ -108,6 +108,6 @@ fn attribute_values_compare_numerically_only_with_the_same_suffix() {
     assert_eq!(differences.len(), 1);
     assert_eq!(
         differences[0].kind,
-        ferrogram_model::DifferenceKind::AttributeValue
+        larrygram_model::DifferenceKind::AttributeValue
     );
 }

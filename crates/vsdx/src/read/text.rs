@@ -12,7 +12,7 @@
 //! The `Text` element itself stays in the shape's preserved content as
 //! before (ADR 0012); this mapping is a typed copy (ADR 0019 decision 1).
 
-use ferrogram_model::{TextContent, TextPart, XmlNode};
+use larrygram_model::{TextContent, TextPart, XmlNode};
 
 use crate::Error;
 use crate::read::node::attribute;
@@ -39,8 +39,8 @@ fn walk(node: &XmlNode, part: &str, content: &mut TextContent, depth: usize) -> 
     }
     for child in &node.children {
         match child {
-            ferrogram_model::XmlChild::Text(text) => push_text(content, text),
-            ferrogram_model::XmlChild::Element(element) => match element.name.local.as_str() {
+            larrygram_model::XmlChild::Text(text) => push_text(content, text),
+            larrygram_model::XmlChild::Element(element) => match element.name.local.as_str() {
                 "cp" => content.parts.push(TextPart::CharRun {
                     ix: marker_ix(element, part)?,
                 }),
@@ -89,7 +89,7 @@ fn marker_ix(node: &XmlNode, part: &str) -> Result<u32, Error> {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{QName, XmlAttribute, XmlChild};
+    use larrygram_model::{QName, XmlAttribute, XmlChild};
 
     use super::*;
 

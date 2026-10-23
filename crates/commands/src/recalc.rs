@@ -22,10 +22,10 @@
 
 use std::collections::BTreeSet;
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellValue, Document, PageId, RowTarget, Section, ShapeId, Sheet, SheetRef,
 };
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     CellAddress, CellRef, DepGraph, DocumentEngine, Evaluation, Expr, ExprKind, Formula,
     FormulaEngine, Literal, RecalcOptions, RecalcOutcome, RecalcWarning, RecalcWarningKind,
     UnaryOp, parse_formula, recalc_with,
@@ -331,7 +331,7 @@ fn report_of(outcome: &RecalcOutcome) -> RecalcReport {
 }
 
 /// Maps an engine failure (the engine broken, not the document).
-fn engine_error(error: ferrogram_shapesheet::Error) -> CommandError {
+fn engine_error(error: larrygram_shapesheet::Error) -> CommandError {
     CommandError::failed(error.to_string())
 }
 
@@ -443,7 +443,7 @@ impl<E: FormulaEngine> FormulaEngine for SnapshotEngine<E> {
     fn references(
         &mut self,
         formula: &Formula,
-    ) -> Result<Vec<CellRef>, ferrogram_shapesheet::Error> {
+    ) -> Result<Vec<CellRef>, larrygram_shapesheet::Error> {
         self.inner.references(formula)
     }
 
@@ -452,7 +452,7 @@ impl<E: FormulaEngine> FormulaEngine for SnapshotEngine<E> {
         document: &mut Document,
         formula: &Formula,
         sheet: SheetRef,
-    ) -> Result<Evaluation, ferrogram_shapesheet::Error> {
+    ) -> Result<Evaluation, larrygram_shapesheet::Error> {
         self.snapshot(document, sheet);
         let evaluation = self.inner.evaluate(document, formula, sheet)?;
         for write in &evaluation.writes {
@@ -663,14 +663,14 @@ fn constant_number(expr: &Expr) -> Option<f64> {
 mod tests {
     use super::*;
     use crate::app::{DocumentSession, Settings};
-    use ferrogram_model::{CellName, Preserved, Row, SectionName, Shape};
+    use larrygram_model::{CellName, Preserved, Row, SectionName, Shape};
 
     fn cell(name: &str, formula: Option<&str>, value: Option<f64>) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: formula.map(str::to_owned),
             value: value.map(CellValue::Number),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }
@@ -893,7 +893,7 @@ mod tests {
             name: CellName::new("NoFill"),
             formula: Some(String::from("0")),
             value: Some(CellValue::Number(0.0)),
-            unit: ferrogram_geom::Unit::Unitsless,
+            unit: larrygram_geom::Unit::Unitsless,
             preserved: Preserved::new(),
         });
         let mut with_section_cell = Vec::new();
@@ -1205,7 +1205,7 @@ mod tests {
         fn references(
             &mut self,
             _formula: &Formula,
-        ) -> Result<Vec<CellRef>, ferrogram_shapesheet::Error> {
+        ) -> Result<Vec<CellRef>, larrygram_shapesheet::Error> {
             Ok(Vec::new())
         }
 
@@ -1214,9 +1214,9 @@ mod tests {
             _document: &mut Document,
             _formula: &Formula,
             _sheet: SheetRef,
-        ) -> Result<Evaluation, ferrogram_shapesheet::Error> {
+        ) -> Result<Evaluation, larrygram_shapesheet::Error> {
             if self.done {
-                return Err(ferrogram_shapesheet::Error::Conversion(
+                return Err(larrygram_shapesheet::Error::Conversion(
                     "test engine failed",
                 ));
             }
@@ -1301,7 +1301,7 @@ mod tests {
 
     #[test]
     fn warning_lines_name_the_problem() {
-        use ferrogram_shapesheet::SyntaxKind;
+        use larrygram_shapesheet::SyntaxKind;
         let address = CellAddress::new(SheetRef::Shape(ShapeId { index: 0 }), CellName::new("X"));
         for (kind, text) in [
             (

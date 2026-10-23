@@ -4,10 +4,10 @@
 //! supported, our result must match the stored value." The harness runs
 //! over every `corpus/vsdx` file (the fetched corpus, ADR 0005; the
 //! test self-skips with a message when it is absent and fails instead
-//! when `FERROGRAM_REQUIRE_CORPUS=1` is set) and prints one
+//! when `LARRYGRAM_REQUIRE_CORPUS=1` is set) and prints one
 //! machine-readable block per file plus a total, the skip counts per
 //! reason and one line per disagreement (ADR 0059's report format).
-//! Run `cargo test -p ferrogram-commands --test crosscheck -- --nocapture`
+//! Run `cargo test -p larrygram-commands --test crosscheck -- --nocapture`
 //! to see it.
 //!
 //! ## Which cells are scanned
@@ -63,8 +63,8 @@ mod helpers;
 
 use std::collections::BTreeMap;
 
-use ferrogram_model::{CellValue, Document};
-use ferrogram_shapesheet::{
+use larrygram_model::{CellValue, Document};
+use larrygram_shapesheet::{
     CellAddress, DepGraph, DocumentEngine, DocumentResolver, ErrorCode, Expr, ExprKind, Formula,
     RecalcOptions, Value, eval_formula, is_supported, parse_formula, recalc_with,
 };
@@ -510,7 +510,7 @@ fn candidates(document: &Document) -> Vec<Candidate> {
 
 /// The function names `expr` calls and the references it makes, in one
 /// iterative walk (no recursion on input).
-fn calls_and_refs(expr: &Expr) -> (Vec<String>, Vec<ferrogram_shapesheet::CellRef>) {
+fn calls_and_refs(expr: &Expr) -> (Vec<String>, Vec<larrygram_shapesheet::CellRef>) {
     let mut calls = Vec::new();
     let mut refs = Vec::new();
     let mut stack: Vec<&Expr> = vec![expr];
@@ -586,7 +586,7 @@ fn classify(document: &mut Document, file: &str, candidate: &Candidate) -> Class
         // (task P6-18 F6).
         match resolved.value {
             None | Some(Value::Err(ErrorCode::Ref)) => missing = true,
-            Some(_) if resolved.source == ferrogram_model::ValueSource::HardDefault => {
+            Some(_) if resolved.source == larrygram_model::ValueSource::HardDefault => {
                 default_only = true;
             }
             Some(_) => {}
@@ -656,7 +656,7 @@ fn classify(document: &mut Document, file: &str, candidate: &Candidate) -> Class
 }
 
 /// The sheet a scanned cell lives on.
-fn candidate_sheet(candidate: &Candidate) -> ferrogram_model::SheetRef {
+fn candidate_sheet(candidate: &Candidate) -> larrygram_model::SheetRef {
     candidate.address.sheet
 }
 
@@ -831,13 +831,13 @@ fn recursion_cycle_opens_and_recalcs_without_a_warning_or_a_hang() {
     // The open path of the app: the fill-in pass over a fresh session
     // (ADR 0057) records nothing and warns about nothing.
     let mut ctx =
-        ferrogram_commands::app::AppCtx::new(ferrogram_commands::app::Settings::default());
-    let index = ctx.open_document(ferrogram_commands::app::DocumentSession::new(
+        larrygram_commands::app::AppCtx::new(larrygram_commands::app::Settings::default());
+    let index = ctx.open_document(larrygram_commands::app::DocumentSession::new(
         document.clone(),
         None,
     ));
     let session = ctx.documents.get(index).expect("session").id;
-    let report = ferrogram_commands::recalc::fill_missing(&mut ctx, session).expect("fill-in");
+    let report = larrygram_commands::recalc::fill_missing(&mut ctx, session).expect("fill-in");
     assert!(report.warnings.is_empty(), "{:?}", report.warnings);
     assert_eq!(report.updated, 0, "nothing to fill in");
     assert!(ctx.warnings.is_empty(), "{:?}", ctx.warnings);

@@ -5,7 +5,7 @@
 //! `docs/sources.md` source 5) and produces `ui-spec/shortcuts.yaml`.
 //!
 //! Each `<table>` row maps a source action description to a key
-//! sequence. The action -> Ferrogram command mapping is the
+//! sequence. The action -> Larrygram command mapping is the
 //! hand-written [`ACTION_TO_COMMAND`] table (keyed by phrase hashes);
 //! rows that
 //! are not in the table are dropped with a warning on `stderr` and
@@ -37,7 +37,7 @@ pub const SNAPSHOT_URL: &str = "https://web.archive.org/web/20251205120214id_/ht
 /// The pinned source identifier recorded in the file header.
 pub const SOURCE_REVISION: &str = "web snapshot 20251205120214 (2025-12-05)";
 
-/// Normalised action phrase -> Ferrogram command id, keyed by the
+/// Normalised action phrase -> Larrygram command id, keyed by the
 /// lowercase hex sha256 of the normalised phrase (F2). The value must
 /// exist in `ui-spec/commands.yaml` (the unit test
 /// `action_targets_exist_in_committed_commands` checks this against
@@ -439,12 +439,12 @@ pub const SECTION_GROUPS: &[(&str, &str, &str)] = &[
     (
         "3de01339d82805798df58339567956e83d9f821932d82a67e9d59a3000942de9",
         "Navigation",
-        "ribbon",
+        "command_bar",
     ),
     (
         "50a41f95a1d3a5f33e0c40abddb1232126249c8f0fd62f1cda3b783a084748ea",
         "Navigation",
-        "ribbon",
+        "command_bar",
     ),
     (
         "5cb3a04764a310c2ca758bbf66a43895de44ba4ceacb04bfaf050bd19dcab443",
@@ -1171,7 +1171,7 @@ mod tests {
         [
             ("everyday edits", "Common", "global"),
             ("views", "Views", "global"),
-            ("key tips", "Navigation", "ribbon"),
+            ("key tips", "Navigation", "command_bar"),
         ]
         .iter()
         .map(|(heading, group, scope)| {
@@ -1475,7 +1475,14 @@ mod tests {
             "Views",
             "Dialogs",
         ];
-        const SCOPES: [&str; 6] = ["global", "page", "text", "ribbon", "selection", "window"];
+        const SCOPES: [&str; 6] = [
+            "global",
+            "page",
+            "text",
+            "command_bar",
+            "selection",
+            "window",
+        ];
         for (key, group, scope) in SECTION_GROUPS {
             assert_eq!(key.len(), 64, "section key for {group}");
             assert!(GROUPS.contains(group), "unknown group {group}");

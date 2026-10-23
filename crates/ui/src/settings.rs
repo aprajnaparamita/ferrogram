@@ -7,10 +7,10 @@
 //! A corrupt or unreadable store falls back to [`Settings::default`]
 //! with one `warning:` line (ADR 0021: bad data substitutes a default
 //! and warns, never crashes); the apps record the same warning on
-//! [`AppCtx::warnings`](ferrogram_commands::AppCtx) so the status bar
+//! [`AppCtx::warnings`](larrygram_commands::AppCtx) so the status bar
 //! shows it.
 //!
-//! [`show_options`] draws the View/Options dialog body: the panel
+//! [`show_options`] draws the View/Options dialog body: the Panel
 //! layout radio choice (ADR 0032), the grid and rulers toggles and the
 //! display units. The dialog never mutates [`Settings`] (the ADR 0032
 //! amendment): it returns the [`Intent`]s for the rows the user
@@ -19,10 +19,10 @@
 //! `view.units`).
 
 use egui::Ui;
-use ferrogram_commands::{
+use larrygram_commands::{
     ArgValue, Args, DisplayUnits, Invocation, Settings, SettingsError, SettingsStore, Source,
 };
-use ferrogram_ui_spec::LayoutKind;
+use larrygram_ui_spec::LayoutKind;
 
 use crate::{Intent, UiError};
 
@@ -108,7 +108,7 @@ const UNIT_CHOICES: &[(DisplayUnits, &str)] = &[
 /// the fields as an interface stub here, because the persisted
 /// [`Settings`] type lives in `crates/commands` and Phase 6 owns that
 /// crate; task P7-09 moves the two fields onto
-/// `ferrogram_commands::Settings` (with serde defaults, so old stores
+/// `larrygram_commands::Settings` (with serde defaults, so old stores
 /// still load) and deletes this type.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
@@ -117,14 +117,14 @@ pub struct WelcomeSettings {
     /// only while this is `false`, and both Cancel and Start set it.
     pub welcome_seen: bool,
     /// The layout the wizard chose as the default (ADR 0066).
-    pub default_layout: ferrogram_ui_spec::v2::LayoutKind,
+    pub default_layout: larrygram_ui_spec::v2::LayoutKind,
 }
 
 impl Default for WelcomeSettings {
     fn default() -> Self {
         Self {
             welcome_seen: false,
-            default_layout: ferrogram_ui_spec::v2::LayoutKind::PanelModern,
+            default_layout: larrygram_ui_spec::v2::LayoutKind::PanelModern,
         }
     }
 }
@@ -135,7 +135,7 @@ impl Default for WelcomeSettings {
 ///
 /// The fallback prints exactly one `warning: <error>` line so the
 /// failure is never silent; the caller that owns an
-/// [`AppCtx`](ferrogram_commands::AppCtx) records the same text for
+/// [`AppCtx`](larrygram_commands::AppCtx) records the same text for
 /// the status bar.
 pub fn load_settings(store: &mut dyn SettingsStore) -> Result<Settings, UiError> {
     match store.load() {
@@ -153,7 +153,7 @@ pub fn save_settings(store: &mut dyn SettingsStore, settings: &Settings) -> Resu
 }
 
 /// Draws the View/Options dialog body (ADR 0032 as amended): the
-/// panel layout radio choice, grid and rulers toggles, display units.
+/// Panel layout radio choice, grid and rulers toggles, display units.
 ///
 /// The dialog draws its rows over a draft copy of `settings` and
 /// returns one [`Intent`] per row the user changed
@@ -168,12 +168,12 @@ pub fn show_options(ui: &mut Ui, settings: &Settings) -> Result<Vec<Intent>, UiE
     ui.label("Panel layout");
     ui.radio_value(
         &mut draft.ui_layout,
-        LayoutKind::Visio2016,
+        LayoutKind::Panel2016,
         "Panel (2016 data)",
     );
     ui.radio_value(
         &mut draft.ui_layout,
-        LayoutKind::Visio365,
+        LayoutKind::Panel365,
         "Panel (365 data)",
     );
     ui.separator();
@@ -198,7 +198,7 @@ pub fn show_options(ui: &mut Ui, settings: &Settings) -> Result<Vec<Intent>, UiE
 
 /// The dispatch requests for the Options rows `after` changed against
 /// `before` (ADR 0032 amendment): the layout radios dispatch
-/// `view.ui_layout.visio_2016` / `view.ui_layout.visio_365`, the grid
+/// `view.ui_layout.panel_2016` / `view.ui_layout.panel_365`, the grid
 /// and rulers checkboxes dispatch `view.toggle_grid` / `view.rulers`,
 /// and the units combo dispatches `view.units` with its `units`
 /// argument. All are `Source::Ui` (the dialog is interactive).
@@ -206,8 +206,12 @@ pub fn option_changes(before: &Settings, after: &Settings) -> Result<Vec<Intent>
     let mut intents = Vec::new();
     if before.ui_layout != after.ui_layout {
         let id = match after.ui_layout {
-            LayoutKind::Visio2016 => "view.ui_layout.visio_2016",
-            LayoutKind::Visio365 => "view.ui_layout.visio_365",
+            LayoutKind::Panel2016 => "view.ui_layout.panel_2016",
+            LayoutKind::Panel365 => "view.ui_layout.panel_365",
+            // The curated layouts gain their registry rows in P7-09;
+            // the dialog never offers them before then.
+            LayoutKind::PanelModern => "view.ui_layout.panel_modern",
+            LayoutKind::PanelClassic => "view.ui_layout.panel_classic",
         };
         intents.push(intent(id)?);
     }
@@ -228,7 +232,7 @@ pub fn option_changes(before: &Settings, after: &Settings) -> Result<Vec<Intent>
 
 /// One dispatch request for a static command id.
 fn intent(id: &'static str) -> Result<Intent, UiError> {
-    let command = ferrogram_commands::CommandId::parse(id).map_err(|error| UiError::Io {
+    let command = larrygram_commands::CommandId::parse(id).map_err(|error| UiError::Io {
         message: format!("the options command id {id} is not valid: {error}"),
     })?;
     Ok(Intent::new(command, Invocation::empty(Source::Ui)))
@@ -368,20 +372,20 @@ mod tests {
                 .iter()
                 .map(|intent| intent.command.as_str())
                 .collect::<Vec<_>>(),
-            vec!["view.ui_layout.visio_365"],
+            vec!["view.ui_layout.panel_365"],
             "the radio dispatches its registry command (ADR 0032 amendment)"
         );
-        assert_eq!(intents[0].invocation.source, ferrogram_commands::Source::Ui);
+        assert_eq!(intents[0].invocation.source, larrygram_commands::Source::Ui);
         // The dialog writes nothing itself: the settings still hold
         // the old layout until the shell dispatches the intent.
-        assert_eq!(settings.borrow().ui_layout, LayoutKind::Visio2016);
+        assert_eq!(settings.borrow().ui_layout, LayoutKind::Panel2016);
     }
 
     #[test]
     fn every_changed_row_maps_to_its_registry_command() {
         let before = Settings::default();
         let mut after = Settings::default();
-        after.ui_layout = LayoutKind::Visio365;
+        after.ui_layout = LayoutKind::Panel365;
         after.show_grid = false;
         after.show_rulers = false;
         after.units = DisplayUnits::Feet;
@@ -393,7 +397,7 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                "view.ui_layout.visio_365",
+                "view.ui_layout.panel_365",
                 "view.toggle_grid",
                 "view.rulers",
                 "view.units"
@@ -410,11 +414,11 @@ mod tests {
     #[test]
     fn the_layout_radio_names_the_chosen_layout() {
         let mut before = Settings::default();
-        before.ui_layout = LayoutKind::Visio365;
+        before.ui_layout = LayoutKind::Panel365;
         let after = Settings::default();
         let intents = option_changes(&before, &after).expect("intents");
         assert_eq!(intents.len(), 1);
-        assert_eq!(intents[0].command.as_str(), "view.ui_layout.visio_2016");
+        assert_eq!(intents[0].command.as_str(), "view.ui_layout.panel_2016");
     }
 
     #[test]
@@ -468,6 +472,56 @@ mod tests {
     }
 
     #[test]
+    fn option_changes_cover_the_curated_layout_kinds_too() {
+        // The dialog offers only the two Fluent-data layouts, but the
+        // change rule names an id for every kind (task P7-00).
+        for (kind, id) in [
+            (LayoutKind::PanelModern, "view.ui_layout.panel_modern"),
+            (LayoutKind::PanelClassic, "view.ui_layout.panel_classic"),
+        ] {
+            let before = Settings::default();
+            let mut after = Settings::default();
+            after.ui_layout = kind;
+            let intents = option_changes(&before, &after).expect("intents");
+            assert_eq!(intents.len(), 1);
+            assert_eq!(intents[0].command.as_str(), id);
+        }
+    }
+
+    #[test]
+    fn a_settings_store_saved_before_the_rename_still_loads() {
+        // The exact JSON a pre-P7-00 build wrote: the old enum
+        // spellings and none of the later fields.
+        let old = concat!(
+            r#"{"ui_layout":"Visio2016","show_grid":false,"show_rulers":true,"#,
+            r#""units":"Inches","recent_files":[]}"#
+        );
+        let mut store = TextStore::new(Some(old.to_owned()));
+        let settings = store.load().expect("the old store loads");
+        assert_eq!(
+            settings.ui_layout,
+            LayoutKind::Panel2016,
+            "the old spelling maps to Panel (2016 data)"
+        );
+        assert!(!settings.show_grid);
+        assert_eq!(settings.units, DisplayUnits::Inches);
+        assert!(
+            store.take_warning().is_none(),
+            "no warning for an old store"
+        );
+        // The serde default on `ui_layout` covers a store written
+        // before the field existed (ADR 0032 keeps the other fields
+        // strict: a missing one is corrupt, not a partial load).
+        let mut older = TextStore::new(Some(
+            r#"{"show_grid":false,"show_rulers":true,"units":"Inches","recent_files":[]}"#
+                .to_owned(),
+        ));
+        let settings = older.load().expect("the older store loads");
+        assert_eq!(settings.ui_layout, LayoutKind::Panel2016, "the default");
+        assert!(!settings.show_grid);
+    }
+
+    #[test]
     fn settings_errors_wrap_into_ui_errors() {
         let error = settings_error(SettingsError::Format {
             message: "truncated".into(),
@@ -486,7 +540,7 @@ mod welcome_settings_tests {
         assert!(!settings.welcome_seen);
         assert_eq!(
             settings.default_layout,
-            ferrogram_ui_spec::v2::LayoutKind::PanelModern
+            larrygram_ui_spec::v2::LayoutKind::PanelModern
         );
     }
 

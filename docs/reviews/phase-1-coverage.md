@@ -10,7 +10,7 @@
 - `cargo xtask coverage` (which runs
   `cargo llvm-cov --workspace --all-features --json --summary-only`)
   in the P1-10 worktree with
-  `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/P1-10`.
+  `CARGO_TARGET_DIR=/Volumes/Dara/larrygram/target/P1-10`.
 - `cargo llvm-cov report --json` (full report, segments) for line-level
   detail. `cargo-llvm-cov 0.9.1`.
 - All tests green in the same run (184 xtask tests, plus every crate).
@@ -23,20 +23,20 @@ measured percentage minus the ratchet.
 
 | Crate | Lines | Covered | Pct | Threshold | Ratchet | Delta vs ratchet | Delta vs threshold |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| ferrogram | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
-| ferrogram-cli | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
-| ferrogram-commands | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-control | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
-| ferrogram-geom | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-model | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-render | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
-| ferrogram-shapesheet | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-text | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
-| ferrogram-ui | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
-| ferrogram-ui-spec | 1320 | 1309 | 99.2 | 85.0 | — | — | +14.2 |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85.0 | — | — | see "misleading" below |
-| ferrogram-vsdx | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | — (no threshold) |
+| larrygram | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
+| larrygram-cli | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
+| larrygram-commands | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-control | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
+| larrygram-geom | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-model | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-render | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
+| larrygram-shapesheet | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-text | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
+| larrygram-ui | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
+| larrygram-ui-spec | 1320 | 1309 | 99.2 | 85.0 | — | — | +14.2 |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85.0 | — | — | see "misleading" below |
+| larrygram-vsdx | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | — (no threshold) |
 | xtask | 8027 | 7198 | 89.7 | — | 55.6 | +34.1 | — (no threshold) |
 
 No crate is below its threshold or below its ratchet, so there is no
@@ -50,22 +50,22 @@ would write (percent floored to one decimal, empty crates omitted):
 
 ```toml
 [ratchet]
-ferrogram = 66.6
-ferrogram-cli = 66.6
-ferrogram-ui-spec = 99.1
-ferrogram-web = 0.0
+larrygram = 66.6
+larrygram-cli = 66.6
+larrygram-ui-spec = 99.1
+larrygram-web = 0.0
 xtask = 89.6
 ```
 
 Notes:
 
-- The floored values (99.1 for `ferrogram-ui-spec`, 89.6 for `xtask`)
+- The floored values (99.1 for `larrygram-ui-spec`, 89.6 for `xtask`)
   are one tenth below the displayed table numbers (99.2, 89.7). The
   `--update-ratchet` command floors deliberately so the ratchet never
   exceeds what was measured. Do not hand-round them up.
 - `xtask` has no threshold. It is dev tooling; the ratchet alone guards
   it. Consider keeping it that way.
-- `ferrogram` and `ferrogram-cli` sit one uncovered line above their
+- `larrygram` and `larrygram-cli` sit one uncovered line above their
   ratchet (6/9 lines). See "misleading measurements": their ratchet of
   66.6 is fragile.
 
@@ -181,19 +181,19 @@ None.
 
 ## Misleading measurements
 
-- **`ferrogram-vsd-binary` (0 lines).** Its only code is under
+- **`larrygram-vsd-binary` (0 lines).** Its only code is under
   `crates/vsd-binary/tests/`, which `cargo llvm-cov` excludes from the
   report by default, and its `src/` is an empty placeholder. The 0
   lines say nothing about the tests' quality. This matches the
   deferred note in `docs/STATUS.md` (P1-07): the number becomes
   meaningful once the crate has library code (Phase 7). Rated the
   same as the master; not counted as a finding.
-- **`ferrogram` and `ferrogram-cli` (9 lines each).** One uncovered
+- **`larrygram` and `larrygram-cli` (9 lines each).** One uncovered
   line swings the percentage by 11 points. Their 66.7% against a 66.6
   ratchet has a margin of zero: any edit to `main.rs` can flip the
   gate. Do not tighten these ratchets; consider a "small denominator"
   grace in the coverage step later.
-- **`ferrogram-web` (2 lines).** The wasm entry point is not run under
+- **`larrygram-web` (2 lines).** The wasm entry point is not run under
   `wasm32`; 0.0% is expected. Its ratchet of 0.0 is correct.
 - **Test code in `src/` counts toward the denominator.** Unit tests
   are inline, so unreachable match arms in tests inflate "uncovered"
@@ -203,10 +203,10 @@ None.
   `xtask/src/extract/commands.rs:1448-1449`. They can never be covered
   and should be read as noise, not gaps.
 - **Zero-line crates are not "passing" in a meaningful sense.**
-  `ferrogram-geom`, `ferrogram-model`, `ferrogram-vsdx`,
-  `ferrogram-vsd-binary`, `ferrogram-shapesheet`, `ferrogram-commands`,
-  `ferrogram-render`, `ferrogram-text`, `ferrogram-control` and
-  `ferrogram-ui` are empty placeholders. The gate passes them by
+  `larrygram-geom`, `larrygram-model`, `larrygram-vsdx`,
+  `larrygram-vsd-binary`, `larrygram-shapesheet`, `larrygram-commands`,
+  `larrygram-render`, `larrygram-text`, `larrygram-control` and
+  `larrygram-ui` are empty placeholders. The gate passes them by
   design ("a crate with zero instrumented lines passes"). Phase 2
   onwards numbers will appear; the thresholds in `coverage.toml`
   (85/75/50) are the real target then.

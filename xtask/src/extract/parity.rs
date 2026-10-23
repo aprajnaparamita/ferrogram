@@ -12,7 +12,7 @@
 //! - `out-of-scope` when the id is listed in `ui-spec/out-of-scope.txt`;
 //! - `implemented` when the control's `CommandId` (its `command` link,
 //!   else its `commands.yaml` entry) resolves in
-//!   `ferrogram_commands::builtins::registry()` to
+//!   `larrygram_commands::builtins::registry()` to
 //!   `CommandStatus::Implemented`;
 //! - `stub` otherwise.
 //!
@@ -26,7 +26,7 @@
 //! `ui-spec/out-of-scope.txt` (case-insensitively) or every one of its
 //! Fluent ids is (the controls it serves are out of the alpha),
 //! `implemented` when
-//! `ferrogram_commands::builtins::registry()` reports
+//! `larrygram_commands::builtins::registry()` reports
 //! `CommandStatus::Implemented` for the id, `stub` otherwise.
 //! `out-of-scope` wins over `implemented`, as in the control table.
 //!
@@ -137,7 +137,7 @@ pub fn generate(out_dir: &Path) -> ExtractResult<String> {
          exactly or by a `*` glob);\n\
          - `implemented` when the control's command (its `command` \
          link, else its `commands.yaml` entry) resolves in \
-         `ferrogram_commands::builtins::registry()` to \
+         `larrygram_commands::builtins::registry()` to \
          `CommandStatus::Implemented`;\n\
          - `stub` otherwise.\n\n\
          A row listed in `ui-spec/out-of-scope.txt` stays \
@@ -176,7 +176,7 @@ fn command_section(rules: &StatusRules) -> ExtractResult<String> {
     text.push_str("\n# Parity matrix: registry commands\n\n");
     text.push_str(
         "Every command id in \
-         `ferrogram_commands::builtins::registry()`, including ids with \
+         `larrygram_commands::builtins::registry()`, including ids with \
          no Fluent control, with a status of `implemented`, `stub`, or \
          `out-of-scope`. Sorted by `(status, id)`; the status order is \
          `implemented`, `stub`, `out-of-scope`.\n\n\
@@ -186,7 +186,7 @@ fn command_section(rules: &StatusRules) -> ExtractResult<String> {
          exactly or by a `*` glob), or every one of its Fluent ids is \
          listed (the controls it serves are out of the alpha);\n\
          - `implemented` when \
-         `ferrogram_commands::builtins::registry()` reports \
+         `larrygram_commands::builtins::registry()` reports \
          `CommandStatus::Implemented` for the id;\n\
          - `stub` otherwise.\n\n\
          An `out-of-scope` row stays out of scope even when a handler \
@@ -221,14 +221,14 @@ struct CommandRow {
 
 /// The commands table rows over the builtin registry.
 fn command_rows(rules: &StatusRules) -> ExtractResult<Vec<CommandRow>> {
-    command_rows_from(ferrogram_commands::builtins::registry(), rules)
+    command_rows_from(larrygram_commands::builtins::registry(), rules)
 }
 
 /// [`command_rows`] over an injected registry build (the same seam as
 /// [`implemented_ids_from`], so the "does not build" error arm is
 /// testable).
 fn command_rows_from<E: std::fmt::Display>(
-    registry: std::result::Result<ferrogram_commands::Registry, E>,
+    registry: std::result::Result<larrygram_commands::Registry, E>,
     rules: &StatusRules,
 ) -> ExtractResult<Vec<CommandRow>> {
     let registry = registry.map_err(|error| ExtractError::Parse {
@@ -253,7 +253,7 @@ fn command_rows_from<E: std::fmt::Display>(
                 status: command_status(
                     id.as_str(),
                     &fluent,
-                    registry.status(&id) == ferrogram_commands::CommandStatus::Implemented,
+                    registry.status(&id) == larrygram_commands::CommandStatus::Implemented,
                     rules,
                 ),
                 id: id.as_str().to_owned(),
@@ -318,7 +318,7 @@ fn row_shape(
 /// The rules that derive one row's status (ADR 0037).
 pub struct StatusRules {
     /// Command ids the builtin registry reports as
-    /// [`CommandStatus::Implemented`](ferrogram_commands::CommandStatus).
+    /// [`CommandStatus::Implemented`](larrygram_commands::CommandStatus).
     pub implemented: BTreeSet<String>,
     /// Fluent id -> command id, from `commands.yaml` (the entry that
     /// lists the id in `fluent_ids`; first entry wins).
@@ -359,11 +359,11 @@ impl StatusRules {
     }
 }
 
-/// The command ids `ferrogram_commands::builtins::registry()` reports
+/// The command ids `larrygram_commands::builtins::registry()` reports
 /// as implemented: the one source of truth for `implemented` rows
 /// (ADR 0037).
 fn implemented_ids() -> ExtractResult<BTreeSet<String>> {
-    implemented_ids_from(ferrogram_commands::builtins::registry())
+    implemented_ids_from(larrygram_commands::builtins::registry())
 }
 
 /// [`implemented_ids`] over an injected registry build. The error arm
@@ -371,7 +371,7 @@ fn implemented_ids() -> ExtractResult<BTreeSet<String>> {
 /// embedded registry is broken, so the seam exists for the tests
 /// (P4-17).
 fn implemented_ids_from<E: std::fmt::Display>(
-    registry: std::result::Result<ferrogram_commands::Registry, E>,
+    registry: std::result::Result<larrygram_commands::Registry, E>,
 ) -> ExtractResult<BTreeSet<String>> {
     let registry = registry.map_err(|error| ExtractError::Parse {
         path: PathBuf::from("crates/commands"),
@@ -379,7 +379,7 @@ fn implemented_ids_from<E: std::fmt::Display>(
     })?;
     Ok(registry
         .ids()
-        .filter(|id| registry.status(id) == ferrogram_commands::CommandStatus::Implemented)
+        .filter(|id| registry.status(id) == larrygram_commands::CommandStatus::Implemented)
         .map(|id| id.as_str().to_owned())
         .collect())
 }
@@ -397,7 +397,7 @@ fn load_value(path: &Path) -> ExtractResult<Value> {
 }
 
 /// Walks a layout [`Value`] and records every control's `command`
-/// link: Fluent id -> Ferrogram command id. First occurrence wins
+/// link: Fluent id -> Larrygram command id. First occurrence wins
 /// (a repeated id with two links is an extractor artefact).
 pub fn collect_command_links(value: &Value, out: &mut BTreeMap<String, String>) {
     match value {
@@ -449,7 +449,7 @@ fn load_command_table(path: &Path) -> ExtractResult<BTreeMap<String, String>> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// The control's command resolves to a real handler in
-    /// `ferrogram_commands::builtins::registry()`.
+    /// `larrygram_commands::builtins::registry()`.
     Implemented,
     /// No handler is registered for the control's command yet.
     Stub,
@@ -1011,7 +1011,7 @@ tabs:
     #[test]
     fn a_registry_that_does_not_build_is_an_error() {
         let error =
-            implemented_ids_from(Err::<ferrogram_commands::Registry, _>("boom")).unwrap_err();
+            implemented_ids_from(Err::<larrygram_commands::Registry, _>("boom")).unwrap_err();
         let message = error.to_string();
         assert!(
             message.contains("builtin registry does not build"),
@@ -1026,7 +1026,7 @@ tabs:
     fn the_real_registry_contributes_implemented_ids() {
         let ids = implemented_ids().unwrap();
         assert!(!ids.is_empty());
-        assert!(implemented_ids_from(ferrogram_commands::builtins::registry()).is_ok());
+        assert!(implemented_ids_from(larrygram_commands::builtins::registry()).is_ok());
     }
 
     // ---- the commands table (P5-10) --------------------------------
@@ -1077,7 +1077,7 @@ tabs:
     fn command_rows_of_a_registry_that_does_not_build_are_an_error() {
         let r = rules(&[], &[], &[]);
         let error =
-            command_rows_from(Err::<ferrogram_commands::Registry, _>("boom"), &r).unwrap_err();
+            command_rows_from(Err::<larrygram_commands::Registry, _>("boom"), &r).unwrap_err();
         let message = error.to_string();
         assert!(
             message.contains("builtin registry does not build"),
@@ -1093,7 +1093,7 @@ tabs:
     fn the_commands_table_lists_every_registry_id() {
         let root = ws();
         let rules = StatusRules::load(&root).unwrap();
-        let registry = ferrogram_commands::builtins::registry().unwrap();
+        let registry = larrygram_commands::builtins::registry().unwrap();
         let rows = command_rows(&rules).unwrap();
         assert_eq!(rows.len(), registry.len(), "one row per registry id");
         let text = generate(&root).unwrap();

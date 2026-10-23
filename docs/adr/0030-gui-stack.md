@@ -19,12 +19,12 @@ the whole new dependency tree, and the macOS and wasm builds must work.
 
 | Crate | Version | Licence | Where | Why |
 |---|---|---|---|---|
-| `egui` | 0.37 | MIT OR Apache-2.0 | `crates/ui` (L6) | immediate-mode UI; widgets for the ribbon and panels |
-| `eframe` | 0.37 | MIT OR Apache-2.0 | `apps/ferrogram`, `apps/ferrogram-web` (L7) | window + event loop + storage, desktop and wasm |
-| `egui_kittest` | 0.37 | MIT OR Apache-2.0 | dev-dependency of `crates/ui`, `apps/ferrogram` | headless UI tests (KICKOFF) |
+| `egui` | 0.37 | MIT OR Apache-2.0 | `crates/ui` (L6) | immediate-mode UI; widgets for the command bar and panes |
+| `eframe` | 0.37 | MIT OR Apache-2.0 | `apps/larrygram`, `apps/larrygram-web` (L7) | window + event loop + storage, desktop and wasm |
+| `egui_kittest` | 0.37 | MIT OR Apache-2.0 | dev-dependency of `crates/ui`, `apps/larrygram` | headless UI tests (KICKOFF) |
 | `rfd` | 0.17 | MIT OR Apache-2.0 | `crates/ui` (L6) | native file dialogs on desktop (KICKOFF) |
 | `serde_json` | 1 | MIT OR Apache-2.0 | `crates/ui` (L6) | the settings slot format (ADR 0032); added by P4-03 |
-| `wasm-bindgen`, `wasm-bindgen-futures`, `js-sys`, `web-sys` | 0.2 / 0.4 / 0.3 / 0.3 | MIT OR Apache-2.0 | `crates/ui` and `apps/ferrogram-web`, wasm32 only | the async upload bridge and the download save (ADR 0036); added by P4-03 |
+| `wasm-bindgen`, `wasm-bindgen-futures`, `js-sys`, `web-sys` | 0.2 / 0.4 / 0.3 / 0.3 | MIT OR Apache-2.0 | `crates/ui` and `apps/larrygram-web`, wasm32 only | the async upload bridge and the download save (ADR 0036); added by P4-03 |
 
 `egui`, `eframe` and `egui_kittest` are released in lockstep; the three are
 pinned to the same 0.x minor. `rfd` is the only dialog crate; on wasm the
@@ -50,7 +50,7 @@ the apps depend on `eframe`. `cargo xtask layers` already encodes this.
 ### Tests: `egui_kittest`
 
 UI tests run headless through `egui_kittest::Harness` (which drives the
-AccessKit tree): ribbon generation for both layouts, layout switching,
+AccessKit tree): command bar generation for both layouts, layout switching,
 enabled/disabled state, shortcut dispatch (KICKOFF Phase 4). The same
 harness backs the `ui` and app crates' 50% coverage lines (ADR 0037).
 Plain `egui::Context` tests are allowed for pure widget logic.
@@ -91,7 +91,7 @@ here:
 
 **No MPL allowance is needed.** The wasm binding crates (`wasm-bindgen`,
 `js-sys`, `web-sys`) are `MIT OR Apache-2.0`, checked in this task; the
-ADR 0003 rule ("`ferrogram-vsd-binary` is the only MPL crate") stands
+ADR 0003 rule ("`larrygram-vsd-binary` is the only MPL crate") stands
 unchanged and `cargo deny` keeps enforcing it.
 
 `eframe` is built with `default-features = false` plus `accesskit`,
@@ -100,14 +100,14 @@ desktop and `default_fonts`, `glow`, `persistence`, `web_screen_reader`
 on wasm: the `wgpu` feature is off (this ADR's backend decision) and
 `persistence` backs the settings store (ADR 0032). eframe's own default
 list enables `winit/default`; a dependency feature list cannot contain
-slashes, so `apps/ferrogram` depends on `winit = "0.30"` directly (same
+slashes, so `apps/larrygram` depends on `winit = "0.30"` directly (same
 line eframe uses) to keep winit's default features (`rwh_06`, `x11`,
 `wayland`, `wayland-dlopen`, `wayland-csd-adwaita`).
 
 ## Consequences
 
 - `cargo deny check` runs over the full GUI tree at every gate.
-- The wasm build (`cargo build -p ferrogram-web --target wasm32-unknown-unknown`)
+- The wasm build (`cargo build -p larrygram-web --target wasm32-unknown-unknown`)
   now compiles eframe for `wasm32-unknown-unknown`; it stays a gate step.
 - macOS build uses `winit`/`glutin` transitively through eframe; nothing in
   L0..L5 changes (layers step stays green).

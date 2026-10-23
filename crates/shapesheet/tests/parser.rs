@@ -10,7 +10,7 @@
 
 // Test code: a failing `expect` is the bug under test.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     BinaryOp, CellRef, Error, Expr, ExprKind, Formula, Literal, MAX_SOURCE_LEN, MAX_TOKENS,
     NumberLiteral, Span, SyntaxKind, UnaryOp, parse, parse_formula, print,
 };

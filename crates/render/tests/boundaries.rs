@@ -3,12 +3,12 @@
 //! and text that overflows its shape box. Each case must produce a valid
 //! output or a clean `Err`, never a panic.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape, ShapeId,
     TextContent, TextPart,
 };
-use ferrogram_render::scene::{Node, Scene};
-use ferrogram_render::{
+use larrygram_render::scene::{Node, Scene};
+use larrygram_render::{
     BuildOptions, Error, PngOptions, SvgOptions, build_scene, render_png, render_svg,
 };
 
@@ -229,8 +229,8 @@ fn an_open_tile_draws_the_same_marks_in_both_backends() {
     // The ADR 0023 example tile (`M 0 0 L 1 1`) as an open stroke: the
     // scene's `filled` flag and `tile_stroke_width` draw the same mark in
     // both backends (P3-16), at the same device size.
-    use ferrogram_geom::{Path, Point, Segment, Size, Transform};
-    use ferrogram_render::scene::{Paint, PatternPaint, Shape as SceneShape};
+    use larrygram_geom::{Path, Point, Segment, Size, Transform};
+    use larrygram_render::scene::{Paint, PatternPaint, Shape as SceneShape};
 
     let mut tile = Path::new();
     tile.push(Segment::MoveTo(Point::new(0.0, 0.0)));
@@ -246,8 +246,8 @@ fn an_open_tile_draws_the_same_marks_in_both_backends() {
         transform: Transform::identity(),
         path,
         fill: Some(Paint::Pattern(PatternPaint {
-            foreground: ferrogram_render::Rgba::opaque(255, 0, 0),
-            background: ferrogram_render::Rgba::opaque(255, 255, 255),
+            foreground: larrygram_render::Rgba::opaque(255, 0, 0),
+            background: larrygram_render::Rgba::opaque(255, 255, 255),
             tile,
             tile_size: Size::new(1.0, 1.0),
             filled: false,

@@ -16,7 +16,7 @@ never fail a render because one cell is bad.
 
 ## Decision
 
-### One facade: `ferrogram_model::CellReader`
+### One facade: `larrygram_model::CellReader`
 
 Every cell the renderer reads goes through `CellReader` (L1, in `model`,
 because it needs the lookup of ADR 0013):
@@ -118,7 +118,7 @@ counts as "of the requested kind" in the policy above.
 transparency cells whose value comes from the theme cache the literal
 `Themed` (`<Cell N='FillForegnd' V='Themed' F='Inh'/>`, cells with
 `F='THEMEVAL()'`). The reader keeps it as `Str("Themed")` whatever `U`
-declares (`ferrogram-vsdx`, so a themed value in a numeric unit is not a
+declares (`larrygram-vsdx`, so a themed value in a numeric unit is not a
 read error), and `CellReader` resolves it:
 
 - `color` reads the shape's `QuickStyle*` cell for the cell's role
@@ -142,7 +142,7 @@ read error), and `CellReader` resolves it:
 
 **A cached numeric colour is an index.** Cells like
 `<Cell N='LineColor' V='0' F='GUARD(0)'/>` cache an index, not an RGB:
-0..23 is the fixed Visio palette (`ferrogram_model::values::palette`,
+0..23 is the fixed Visio palette (`larrygram_model::values::palette`,
 whose indices and names come from the `VisDefaultColors` enumeration on
 Microsoft Learn; the RGB values are our own transcription pending a
 black-box check) and 24 and up is the document colour table
@@ -264,7 +264,7 @@ and friends) still substitutes 0 with `UnresolvedTheme`.
 
 A cell that is **absent at every rung** and has a default documented on its
 ShapeSheet reference page resolves to that default with **no** warning
-(`ferrogram_model::defaults`). The table transcribes the documented
+(`larrygram_model::defaults`). The table transcribes the documented
 defaults of the cells the scene builder reads: `LocPinX`/`LocPinY`
 (`= Width*0.5`, `= Height*0.5`), `TxtPinX`/`TxtPinY`, `TxtWidth`/
 `TxtHeight` (`= Width*1`, `= Height*1`), `TxtLocPinX`/`TxtLocPinY`

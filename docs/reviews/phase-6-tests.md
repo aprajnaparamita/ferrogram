@@ -129,14 +129,14 @@ product bugs (below) and closed the P5-20 `sync_uint` open item.
 |---|---|
 | the fill-in pass fills only what is missing | `src/recalc.rs::fill_missing_only_recomputes_cells_without_a_cached_value`, `crates/commands/src/builtins/file.rs::{a_formula_without_a_cached_value_gains_one_on_read, a_cached_value_is_unchanged_by_the_fill_in_pass}`, `tests/recalc_engine.rs::a_section_level_cell_fills_its_hole` |
 | the fill-in pass is not an edit | `file.rs::the_fill_in_pass_takes_no_undo_entry`, `recalc_edit.rs::fill_missing_fills_the_holes_without_an_undo_entry` |
-| the local snapshot wins for an inherited cell at render time | `apps/ferrogram/tests/open_corpus.rs` (P6-08's resized-instance raster assertions, P6-15's blank-file rule) |
+| the local snapshot wins for an inherited cell at render time | `apps/larrygram/tests/open_corpus.rs` (P6-08's resized-instance raster assertions, P6-15's blank-file rule) |
 | the writer's kind spelling round-trips | `crates/vsdx/tests/value_roundtrip.rs`, `crates/commands/tests/value_roundtrip.rs` (P6-08) |
 
-### ADR 0058 (typed Shape Data and panels)
+### ADR 0058 (typed Shape Data and panes)
 
 | Promise | Test |
 |---|---|
-| typed display, unit conversion on entry, formula cells read-only | `crates/ui/tests/panels_typed.rs` (P6-09); nothing in this pass changed the panels |
+| typed display, unit conversion on entry, formula cells read-only | `crates/ui/tests/panes_typed.rs` (P6-09); nothing in this pass changed the panes |
 
 ### ADR 0059 (the cached-value cross-check)
 
@@ -172,23 +172,23 @@ product bugs (below) and closed the P5-20 `sync_uint` open item.
 
 | crate | lines | covered | pct | threshold | ratchet |
 |---|---|---|---|---|---|
-| ferrogram | 250 | 200 | 80.0 | 50.0 | 80.0 |
-| ferrogram-cli | 1266 | 1225 | 96.8 | 50.0 | 96.7 |
-| ferrogram-commands | 9537 | 9372 | 98.3 | 85.0 | 98.3 |
-| ferrogram-geom | 2501 | 2501 | 100.0 | 85.0 | 100.0 |
-| ferrogram-model | 11234 | 11204 | 99.7 | 85.0 | 99.7 |
-| ferrogram-render | 7221 | 7113 | 98.5 | 75.0 | 98.5 |
-| ferrogram-shapesheet | 6733 | 6433 | 95.5 | 85.0 | 85.0 |
-| ferrogram-text | 1768 | 1748 | 98.9 | 75.0 | 98.8 |
-| ferrogram-ui | 11671 | 11324 | 97.0 | 50.0 | 96.8 |
-| ferrogram-ui-spec | 2043 | 2031 | 99.4 | 85.0 | 99.3 |
-| ferrogram-vsd-binary | — | — | n/a | 85.0 | — |
-| ferrogram-vsdx | 7722 | 7583 | 98.2 | 85.0 | 98.1 |
-| ferrogram-web | 140 | 109 | 77.9 | — | 77.8 |
+| larrygram | 250 | 200 | 80.0 | 50.0 | 80.0 |
+| larrygram-cli | 1266 | 1225 | 96.8 | 50.0 | 96.7 |
+| larrygram-commands | 9537 | 9372 | 98.3 | 85.0 | 98.3 |
+| larrygram-geom | 2501 | 2501 | 100.0 | 85.0 | 100.0 |
+| larrygram-model | 11234 | 11204 | 99.7 | 85.0 | 99.7 |
+| larrygram-render | 7221 | 7113 | 98.5 | 75.0 | 98.5 |
+| larrygram-shapesheet | 6733 | 6433 | 95.5 | 85.0 | 85.0 |
+| larrygram-text | 1768 | 1748 | 98.9 | 75.0 | 98.8 |
+| larrygram-ui | 11671 | 11324 | 97.0 | 50.0 | 96.8 |
+| larrygram-ui-spec | 2043 | 2031 | 99.4 | 85.0 | 99.3 |
+| larrygram-vsd-binary | — | — | n/a | 85.0 | — |
+| larrygram-vsdx | 7722 | 7583 | 98.2 | 85.0 | 98.1 |
+| larrygram-web | 140 | 109 | 77.9 | — | 77.8 |
 | xtask | 10443 | 9757 | 93.4 | — | 93.4 |
 
-`ferrogram-shapesheet` grew from the ratchet (85.0) to 95.5 with the
-Phase 6 implementation and this pass's tests; `ferrogram-model` dipped
+`larrygram-shapesheet` grew from the ratchet (85.0) to 95.5 with the
+Phase 6 implementation and this pass's tests; `larrygram-model` dipped
 to 99.6 when `write_section_cell` landed and is back at its 99.7
 ratchet with the two model tests. The pass adds no new public API
 surface beyond `Document::write_section_cell` and the

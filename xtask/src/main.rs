@@ -1,4 +1,4 @@
-//! Ferrogram developer tasks.
+//! Larrygram developer tasks.
 //!
 //! Run with `cargo xtask <task>`:
 //!
@@ -38,7 +38,7 @@ const USAGE: &str = "usage: cargo xtask <task>
 
 tasks:
   gate [--quick] [--skip <step>,...]   run the quality gate
-                                       steps: codegen parity fmt clippy test doc coverage deny layers wasm fuzz
+                                       steps: codegen names parity fmt clippy test doc coverage deny layers wasm fuzz
                                        --quick skips coverage, wasm and fuzz
   codegen [--check]                    regenerate crates/model/src/generated from
                                        ui-spec/shapesheet.toml (ADR 0015)

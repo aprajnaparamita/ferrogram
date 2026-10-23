@@ -20,7 +20,7 @@
 //!
 //! Layer L2 (ADR 0002): the engine runs on the document model.
 //!
-//! Part of Ferrogram. Alpha: function bodies marked "not implemented" are
+//! Part of Larrygram. Alpha: function bodies marked "not implemented" are
 //! stubs awaiting their implementing task (tasks P6-02..P6-06).
 
 #![forbid(unsafe_code)]

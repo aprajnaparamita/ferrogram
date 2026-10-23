@@ -16,7 +16,7 @@ mod exec;
 mod inspect;
 mod parse;
 
-use ferrogram_render::Rgba;
+use larrygram_render::Rgba;
 
 /// The output formats the CLI writes (ADR 0026).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

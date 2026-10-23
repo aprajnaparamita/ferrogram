@@ -17,8 +17,8 @@ use crate::{coverage, layers};
 
 /// Gate steps in execution order.
 pub const STEPS: &[&str] = &[
-    "codegen", "parity", "fmt", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm",
-    "fuzz",
+    "codegen", "names", "parity", "fmt", "clippy", "test", "doc", "coverage", "deny", "layers",
+    "wasm", "fuzz",
 ];
 
 /// Steps skipped by `--quick`.
@@ -39,6 +39,9 @@ enum Outcome {
 enum Plan {
     /// `cargo xtask codegen --check` (ADR 0015).
     Codegen,
+    /// The old-name check (task P7-00): no committed file carries the
+    /// pre-rename product name or the old layout term.
+    Names,
     /// `cargo xtask parity --check` (ADR 0037).
     Parity,
     /// `cargo llvm-cov` against `coverage.toml`.
@@ -180,6 +183,7 @@ fn plan(step: &str, coverage_runs: bool) -> Result<Plan> {
         "test" if coverage_runs => Ok(Plan::Cargo(DOC_TESTS_ONLY)),
         // ADR 0015: `--quick` does not skip this step (it is fast).
         "codegen" => Ok(Plan::Codegen),
+        "names" => Ok(Plan::Names),
         "parity" => Ok(Plan::Parity),
         "fmt" => Ok(Plan::Cargo(CargoStep {
             args: &["fmt", "--all", "--", "--check"],
@@ -220,7 +224,7 @@ fn plan(step: &str, coverage_runs: bool) -> Result<Plan> {
             args: &[
                 "build",
                 "--package",
-                "ferrogram-web",
+                "larrygram-web",
                 "--target",
                 "wasm32-unknown-unknown",
             ],
@@ -239,6 +243,7 @@ fn plan(step: &str, coverage_runs: bool) -> Result<Plan> {
 fn execute(plan: Plan) -> Outcome {
     let result: Result<()> = match plan {
         Plan::Codegen => crate::codegen::run(&crate::codegen::Options { check: true }),
+        Plan::Names => names(),
         Plan::Parity => crate::parity::run(&crate::parity::Options { check: true }),
         Plan::Coverage => coverage::run(false),
         Plan::Layers => layers::run(),
@@ -270,6 +275,138 @@ fn execute(plan: Plan) -> Outcome {
 fn fail(e: String) -> Outcome {
     eprintln!("{e}");
     Outcome::Fail(e)
+}
+
+// --- the names step (task P7-00) ------------------------------------------
+
+/// The pre-rename product name and the old layout term, split in two
+/// so this source file carries neither word: the step scans every
+/// committed file, its own source included.
+const OLD_PRODUCT: &str = concat!("ferro", "gram");
+const OLD_LAYOUT_TERM: &str = concat!("rib", "bon");
+
+/// Files that name one of the two words in order to forbid or rename
+/// it: the rename's own task file and the Phase 7 docs that quote the
+/// terms (task P7-00's explicit path list).
+const NAMES_ALLOWED_PATHS: &[&str] = &[
+    "docs/tasks/P7-00.md",
+    "docs/tasks/P7-01.md",
+    "docs/plans/phase-7.md",
+    "docs/phase-7/README.md",
+    "KICKOFF.md",
+];
+
+/// Verbatim third-party identifiers that carry the old layout term
+/// (task P7-00): the two VisUICmds constants whose derived command ids
+/// once carried it, one upstream worksheet cell value and one upstream
+/// asset file name. A word occurrence inside one of these is not a hit.
+const NAMES_ALLOWED_IDENTIFIERS: &[&str] = &[
+    "visCmdCloseInkToolsRibbonTab",
+    "visCmdMinimizeRibbonToggle",
+    "Not in the Ribbon",
+    "layouts/ribbon.yaml",
+];
+
+/// One finding of [`names_in`]: the committed file, the line number
+/// (0 for a file-name hit) and the offending text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NameHit {
+    /// The committed path, as `git ls-files` prints it.
+    file: String,
+    /// The 1-based line number, or 0 when the hit is the file name.
+    line: usize,
+    /// The offending line (the path for a file-name hit).
+    text: String,
+}
+
+impl std::fmt::Display for NameHit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}: {}", self.file, self.line, self.text)
+    }
+}
+
+/// True when `text` carries one of the two words outside the allowed
+/// identifiers. The words match case-insensitively, so every spelling
+/// of the old names counts (task P7-00).
+fn names_hit(text: &str) -> bool {
+    let mut scrubbed = text.to_owned();
+    for id in NAMES_ALLOWED_IDENTIFIERS {
+        scrubbed = scrubbed.replace(*id, "");
+    }
+    let lowered = scrubbed.to_ascii_lowercase();
+    lowered.contains(OLD_PRODUCT) || lowered.contains(OLD_LAYOUT_TERM)
+}
+
+/// Scans the listed committed files under `root` and returns every hit
+/// in file, then line, order. `listed` holds paths relative to `root`,
+/// as `git ls-files` prints them. A file that cannot be read is an
+/// error, never a panic.
+fn names_in(root: &Path, listed: &[String]) -> Result<Vec<NameHit>> {
+    let mut hits: Vec<NameHit> = Vec::new();
+    for rel in listed {
+        if NAMES_ALLOWED_PATHS.contains(&rel.as_str()) {
+            continue;
+        }
+        if names_hit(rel) {
+            hits.push(NameHit {
+                file: rel.clone(),
+                line: 0,
+                text: rel.clone(),
+            });
+        }
+        let bytes = std::fs::read(root.join(rel)).map_err(|e| format!("cannot read {rel}: {e}"))?;
+        let text = String::from_utf8_lossy(&bytes);
+        for (index, line) in text.lines().enumerate() {
+            if names_hit(line) {
+                hits.push(NameHit {
+                    file: rel.clone(),
+                    line: index + 1,
+                    text: line.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(hits)
+}
+
+/// The names step over the workspace: `git ls-files` lists the
+/// committed files (untracked files are never read), and every hit
+/// fails the step with its file and line.
+fn names() -> Result<()> {
+    names_run(&util::root())
+}
+
+/// [`names`] over an explicit root (the tests use a scratch tree).
+fn names_run(root: &Path) -> Result<()> {
+    let listed = git_ls_files(root)?;
+    let hits = names_in(root, &listed)?;
+    if hits.is_empty() {
+        return Ok(());
+    }
+    let mut message = format!("{} old-name hit(s) in committed files:", hits.len());
+    for hit in &hits {
+        message.push('\n');
+        message.push_str(&hit.to_string());
+    }
+    Err(message)
+}
+
+/// The committed file list of the repository at `root` (`git ls-files`).
+fn git_ls_files(root: &Path) -> Result<Vec<String>> {
+    let mut cmd = Command::new("git");
+    cmd.args(["ls-files", "-z"]).current_dir(root);
+    let output = cmd
+        .output()
+        .map_err(|e| format!("cannot run git ls-files: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("git ls-files exited with {}", output.status));
+    }
+    Ok(output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| String::from_utf8_lossy(entry).into_owned())
+        .collect())
 }
 
 /// Plans and executes one step.
@@ -517,7 +654,8 @@ mod tests {
         assert_eq!(
             fake.asked,
             s(&[
-                "codegen", "parity", "clippy", "test", "doc", "coverage", "deny", "layers", "wasm"
+                "codegen", "names", "parity", "clippy", "test", "doc", "coverage", "deny",
+                "layers", "wasm"
             ])
         );
     }
@@ -539,11 +677,11 @@ mod tests {
         assert_eq!(fake.asked, s(STEPS));
         let summary = summary(&output);
         assert_eq!(summary.len(), STEPS.len());
-        assert_summary_line(summary[2], "FAIL", "fmt");
-        assert!(summary[2].ends_with("  fmt is broken"), "{:?}", summary[2]);
-        assert_summary_line(summary[4], "FAIL", "test");
+        assert_summary_line(summary[3], "FAIL", "fmt");
+        assert!(summary[3].ends_with("  fmt is broken"), "{:?}", summary[3]);
+        assert_summary_line(summary[5], "FAIL", "test");
         // Only the first line of a multi-line reason is shown.
-        assert!(summary[4].ends_with("  tests failed"), "{:?}", summary[4]);
+        assert!(summary[5].ends_with("  tests failed"), "{:?}", summary[5]);
         assert!(!output.contains("second line"), "{output}");
     }
 
@@ -554,7 +692,7 @@ mod tests {
         let (result, output) = drive_fake(&[], &mut fake);
         assert_eq!(result.unwrap_err(), "gate: RED (1 step(s) failed)");
         let summary = summary(&output);
-        assert_summary_line(summary[10], "FAIL", "fuzz");
+        assert_summary_line(summary[11], "FAIL", "fuzz");
     }
 
     /// The full summary line format: two spaces, a four-letter
@@ -568,9 +706,9 @@ mod tests {
         let summary = summary(&output);
         assert_eq!(summary.len(), STEPS.len());
         assert_summary_line(summary[0], "PASS", "codegen");
-        assert_summary_line(summary[2], "FAIL", "fmt");
-        assert_summary_line(summary[5], "SKIP", "doc");
-        assert!(summary[5].ends_with("  --skip/--quick"), "{:?}", summary[5]);
+        assert_summary_line(summary[3], "FAIL", "fmt");
+        assert_summary_line(summary[6], "SKIP", "doc");
+        assert!(summary[6].ends_with("  --skip/--quick"), "{:?}", summary[6]);
         // The `{:<9}` field is padded, not truncated.
         assert!(
             summary[0].contains(&format!("{:<9}", "codegen")),
@@ -616,6 +754,7 @@ mod tests {
     fn every_step_has_a_pinned_plan() {
         let expected: &[(&str, Plan)] = &[
             ("codegen", Plan::Codegen),
+            ("names", Plan::Names),
             ("parity", Plan::Parity),
             (
                 "fmt",
@@ -673,7 +812,7 @@ mod tests {
                     args: &[
                         "build",
                         "--package",
-                        "ferrogram-web",
+                        "larrygram-web",
                         "--target",
                         "wasm32-unknown-unknown",
                     ],
@@ -819,5 +958,114 @@ mod tests {
             dirs.iter()
                 .any(|d| d.ends_with(Path::new("crates").join("ui")))
         );
+    }
+    // --- the names step (task P7-00) --------------------------------
+
+    /// Writes `files` into a scratch tree and returns it.
+    fn names_tree(files: &[(&str, &str)]) -> crate::util::test_support::TempDir {
+        let tmp = crate::util::test_support::TempDir::new("names");
+        for (rel, text) in files {
+            let path = tmp.path().join(rel);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(path, text).unwrap();
+        }
+        tmp
+    }
+
+    /// The file list shape of `git ls-files`.
+    fn listed(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    /// A hit is reported with its file, line and text; the words match
+    /// case-insensitively (an upper-case variable spelling counts).
+    #[test]
+    fn names_reports_file_line_and_text() {
+        let old_product = OLD_PRODUCT.to_ascii_uppercase();
+        let text = format!("first line\nset {old_product}_HOME=1\nlast line\n");
+        let tree = names_tree(&[("docs/a.md", &text)]);
+        let hits = names_in(tree.path(), &listed(&["docs/a.md"])).unwrap();
+        assert_eq!(
+            hits,
+            vec![NameHit {
+                file: "docs/a.md".to_owned(),
+                line: 2,
+                text: format!("set {old_product}_HOME=1"),
+            }]
+        );
+        assert_eq!(
+            hits[0].to_string(),
+            format!("docs/a.md:2: set {old_product}_HOME=1")
+        );
+    }
+
+    /// The old layout term counts too, in prose and in identifiers.
+    #[test]
+    fn names_finds_the_old_layout_term_too() {
+        let text = format!(
+            "a {} layout\na {}-ui crate\n",
+            OLD_LAYOUT_TERM, OLD_LAYOUT_TERM
+        );
+        let tree = names_tree(&[("x.rs", &text)]);
+        let hits = names_in(tree.path(), &listed(&["x.rs"])).unwrap();
+        assert_eq!(hits.len(), 2, "{hits:?}");
+        assert_eq!(hits[0].line, 1);
+        assert_eq!(hits[1].line, 2);
+    }
+
+    /// The verbatim third-party identifiers are not hits.
+    #[test]
+    fn allowed_identifiers_are_not_hits() {
+        let mut text = String::new();
+        for id in NAMES_ALLOWED_IDENTIFIERS {
+            text.push_str(id);
+            text.push('\n');
+        }
+        let tree = names_tree(&[("x.rs", &text)]);
+        let hits = names_in(tree.path(), &listed(&["x.rs"])).unwrap();
+        assert!(hits.is_empty(), "{hits:?}");
+    }
+
+    /// An allowed identifier covers only its own text.
+    #[test]
+    fn an_allowed_identifier_does_not_cover_the_rest_of_the_line() {
+        let text = format!(
+            "{} and a {} walk in",
+            NAMES_ALLOWED_IDENTIFIERS[0], OLD_LAYOUT_TERM
+        );
+        let tree = names_tree(&[("x.rs", &text)]);
+        let hits = names_in(tree.path(), &listed(&["x.rs"])).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+    }
+
+    /// The rename's own docs are skipped by path, and a file name is a
+    /// hit reported with line 0.
+    #[test]
+    fn allowed_paths_are_skipped_and_file_names_count() {
+        let bad = format!("notes-{}.md", OLD_LAYOUT_TERM);
+        let tree = names_tree(&[
+            ("docs/tasks/P7-00.md", OLD_PRODUCT),
+            (bad.as_str(), "clean"),
+        ]);
+        let hits = names_in(tree.path(), &listed(&["docs/tasks/P7-00.md", bad.as_str()])).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].line, 0, "a file-name hit has line 0");
+        assert_eq!(hits[0].file, bad);
+    }
+
+    /// A file that cannot be read is an error, never a panic.
+    #[test]
+    fn a_missing_file_is_an_error() {
+        let tree = names_tree(&[]);
+        let error = names_in(tree.path(), &listed(&["gone.md"])).unwrap_err();
+        assert!(error.contains("cannot read gone.md"), "{error}");
+    }
+
+    /// The real committed tree passes, this source file included.
+    #[test]
+    fn the_committed_tree_is_clean() {
+        names_run(&util::root()).expect("no committed file carries an old name");
     }
 }

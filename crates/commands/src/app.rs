@@ -7,8 +7,8 @@
 
 use std::path::PathBuf;
 
-use ferrogram_model::{Document, PageId};
-use ferrogram_ui_spec::LayoutKind;
+use larrygram_model::{Document, PageId};
+use larrygram_ui_spec::LayoutKind;
 use serde::{Deserialize, Serialize};
 
 use crate::SettingsError;
@@ -53,7 +53,7 @@ impl DisplayUnits {
     /// Parses a [`Self::NAMES`] spelling, ignoring ASCII case.
     ///
     /// ```
-    /// use ferrogram_commands::DisplayUnits;
+    /// use larrygram_commands::DisplayUnits;
     /// assert_eq!(DisplayUnits::parse("millimeters"), Some(DisplayUnits::Millimeters));
     /// assert_eq!(DisplayUnits::parse("furlongs"), None);
     /// ```
@@ -73,7 +73,7 @@ impl DisplayUnits {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ViewState {
     /// Page-space pan offset, in inches.
-    pub pan: ferrogram_geom::Point,
+    pub pan: larrygram_geom::Point,
     /// View scale multiplier (1.0 = 100%); finite and positive.
     pub zoom: f64,
     /// Whether the grid is drawn (ADR 0033).
@@ -86,7 +86,7 @@ impl ViewState {
     /// The default view: no pan, 100% zoom, grid and rulers on.
     pub fn new() -> Self {
         Self {
-            pan: ferrogram_geom::Point::new(0.0, 0.0),
+            pan: larrygram_geom::Point::new(0.0, 0.0),
             zoom: 1.0,
             show_grid: true,
             show_rulers: true,
@@ -116,7 +116,7 @@ impl Default for ViewState {
 ///
 /// The selection is per application, not per document: the commands that
 /// switch document or page clear it. `shapes` is in click order and the
-/// last entry is the primary shape (the one the panels show).
+/// last entry is the primary shape (the one the panes show).
 ///
 /// `entered` is the group the user is "inside" (task P5-04, the
 /// `shape.enter_group` / `shape.exit_group` state of ADR 0041): while it
@@ -127,13 +127,13 @@ impl Default for ViewState {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Selection {
     /// The selected shapes of the active page, in click order.
-    pub shapes: Vec<ferrogram_model::ShapeId>,
+    pub shapes: Vec<larrygram_model::ShapeId>,
     /// The primary shape, or `None` while the selection is empty.
-    pub anchor: Option<ferrogram_model::ShapeId>,
+    pub anchor: Option<larrygram_model::ShapeId>,
     /// The page the selection belongs to.
     pub page: Option<PageId>,
     /// The group currently entered, or `None` at page level.
-    pub entered: Option<ferrogram_model::ShapeId>,
+    pub entered: Option<larrygram_model::ShapeId>,
 }
 
 impl Selection {
@@ -153,12 +153,12 @@ impl Selection {
     }
 
     /// Whether `shape` is selected.
-    pub fn contains(&self, shape: ferrogram_model::ShapeId) -> bool {
+    pub fn contains(&self, shape: larrygram_model::ShapeId) -> bool {
         self.shapes.contains(&shape)
     }
 
-    /// The primary shape (the panels' subject, ADR 0041).
-    pub fn primary(&self) -> Option<ferrogram_model::ShapeId> {
+    /// The primary shape (the panes' subject, ADR 0041).
+    pub fn primary(&self) -> Option<larrygram_model::ShapeId> {
         self.anchor
     }
 
@@ -169,7 +169,7 @@ impl Selection {
     /// `PageId` goes stale. Every command that renumbers pages calls this
     /// afterwards; the editing commands call it whenever they change the
     /// selection. The anchor's page wins, then the first selected shape's.
-    pub fn refresh_page(&mut self, document: &ferrogram_model::Document) {
+    pub fn refresh_page(&mut self, document: &larrygram_model::Document) {
         let derived = self
             .anchor
             .or_else(|| self.shapes.first().copied())
@@ -231,13 +231,13 @@ pub struct DocumentSession {
     /// The dependency graph of the document's formulas (ADR 0055): built
     /// on the first recalc and kept beside the undo stack, so a pass
     /// re-links only the nodes an edit touches. `None` until then.
-    pub graph: Option<ferrogram_shapesheet::DepGraph>,
+    pub graph: Option<larrygram_shapesheet::DepGraph>,
     /// The package the document was read from, kept for the lossless
     /// patch-based writer (ADR 0018: `write_document` patches the
     /// source parts so unmapped content survives a save). `None` for a
     /// document that was never read from a file (task P4-02 extension
     /// of the ADR 0029 field list).
-    pub preserve: Option<ferrogram_vsdx::Package>,
+    pub preserve: Option<larrygram_vsdx::Package>,
 }
 
 impl DocumentSession {
@@ -259,7 +259,7 @@ impl DocumentSession {
     }
 
     /// Keeps the package the document was read from (ADR 0018).
-    pub fn with_preserve(mut self, preserve: ferrogram_vsdx::Package) -> Self {
+    pub fn with_preserve(mut self, preserve: larrygram_vsdx::Package) -> Self {
         self.preserve = Some(preserve);
         self
     }
@@ -277,10 +277,16 @@ impl DocumentSession {
 }
 
 /// The persisted user settings (ADR 0029, ADR 0032).
+///
+/// A missing field is corrupt, not a partial load (ADR 0032), with one
+/// exception: `ui_layout` has a serde default and carries the
+/// pre-rename spellings as aliases, so a settings store saved before
+/// the P7-00 rename still loads (task P7-00).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct Settings {
-    /// The ribbon layout (ADR 0032).
+    /// The Panel layout (ADR 0032).
+    #[serde(default = "default_ui_layout")]
     pub ui_layout: LayoutKind,
     /// Whether the grid is drawn by default.
     pub show_grid: bool,
@@ -292,10 +298,17 @@ pub struct Settings {
     pub recent_files: Vec<PathBuf>,
 }
 
+/// The serde default of [`Settings::ui_layout`]: the pre-rename
+/// default layout, for a settings store written before the field
+/// existed (task P7-00).
+fn default_ui_layout() -> LayoutKind {
+    LayoutKind::Panel2016
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            ui_layout: LayoutKind::Visio2016,
+            ui_layout: LayoutKind::Panel2016,
             show_grid: true,
             show_rulers: true,
             units: DisplayUnits::Inches,
@@ -548,13 +561,13 @@ impl AppCtx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::Document;
+    use larrygram_model::Document;
 
     #[test]
     fn view_state_defaults() {
         let view = ViewState::new();
         assert_eq!(view.zoom, 1.0);
-        assert_eq!(view.pan, ferrogram_geom::Point::new(0.0, 0.0));
+        assert_eq!(view.pan, larrygram_geom::Point::new(0.0, 0.0));
         assert!(view.show_grid);
         assert!(view.show_rulers);
         assert_eq!(view, ViewState::default());
@@ -573,7 +586,7 @@ mod tests {
         assert!(!view.show_grid);
         assert!(view.show_rulers);
         assert_eq!(view.zoom, 1.0);
-        assert_eq!(view.pan, ferrogram_geom::Point::new(0.0, 0.0));
+        assert_eq!(view.pan, larrygram_geom::Point::new(0.0, 0.0));
     }
 
     #[test]
@@ -598,7 +611,7 @@ mod tests {
     #[test]
     fn settings_default_to_the_2016_layout() {
         let settings = Settings::default();
-        assert_eq!(settings.ui_layout, LayoutKind::Visio2016);
+        assert_eq!(settings.ui_layout, LayoutKind::Panel2016);
         assert_eq!(settings.units, DisplayUnits::Inches);
         assert!(settings.recent_files.is_empty());
     }
@@ -608,7 +621,7 @@ mod tests {
         let mut document = Document::new();
         document
             .pages
-            .push(ferrogram_model::Page::new(PageId { index: 0 }, 0));
+            .push(larrygram_model::Page::new(PageId { index: 0 }, 0));
         let session = DocumentSession::new(document, None);
         assert_eq!(session.active_page, Some(PageId { index: 0 }));
         assert_eq!(session.display_name(), "Untitled");
@@ -618,7 +631,7 @@ mod tests {
         let mut document = Document::new();
         document
             .pages
-            .push(ferrogram_model::Page::new(PageId { index: 0 }, 0));
+            .push(larrygram_model::Page::new(PageId { index: 0 }, 0));
         let session = DocumentSession::new(document, Some(PathBuf::from("/tmp/a.vsdx")));
         assert_eq!(session.display_name(), "a.vsdx");
     }
@@ -628,10 +641,10 @@ mod tests {
         let mut document = Document::new();
         document
             .pages
-            .push(ferrogram_model::Page::new(PageId { index: 0 }, 0));
+            .push(larrygram_model::Page::new(PageId { index: 0 }, 0));
         let session = DocumentSession::new(document, None);
         assert!(session.preserve.is_none());
-        let session = session.with_preserve(ferrogram_vsdx::Package::new());
+        let session = session.with_preserve(larrygram_vsdx::Package::new());
         assert!(session.preserve.is_some());
     }
 
@@ -705,8 +718,8 @@ mod tests {
 
     #[test]
     fn selections_answer_membership_and_the_primary_shape() {
-        let a = ferrogram_model::ShapeId { index: 1 };
-        let b = ferrogram_model::ShapeId { index: 2 };
+        let a = larrygram_model::ShapeId { index: 1 };
+        let b = larrygram_model::ShapeId { index: 2 };
         let mut selection = Selection::new();
         assert!(selection.is_empty());
         assert_eq!(selection.primary(), None);
@@ -715,7 +728,7 @@ mod tests {
         assert_eq!(selection.len(), 2);
         assert!(!selection.is_empty());
         assert!(selection.contains(b));
-        assert!(!selection.contains(ferrogram_model::ShapeId { index: 3 }));
+        assert!(!selection.contains(larrygram_model::ShapeId { index: 3 }));
         assert_eq!(selection.primary(), Some(a));
     }
 
@@ -838,12 +851,12 @@ mod tests {
         let mut document = Document::new();
         document
             .pages
-            .push(ferrogram_model::Page::new(PageId { index: 0 }, 1));
+            .push(larrygram_model::Page::new(PageId { index: 0 }, 1));
         document
             .pages
-            .push(ferrogram_model::Page::new(PageId { index: 1 }, 2));
-        let shape = document.add_shape(ferrogram_model::Shape::new(
-            ferrogram_model::ShapeId { index: 0 },
+            .push(larrygram_model::Page::new(PageId { index: 1 }, 2));
+        let shape = document.add_shape(larrygram_model::Shape::new(
+            larrygram_model::ShapeId { index: 0 },
             1,
         ));
         document.pages[1].shapes.push(shape);

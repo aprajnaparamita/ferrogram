@@ -39,8 +39,8 @@
 
 use std::ops::Range;
 
-use ferrogram_geom::Angle;
 use harfrust::{Buffer, ShapeOptions, ShaperFont, shape};
+use larrygram_geom::Angle;
 use unicode_linebreak::{BreakOpportunity, linebreaks};
 
 use crate::error::Error;

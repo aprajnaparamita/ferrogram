@@ -5,9 +5,9 @@
 //! decoded PNG is straight RGBA, like [`RasterImage::rgba`]). The ADR
 //! 0025 caps return the same errors from both backends.
 
-use ferrogram_geom::{Path, Point, Segment, Transform};
-use ferrogram_render::scene::{LineCap, LineJoin, Node, Paint, Rgba, Shape, Stroke};
-use ferrogram_render::{
+use larrygram_geom::{Path, Point, Segment, Transform};
+use larrygram_render::scene::{LineCap, LineJoin, Node, Paint, Rgba, Shape, Stroke};
+use larrygram_render::{
     Error, PngOptions, RasterOptions, Scene, SvgOptions, render_png, render_raster, render_svg,
 };
 
@@ -190,13 +190,13 @@ fn both_backends_report_the_same_cap_errors() {
 /// over a white rectangle.
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
 fn glyph_node(font: usize, glyph: u16) -> Node {
-    let stack = ferrogram_text::default_fonts();
-    let layout = ferrogram_text::Layout {
+    let stack = larrygram_text::default_fonts();
+    let layout = larrygram_text::Layout {
         width: 1.0,
         height: 0.2,
-        lines: vec![ferrogram_text::Line {
-            glyphs: vec![ferrogram_text::GlyphPos {
-                glyph: ferrogram_text::GlyphId(glyph),
+        lines: vec![larrygram_text::Line {
+            glyphs: vec![larrygram_text::GlyphPos {
+                glyph: larrygram_text::GlyphId(glyph),
                 font,
                 x: 0.1,
                 y: 0.1,
@@ -207,7 +207,7 @@ fn glyph_node(font: usize, glyph: u16) -> Node {
             width: 1.0,
             paragraph: 0,
         }],
-        ..ferrogram_text::Layout::default()
+        ..larrygram_text::Layout::default()
     };
     Node::Shape(Box::new(Shape {
         shape_id: None,
@@ -217,7 +217,7 @@ fn glyph_node(font: usize, glyph: u16) -> Node {
         stroke: None,
         shadow: None,
         clip: None,
-        text: Some(ferrogram_render::scene::TextNode {
+        text: Some(larrygram_render::scene::TextNode {
             fonts: stack.fonts().to_vec(),
             runs: Vec::new(),
             layout,
@@ -267,11 +267,11 @@ fn a_font_the_block_does_not_have_is_skipped_by_both_backends() {
 fn a_zero_sized_pattern_tile_transforms_by_the_identity() {
     // A pattern tile of no size has no pixels to scale by: the tile
     // transform is the identity and the fill still paints.
-    let tile = Paint::Pattern(ferrogram_render::scene::PatternPaint {
+    let tile = Paint::Pattern(larrygram_render::scene::PatternPaint {
         foreground: Rgba::opaque(0, 0, 0),
         background: Rgba::opaque(255, 255, 255),
         tile: Path::new(),
-        tile_size: ferrogram_geom::Size::new(0.0, 0.0),
+        tile_size: larrygram_geom::Size::new(0.0, 0.0),
         filled: true,
         tile_stroke_width: 0.0,
     });
@@ -301,7 +301,7 @@ fn a_clipped_shape_writes_its_clip_path() {
         None,
     );
     if let Node::Shape(shape) = &mut node {
-        shape.clip = Some(ferrogram_render::scene::Clip {
+        shape.clip = Some(larrygram_render::scene::Clip {
             path: path_rect(0.2, 0.2, 0.6, 0.6),
         });
     }
@@ -322,7 +322,7 @@ fn a_line_end_on_a_degenerate_path_draws_no_marker() {
     // The path has no direction to aim a line end at (`endpoint`'s
     // degenerate arms): the marker is skipped and the stroke still
     // draws.
-    let arrow = ferrogram_render::scene::LineEnd {
+    let arrow = larrygram_render::scene::LineEnd {
         shape: {
             let mut path = Path::new();
             path.push(Segment::MoveTo(Point::new(0.0, 0.0)));
@@ -344,7 +344,7 @@ fn a_line_end_on_a_degenerate_path_draws_no_marker() {
         join: LineJoin::Miter,
         miter_limit: 4.0,
         start: Some(arrow),
-        end: Some(ferrogram_render::scene::LineEnd {
+        end: Some(larrygram_render::scene::LineEnd {
             shape: Path::new(),
             width: 0.1,
             length: 0.1,
@@ -378,7 +378,7 @@ fn a_shadow_of_an_unstroked_shape_writes_its_path_alone() {
         None,
     );
     if let Node::Shape(shape) = &mut node {
-        shape.shadow = Some(ferrogram_render::scene::Shadow {
+        shape.shadow = Some(larrygram_render::scene::Shadow {
             color: Rgba::new(0, 0, 0, 128),
             offset: Point::new(0.1, -0.1),
             blur: 0.05,

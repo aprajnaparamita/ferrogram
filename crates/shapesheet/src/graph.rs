@@ -18,7 +18,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellLookup, CellName, Document, MasterId, Resolved, Row, RowTarget, Section, SectionName,
     Sheet, SheetRef, ValueSource,
 };
@@ -436,7 +436,7 @@ pub(crate) struct EffectiveCell {
     /// entry exists.
     pub local_formula: Option<String>,
     /// The cell's own entry's cached value, when the entry exists.
-    pub local_value: Option<ferrogram_model::CellValue>,
+    pub local_value: Option<larrygram_model::CellValue>,
     /// Which rung defines the formula (ADR 0013).
     pub source: ValueSource,
 }
@@ -449,14 +449,14 @@ pub(crate) struct EffectiveCell {
 pub(crate) fn effective(
     document: &Document,
     address: &CellAddress,
-) -> Result<Option<EffectiveCell>, ferrogram_model::Error> {
+) -> Result<Option<EffectiveCell>, larrygram_model::Error> {
     let local = local_cell(document, address);
     let defined = match (address.sheet, &address.section, &address.row) {
         (SheetRef::Shape(id), None, None) => defined(document.resolve(id, &address.cell)?),
         (SheetRef::Page(id), None, None) => defined(document.resolve_page_cell(id, &address.cell)?),
         (sheet, Some(section), Some(row)) => {
             let position = row_position(document, sheet, section, *row)
-                .ok_or(ferrogram_model::Error::BadCell("no such row"))?;
+                .ok_or(larrygram_model::Error::BadCell("no such row"))?;
             defined(document.resolve_row_cell(sheet, section.as_str(), position, &address.cell)?)
         }
         (sheet, Some(section), None) => section_rung(document, sheet, section, &address.cell),
@@ -775,12 +775,12 @@ fn sheet_part(document: &Document, sheet: SheetRef, part: &str) -> Option<SheetR
 /// when given, by Visio `ID`.
 fn find_shape_by_name(
     document: &Document,
-    page: ferrogram_model::PageId,
+    page: larrygram_model::PageId,
     name: &str,
     visio_id: Option<i32>,
-) -> Option<ferrogram_model::ShapeId> {
+) -> Option<larrygram_model::ShapeId> {
     let page = document.page(page)?;
-    let mut queue: Vec<ferrogram_model::ShapeId> = page.shapes.clone();
+    let mut queue: Vec<larrygram_model::ShapeId> = page.shapes.clone();
     let mut seen: BTreeSet<u32> = BTreeSet::new();
     while let Some(id) = queue.pop() {
         if !seen.insert(id.index) {
@@ -925,8 +925,8 @@ fn split_visio_id(part: &str) -> (&str, Option<i32>) {
 mod tests {
     use super::*;
     use crate::recalc::testing::TestEngine;
-    use ferrogram_geom::Unit;
-    use ferrogram_model::{Cell, CellValue, Master, Page, PageId, Preserved, Shape, ShapeId};
+    use larrygram_geom::Unit;
+    use larrygram_model::{Cell, CellValue, Master, Page, PageId, Preserved, Shape, ShapeId};
 
     fn cell(name: &str, formula: Option<&str>, value: Option<CellValue>) -> Cell {
         Cell {
@@ -1043,7 +1043,7 @@ mod tests {
             vec![cell("Alpha", Some("Beta*2"), Some(CellValue::Number(4.0)))],
         ));
         doc.masters
-            .push(Master::new(ferrogram_model::MasterId { index: 0 }, 1));
+            .push(Master::new(larrygram_model::MasterId { index: 0 }, 1));
         if let Some(master) = doc.masters.first_mut() {
             master.shapes.push(master_shape);
         }
@@ -1052,7 +1052,7 @@ mod tests {
                 2,
                 vec![cell("Alpha", Some("Inh"), Some(CellValue::Number(3.0)))],
             );
-            shape.master = Some(ferrogram_model::MasterId { index: 0 });
+            shape.master = Some(larrygram_model::MasterId { index: 0 });
             shape
         });
         let instance_address =

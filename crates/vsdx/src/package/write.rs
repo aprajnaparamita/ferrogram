@@ -166,7 +166,7 @@ fn relationships_xml(relationships: &[&Relationship]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
+    use larrygram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
 
     use super::*;
     use crate::package::{ContentType, Limits, Part, PartName, RelationshipId};

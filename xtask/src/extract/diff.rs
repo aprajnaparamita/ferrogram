@@ -3,7 +3,7 @@
 //! Reads the two layout files written by [`super::fluent`] and
 //! produces `ui-spec/diff-2016-vs-365.md`. The diff is a markdown
 //! table of Fluent control ids in only one, only the other, or both,
-//! with control type and ribbon path.
+//! with control type and command-bar path.
 //!
 //! See ADR 0009 for the extractor contract.
 
@@ -86,7 +86,7 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
     let total_365: usize = entries_365.len();
 
     let mut text = String::new();
-    text.push_str("# Ribbon diff: Office 2016 vs Microsoft 365\n\n");
+    text.push_str("# Panel diff: Office 2016 vs Microsoft 365\n\n");
     text.push_str(
         "Keyed by Fluent control id (ADR 0007 B1). Rows are sorted by \
          (in 2016, in 365, id) so identical sets are obvious.\n\n",
@@ -121,12 +121,12 @@ pub fn run(in_dir: &Path, out_dir: &Path) -> ExtractResult<Vec<PathBuf>> {
     Ok(vec![out_path])
 }
 
-/// One Fluent control id with its type and ribbon path.
+/// One Fluent control id with its type and command-bar path.
 #[derive(Debug, Clone)]
 pub struct Entry {
     /// Control type (e.g. `button`, `splitButton`).
     pub control_type: String,
-    /// Ribbon path (`tab/<tab>/<group>/<control>`,
+    /// command-bar path (`tab/<tab>/<group>/<control>`,
     /// `backstage/<tab>/<control>`, `menu/<menu>/<control>`, or
     /// `qat/<control>`).
     pub path: String,
@@ -147,7 +147,7 @@ fn collect_entries(layout_path: &Path) -> ExtractResult<BTreeMap<String, Entry>>
 }
 
 /// Visits every control id in a layout `Value` and records its
-/// type and ribbon path. Used by both the diff and parity
+/// type and command-bar path. Used by both the diff and parity
 /// extractors; public so [`super::parity`] can call it.
 pub fn visit_layout(value: &Value, out: &mut BTreeMap<String, Entry>) {
     visit(value, "", out);
@@ -187,7 +187,7 @@ fn visit(value: &Value, path: &str, out: &mut BTreeMap<String, Entry>) {
             }
         }
     }
-    // Ribbon tabs
+    // Command bar tabs
     if let Some(tabs) = value.get("tabs").and_then(|v| v.as_array()) {
         for tab in tabs {
             let tab_id = tab.get("id").and_then(Value::as_str).unwrap_or("");

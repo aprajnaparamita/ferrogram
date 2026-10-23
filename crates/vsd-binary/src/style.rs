@@ -8,8 +8,8 @@
 //! This module reads the stylesheet records (style sheets and their
 //! line, fill and shadow, text block, character and paragraph cells),
 //! the colour table and the font list, and maps them onto
-//! [`ferrogram_model::Stylesheet`], [`ferrogram_model::Style`] and
-//! [`ferrogram_model::ColorTableEntry`]. A style keeps its Visio id,
+//! [`larrygram_model::Stylesheet`], [`larrygram_model::Style`] and
+//! [`larrygram_model::ColorTableEntry`]. A style keeps its Visio id,
 //! name and its line, fill and text style references, so shapes and
 //! other styles resolve the same way the `.vsdx` reader leaves them
 //! (ADR 0013: inheritance is never flattened on load).
@@ -17,7 +17,7 @@
 //! Task P8-01 defines the entry point as an interface stub; task P8-06
 //! implements it.
 
-use ferrogram_model::Document;
+use larrygram_model::Document;
 
 use crate::chunks::Chunk;
 use crate::error::Error;

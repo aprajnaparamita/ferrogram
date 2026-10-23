@@ -10,7 +10,7 @@ KICKOFF: "Resolve master/instance inheritance and stylesheet inheritance
 through a lookup API. Do not flatten them on load." A Visio shape's effective
 cell value can come from the shape itself, from the master it is an instance
 of, from its styles (each of which has its own style chain), or from
-defaults. Phase 3 rendering, Phase 4 property panels and the formula engine
+defaults. Phase 3 rendering, Phase 4 property panes and the formula engine
 all need this value, and each needs to know **where it came from**.
 
 ## Decision
@@ -63,7 +63,7 @@ chain can too (`BaseID`). The lookup keeps a visited set per chain:
 
 ### Not flattened on load
 
-The reader (`ferrogram-vsdx`) stores each cell exactly as written on the
+The reader (`larrygram-vsdx`) stores each cell exactly as written on the
 entity it is written on. It does not copy master values into instances or
 style values into shapes. `Resolved` borrows from the document; nothing in
 the document changes when a lookup runs.
@@ -117,9 +117,9 @@ further amendment.
 
 ## Consequences
 
-- Rendering and property panels call `resolve` per cell; caching is a later
+- Rendering and property panes call `resolve` per cell; caching is a later
   concern (Phase 3 measures first). A cache must key on (shape, cell) and be
-  invalidated by edits; it can live in `ferrogram-commands` without changing
+  invalidated by edits; it can live in `larrygram-commands` without changing
   this API.
 - Editing a master cell changes its instances only through the lookup, which
   is exactly Visio's behavior.

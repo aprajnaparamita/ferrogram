@@ -191,7 +191,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrogram-ui-spec"
+name = "larrygram-ui-spec"
 version = "0.0.1"
 dependencies = [
  "jsonschema",
@@ -202,10 +202,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrogram-ui-spec-fuzz"
+name = "larrygram-ui-spec-fuzz"
 version = "0.0.0"
 dependencies = [
- "ferrogram-ui-spec",
+ "larrygram-ui-spec",
  "libfuzzer-sys",
 ]
 

@@ -11,10 +11,10 @@
 
 use std::collections::BTreeSet;
 
-use ferrogram_commands::AppCtx;
-use ferrogram_geom::{Angle, Point, Rect, Transform};
-use ferrogram_model::{Document, ShapeId};
-use ferrogram_render::{
+use larrygram_commands::AppCtx;
+use larrygram_geom::{Angle, Point, Rect, Transform};
+use larrygram_model::{Document, ShapeId};
+use larrygram_render::{
     BuildOptions, NodePath, OverlayMark, Scene, build_scene, build_selection_overlay,
 };
 
@@ -244,7 +244,7 @@ pub(crate) fn node_entries(scene: &Scene) -> Vec<NodeEntry> {
 
 /// The recursion of [`node_entries`] (depth-capped like the renderer).
 fn collect_entries(
-    nodes: &[ferrogram_render::scene::Node],
+    nodes: &[larrygram_render::scene::Node],
     parent: &NodePath,
     transform: Transform,
     depth: usize,
@@ -257,14 +257,14 @@ fn collect_entries(
     for (index, node) in nodes.iter().enumerate() {
         let path = parent.child(index);
         match node {
-            ferrogram_render::scene::Node::Group(group) => collect_entries(
+            larrygram_render::scene::Node::Group(group) => collect_entries(
                 &group.children,
                 &path,
                 group.transform.then(transform),
                 depth + 1,
                 entries,
             ),
-            ferrogram_render::scene::Node::Shape(shape) => {
+            larrygram_render::scene::Node::Shape(shape) => {
                 if let Some(id) = shape.shape_id {
                     entries.push(NodeEntry {
                         shape: id,
@@ -366,7 +366,7 @@ pub(crate) fn rotate_about(center: Point, angle: Angle, point: Point) -> Point {
 }
 
 /// A render failure as a [`UiError`].
-pub(crate) fn render_error(error: ferrogram_render::Error) -> UiError {
+pub(crate) fn render_error(error: larrygram_render::Error) -> UiError {
     UiError::Render {
         message: format!("the scene build failed: {error}"),
     }
@@ -385,8 +385,8 @@ fn finite_rect(bounds: Rect) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{
         Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape,
     };
 
@@ -591,7 +591,7 @@ mod tests {
 
     #[test]
     fn render_errors_map_into_ui_errors() {
-        let error = render_error(ferrogram_render::Error::TooLarge);
+        let error = render_error(larrygram_render::Error::TooLarge);
         assert!(matches!(error, UiError::Render { .. }), "{error:?}");
     }
 

@@ -12,15 +12,15 @@ use std::rc::Rc;
 
 use egui::accesskit::Role;
 use egui_kittest::{Harness, kittest::Queryable};
-use ferrogram_commands::Source;
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_ui::Intent;
-use ferrogram_ui::ribbon::Ribbon;
-use ferrogram_ui_spec::{Control, ControlType, FluentId, Group, LayoutKind, LayoutSet, Tab};
+use larrygram_commands::Source;
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_ui::Intent;
+use larrygram_ui::tab_bar::TabBar;
+use larrygram_ui_spec::{Control, ControlType, FluentId, Group, LayoutKind, LayoutSet, Tab};
 
 use crate::{Widget, widgets};
 
-/// The ADR 0031 tooltip texts (mirrors `crates/ui/src/ribbon.rs`;
+/// The ADR 0031 tooltip texts (mirrors `crates/ui/src/tab_bar.rs`;
 /// the exact strings are the contract the UI test pins).
 const NOT_YET_IMPLEMENTED: &str = "Not yet implemented";
 const OUT_OF_SCOPE: &str = "Out of scope for this run";
@@ -33,7 +33,7 @@ fn control(id: &str, label: &str, command: Option<&str>) -> Control {
         label: label.to_owned(),
         order: 0,
         parent: None,
-        command: command.map(ferrogram_ui_spec::CommandId::new),
+        command: command.map(larrygram_ui_spec::CommandId::new),
         aliases: Vec::new(),
         bounds: None,
         icon_ref: None,
@@ -45,7 +45,7 @@ fn control(id: &str, label: &str, command: Option<&str>) -> Control {
 
 /// A one-tab layout with one group of controls.
 fn set_with(controls: Vec<Control>) -> LayoutSet {
-    let mut layout = ferrogram_ui_spec::Layout::default();
+    let mut layout = larrygram_ui_spec::Layout::default();
     layout.tabs.push(Tab {
         id: FluentId::new("TabHome"),
         label: "TabHome".to_owned(),
@@ -74,7 +74,7 @@ fn set_with(controls: Vec<Control>) -> LayoutSet {
     }
 }
 
-/// A ribbon driven headlessly with the real registry.
+/// A command bar driven headlessly with the real registry.
 struct Rig {
     intents: Rc<RefCell<Vec<Intent>>>,
     harness: Harness<'static>,
@@ -82,24 +82,24 @@ struct Rig {
 
 impl Rig {
     fn new(set: LayoutSet) -> Self {
-        let ribbon = Rc::new(RefCell::new(Ribbon::new(LayoutKind::Visio2016)));
+        let tab_bar = Rc::new(RefCell::new(TabBar::new(LayoutKind::Panel2016)));
         let intents = Rc::new(RefCell::new(Vec::new()));
         let set = Rc::new(set);
         let app = AppCtx::new(Settings::default());
         // The real builtin registry: the states come from it, not
         // from a stub resolver.
-        let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+        let registry = larrygram_commands::builtins::registry().expect("the registry builds");
         let harness = Harness::builder()
             .with_size(egui::vec2(1600.0, 900.0))
             .build_ui({
-                let ribbon = Rc::clone(&ribbon);
+                let tab_bar = Rc::clone(&tab_bar);
                 let intents = Rc::clone(&intents);
                 let set = Rc::clone(&set);
                 move |ui| {
-                    let mut ribbon = ribbon.borrow_mut();
-                    let produced = ribbon
+                    let mut tab_bar = tab_bar.borrow_mut();
+                    let produced = tab_bar
                         .show(ui, &set, &registry, &app)
-                        .expect("the ribbon renders");
+                        .expect("the command bar renders");
                     intents.borrow_mut().extend(produced);
                 }
             });
@@ -209,7 +209,7 @@ fn only_an_enabled_control_dispatches_its_command() {
     let intents = rig.take_intents();
     assert_eq!(intents.len(), 1, "the enabled control dispatches");
     assert_eq!(intents[0].command.as_str(), "file.new");
-    assert_eq!(intents[0].invocation.source, Source::Ribbon);
+    assert_eq!(intents[0].invocation.source, Source::CommandBar);
 
     rig.click("Print");
     assert!(rig.take_intents().is_empty(), "a stub dispatches nothing");

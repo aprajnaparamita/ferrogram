@@ -11,13 +11,13 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, Invocation, Registry, SessionId, Source,
 };
-use ferrogram_geom::Unit;
-use ferrogram_model::{Cell, CellName, CellValue, Document, PageId, Preserved, Shape, ShapeId};
+use larrygram_geom::Unit;
+use larrygram_model::{Cell, CellName, CellValue, Document, PageId, Preserved, Shape, ShapeId};
 use std::path::PathBuf;
 
 fn fixture(names: &[&str]) -> (AppCtx, Registry, SessionId, Vec<PageId>) {
@@ -276,7 +276,7 @@ fn file_open_records_recent_files() {
 
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let dir = std::env::temp_dir().join(format!(
-        "ferrogram-pages-recent-{}-{}",
+        "larrygram-pages-recent-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));
@@ -285,8 +285,8 @@ fn file_open_records_recent_files() {
     let two = dir.join("two.vsdx");
     let mut doc = Document::new();
     doc.add_page("Page-1").expect("page");
-    let package = ferrogram_vsdx::from_model(&doc).expect("package");
-    let bytes = ferrogram_vsdx::write_package(&package).expect("bytes");
+    let package = larrygram_vsdx::from_model(&doc).expect("package");
+    let bytes = larrygram_vsdx::write_package(&package).expect("bytes");
     std::fs::write(&one, &bytes).expect("one");
     std::fs::write(&two, &bytes).expect("two");
 

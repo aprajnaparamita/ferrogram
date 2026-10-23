@@ -28,7 +28,7 @@ rows that landed one commit after their assets.
 
 1. **Licences.** `cargo deny check` is green (`advisories ok, bans ok,
    licenses ok, sources ok`). `deny.toml` allows MPL-2.0 only through the
-   `ferrogram-vsd-binary` exception (`deny.toml:43-45`) and checks our own
+   `larrygram-vsd-binary` exception (`deny.toml:43-45`) and checks our own
    crates (`licenses.private.ignore = false`), so the graph is
    MPL-confined as ADR 0003 requires. `crates/vsd-binary` is untouched by
    Phase 2 and its files carry the MPL-2.0 header.

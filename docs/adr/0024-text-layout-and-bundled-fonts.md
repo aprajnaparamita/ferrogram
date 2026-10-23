@@ -7,7 +7,7 @@
 ## Context
 
 Phase 3 renders "text blocks with basic formatting" (KICKOFF). Text layout
-lives in `ferrogram-text` (L1) and **cannot see `model`** (ADR 0002): the
+lives in `larrygram-text` (L1) and **cannot see `model`** (ADR 0002): the
 renderer passes it plain runs, formatting and a box. The crate must shape
 text, break lines, align and indent paragraphs, and hand glyph outlines to
 the backends. It needs fonts, and AGENTS.md section 4 fixes them: Carlito
@@ -39,7 +39,7 @@ names `skrifa` (Google Fonts `fontations`) and `harfrust` (the harfbuzz
 organisation's Rust port) as the maintained alternatives. We take the
 maintained pair.
 
-### API (`ferrogram_text`)
+### API (`larrygram_text`)
 
 Input is plain runs and formatting; output is positioned glyphs:
 
@@ -82,7 +82,7 @@ pub struct Layout {
 Coordinates are inches in the block's local space (origin top-left, y down,
 matching text layout convention); the scene builder maps them through the
 shape transform and the text rotation. `Font::outline(glyph) ->
-ferrogram_geom::Path` returns the glyph outline in **em units** (size 1),
+larrygram_geom::Path` returns the glyph outline in **em units** (size 1),
 so backends scale by `size / 72` inches per point.
 
 Line breaking: UAX #14 opportunities from `unicode-linebreak`, soft wrap

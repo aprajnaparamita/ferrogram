@@ -9,7 +9,7 @@
 
 #![no_main]
 
-use ferrogram_vsdx::{Limits, Package, read_document, write_document};
+use larrygram_vsdx::{Limits, Package, read_document, write_document};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

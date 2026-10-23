@@ -1,9 +1,9 @@
 //! The mutation API invariants (ADR 0039, task P5-02): stable ids across
 //! detach/restore, no cycles, clamped indices and id allocation.
 
-use ferrogram_geom::{Point, Size, Unit};
-use ferrogram_model::mutate::{CellWrite, DetachedShapes};
-use ferrogram_model::{
+use larrygram_geom::{Point, Size, Unit};
+use larrygram_model::mutate::{CellWrite, DetachedShapes};
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Error, Master, MasterId, PageId, Row, RowTarget,
     Section, SectionName, Shape, ShapeId, SheetRef, TextContent,
 };
@@ -259,7 +259,7 @@ fn set_shape_text_survives_a_detach_and_restore() {
         .expect("s");
     let mut text = TextContent::new();
     text.parts
-        .push(ferrogram_model::TextPart::Text("kept".to_owned()));
+        .push(larrygram_model::TextPart::Text("kept".to_owned()));
     doc.set_shape_text(shape, text.clone()).expect("text");
     let detached = doc.detach_shape(shape).expect("detach");
     let restored = doc.restore_shapes(detached).expect("restore");

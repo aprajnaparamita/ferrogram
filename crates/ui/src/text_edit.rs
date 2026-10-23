@@ -15,11 +15,11 @@
 //! announce the same transition for headless callers.
 
 use egui::{Id, Ui};
-use ferrogram_commands::AppCtx;
-use ferrogram_geom::{Point, Rect as GeoRect, Transform};
-use ferrogram_model::{ShapeId, TextContent, TextPart};
-use ferrogram_render::scene::{Node, Shape as SceneShape};
-use ferrogram_render::{Scene, node_bounds};
+use larrygram_commands::AppCtx;
+use larrygram_geom::{Point, Rect as GeoRect, Transform};
+use larrygram_model::{ShapeId, TextContent, TextPart};
+use larrygram_render::scene::{Node, Shape as SceneShape};
+use larrygram_render::{Scene, node_bounds};
 
 use crate::UiError;
 
@@ -95,7 +95,7 @@ impl TextEditor {
     /// empty-buffer cases.
     pub fn finish(&mut self) -> Result<Option<TextContent>, UiError> {
         if !self.is_active() {
-            return Err(UiError::Command(ferrogram_commands::CommandError::failed(
+            return Err(UiError::Command(larrygram_commands::CommandError::failed(
                 "no text edit is active",
             )));
         }
@@ -117,12 +117,12 @@ impl TextEditor {
             return Ok(None);
         };
         let Some(session) = ctx.active_document() else {
-            return Err(UiError::Command(ferrogram_commands::CommandError::failed(
+            return Err(UiError::Command(larrygram_commands::CommandError::failed(
                 "no open document",
             )));
         };
         let entry = session.document.shape(shape).ok_or_else(|| {
-            UiError::Command(ferrogram_commands::CommandError::failed(format!(
+            UiError::Command(larrygram_commands::CommandError::failed(format!(
                 "unknown shape id {}",
                 shape.index
             )))
@@ -200,7 +200,7 @@ pub enum EditorAction {
 
 /// The stable egui id of the editor area for one shape.
 fn editor_id(shape: Option<ShapeId>) -> Id {
-    Id::unique(("ferrogram-text-editor", shape.map(|shape| shape.index)))
+    Id::unique(("larrygram-text-editor", shape.map(|shape| shape.index)))
 }
 
 /// The plain text of a [`TextContent`]: literal parts concatenated, field
@@ -287,10 +287,10 @@ pub fn editor_rect(
 fn find_shape<'a>(
     nodes: &'a [Node],
     shape: ShapeId,
-    path: &ferrogram_render::NodePath,
+    path: &larrygram_render::NodePath,
     parent: Transform,
     depth: usize,
-) -> Option<(ferrogram_render::NodePath, &'a SceneShape, Transform)> {
+) -> Option<(larrygram_render::NodePath, &'a SceneShape, Transform)> {
     const MAX_DEPTH: usize = 128;
     if depth >= MAX_DEPTH {
         return None;
@@ -319,10 +319,10 @@ fn find_shape<'a>(
 }
 
 /// The text block's bounds in page inches: the layout box turned about
-/// its centre and placed at [`ferrogram_render::scene::TextNode::origin`]
+/// its centre and placed at [`larrygram_render::scene::TextNode::origin`]
 /// (`origin + (x, -y)`), then mapped through the shape transform.
 fn text_block_bounds(
-    text: &ferrogram_render::scene::TextNode,
+    text: &larrygram_render::scene::TextNode,
     transform: Transform,
 ) -> Option<GeoRect> {
     let width = text.layout.width;
@@ -378,27 +378,27 @@ fn finite_rect(rect: egui::Rect) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::Settings;
-    use ferrogram_geom::Angle;
-    use ferrogram_render::Rgba;
-    use ferrogram_render::scene::{Group, Shape as SceneShape, TextNode};
+    use larrygram_commands::Settings;
+    use larrygram_geom::Angle;
+    use larrygram_render::Rgba;
+    use larrygram_render::scene::{Group, Shape as SceneShape, TextNode};
 
     fn text(parts: Vec<TextPart>) -> TextContent {
         TextContent { parts }
     }
 
     fn document_with(text: Option<TextContent>) -> (AppCtx, ShapeId) {
-        use ferrogram_model::Document;
+        use larrygram_model::Document;
         let mut doc = Document::new();
         let page = doc.add_page("Page-1").expect("page");
-        let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 1);
+        let mut shape = larrygram_model::Shape::new(ShapeId { index: 0 }, 1);
         shape.text = text.clone();
         let shape = doc.insert_shape(page, shape, None).expect("shape");
         if let Some(text) = text {
             doc.set_shape_text(shape, text).expect("text");
         }
         let mut app = AppCtx::new(Settings::default());
-        app.open_document(ferrogram_commands::DocumentSession::new(doc, None));
+        app.open_document(larrygram_commands::DocumentSession::new(doc, None));
         (app, shape)
     }
 
@@ -460,7 +460,7 @@ mod tests {
         assert!(matches!(
             editor.finish(),
             Err(UiError::Command(
-                ferrogram_commands::CommandError::Failed { .. }
+                larrygram_commands::CommandError::Failed { .. }
             ))
         ));
     }
@@ -502,7 +502,7 @@ mod tests {
         assert!(matches!(
             stale.original_text(&app),
             Err(UiError::Command(
-                ferrogram_commands::CommandError::Failed { .. }
+                larrygram_commands::CommandError::Failed { .. }
             ))
         ));
 
@@ -513,7 +513,7 @@ mod tests {
         assert!(matches!(
             no_document.original_text(&AppCtx::new(Settings::default())),
             Err(UiError::Command(
-                ferrogram_commands::CommandError::Failed { .. }
+                larrygram_commands::CommandError::Failed { .. }
             ))
         ));
     }

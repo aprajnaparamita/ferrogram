@@ -3,8 +3,8 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_geom::Point;
-use ferrogram_model::{
+use larrygram_geom::Point;
+use larrygram_model::{
     Cell, CellName, CellValue, CellWrite, Document, Master, MasterId, Page, PageId, Preserved, Row,
     Section, SectionName, Shape, ShapeId, SheetRef, stencils,
 };
@@ -14,7 +14,7 @@ fn cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }

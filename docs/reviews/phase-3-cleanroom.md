@@ -42,7 +42,7 @@ role's lane ("you never edit code"), so it goes to a fix task.
 
 1. **Licences.** `cargo deny check` is green (`advisories ok, bans ok,
    licenses ok, sources ok`). `deny.toml` allows MPL-2.0 only through the
-   `ferrogram-vsd-binary` exception and checks our own crates, so the
+   `larrygram-vsd-binary` exception and checks our own crates, so the
    graph is MPL-confined as ADR 0003 requires. Phase 3 touches no file in
    `crates/vsd-binary`.
 2. **No Microsoft-owned files.** The committed binaries are our own
@@ -199,7 +199,7 @@ flaky-to-red on `main`, independent of this task's doc-only changes).
   in `crates/render/src/svg.rs` for consistency; add the shrunk input
   above as a regression test; re-pin a proptest regression seed
   (`proptest-regressions`) so the case cannot silently pass again. Note
-  that `ferrogram-text` has the related known hardening gap in
+  that `larrygram-text` has the related known hardening gap in
   `text::layout` (P3-11's open item: non-finite glyph positions for
   `line_spacing: f64::MAX`).
 - **Blast radius:** `crates/render` (L3). Parallel audits P3-12 and

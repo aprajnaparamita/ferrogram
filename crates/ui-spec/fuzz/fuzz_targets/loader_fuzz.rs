@@ -1,4 +1,4 @@
-//! Fuzz target for the `ferrogram-ui-spec` loader (P1-08 goal 6).
+//! Fuzz target for the `larrygram-ui-spec` loader (P1-08 goal 6).
 //!
 //! Feeds the input bytes to the loader's parse-and-validate path: the
 //! first byte picks which of the four data files is fuzzed, the rest
@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use ferrogram_ui_spec::Loader;
+use larrygram_ui_spec::Loader;
 use libfuzzer_sys::fuzz_target;
 
 /// The four data files, in loader read order.
@@ -33,7 +33,7 @@ const BASELINE: [&str; 4] = [
 
 /// The process-unique fuzz workspace.
 fn workspace() -> PathBuf {
-    std::env::temp_dir().join(format!("ferrogram-ui-spec-fuzz-{}", std::process::id()))
+    std::env::temp_dir().join(format!("larrygram-ui-spec-fuzz-{}", std::process::id()))
 }
 
 /// The shared `Loader` (compiles the schema once per process).

@@ -25,8 +25,8 @@ pub enum Error {
     /// The container or a part is malformed (bad zip, bad XML, bad content
     /// types). The message never carries file content.
     InvalidPackage(String),
-    /// A [`ferrogram_model`] operation failed while mapping.
-    Model(ferrogram_model::Error),
+    /// A [`larrygram_model`] operation failed while mapping.
+    Model(larrygram_model::Error),
     /// The operation is not implemented yet (a Phase 5 interface stub,
     /// task P5-01).
     NotImplemented,
@@ -49,8 +49,8 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-impl From<ferrogram_model::Error> for Error {
-    fn from(e: ferrogram_model::Error) -> Self {
+impl From<larrygram_model::Error> for Error {
+    fn from(e: larrygram_model::Error) -> Self {
         Error::Model(e)
     }
 }
@@ -83,8 +83,8 @@ mod tests {
             "invalid package: bad zip"
         );
         assert_eq!(
-            Error::Model(ferrogram_model::Error::UnknownShape(
-                ferrogram_model::ShapeId { index: 2 }
+            Error::Model(larrygram_model::Error::UnknownShape(
+                larrygram_model::ShapeId { index: 2 }
             ))
             .to_string(),
             "model error: unknown shape id 2"
@@ -94,8 +94,8 @@ mod tests {
 
     #[test]
     fn model_errors_convert() {
-        let model: ferrogram_model::Error =
-            ferrogram_model::Error::UnknownShape(ferrogram_model::ShapeId { index: 2 });
+        let model: larrygram_model::Error =
+            larrygram_model::Error::UnknownShape(larrygram_model::ShapeId { index: 2 });
         let e: Error = model.into();
         assert_eq!(e, Error::Model(model));
     }

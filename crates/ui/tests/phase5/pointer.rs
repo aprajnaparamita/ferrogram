@@ -11,13 +11,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use egui_kittest::Harness;
-use ferrogram_commands::app::AppCtx;
-use ferrogram_commands::{
+use larrygram_commands::app::AppCtx;
+use larrygram_commands::{
     ArgValue, Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled, Invocation,
     Outcome, Registry,
 };
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::{LayoutSets, Loader, ShortcutScope};
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::{LayoutSets, Loader, ShortcutScope};
 
 use crate::{CanvasRig, app_with_one_shape, screen, shape_number};
 
@@ -33,12 +33,12 @@ fn a_click_selects_the_shape_under_the_pointer() {
         assert_eq!(app.selection.anchor, Some(id));
         assert_eq!(
             app.selection.page,
-            Some(ferrogram_model::PageId { index: 0 })
+            Some(larrygram_model::PageId { index: 0 })
         );
     }
-    // The panels show the anchor shape.
+    // The panes show the anchor shape.
     let rows =
-        ferrogram_ui::panels::size_position_rows(&mut rig.app.borrow_mut()).expect("panel rows");
+        larrygram_ui::panes::size_position_rows(&mut rig.app.borrow_mut()).expect("pane rows");
     assert_eq!(rows[0].label, "Width");
     assert_eq!(rows[0].numeric, Some(2.0));
 }
@@ -214,7 +214,7 @@ impl Command for Counts {
         &self,
         _ctx: &mut AppCtx,
         _inv: &Invocation,
-    ) -> Result<Outcome, ferrogram_commands::CommandError> {
+    ) -> Result<Outcome, larrygram_commands::CommandError> {
         self.0.fetch_add(1, Ordering::SeqCst);
         Ok(Outcome::message("nudged"))
     }
@@ -230,7 +230,7 @@ fn tab_focuses_the_canvas_and_enables_page_scoped_shortcuts() {
         .expect("register");
     let mut shell = Shell::new(registry, LayoutSets::default(), app);
     let sets = Loader::from_embedded().expect("layouts");
-    shell.set_shortcuts(&sets.visio_2016.shortcuts);
+    shell.set_shortcuts(&sets.panel_2016.shortcuts);
     let shell = Rc::new(RefCell::new(shell));
     let mut harness = Harness::builder()
         .with_size(egui::vec2(800.0, 600.0))

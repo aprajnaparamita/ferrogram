@@ -1,7 +1,7 @@
 //! Snapping policy (ADR 0043): which candidates exist, in what priority,
 //! and the snap distance in screen pixels.
 //!
-//! The math lives in `ferrogram_geom::snap` (L0); this module gathers the
+//! The math lives in `larrygram_geom::snap` (L0); this module gathers the
 //! candidates from the document (grid lines, shape edges and centres,
 //! connection points) and applies the priority of ADR 0043:
 //! connection point, then alignment, then grid. Alt disables snapping.
@@ -10,11 +10,11 @@
 //! selection's relative offsets stay), and a point snap snaps its x and y
 //! with the same priority rule.
 
-use ferrogram_commands::AppCtx;
-use ferrogram_geom::{Point, SnapKind, SnapResult, snap_axis, snap_grid};
-use ferrogram_model::ShapeId;
-use ferrogram_render::node_bounds;
-use ferrogram_render::scene::Scene;
+use larrygram_commands::AppCtx;
+use larrygram_geom::{Point, SnapKind, SnapResult, snap_axis, snap_grid};
+use larrygram_model::ShapeId;
+use larrygram_render::node_bounds;
+use larrygram_render::scene::Scene;
 
 use crate::UiError;
 use crate::handles::{is_within, node_entries, rect_center, scene_for, selection_frame};
@@ -280,10 +280,10 @@ impl Snapper {
 ///
 /// The model helper returns the shape's own `Connection` rows or the rows
 /// inherited from its master chain, scaled to the instance's size
-/// ([`ferrogram_model::Document::connection_points`]). The node transform
+/// ([`larrygram_model::Document::connection_points`]). The node transform
 /// maps the local points to the page.
 pub(crate) fn connection_points(
-    doc: &ferrogram_model::Document,
+    doc: &larrygram_model::Document,
     entry: &crate::handles::NodeEntry,
 ) -> Vec<Point> {
     doc.connection_points(entry.shape)
@@ -329,7 +329,7 @@ fn higher(a: Option<SnapKind>, b: Option<SnapKind>) -> Option<SnapKind> {
 
 /// A geom failure as a [`UiError`] (task P5-19 review F8: the geometry
 /// variant, never [`UiError::Io`] — no IO is involved).
-fn geom_error(error: ferrogram_geom::Error) -> UiError {
+fn geom_error(error: larrygram_geom::Error) -> UiError {
     UiError::Geometry {
         message: format!("snap math failed: {error}"),
     }
@@ -338,8 +338,8 @@ fn geom_error(error: ferrogram_geom::Error) -> UiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{
         Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape,
     };
 
@@ -550,7 +550,7 @@ mod tests {
                 name: CellName::new("X"),
                 formula: None,
                 value: Some(CellValue::Str("nope".to_owned())),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Default::default(),
             }];
             section.rows.push(missing);
@@ -564,8 +564,8 @@ mod tests {
         }));
         let stale = crate::handles::NodeEntry {
             shape: ShapeId { index: 99 },
-            path: ferrogram_render::NodePath::new(),
-            transform: ferrogram_geom::Transform::identity(),
+            path: larrygram_render::NodePath::new(),
+            transform: larrygram_geom::Transform::identity(),
         };
         assert!(
             connection_points(&app.active_document().expect("session").document, &stale).is_empty()
@@ -584,7 +584,7 @@ mod tests {
             Some(SnapKind::Alignment)
         );
         assert_eq!(higher(None, None), None);
-        let error = geom_error(ferrogram_geom::Error::Singular);
+        let error = geom_error(larrygram_geom::Error::Singular);
         assert!(matches!(error, UiError::Geometry { .. }));
     }
 

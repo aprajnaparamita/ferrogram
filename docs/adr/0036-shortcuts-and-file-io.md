@@ -49,7 +49,7 @@ impl ShortcutMap {
   2 seconds (the buffer lives in `crates/ui`, ADR 0029).
 - **Scopes** filter by focus: `Global` always; `Page` when the canvas has
   focus; `Text` when an egui text edit has focus; `Selection` needs a
-  selection (Phase 5: always false in Phase 4); `Ribbon` when the ribbon
+  selection (Phase 5: always false in Phase 4); `CommandBar` when the command bar
   has focus; `Window` always in the single-window Phase 4 shell. A shortcut
   whose scope does not match is not dispatched.
 - **Conflicts:** the conflict key is the chord sequence **and** the
@@ -58,7 +58,7 @@ impl ShortcutMap {
   `format.text.align_center` in `text` and to `tools.format_painter` in
   `global`); each binding fires when its scope is active. When more
   than one bound scope is active, the most specific wins: `Text`, then
-  `Selection`, `Page`, `Ribbon`, `Window`, `Global`. Two entries with the
+  `Selection`, `Page`, `CommandBar`, `Window`, `Global`. Two entries with the
   same sequence and scope: the first in file order wins and one warning
   is recorded on `AppCtx::warnings` at load, except when both name the
   same command (an exact repeat across sections of the source table is
@@ -90,7 +90,7 @@ Commands (ADR 0028 argument names):
 - `file.save_as` takes `path` (or `NeedsInput::Path { purpose: SaveFile }`).
 - `file.close`, `file.new` behave the same way.
 
-Reading and writing use `ferrogram_vsdx::read_document(bytes, limits)` and
+Reading and writing use `larrygram_vsdx::read_document(bytes, limits)` and
 `write_document` (byte-based already, so wasm upload needs no new API).
 The bytes come from `std::fs` on desktop and from the file dialog on wasm.
 
@@ -127,7 +127,7 @@ dialog ever appears (AGENTS.md section 6).
   `shortcuts.yaml` without code changes beyond the token table.
 - The wasm app gets open (upload) and save (download) without a
   filesystem; the desktop app gets native dialogs.
-- The registry sees one dispatch path for keys, ribbon, menus, CLI and
+- The registry sees one dispatch path for keys, command bar, menus, CLI and
   (Phase 8) MCP.
 
 ## Alternatives considered

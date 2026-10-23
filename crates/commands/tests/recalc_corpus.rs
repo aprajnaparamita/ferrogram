@@ -12,7 +12,7 @@
 //!
 //! The corpus is fetched, never committed (ADR 0005): the tests
 //! self-skip with a message and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set, the workspace convention of the
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set, the workspace convention of the
 //! `crosscheck` helpers.
 
 // The never-crash lints apply to non-test code only (clippy.toml).
@@ -23,7 +23,7 @@ mod helpers;
 
 use helpers::{LocatedCell, corpus_files, located_cells, read_corpus_file, skip_without_corpus};
 
-use ferrogram_shapesheet::{CellAddress, RecalcOptions, recalc};
+use larrygram_shapesheet::{CellAddress, RecalcOptions, recalc};
 
 /// Every cell address of a document, in walk order.
 fn addresses(cells: &[LocatedCell<'_>]) -> Vec<CellAddress> {

@@ -8,21 +8,21 @@ use crate::util::{self, Package, Result};
 /// Layer of each workspace package. Unlisted packages fail the check so the
 /// table stays complete.
 const LAYERS: &[(&str, u8)] = &[
-    ("ferrogram-geom", 0),
-    ("ferrogram-ui-spec", 0),
-    ("ferrogram-model", 1),
-    ("ferrogram-text", 1),
-    ("ferrogram-vsdx", 2),
-    ("ferrogram-vsd-binary", 2),
-    ("ferrogram-shapesheet", 2),
-    ("ferrogram-render", 3),
-    ("ferrogram-commands", 4),
-    ("ferrogram-control", 5),
-    ("ferrogram-ui", 6),
-    ("ferrogram", 7),
-    ("ferrogram-web", 7),
-    ("ferrogram-cli", 7),
-    ("xtask", 9),
+    ("larrygram-geom", 0),
+    ("larrygram-ui-spec", 0),
+    ("larrygram-model", 1),
+    ("larrygram-text", 1),
+    ("larrygram-vsdx", 2),
+    ("larrygram-vsd-binary", 2),
+    ("larrygram-shapesheet", 2),
+    ("larrygram-render", 3),
+    ("larrygram-commands", 4),
+    ("larrygram-control", 5),
+    ("larrygram-ui", 6),
+    ("larrygram", 7),
+    ("larrygram-web", 7),
+    ("larrygram-cli", 7),
+    ("larrygram-xtask", 9),
 ];
 
 /// First layer allowed to depend on GUI toolkits.
@@ -68,7 +68,7 @@ pub fn check(pkgs: &[Package]) -> Vec<String> {
         for d in &p.deps {
             if let Some(dl) = layer_of(d)
                 && dl >= layer
-                && p.name != "xtask"
+                && p.name != "larrygram-xtask"
             {
                 errors.push(format!(
                     "{} (L{layer}) depends on {d} (L{dl}); only lower layers allowed",
@@ -101,15 +101,15 @@ mod tests {
 
     #[test]
     fn allows_downward_deps() {
-        let pkgs = [pkg("ferrogram-model", &["ferrogram-geom", "serde"])];
+        let pkgs = [pkg("larrygram-model", &["larrygram-geom", "serde"])];
         assert!(check(&pkgs).is_empty());
     }
 
     #[test]
     fn rejects_upward_and_same_layer_deps() {
         let pkgs = [
-            pkg("ferrogram-geom", &["ferrogram-model"]),
-            pkg("ferrogram-vsdx", &["ferrogram-shapesheet"]),
+            pkg("larrygram-geom", &["larrygram-model"]),
+            pkg("larrygram-vsdx", &["larrygram-shapesheet"]),
         ];
         assert_eq!(check(&pkgs).len(), 2);
     }
@@ -117,12 +117,12 @@ mod tests {
     #[test]
     fn rejects_gui_below_ui_layer() {
         let pkgs = [
-            pkg("ferrogram-render", &["egui"]),
-            pkg("ferrogram-ui", &["egui"]),
+            pkg("larrygram-render", &["egui"]),
+            pkg("larrygram-ui", &["egui"]),
         ];
         let errs = check(&pkgs);
         assert_eq!(errs.len(), 1);
-        assert!(errs[0].contains("ferrogram-render"));
+        assert!(errs[0].contains("larrygram-render"));
     }
 
     #[test]

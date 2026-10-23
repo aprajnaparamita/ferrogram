@@ -30,7 +30,7 @@ pub fn is_writable_dir(path: &Path) -> bool {
         return false;
     }
     // Probe by trying to create and remove a temp file.
-    let probe = path.join(".ferrogram-write-probe");
+    let probe = path.join(".larrygram-write-probe");
     match std::fs::write(&probe, b"x") {
         Ok(()) => {
             let _ = std::fs::remove_file(&probe);

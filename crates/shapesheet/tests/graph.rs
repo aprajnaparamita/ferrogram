@@ -5,11 +5,11 @@
 //! rules are pinned next to the code in `src/graph.rs`, where the test
 //! engine lives.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellName, Document, Page, PageId, Preserved, Shape, ShapeId, SheetRef,
 };
-use ferrogram_shapesheet::{CellAddress, DepGraph};
+use larrygram_shapesheet::{CellAddress, DepGraph};
 
 fn cell(name: &str, formula: Option<&str>) -> Cell {
     Cell {
@@ -48,8 +48,8 @@ fn an_address_holds_its_parts() {
     assert_eq!(plain.row, None);
     let row_cell = CellAddress::in_row(
         SheetRef::Page(PageId { index: 0 }),
-        ferrogram_model::SectionName::from_static("Geometry"),
-        ferrogram_model::RowTarget::at(1),
+        larrygram_model::SectionName::from_static("Geometry"),
+        larrygram_model::RowTarget::at(1),
         CellName::from_static("X"),
     );
     assert_eq!(row_cell.cell.as_str(), "X");
@@ -128,8 +128,8 @@ fn a_bare_row_cell_reference_builds_its_edge() {
     let mut shape = Shape::new(ShapeId { index: 0 }, 1);
     {
         let mut section =
-            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Geometry"));
-        let mut row = ferrogram_model::Row::new();
+            larrygram_model::Section::new(larrygram_model::SectionName::from_static("Geometry"));
+        let mut row = larrygram_model::Row::new();
         row.ix = Some(0);
         row.cells = vec![cell("X", Some("1"))];
         section.rows.push(row);
@@ -146,8 +146,8 @@ fn a_bare_row_cell_reference_builds_its_edge() {
     let source = CellAddress::new(SheetRef::Shape(shape), CellName::from_static("Alpha"));
     let reads = CellAddress::in_row(
         SheetRef::Shape(shape),
-        ferrogram_model::SectionName::from_static("Geometry"),
-        ferrogram_model::RowTarget {
+        larrygram_model::SectionName::from_static("Geometry"),
+        larrygram_model::RowTarget {
             position: Some(0),
             ix: Some(0),
         },
@@ -173,15 +173,15 @@ fn a_reference_resolved_through_a_master_builds_its_edge() {
     let mut master_shape = Shape::new(ShapeId { index: 0 }, 10);
     {
         let mut section =
-            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Character"));
-        let mut row = ferrogram_model::Row::new();
+            larrygram_model::Section::new(larrygram_model::SectionName::from_static("Character"));
+        let mut row = larrygram_model::Row::new();
         row.ix = Some(0);
         row.cells = vec![cell("Size", Some("5"))];
         section.rows.push(row);
         master_shape.sheet.sections.push(section);
     }
     let master_root = doc.add_shape(master_shape);
-    let mut master = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+    let mut master = larrygram_model::Master::new(larrygram_model::MasterId { index: 0 }, 1);
     master.name = String::from("Badge");
     master.name_u = String::from("Badge");
     master.shapes = vec![master_root];
@@ -197,8 +197,8 @@ fn a_reference_resolved_through_a_master_builds_its_edge() {
     let source = CellAddress::new(SheetRef::Shape(instance), CellName::from_static("PinX"));
     let reads = CellAddress::in_row(
         SheetRef::Shape(master_root),
-        ferrogram_model::SectionName::from_static("Character"),
-        ferrogram_model::RowTarget {
+        larrygram_model::SectionName::from_static("Character"),
+        larrygram_model::RowTarget {
             position: Some(0),
             ix: Some(0),
         },

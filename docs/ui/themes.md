@@ -19,7 +19,7 @@ contextual_tab_sets: {set: colour family}   # Panel Modern only
 
 | Token | egui |
 |---|---|
-| `chrome.background` | `Visuals::panel_fill` for the chrome panels |
+| `chrome.background` | `Visuals::panel_fill` for the chrome backgrounds |
 | `chrome.text` | `Visuals::override_text_color` |
 | `chrome.text_disabled` | the weak text colour for disabled widgets |
 | `button.hover.fill`, `button.hover.border` | `widgets.hovered.weak_bg_fill` and `bg_stroke` |

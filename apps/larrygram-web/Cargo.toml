@@ -1,6 +1,6 @@
 [package]
-name = "ferrogram-web"
-description = "Ferrogram web app (wasm, built with trunk)."
+name = "larrygram-web"
+description = "Larrygram web app (wasm, built with trunk)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,9 +19,9 @@ eframe = { version = "0.37", default-features = false, features = [
     "persistence",
     "web_screen_reader",
 ] }
-ferrogram-commands = { path = "../../crates/commands" }
-ferrogram-ui = { path = "../../crates/ui" }
-ferrogram-ui-spec = { path = "../../crates/ui-spec" }
+larrygram-commands = { path = "../../crates/commands" }
+larrygram-ui = { path = "../../crates/ui" }
+larrygram-ui-spec = { path = "../../crates/ui-spec" }
 
 # The wasm startup seam (ADR 0030): `wasm-bindgen-futures` drives the
 # `WebRunner`, `web-sys` finds the canvas and reports startup failures

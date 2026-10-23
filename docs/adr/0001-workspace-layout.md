@@ -10,11 +10,11 @@ KICKOFF.md proposes a layout of library crates under `crates/`, apps under `apps
 
 ## Decision
 
-- Library crates live in `crates/<short-name>` with package name `ferrogram-<short-name>`: geom, model, vsdx, vsd-binary, shapesheet, text, render, commands, ui-spec, control, and **ui** (added).
-- `crates/ui` holds all egui code (ribbon, canvas, panels, dialogs). `apps/ferrogram` and `apps/ferrogram-web` are thin shells around it. This lets egui_kittest tests live in a library crate and keeps the desktop and web apps identical.
-- Apps: `apps/ferrogram` (desktop, eframe), `apps/ferrogram-web` (wasm, trunk), `apps/ferrogram-cli`.
+- Library crates live in `crates/<short-name>` with package name `larrygram-<short-name>`: geom, model, vsdx, vsd-binary, shapesheet, text, render, commands, ui-spec, control, and **ui** (added).
+- `crates/ui` holds all egui code (command bar, canvas, panes, dialogs). `apps/larrygram` and `apps/larrygram-web` are thin shells around it. This lets egui_kittest tests live in a library crate and keeps the desktop and web apps identical.
+- Apps: `apps/larrygram` (desktop, eframe), `apps/larrygram-web` (wasm, trunk), `apps/larrygram-cli`.
 - Fuzz targets live in `crates/<name>/fuzz/` in the cargo-fuzz layout. They are separate workspaces and are built by `cargo xtask gate`.
-- `reference/` is a gitignored symlink to `/Volumes/Dara/ferrogram/reference` (local disk is small).
+- `reference/` is a gitignored symlink to `/Volumes/Dara/larrygram/reference` (local disk is small).
 - Workspace version 0.0.1, edition 2024, MSRV and pinned toolchain 1.95.0.
 
 ## Consequences
@@ -24,4 +24,4 @@ KICKOFF.md proposes a layout of library crates under `crates/`, apps under `apps
 
 ## Alternatives considered
 
-- UI code inside `apps/ferrogram`: duplicates for web, harder to test.
+- UI code inside `apps/larrygram`: duplicates for web, harder to test.

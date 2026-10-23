@@ -8,12 +8,12 @@
 //! is deterministic). A deleted page loses its part, its relationships
 //! and its content-type entry.
 
-use ferrogram_model::mutate::{CellWrite, VIS_BEGIN, VIS_END, VIS_WHOLE_SHAPE};
-use ferrogram_model::{
+use larrygram_model::mutate::{CellWrite, VIS_BEGIN, VIS_END, VIS_WHOLE_SHAPE};
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Master, MasterId, PageId, Preserved, Row,
     Section, SectionName, Shape, ShapeId, Sheet, TextContent, TextPart, XmlChild, XmlNode,
 };
-use ferrogram_vsdx::{Limits, Package, PartName, read_package, to_model, write_document};
+use larrygram_vsdx::{Limits, Package, PartName, read_package, to_model, write_document};
 
 /// A cell with a cached number and a literal formula.
 #[allow(clippy::expect_used, clippy::panic)] // test helper
@@ -21,7 +21,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
     let mut cell = Cell::new(CellName::new(name));
     cell.formula = Some(value.to_string());
     cell.value = Some(CellValue::Number(value));
-    cell.unit = ferrogram_geom::Unit::Inches;
+    cell.unit = larrygram_geom::Unit::Inches;
     cell
 }
 
@@ -66,7 +66,7 @@ fn built() -> Document {
         .insert_shape(page, rectangle(2.0, 1.0), None)
         .expect("rect");
     doc.write_cell(
-        ferrogram_model::SheetRef::Shape(rect),
+        larrygram_model::SheetRef::Shape(rect),
         &CellName::from_static("PinX"),
         &CellWrite::new("3", CellValue::Number(3.0)),
     )
@@ -84,7 +84,7 @@ fn built() -> Document {
     master.name_u = "Box".to_owned();
     master.shapes.push(content);
     let master = doc.add_master(master).expect("master");
-    doc.instantiate_master(master, page, ferrogram_geom::Point::new(5.0, 5.0), None)
+    doc.instantiate_master(master, page, larrygram_geom::Point::new(5.0, 5.0), None)
         .expect("instance");
 
     // A connector glued to the rectangle.
@@ -113,13 +113,13 @@ fn built() -> Document {
     doc.insert_shape(second, rectangle(1.0, 1.0), None)
         .expect("s");
     doc.write_cell(
-        ferrogram_model::SheetRef::Shape(rect),
+        larrygram_model::SheetRef::Shape(rect),
         &CellName::from_static("Width"),
         &CellWrite::new("4", CellValue::Number(4.0)),
     )
     .expect("width");
     doc.write_cell(
-        ferrogram_model::SheetRef::Shape(rect),
+        larrygram_model::SheetRef::Shape(rect),
         &CellName::from_static("Height"),
         &CellWrite::new("2", CellValue::Number(2.0)),
     )
@@ -332,7 +332,7 @@ fn a_deleted_page_drops_its_part_and_relationships() {
     let pages_part = reread
         .part(&PartName::new("/visio/pages/pages.xml"))
         .expect("pages part");
-    let ferrogram_vsdx::PartData::Xml(root) = &pages_part.data else {
+    let larrygram_vsdx::PartData::Xml(root) = &pages_part.data else {
         panic!("pages part is not XML");
     };
     let page_elements = root
@@ -398,15 +398,15 @@ fn a_new_shape_and_its_text_land_in_the_written_page() {
     assert_eq!(
         text.parts,
         vec![
-            ferrogram_model::TextPart::CharRun { ix: 0 },
-            ferrogram_model::TextPart::Text("added".to_owned())
+            larrygram_model::TextPart::CharRun { ix: 0 },
+            larrygram_model::TextPart::Text("added".to_owned())
         ]
     );
     // The written `Text` element carries the markers.
     let page_part = reread
         .part(&PartName::new("/visio/pages/page1.xml"))
         .expect("page part");
-    let ferrogram_vsdx::PartData::Xml(root) = &page_part.data else {
+    let larrygram_vsdx::PartData::Xml(root) = &page_part.data else {
         panic!("page part is not XML");
     };
     fn text_elements(node: &XmlNode, out: &mut Vec<String>) {

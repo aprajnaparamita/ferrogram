@@ -47,7 +47,7 @@ Both compare the **reachable** state (task P5-11 note), never
 (arena renumbered into wrapper order), their sheets and text, the
 `Connect` records of those shapes (with their list positions), and the
 masters their instances use (renumbered into document order). The
-normalisation follows `apps/ferrogram/tests/flowchart.rs`: `Preserved`
+normalisation follows `apps/larrygram/tests/flowchart.rs`: `Preserved`
 attribute order, preserved `Rel` children and a cell's `U` kind
 spelling are not content, and the volatile document properties are not
 compared.
@@ -120,7 +120,7 @@ commit after the release are outside the measurement, exactly as ADR
 machine. The assertion runs the median against `8 ms x 5` in CI (the
 generous CI multiplier) and `8 ms x 2` on a local machine, and only on
 a known CPU/OS pair (`aarch64`/`x86_64` x `macos`/`linux`) or with an
-explicit `FERROGRAM_DRAG_BUDGET_MS`; anywhere else the test still runs
+explicit `LARRYGRAM_DRAG_BUDGET_MS`; anywhere else the test still runs
 and prints the measurements, then skips the assertion with its reason
 (unknown hardware would turn the check into noise).
 
@@ -222,7 +222,7 @@ re-route warning helper became one (`connector::reroute_quietly`).
   ADR 0042 budgets and the one the harness measures. See "Open
   issues".
 - **The budget assertion skips on unknown hardware** (with its reason
-  and the measured numbers printed). `FERROGRAM_DRAG_BUDGET_MS` forces
+  and the measured numbers printed). `LARRYGRAM_DRAG_BUDGET_MS` forces
   it anywhere.
 - **Defensive arms stay uncovered**: the re-route failure warnings
   (the pass cannot fail from public-API state: non-finite cells read as
@@ -265,9 +265,9 @@ pins them as observable:
 
 | crate | before (main) | after | ratchet |
 |---|---|---|---|
-| ferrogram-commands | 98.1% | 98.1% | 98.1 |
-| ferrogram-model | 99.6% | 99.6% | 99.6 |
-| ferrogram-ui | 96.4% | 96.6% | 96.4 |
+| larrygram-commands | 98.1% | 98.1% | 98.1 |
+| larrygram-model | 99.6% | 99.6% | 99.6 |
+| larrygram-ui | 96.4% | 96.6% | 96.4 |
 
 (`cargo xtask coverage`: every crate is at or above its threshold and
 its ratchet. The commands crate is at its ratchet exactly; the

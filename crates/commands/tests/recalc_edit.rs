@@ -27,22 +27,22 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, Registry, SessionId};
-use ferrogram_model::mutate::VIS_END;
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, Registry, SessionId};
+use larrygram_model::mutate::VIS_END;
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Master, MasterId, PageId, Preserved, Row,
     Section, SectionName, Shape, ShapeId, SheetRef,
 };
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 fn number_cell(name: &str, formula: &str, value: f64) -> Cell {
     Cell {
         name: CellName::new(name),
         formula: Some(formula.to_owned()),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -471,7 +471,7 @@ fn reroute_skips_a_connector_whose_geometry_rows_carry_formulas() {
         connect.from_part = VIS_END;
         connect.to_sheet = target_visio;
         connect.to_cell = String::from("Connections.X1");
-        connect.to_part = ferrogram_model::mutate::VIS_CONNECTION_POINT + 1;
+        connect.to_part = larrygram_model::mutate::VIS_CONNECTION_POINT + 1;
         doc.add_connect(page, connect).expect("connect");
     }
 
@@ -589,12 +589,12 @@ fn a_resize_scales_constant_rows_and_recomputes_formula_rows() {
 }
 
 /// The dirty set a recalc pass runs over is exposed on the step
-/// ([`ferrogram_commands::Edit::dirty_cells`]); the per-edit-type tests
+/// ([`larrygram_commands::Edit::dirty_cells`]); the per-edit-type tests
 /// live next to each type. This pins the composite aggregation the
 /// multi-cell commands rely on.
 #[test]
 fn a_composite_edit_reports_every_step_cell() {
-    use ferrogram_commands::{CompositeEdit, Edit};
+    use larrygram_commands::{CompositeEdit, Edit};
 
     let mut edit = CompositeEdit::new("two steps");
     assert!(edit.dirty_cells().is_empty());
@@ -617,16 +617,16 @@ fn a_composite_edit_reports_every_step_cell() {
 /// One step reporting a fixed dirty set (the composite test above).
 struct DirtyEdit(Vec<CellAddress>);
 
-impl ferrogram_commands::Edit for DirtyEdit {
+impl larrygram_commands::Edit for DirtyEdit {
     fn label(&self) -> &str {
         "dirty"
     }
 
-    fn apply(&mut self, _ctx: &mut AppCtx) -> Result<(), ferrogram_commands::CommandError> {
+    fn apply(&mut self, _ctx: &mut AppCtx) -> Result<(), larrygram_commands::CommandError> {
         Ok(())
     }
 
-    fn revert(&mut self, _ctx: &mut AppCtx) -> Result<(), ferrogram_commands::CommandError> {
+    fn revert(&mut self, _ctx: &mut AppCtx) -> Result<(), larrygram_commands::CommandError> {
         Ok(())
     }
 
@@ -635,7 +635,7 @@ impl ferrogram_commands::Edit for DirtyEdit {
     }
 }
 
-/// [`ferrogram_commands::recalc`] is the fill-in entry point task P6-08
+/// [`larrygram_commands::recalc`] is the fill-in entry point task P6-08
 /// consumes: a document with a formula and no cached value gains one,
 /// with no undo entry.
 #[test]
@@ -653,7 +653,7 @@ fn fill_missing_fills_the_holes_without_an_undo_entry() {
             entry.value = None;
         }
     }
-    let report = ferrogram_commands::recalc::fill_missing(&mut ctx, session).expect("fill");
+    let report = larrygram_commands::recalc::fill_missing(&mut ctx, session).expect("fill");
     assert_eq!(report.updated, 1);
     assert_eq!(
         cell_number(&document(&ctx), shape, "PinX"),
@@ -676,12 +676,12 @@ fn recalc_after_edit_reports_the_warnings_it_could_not_compute() {
         CellName::new("Width"),
     )];
     let report =
-        ferrogram_commands::recalc::recalc_after_edit(&mut ctx, session, &dirty).expect("recalc");
+        larrygram_commands::recalc::recalc_after_edit(&mut ctx, session, &dirty).expect("recalc");
     assert!(!report.truncated);
     assert!(report.warnings.iter().any(|warning| {
         matches!(
             warning.kind,
-            ferrogram_shapesheet::RecalcWarningKind::UnknownFunction(_)
+            larrygram_shapesheet::RecalcWarningKind::UnknownFunction(_)
         )
     }));
     let _ = page;

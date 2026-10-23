@@ -8,9 +8,9 @@
 
 #![no_main]
 
-use ferrogram_model::PageId;
-use ferrogram_render::{BuildOptions, PngOptions, SvgOptions, build_scene, render_png, render_svg};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_model::PageId;
+use larrygram_render::{BuildOptions, PngOptions, SvgOptions, build_scene, render_png, render_svg};
+use larrygram_vsdx::{Limits, read_document};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

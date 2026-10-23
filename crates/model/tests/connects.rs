@@ -2,11 +2,11 @@
 //! per connector endpoint, records that leave with a detached shape and
 //! come back with it, and the `VisFromParts`/`VisToParts` transcription.
 
-use ferrogram_model::mutate::{
+use larrygram_model::mutate::{
     VIS_BEGIN, VIS_CONNECTION_POINT, VIS_CONTROL_POINT, VIS_END, VIS_FROM_NONE, VIS_TO_NONE,
     VIS_WHOLE_SHAPE,
 };
-use ferrogram_model::{Connect, Document, Error, PageId, Shape, ShapeId};
+use larrygram_model::{Connect, Document, Error, PageId, Shape, ShapeId};
 
 /// A document with one page and a connector with two endpoints glued to
 /// two targets.

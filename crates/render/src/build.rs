@@ -20,7 +20,7 @@
 //!   identity inside it, and a child carries its own transform. The
 //!   absolute `own.then(parent)` is used only where page coordinates are
 //!   needed (the `InfiniteLine` page clip).
-//! - **Geometry rows** map through [`Curve::to_cubics`](ferrogram_geom::Curve::to_cubics):
+//! - **Geometry rows** map through [`Curve::to_cubics`](larrygram_geom::Curve::to_cubics):
 //!   `MoveTo` starts a subpath (also mid-section: a stroking gap), the
 //!   `Rel*` rows scale by the shape's `Width`/`Height`, `NurbsTo` assembles
 //!   its knot list from the formula plus the row's `A`..`D` cells (the
@@ -80,15 +80,15 @@
 //!   ([`WarningKind::KindMismatch`]). All of them land in
 //!   [`Scene::warnings`](crate::scene::Scene::warnings).
 
-use ferrogram_geom::{
+use larrygram_geom::{
     Angle, Arc, Cubic, Curve, EllipticalArc, Nurbs, NurbsPoint, Path, Point, Polyline, Segment,
     Size, Spline, Transform,
 };
-use ferrogram_model::{
+use larrygram_model::{
     CellLookup, CellName, CellReader, CellValue, CellWarning, Color, Document, GeometryRow, PageId,
     RowTarget, ShapeId, SheetRef, TextPart, WarningKind,
 };
-use ferrogram_text::{self as text, default_fonts};
+use larrygram_text::{self as text, default_fonts};
 
 use crate::error::Error;
 use crate::scene::{
@@ -173,7 +173,7 @@ pub fn build_scene(doc: &Document, page: PageId, options: &BuildOptions) -> Resu
     let mut ctx = Ctx::new(doc, styles, FLAT_PIXELS / scale);
     let entity = doc
         .page(page)
-        .ok_or(Error::Model(ferrogram_model::Error::UnknownPage(page)))?;
+        .ok_or(Error::Model(larrygram_model::Error::UnknownPage(page)))?;
     let (width, height) = page_size(&mut ctx, page);
     let mut scene = Scene::new(width, height);
 
@@ -382,7 +382,7 @@ impl<'d> Ctx<'d> {
             let name = CellName::new(*cell);
             matches!(
                 self.doc.resolve(shape, &name),
-                Ok(resolved) if resolved.source == ferrogram_model::ValueSource::Local
+                Ok(resolved) if resolved.source == larrygram_model::ValueSource::Local
             )
         })
     }
@@ -408,7 +408,7 @@ impl<'d> Ctx<'d> {
 }
 
 /// A model colour and a transparency into an RGBA value.
-fn rgba_of(color: ferrogram_model::Color, trans: f64) -> Rgba {
+fn rgba_of(color: larrygram_model::Color, trans: f64) -> Rgba {
     let alpha = (1.0 - trans.clamp(0.0, 1.0)) * 255.0;
     Rgba::new(
         color.r,
@@ -1336,7 +1336,7 @@ fn section_rows(ctx: &Ctx<'_>, sheet: SheetRef, section: &str) -> usize {
     if section == "FillGradient" {
         names.push("Fill Gradient");
     }
-    let count = |entity: &ferrogram_model::Shape| {
+    let count = |entity: &larrygram_model::Shape| {
         names.iter().find_map(|name| {
             entity
                 .sheet
@@ -1926,7 +1926,7 @@ impl Ctx<'_> {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{
+    use larrygram_model::{
         Cell, CellValue as Value, Master, MasterId, Page, Row, Section, SectionName,
         Shape as ModelShape, TextContent, TextPart,
     };
@@ -2022,7 +2022,7 @@ mod tests {
         let error = build_scene(&doc, PageId { index: 3 }, &BuildOptions::new());
         assert_eq!(
             error,
-            Err(Error::Model(ferrogram_model::Error::UnknownPage(PageId {
+            Err(Error::Model(larrygram_model::Error::UnknownPage(PageId {
                 index: 3
             })))
         );
@@ -2109,7 +2109,7 @@ mod tests {
         let mismatches: Vec<_> = scene
             .warnings
             .iter()
-            .filter(|w| w.kind == ferrogram_model::WarningKind::KindMismatch)
+            .filter(|w| w.kind == larrygram_model::WarningKind::KindMismatch)
             .collect();
         assert_eq!(mismatches.len(), 1, "{:?}", scene.warnings);
         assert_eq!(mismatches[0].cell, CellName::from_static("PinX"));
@@ -2977,7 +2977,7 @@ mod tests {
                     // (palette indices 2 and 3).
                     assert_eq!(stops.len(), 2);
                     for (stop, index) in stops.iter().zip([2u32, 3]) {
-                        let expected = ferrogram_model::palette(index).expect("palette entry");
+                        let expected = larrygram_model::palette(index).expect("palette entry");
                         assert_eq!(stop.color, Rgba::opaque(expected.r, expected.g, expected.b));
                     }
                 }
@@ -3018,7 +3018,7 @@ mod tests {
             ];
             section.rows.push(row);
             entity.sheet.sections.push(section);
-            entity.text = Some(ferrogram_model::TextContent {
+            entity.text = Some(larrygram_model::TextContent {
                 parts: vec![TextPart::Text("Hi".to_owned())],
             });
         }
@@ -3078,7 +3078,7 @@ mod tests {
         {
             let entity = doc.shape_mut(shape).expect("shape");
             entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
-            entity.text = Some(ferrogram_model::TextContent {
+            entity.text = Some(larrygram_model::TextContent {
                 parts: vec![TextPart::CharRun { ix: 5 }, TextPart::Text("Hi".to_owned())],
             });
         }
@@ -3095,7 +3095,7 @@ mod tests {
                 // The master's `IX` 5 row caches colour index 3; no row
                 // sits at position 5, so a positional read would fall
                 // back to the defaults (black).
-                let expected = ferrogram_model::palette(3).expect("palette entry");
+                let expected = larrygram_model::palette(3).expect("palette entry");
                 assert_eq!(
                     text.runs[0].color,
                     Rgba::opaque(expected.r, expected.g, expected.b)
@@ -3125,7 +3125,7 @@ mod tests {
         {
             let entity = doc.shape_mut(shape).expect("shape");
             entity.sheet.cells = vec![number_cell("Width", 2.0), number_cell("Height", 1.0)];
-            entity.text = Some(ferrogram_model::TextContent {
+            entity.text = Some(larrygram_model::TextContent {
                 parts: vec![
                     TextPart::CharRun { ix: u32::MAX },
                     TextPart::Text("Hi".to_owned()),
@@ -3161,7 +3161,7 @@ mod tests {
             row.cells = vec![number_cell("Bullet", 1.0)];
             section.rows.push(row);
             entity.sheet.sections.push(section);
-            entity.text = Some(ferrogram_model::TextContent {
+            entity.text = Some(larrygram_model::TextContent {
                 parts: vec![
                     TextPart::Text("one".to_owned()),
                     TextPart::ParaRun { ix: 0 },
@@ -3199,7 +3199,7 @@ mod tests {
     fn empty_text_builds_no_text_node() {
         let (mut doc, _page, shape) = document_with_shape();
         if let Some(entity) = doc.shape_mut(shape) {
-            entity.text = Some(ferrogram_model::TextContent::new());
+            entity.text = Some(larrygram_model::TextContent::new());
         }
         with_geometry(
             &mut doc,

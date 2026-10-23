@@ -8,7 +8,7 @@
 //! - a cancelled asynchronous pick clearing the pending command;
 //! - the window commands (`app.quit`, `app.office.center.options`)
 //!   from the programmatic side: [`dispatch_one`] returns their
-//!   [`UiRequest`](ferrogram_commands::UiRequest) with no side effect
+//!   [`UiRequest`](larrygram_commands::UiRequest) with no side effect
 //!   (P4-15 implements them; P4-16 removed the shell intercepts);
 //! - quitting: the flag the shell resets when it hands the close to
 //!   the viewport.
@@ -22,10 +22,10 @@
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{CommandId, Invocation, Source, UiRequest};
-use ferrogram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
-use ferrogram_ui::shell::dispatch_one;
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{CommandId, Invocation, Source, UiRequest};
+use larrygram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
+use larrygram_ui::shell::dispatch_one;
 
 use crate::ShellRig;
 
@@ -61,7 +61,7 @@ impl ScriptedPicker {
 }
 
 impl FilePicker for ScriptedPicker {
-    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         Ok(None)
     }
 
@@ -69,7 +69,7 @@ impl FilePicker for ScriptedPicker {
         &self,
         _request: &SaveRequest,
         _data: &[u8],
-    ) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    ) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         Ok(None)
     }
 
@@ -154,7 +154,7 @@ fn the_window_commands_only_request_their_windows() {
     // effect: never a silent quit, never a dialog (AGENTS.md
     // section 6). P4-16 removed the shell intercepts; the shell acts
     // on the requests for interactive sources only.
-    let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+    let registry = larrygram_commands::builtins::registry().expect("the registry builds");
     let mut app = AppCtx::new(Settings::default());
     for (id, request) in [
         ("app.quit", UiRequest::Quit),

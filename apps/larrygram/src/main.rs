@@ -1,11 +1,11 @@
-//! Ferrogram desktop app (eframe/egui) (ADR 0030).
+//! Larrygram desktop app (eframe/egui) (ADR 0030).
 //!
 //! The thin shell over `crates/ui` (L7, ADR 0002): it parses
 //! `--ui-layout` (ADR 0032), builds the
-//! [`Registry`](ferrogram_commands::Registry) (ADR 0028), loads both
-//! ribbon layouts from the embedded `ui-spec` data (ADR 0031) and runs
+//! [`Registry`](larrygram_commands::Registry) (ADR 0028), loads both
+//! Panel layouts from the embedded `ui-spec` data (ADR 0031) and runs
 //! the eframe event loop around
-//! [`ferrogram_ui::shell::Shell`].
+//! [`larrygram_ui::shell::Shell`].
 //!
 //! Settings persist in eframe's storage slot as `settings.json` (ADR
 //! 0032); a corrupt slot falls back to the defaults with one warning
@@ -16,10 +16,10 @@
 use std::fmt;
 
 use eframe::egui;
-use ferrogram_commands::{AppCtx, Settings};
-use ferrogram_ui::settings::TextStore;
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::{LayoutKind, Loader};
+use larrygram_commands::{AppCtx, Settings};
+use larrygram_ui::settings::TextStore;
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::{LayoutKind, Loader};
 
 /// A startup failure (one line; the app never panics, AGENTS.md
 /// section 6).
@@ -50,13 +50,13 @@ impl std::error::Error for AppError {}
 const SETTINGS_KEY: &str = "settings.json";
 
 /// The app id and window title (eframe's `run_native` name).
-const APP_NAME: &str = "ferrogram";
+const APP_NAME: &str = "larrygram";
 
 /// What the command line asked for (ADR 0032: `--ui-layout` wins over
 /// the persisted setting).
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Options {
-    /// The ribbon layout from `--ui-layout`, when given.
+    /// The Panel layout from `--ui-layout`, when given.
     ui_layout: Option<LayoutKind>,
     /// `--help`: print the usage line and exit.
     help: bool,
@@ -90,20 +90,24 @@ fn parse_args(args: &[String]) -> Result<Options, AppError> {
     Ok(options)
 }
 
-/// The `--ui-layout` value: `2016` or `365` (ADR 0032).
+/// The `--ui-layout` value: `panel-2016` or `panel-365` (ADR 0032).
+///
+/// The pre-rename values (`panel-2016`, `panel-365`, `2016`, `365`)
+/// are rejected like any unknown value, with a message naming the
+/// current ones.
 fn parse_layout(value: &str) -> Result<LayoutKind, AppError> {
     match value {
-        "2016" => Ok(LayoutKind::Visio2016),
-        "365" => Ok(LayoutKind::Visio365),
+        "panel-2016" => Ok(LayoutKind::Panel2016),
+        "panel-365" => Ok(LayoutKind::Panel365),
         other => Err(AppError::new(format!(
-            "unknown layout {other:?}; expected 2016 or 365"
+            "unknown layout {other:?}; expected panel-2016 or panel-365"
         ))),
     }
 }
 
 /// The one-line usage, printed by `--help`.
 fn help_text() -> &'static str {
-    "usage: ferrogram [--ui-layout 2016|365] [--help]"
+    "usage: larrygram [--ui-layout panel-2016|panel-365] [--help]"
 }
 
 /// Builds the registry, loads both layouts and runs the eframe loop
@@ -114,7 +118,7 @@ fn run_with(args: &[String]) -> Result<(), AppError> {
         println!("{}", help_text());
         return Ok(());
     }
-    let registry = ferrogram_commands::builtins::registry()
+    let registry = larrygram_commands::builtins::registry()
         .map_err(|error| AppError::new(error.to_string()))?;
     let layouts = Loader::from_embedded().map_err(|error| AppError::new(error.to_string()))?;
     let cli_layout = options.ui_layout;
@@ -124,7 +128,7 @@ fn run_with(args: &[String]) -> Result<(), AppError> {
         native_options,
         Box::new(move |cc| {
             let shell = build_shell(cc.storage, registry, layouts, cli_layout)?;
-            Ok(Box::new(FerrogramApp::new(shell)))
+            Ok(Box::new(LarrygramApp::new(shell)))
         }),
     )
     .map_err(|error| AppError::new(error.to_string()))
@@ -134,12 +138,12 @@ fn run_with(args: &[String]) -> Result<(), AppError> {
 /// with the `--ui-layout` flag winning over the persisted value.
 fn build_shell(
     storage: Option<&dyn eframe::Storage>,
-    registry: ferrogram_commands::Registry,
-    layouts: ferrogram_ui_spec::LayoutSets,
+    registry: larrygram_commands::Registry,
+    layouts: larrygram_ui_spec::LayoutSets,
     cli_layout: Option<LayoutKind>,
 ) -> Result<Shell, AppError> {
     let mut slot = TextStore::new(storage.and_then(|storage| storage.get_string(SETTINGS_KEY)));
-    let mut settings = ferrogram_ui::settings::load_settings(&mut slot)
+    let mut settings = larrygram_ui::settings::load_settings(&mut slot)
         .map_err(|error| AppError::new(error.to_string()))?;
     if let Some(kind) = cli_layout {
         settings.ui_layout = kind;
@@ -152,14 +156,14 @@ fn build_shell(
 }
 
 /// The eframe app: one [`Shell`] plus the last persisted settings.
-struct FerrogramApp {
+struct LarrygramApp {
     /// The UI shell (ADR 0029).
     shell: Shell,
     /// The settings last written to the store (the dirty check).
     saved_settings: Settings,
 }
 
-impl FerrogramApp {
+impl LarrygramApp {
     /// Wraps a shell and remembers its settings.
     fn new(shell: Shell) -> Self {
         let saved_settings = shell.app.settings.clone();
@@ -187,7 +191,7 @@ impl FerrogramApp {
     fn persist(&mut self, storage: &mut dyn eframe::Storage) {
         let mut slot = TextStore::new(storage.get_string(SETTINGS_KEY));
         if let Err(error) =
-            ferrogram_ui::settings::save_settings(&mut slot, &self.shell.app.settings)
+            larrygram_ui::settings::save_settings(&mut slot, &self.shell.app.settings)
         {
             self.shell.note_error(error.to_string());
             return;
@@ -198,7 +202,7 @@ impl FerrogramApp {
     }
 }
 
-impl eframe::App for FerrogramApp {
+impl eframe::App for LarrygramApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.update_ui(ui);
         if self.shell.app.settings != self.saved_settings {
@@ -257,12 +261,12 @@ mod tests {
 
     #[test]
     fn the_command_line_parses_the_layout_flag() {
-        let options = parse_args(&strings(&["--ui-layout", "365"])).expect("args");
-        assert_eq!(options.ui_layout, Some(LayoutKind::Visio365));
+        let options = parse_args(&strings(&["--ui-layout", "panel-365"])).expect("args");
+        assert_eq!(options.ui_layout, Some(LayoutKind::Panel365));
         assert!(!options.help);
 
-        let options = parse_args(&strings(&["--ui-layout=2016"])).expect("args");
-        assert_eq!(options.ui_layout, Some(LayoutKind::Visio2016));
+        let options = parse_args(&strings(&["--ui-layout=panel-2016"])).expect("args");
+        assert_eq!(options.ui_layout, Some(LayoutKind::Panel2016));
 
         let options = parse_args(&[]).expect("args");
         assert_eq!(options, Options::default());
@@ -280,11 +284,28 @@ mod tests {
         let error = parse_args(&strings(&["--nope"])).expect_err("unknown flag");
         assert!(error.to_string().contains("--nope"), "{error}");
         let error = parse_args(&strings(&["--ui-layout"])).expect_err("missing value");
-        assert!(error.to_string().contains("2016 or 365"), "{error}");
+        assert!(
+            error.to_string().contains("panel-2016 or panel-365"),
+            "{error}"
+        );
         let error = parse_args(&strings(&["--ui-layout", "95"])).expect_err("bad layout");
         assert!(error.to_string().contains("95"), "{error}");
         let error = parse_args(&strings(&["--ui-layout=nope"])).expect_err("bad layout");
-        assert!(error.to_string().contains("2016 or 365"), "{error}");
+        assert!(
+            error.to_string().contains("panel-2016 or panel-365"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn the_old_layout_values_are_rejected_naming_the_new_ones() {
+        for old in ["panel-2016", "panel-365"] {
+            let error = parse_args(&strings(&["--ui-layout", old])).expect_err("old value");
+            let shown = error.to_string();
+            assert!(shown.contains(old), "{shown}");
+            assert!(shown.contains("panel-2016"), "{shown}");
+            assert!(shown.contains("panel-365"), "{shown}");
+        }
     }
 
     #[test]
@@ -301,10 +322,10 @@ mod tests {
     #[test]
     fn settings_round_trip_through_the_storage_slot() {
         let mut storage = MemoryStorage::default();
-        let mut app = FerrogramApp::new(
+        let mut app = LarrygramApp::new(
             build_shell(
                 Some(&storage),
-                ferrogram_commands::builtins::registry().expect("registry"),
+                larrygram_commands::builtins::registry().expect("registry"),
                 Loader::from_embedded().expect("layouts"),
                 None,
             )
@@ -317,14 +338,14 @@ mod tests {
 
         let restored = build_shell(
             Some(&storage),
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             Loader::from_embedded().expect("layouts"),
-            Some(LayoutKind::Visio365),
+            Some(LayoutKind::Panel365),
         )
         .expect("shell");
         assert_eq!(
             restored.app.settings.ui_layout,
-            LayoutKind::Visio365,
+            LayoutKind::Panel365,
             "--ui-layout wins over the persisted setting"
         );
     }
@@ -335,7 +356,7 @@ mod tests {
         storage.set_string(SETTINGS_KEY, "{not json".to_owned());
         let shell = build_shell(
             Some(&storage),
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             Loader::from_embedded().expect("layouts"),
             None,
         )
@@ -348,7 +369,7 @@ mod tests {
     fn a_missing_store_is_the_defaults_without_a_warning() {
         let shell = build_shell(
             None,
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             Loader::from_embedded().expect("layouts"),
             None,
         )
@@ -361,12 +382,12 @@ mod tests {
     fn one_frame_draws_the_shell_without_crashing() {
         let shell = build_shell(
             None,
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             Loader::from_embedded().expect("layouts"),
             None,
         )
         .expect("shell");
-        let mut app = FerrogramApp::new(shell);
+        let mut app = LarrygramApp::new(shell);
         let ctx = egui::Context::default();
         for _ in 0..2 {
             let mut output = ctx.run_ui(Default::default(), |ui| {
@@ -379,10 +400,10 @@ mod tests {
 
     #[test]
     fn saving_persists_the_settings() {
-        let mut app = FerrogramApp::new(
+        let mut app = LarrygramApp::new(
             build_shell(
                 None,
-                ferrogram_commands::builtins::registry().expect("registry"),
+                larrygram_commands::builtins::registry().expect("registry"),
                 Loader::from_embedded().expect("layouts"),
                 None,
             )

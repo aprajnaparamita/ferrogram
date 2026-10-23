@@ -7,7 +7,7 @@
 //! path coordinates out of the XHTML (an open SVG vocabulary). The oracle
 //! is built by `cargo xtask oracle build` (a dev-only harness under
 //! `tools/libvisio-oracle/`); the test skips with a message when
-//! `FERROGRAM_LIBVISIO_ORACLE` is unset, and `FERROGRAM_REQUIRE_ORACLE=1`
+//! `LARRYGRAM_LIBVISIO_ORACLE` is unset, and `LARRYGRAM_REQUIRE_ORACLE=1`
 //! makes a missing oracle a failure (ADR 0010).
 //!
 //! What is compared, per page: the page count, the shape count (the
@@ -22,24 +22,24 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ferrogram_geom::{Point, Segment, Transform};
-use ferrogram_render::scene::{Group, Node, Scene, Shape};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_geom::{Point, Segment, Transform};
+use larrygram_render::scene::{Group, Node, Scene, Shape};
+use larrygram_vsdx::{Limits, read_document};
 
 /// The bounding box tolerance, in inches (ADR 0027).
 const BBOX_TOLERANCE: f64 = 0.05;
 
-/// The oracle tools directory when `FERROGRAM_LIBVISIO_ORACLE` names an
+/// The oracle tools directory when `LARRYGRAM_LIBVISIO_ORACLE` names an
 /// existing directory; `None` when it is unset, empty or missing (ADR
 /// 0010).
 pub fn oracle_dir() -> Option<PathBuf> {
-    oracle_dir_from(std::env::var_os("FERROGRAM_LIBVISIO_ORACLE"))
+    oracle_dir_from(std::env::var_os("LARRYGRAM_LIBVISIO_ORACLE"))
 }
 
-/// Whether `FERROGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a
+/// Whether `LARRYGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a
 /// test failure instead of a skip (set in CI on Linux and macOS).
 pub fn require_oracle() -> bool {
-    require_from(std::env::var("FERROGRAM_REQUIRE_ORACLE").as_deref().ok())
+    require_from(std::env::var("LARRYGRAM_REQUIRE_ORACLE").as_deref().ok())
 }
 
 /// [`oracle_dir`] with an explicit value for the environment variable.
@@ -574,10 +574,10 @@ fn our_rendering_agrees_with_the_oracle_on_structure() {
     let Some(oracle) = oracle_dir() else {
         assert!(
             !require_oracle(),
-            "FERROGRAM_REQUIRE_ORACLE=1 is set but FERROGRAM_LIBVISIO_ORACLE is missing"
+            "LARRYGRAM_REQUIRE_ORACLE=1 is set but LARRYGRAM_LIBVISIO_ORACLE is missing"
         );
         eprintln!(
-            "skipping: FERROGRAM_LIBVISIO_ORACLE is not set; see `cargo xtask oracle build` (ADR 0010)"
+            "skipping: LARRYGRAM_LIBVISIO_ORACLE is not set; see `cargo xtask oracle build` (ADR 0010)"
         );
         return;
     };

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://ferrogram.dev/schemas/ui-layout-v2.json",
+  "$id": "https://larrygram.dev/schemas/ui-layout-v2.json",
   "title": "Larrygram layout, format v2",
   "description": "Schema for ui-spec/layouts/*.yaml (docs/ui/layout-format.md, ADR 0061). One file per layout; `kind` selects the surfaces it has.",
   "type": "object",

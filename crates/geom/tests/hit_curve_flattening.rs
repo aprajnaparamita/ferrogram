@@ -5,7 +5,7 @@
 
 use core::f64::consts::FRAC_PI_4;
 
-use ferrogram_geom::{
+use larrygram_geom::{
     Arc, Cubic, Curve, EllipticalArc, FLATTEN_TOLERANCE, Nurbs, NurbsPoint, Path, Point, Polyline,
     Segment, Spline, distance_point_path,
 };
@@ -71,7 +71,7 @@ fn elliptical_arc_hits_within_tolerance() {
         start: Point::new(1.0, 0.0),
         end: Point::new(-1.0, 0.0),
         ctrl: Point::new(0.0, 1.0),
-        angle: ferrogram_geom::Angle::from_radians(0.0),
+        angle: larrygram_geom::Angle::from_radians(0.0),
         ratio: 1.0,
     });
     assert_on_curve(&curve, Point::new(0.0, 1.0));
@@ -182,7 +182,7 @@ fn a_rotated_curve_hits_the_same_way() {
         start: Point::new(0.5, -0.5),
         end: Point::new(-0.5, 0.5),
         ctrl: Point::new(-0.5, -0.5),
-        angle: ferrogram_geom::Angle::from_radians(FRAC_PI_4),
+        angle: larrygram_geom::Angle::from_radians(FRAC_PI_4),
         ratio: 1.0,
     });
     assert_on_curve(&curve, Point::new(-0.5, -0.5));

@@ -11,16 +11,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use egui_kittest::Harness;
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::{CommandId, Invocation, Source};
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::{CommandId, Invocation, Source};
+use larrygram_model::{
     Document, PageId, Row, Section, SectionName, Shape, ShapeId, TextContent, TextPart,
 };
-use ferrogram_ui::shell::dispatch_one;
-use ferrogram_ui::shortcuts::{self, ShortcutMap};
-use ferrogram_ui::text_edit::{EditorAction, TextEditor};
-use ferrogram_ui::tools::{Modifiers, Tool, ToolEvent, ToolMachine};
-use ferrogram_ui_spec::{Loader, ShortcutScope};
+use larrygram_ui::shell::dispatch_one;
+use larrygram_ui::shortcuts::{self, ShortcutMap};
+use larrygram_ui::text_edit::{EditorAction, TextEditor};
+use larrygram_ui::tools::{Modifiers, Tool, ToolEvent, ToolMachine};
+use larrygram_ui_spec::{Loader, ShortcutScope};
 
 /// A page with one shape whose text has the first-row markers.
 fn fixture() -> (AppCtx, ShapeId) {
@@ -71,10 +71,10 @@ fn typing_into_the_editor_writes_the_shape_text() {
     let action = Rc::new(RefCell::new(EditorAction::Pending));
     let intents = Rc::new(RefCell::new(Vec::new()));
     let app = Rc::new(RefCell::new(app));
-    let registry = ferrogram_commands::builtins::registry().expect("registry");
+    let registry = larrygram_commands::builtins::registry().expect("registry");
     let registry = Rc::new(registry);
     let sets = Loader::from_embedded().expect("layouts");
-    let mut map = ShortcutMap::from_shortcuts(&sets.visio_2016.shortcuts).expect("map");
+    let mut map = ShortcutMap::from_shortcuts(&sets.panel_2016.shortcuts).expect("map");
     let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(220.0, 60.0));
     let harness_editor = Rc::clone(&editor);
     let harness_action = Rc::clone(&action);
@@ -114,8 +114,8 @@ fn typing_into_the_editor_writes_the_shape_text() {
         Some(TextPart::Text(text)) => text.clone(),
         _ => panic!("the one run carries literal text"),
     };
-    let args = ferrogram_commands::Args::new()
-        .with("text", ferrogram_commands::ArgValue::Text(text_arg.clone()));
+    let args = larrygram_commands::Args::new()
+        .with("text", larrygram_commands::ArgValue::Text(text_arg.clone()));
     let id = CommandId::parse("shape.set.text").expect("id");
     dispatch_one(
         &registry,
@@ -141,7 +141,7 @@ fn the_text_shortcut_scope_is_active_while_the_editor_is_focused() {
     let app = Rc::new(RefCell::new(app));
     let intents = Rc::new(RefCell::new(Vec::new()));
     let sets = Loader::from_embedded().expect("layouts");
-    let mut map = ShortcutMap::from_shortcuts(&sets.visio_2016.shortcuts).expect("map");
+    let mut map = ShortcutMap::from_shortcuts(&sets.panel_2016.shortcuts).expect("map");
     let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(220.0, 60.0));
     let harness_editor = Rc::clone(&editor);
     let harness_app = Rc::clone(&app);
@@ -218,14 +218,14 @@ fn escape_commits_and_leaves_the_editor_idle() {
 #[test]
 fn the_text_tool_emits_insert_then_begin_and_the_registry_selects_the_box() {
     let (app, _shape) = fixture();
-    let registry = ferrogram_commands::builtins::registry().expect("builtins");
+    let registry = larrygram_commands::builtins::registry().expect("builtins");
     let mut app = app;
     let mut machine = ToolMachine::new();
     machine.tool = Tool::Text;
     let effect = machine
         .handle(
             ToolEvent::PointerUp {
-                pos: ferrogram_geom::Point::new(2.0, 3.0),
+                pos: larrygram_geom::Point::new(2.0, 3.0),
                 modifiers: Modifiers::none(),
             },
             &app,
@@ -261,10 +261,10 @@ fn the_text_tool_emits_insert_then_begin_and_the_registry_selects_the_box() {
 // ---------------------------------------------------------------------------
 
 /// One `text.begin` / `text.commit` / `text.cancel` dispatch through the
-/// shell (the way the menu, ribbon and shortcuts reach the editor).
-fn shell_dispatch(shell: &Rc<RefCell<ferrogram_ui::shell::Shell>>, id: &'static str) {
+/// shell (the way the menu, command bar and shortcuts reach the editor).
+fn shell_dispatch(shell: &Rc<RefCell<larrygram_ui::shell::Shell>>, id: &'static str) {
     let command = CommandId::parse(id).expect("a valid command id");
-    let intent = ferrogram_ui::Intent::new(command, Invocation::empty(Source::Test));
+    let intent = larrygram_ui::Intent::new(command, Invocation::empty(Source::Test));
     let mut shell = shell.borrow_mut();
     let mut results = shell.dispatch(&[intent]).expect("the intent dispatches");
     let _ = results.pop().expect("one result per intent");
@@ -277,9 +277,9 @@ fn shell_dispatch(shell: &Rc<RefCell<ferrogram_ui::shell::Shell>>, id: &'static 
 fn the_text_edit_cancels_and_commits_through_the_shell() {
     let (app, shape) = fixture();
     let original = shape_text(&app, shape).expect("text");
-    let registry = ferrogram_commands::builtins::registry().expect("registry");
+    let registry = larrygram_commands::builtins::registry().expect("registry");
     let sets = Loader::from_embedded().expect("layouts");
-    let shell = Rc::new(RefCell::new(ferrogram_ui::shell::Shell::new(
+    let shell = Rc::new(RefCell::new(larrygram_ui::shell::Shell::new(
         registry, sets, app,
     )));
     let harness_shell = Rc::clone(&shell);

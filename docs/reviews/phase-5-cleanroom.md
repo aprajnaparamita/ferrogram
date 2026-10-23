@@ -24,7 +24,7 @@ rules). No Microsoft-owned content is committed, no copied long-form text
 exists anywhere in the diff, no libvisio-derived code exists outside
 `crates/vsd-binary`, the routing (ADR 0045) is our own work with no libvisio
 identifier or table in it, and `cargo deny check` is green with
-`ferrogram-vsd-binary` still the only MPL-2.0 crate. The two minor findings
+`larrygram-vsd-binary` still the only MPL-2.0 crate. The two minor findings
 are a blank line that pushes the new `docs/sources.md` row 18 out of the
 sources table (F1), and an `ATTRIBUTION.md` row whose task list does not name
 the Phase 5 `proptest-regressions` file (F2).
@@ -39,7 +39,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    new commands' labels or tooltips.** Pass. The Phase 5 diff adds no binary
    or asset file: the only binary entries in `--name-status` are 26 pure
    renames (R100) of our own fuzz seeds into per-target directories. No
-   Office document, stencil, template, icon, image, font, spec PDF or ribbon
+   Office document, stencil, template, icon, image, font, spec PDF or command bar
    XML anywhere in the diff. The new `ui-spec/commands.yaml` rows and the
    `add_our_commands` table in `xtask/src/extract/commands.rs` carry short
    command labels only ("Draw Connector", "Glue Begin", "Distribute
@@ -76,7 +76,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 4. **`cargo deny` passes; every new dependency is license-clean and named.**
    Pass. `cargo deny check` output: `advisories ok, bans ok, licenses ok,
    sources ok`. The only manifest change in the phase is the
-   `ferrogram-model` dev-dependency of `apps/ferrogram` (an internal crate,
+   `larrygram-model` dev-dependency of `apps/larrygram` (an internal crate,
    MIT; already recorded in the P5-10 Result as accepted by the master). No
    external crate was added, so the deny graph is unchanged apart from the
    internal edge.
@@ -119,7 +119,7 @@ Counts: **blocker 0, major 0, minor 2**.
 advisories ok, bans ok, licenses ok, sources ok
 ```
 
-`cargo xtask gate --quick` in `/Volumes/Dara/ferrogram/worktrees/P5-14`:
+`cargo xtask gate --quick` in `/Volumes/Dara/larrygram/worktrees/P5-14`:
 
 ```
   PASS  codegen       0.0s

@@ -1,7 +1,7 @@
 //! Integration tests for the inheritance lookup ([`CellLookup`], ADR 0013)
-//! through the public API of `ferrogram-model`.
+//! through the public API of `larrygram-model`.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellLookup, CellName, CellValue, Document, Error, Master, MasterId, Page, PageId, Row,
     Section, SectionName, Shape, ShapeId, SheetRef, Style, StyleId, ValueSource,
 };
@@ -245,7 +245,7 @@ fn a_repeated_and_page_lookup_report_a_stale_sheet() {
 
 #[test]
 fn a_themed_line_pattern_resolves_through_the_variation_style_matrix() {
-    use ferrogram_model::{CellReader, Theme, ThemeLineKind, ThemeLineStyle, ThemeVariationStyles};
+    use larrygram_model::{CellReader, Theme, ThemeLineKind, ThemeLineStyle, ThemeVariationStyles};
 
     // `QuickStyleLineMatrix` 100..103 names the `lineIdx` of the
     // first..fourth `vt:varStyle` of the variation style scheme

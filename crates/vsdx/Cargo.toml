@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-vsdx"
+name = "larrygram-vsdx"
 description = "OPC package and XML read/write for .vsdx/.vssx/.vstx"
 version.workspace = true
 edition.workspace = true
@@ -8,8 +8,8 @@ license = "MIT"
 publish = false
 
 [dependencies]
-ferrogram-geom = { path = "../geom" }
-ferrogram-model = { path = "../model" }
+larrygram-geom = { path = "../geom" }
+larrygram-model = { path = "../model" }
 # XML reader/writer (task P2-06, P2-07). MIT/Apache-2.0; version already in
 # `Cargo.lock` via xtask's calamine dependency (ADR 0014).
 quick-xml = "0.41"
@@ -24,7 +24,7 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 # (ADR 0014).
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # Property tests (task P2-10, ADR 0017 section 2). MIT/Apache-2.0, already in
-# `Cargo.lock` via `ferrogram-geom` and `ferrogram-model`.
+# `Cargo.lock` via `larrygram-geom` and `larrygram-model`.
 proptest = "1"
 
 [lints]

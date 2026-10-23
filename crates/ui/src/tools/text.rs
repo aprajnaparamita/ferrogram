@@ -12,8 +12,8 @@
 //! branch is requested in the P5-07 Result (Open issues) because
 //! `tools/pointer.rs` is outside this task's files.
 
-use ferrogram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Source};
-use ferrogram_geom::Point;
+use larrygram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Source};
+use larrygram_geom::Point;
 
 use crate::{Intent, UiError};
 
@@ -33,7 +33,7 @@ pub const TEXT_BOX_HEIGHT_IN: f64 = 0.5;
 pub fn handle(
     _state: &mut super::ToolMachine,
     event: &super::ToolEvent,
-    ctx: &ferrogram_commands::AppCtx,
+    ctx: &larrygram_commands::AppCtx,
 ) -> Result<super::ToolEffect, UiError> {
     let mut effect = ToolEffect::new();
     if ctx.active_document().is_none() {
@@ -89,14 +89,14 @@ fn intent(id: &'static str, args: Args) -> Result<Intent, UiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::Settings;
-    use ferrogram_model::Document;
+    use larrygram_commands::Settings;
+    use larrygram_model::Document;
 
-    fn app_with_page() -> ferrogram_commands::AppCtx {
+    fn app_with_page() -> larrygram_commands::AppCtx {
         let mut doc = Document::new();
         doc.add_page("Page-1").expect("page");
-        let mut app = ferrogram_commands::AppCtx::new(Settings::default());
-        app.open_document(ferrogram_commands::DocumentSession::new(doc, None));
+        let mut app = larrygram_commands::AppCtx::new(Settings::default());
+        app.open_document(larrygram_commands::DocumentSession::new(doc, None));
         app
     }
 
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn no_document_or_other_events_do_nothing() {
-        let ctx = ferrogram_commands::AppCtx::new(Settings::default());
+        let ctx = larrygram_commands::AppCtx::new(Settings::default());
         let mut machine = super::super::ToolMachine::new();
         let effect = handle(
             &mut machine,

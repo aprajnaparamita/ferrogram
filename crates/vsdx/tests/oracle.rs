@@ -6,7 +6,7 @@
 //! description of libvisio's output format beyond what the comparison needs.
 //! The oracle is built by `cargo xtask oracle build` (a dev-only harness under
 //! `tools/libvisio-oracle/`); the test skips with a message when
-//! `FERROGRAM_LIBVISIO_ORACLE` is unset, and `FERROGRAM_REQUIRE_ORACLE=1`
+//! `LARRYGRAM_LIBVISIO_ORACLE` is unset, and `LARRYGRAM_REQUIRE_ORACLE=1`
 //! makes a missing oracle a failure (ADR 0010).
 //!
 //! What the raw dump supports: a page list with a name and a size in inches.
@@ -21,19 +21,19 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ferrogram_model::{CellValue, Document};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_model::{CellValue, Document};
+use larrygram_vsdx::{Limits, read_document};
 
-/// The oracle tools directory when `FERROGRAM_LIBVISIO_ORACLE` names an
+/// The oracle tools directory when `LARRYGRAM_LIBVISIO_ORACLE` names an
 /// existing directory; `None` when it is unset, empty or missing (ADR 0010).
 pub fn oracle_dir() -> Option<PathBuf> {
-    oracle_dir_from(std::env::var_os("FERROGRAM_LIBVISIO_ORACLE"))
+    oracle_dir_from(std::env::var_os("LARRYGRAM_LIBVISIO_ORACLE"))
 }
 
-/// Whether `FERROGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a test
+/// Whether `LARRYGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a test
 /// failure instead of a skip (set in CI on Linux and macOS).
 pub fn require_oracle() -> bool {
-    require_from(std::env::var("FERROGRAM_REQUIRE_ORACLE").as_deref().ok())
+    require_from(std::env::var("LARRYGRAM_REQUIRE_ORACLE").as_deref().ok())
 }
 
 /// [`oracle_dir`] with an explicit value for the environment variable.
@@ -146,7 +146,7 @@ impl ScratchDir {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir =
-            std::env::temp_dir().join(format!("ferrogram-oracle-{}-{unique}", std::process::id()));
+            std::env::temp_dir().join(format!("larrygram-oracle-{}-{unique}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         ScratchDir(dir)
     }
@@ -219,11 +219,11 @@ fn oracle_agrees_on_page_counts_and_page_sizes() {
     let Some(oracle) = oracle_dir() else {
         assert!(
             !require_oracle(),
-            "FERROGRAM_REQUIRE_ORACLE=1 but no oracle: FERROGRAM_LIBVISIO_ORACLE \
+            "LARRYGRAM_REQUIRE_ORACLE=1 but no oracle: LARRYGRAM_LIBVISIO_ORACLE \
              is unset or not a directory"
         );
         eprintln!(
-            "skipping the oracle comparison: set FERROGRAM_LIBVISIO_ORACLE (ADR 0010) \
+            "skipping the oracle comparison: set LARRYGRAM_LIBVISIO_ORACLE (ADR 0010) \
              to the oracle's bin directory"
         );
         return;

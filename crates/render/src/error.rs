@@ -28,7 +28,7 @@ pub enum Error {
     /// The model rejected a document reference (a stale shape or page id).
     /// The builder only walks ids it got from the document, so this is a
     /// caller bug (ADR 0021: a resolving error is not file data).
-    Model(ferrogram_model::Error),
+    Model(larrygram_model::Error),
     /// The rendered raster could not be encoded (PNG encoding failed).
     Encode,
 }
@@ -73,8 +73,8 @@ mod tests {
             "committed visual style data is not valid"
         );
         assert_eq!(
-            Error::Model(ferrogram_model::Error::UnknownShape(
-                ferrogram_model::ShapeId { index: 1 }
+            Error::Model(larrygram_model::Error::UnknownShape(
+                larrygram_model::ShapeId { index: 1 }
             ))
             .to_string(),
             "model error: unknown shape id 1"

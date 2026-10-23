@@ -1,6 +1,6 @@
 //! The committed `ui-spec/` data embedded in the binary (ADR 0031).
 //!
-//! The ribbon is built from the committed YAML at runtime. Wasm has no
+//! The command bar is built from the committed YAML at runtime. Wasm has no
 //! filesystem, so the four data documents are embedded here with
 //! `include_str!` and parsed by
 //! [`Loader::from_embedded`](crate::Loader::from_embedded), the same
@@ -16,10 +16,10 @@ use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
 /// The committed `panel-2016.yaml` as embedded text.
-pub const VISIO_2016_YAML: &str = include_str!("../../../ui-spec/panel-2016.yaml");
+pub const PANEL_2016_YAML: &str = include_str!("../../../ui-spec/panel-2016.yaml");
 
 /// The committed `panel-365.yaml` as embedded text.
-pub const VISIO_365_YAML: &str = include_str!("../../../ui-spec/panel-365.yaml");
+pub const PANEL_365_YAML: &str = include_str!("../../../ui-spec/panel-365.yaml");
 
 /// The committed `commands.yaml` as embedded text.
 pub const COMMANDS_YAML: &str = include_str!("../../../ui-spec/commands.yaml");
@@ -38,7 +38,7 @@ pub const OUT_OF_SCOPE_TXT: &str = include_str!("../../../ui-spec/out-of-scope.t
 /// tooltip "Out of scope for this run".
 ///
 /// ```
-/// use ferrogram_ui_spec::embedded::is_out_of_scope;
+/// use larrygram_ui_spec::embedded::is_out_of_scope;
 /// assert!(is_out_of_scope("CoauthorMenu"));
 /// assert!(is_out_of_scope("SomeMacroThing"));
 /// assert!(!is_out_of_scope("FileSave"));
@@ -146,8 +146,8 @@ mod tests {
 
     #[test]
     fn the_constants_hold_the_committed_files() {
-        assert_eq!(VISIO_2016_YAML, read("panel-2016.yaml"));
-        assert_eq!(VISIO_365_YAML, read("panel-365.yaml"));
+        assert_eq!(PANEL_2016_YAML, read("panel-2016.yaml"));
+        assert_eq!(PANEL_365_YAML, read("panel-365.yaml"));
         assert_eq!(COMMANDS_YAML, read("commands.yaml"));
         assert_eq!(SHORTCUTS_YAML, read("shortcuts.yaml"));
         assert_eq!(OUT_OF_SCOPE_TXT, read("out-of-scope.txt"));
@@ -157,8 +157,8 @@ mod tests {
     fn the_embedded_documents_look_like_their_documents() {
         // A cheap guard against an include_str! pointing at the wrong
         // file: each document has its own marker.
-        assert!(VISIO_2016_YAML.contains("source: Office Fluent UI 2016"));
-        assert!(VISIO_365_YAML.contains("Microsoft 365"));
+        assert!(PANEL_2016_YAML.contains("source: Office Fluent UI 2016"));
+        assert!(PANEL_365_YAML.contains("Microsoft 365"));
         assert!(COMMANDS_YAML.contains("mapping_confidence"));
         assert!(SHORTCUTS_YAML.contains("sequence"));
     }

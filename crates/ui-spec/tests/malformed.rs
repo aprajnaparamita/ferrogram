@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ferrogram_ui_spec::{LayoutSets, LoadError, Loader};
+use larrygram_ui_spec::{LayoutSets, LoadError, Loader};
 use proptest::prelude::*;
 
 /// The good fixture workspace (the baseline documents).
@@ -37,7 +37,7 @@ fn workspace_with(file: &str, bytes: &[u8]) -> PathBuf {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "ferrogram-ui-spec-malformed-{}-{n}",
+        "larrygram-ui-spec-malformed-{}-{n}",
         std::process::id()
     ));
     let ui = root.join("ui-spec");

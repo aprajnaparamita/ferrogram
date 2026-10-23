@@ -12,7 +12,7 @@
 //!
 //! # The ADR 0048 model equality
 //!
-//! The comparison rules are copied from `apps/ferrogram/tests/flowchart.rs`
+//! The comparison rules are copied from `apps/larrygram/tests/flowchart.rs`
 //! (a test binary cannot import from another test crate): [`normalised`]
 //! drops preserved `Rel` children and preserved cell `U` spellings and
 //! sorts preserved attributes (they are not content), [`canonical`]
@@ -24,18 +24,18 @@ mod common;
 use std::collections::HashMap;
 
 use common::{Fixture, build};
-use ferrogram_model::mutate::{CellWrite, VIS_BEGIN, VIS_END, VIS_WHOLE_SHAPE};
-use ferrogram_model::{
+use larrygram_model::mutate::{CellWrite, VIS_BEGIN, VIS_END, VIS_WHOLE_SHAPE};
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Master, MasterId, PageId, Preserved, QName, Row,
     Section, SectionName, Shape, ShapeId, Sheet, Style, StyleId, XmlAttribute, XmlChild, XmlNode,
 };
-use ferrogram_vsdx::{
+use larrygram_vsdx::{
     ContentType, ContentTypeDecl, ContentTypeKind, Limits, Package, Part, PartData, PartName,
     Relationship, RelationshipId, TargetMode, read_package, to_model, write_document,
 };
 
 // ---------------------------------------------------------------------------
-// The ADR 0048 comparison (copied from `apps/ferrogram/tests/flowchart.rs`)
+// The ADR 0048 comparison (copied from `apps/larrygram/tests/flowchart.rs`)
 // ---------------------------------------------------------------------------
 
 /// Sorts the attributes of every preserved element (attribute order is
@@ -208,7 +208,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
     let mut cell = Cell::new(CellName::new(name));
     cell.formula = Some(value.to_string());
     cell.value = Some(CellValue::Number(value));
-    cell.unit = ferrogram_geom::Unit::Inches;
+    cell.unit = larrygram_geom::Unit::Inches;
     cell
 }
 
@@ -292,7 +292,7 @@ fn inserting_into_a_read_document_round_trips() {
     // A cell the read shape does not define.
     document
         .write_cell(
-            ferrogram_model::SheetRef::Shape(rect),
+            larrygram_model::SheetRef::Shape(rect),
             &CellName::from_static("Angle"),
             &CellWrite::new("0.5", CellValue::Number(0.5)),
         )
@@ -301,9 +301,9 @@ fn inserting_into_a_read_document_round_trips() {
     // A cell of a row the read row does not define.
     document
         .write_row_cell(
-            ferrogram_model::SheetRef::Shape(rect),
+            larrygram_model::SheetRef::Shape(rect),
             &SectionName::from_static("Geometry"),
-            ferrogram_model::RowTarget::by_ix(1),
+            larrygram_model::RowTarget::by_ix(1),
             &CellName::from_static("A"),
             &CellWrite::new("0.25", CellValue::Number(0.25)),
         )

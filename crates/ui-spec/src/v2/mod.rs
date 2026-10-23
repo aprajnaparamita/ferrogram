@@ -32,8 +32,16 @@ pub enum LayoutKind {
     /// The 2007 data: a menu bar, docked toolbars and context menus.
     PanelClassic,
     /// Panel (2016 data): the Office 2016 Fluent control data.
+    ///
+    /// The serde alias is the pre-P7-00 spelling, so a settings store
+    /// saved before the rename still loads.
+    #[serde(alias = "Visio2016")]
     Panel2016,
     /// Panel (365 data): the Microsoft 365 Current Channel data.
+    ///
+    /// The serde alias is the pre-P7-00 spelling, so a settings store
+    /// saved before the rename still loads.
+    #[serde(alias = "Visio365")]
     Panel365,
 }
 
@@ -58,7 +66,9 @@ impl LayoutKind {
         }
     }
 
-    /// The file name under `ui-spec/layouts/`.
+    /// The file name of the layout's data file: `panel-*.yaml` under
+    /// `ui-spec/layouts/` for the two curated layouts, under
+    /// `ui-spec/` for the two Fluent-data ones.
     pub fn file_name(self) -> &'static str {
         match self {
             Self::PanelModern => "panel-modern.yaml",

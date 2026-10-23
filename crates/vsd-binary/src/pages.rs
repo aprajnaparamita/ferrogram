@@ -8,9 +8,9 @@
 //! This module reads the page records (pages, page sheets, page
 //! properties, background pages, connects), the master records
 //! (stencils, stencil pages, master shapes, names) and the document
-//! properties, and maps them onto [`ferrogram_model::Page`],
-//! [`ferrogram_model::Master`], [`ferrogram_model::Connect`],
-//! [`ferrogram_model::Property`] and [`ferrogram_model::DocumentKind`].
+//! properties, and maps them onto [`larrygram_model::Page`],
+//! [`larrygram_model::Master`], [`larrygram_model::Connect`],
+//! [`larrygram_model::Property`] and [`larrygram_model::DocumentKind`].
 //!
 //! The document kind comes from the records (a file of stencil pages is
 //! a stencil), not from the file name, so `.vsd`, `.vss` and `.vst`
@@ -19,7 +19,7 @@
 //! Task P8-01 defines the entry point as an interface stub; task P8-07
 //! implements it.
 
-use ferrogram_model::Document;
+use larrygram_model::Document;
 
 use crate::chunks::Chunk;
 use crate::error::Error;

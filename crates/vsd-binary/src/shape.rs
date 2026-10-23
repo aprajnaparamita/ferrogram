@@ -9,7 +9,7 @@
 //! shapes), the transform records (pin, size, angle, flips, 1-D
 //! endpoints) and the geometry records (move, line, arc, elliptical
 //! arc, spline, NURBS, polyline, infinite line) and maps them onto
-//! [`ferrogram_model::Shape`] and its ShapeSheet: transforms to the
+//! [`larrygram_model::Shape`] and its ShapeSheet: transforms to the
 //! `Xform` cells, `Xform1D` to the 1-D cells, geometry rows to
 //! `Geometry` sections. Lengths are inches and angles are radians, the
 //! model's units (AGENTS.md section 6).
@@ -17,7 +17,7 @@
 //! Task P8-01 defines the entry point as an interface stub; task P8-04
 //! implements it.
 
-use ferrogram_model::Document;
+use larrygram_model::Document;
 
 use crate::chunks::Chunk;
 use crate::error::Error;

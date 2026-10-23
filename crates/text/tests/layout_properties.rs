@@ -7,7 +7,7 @@
 //! ranges) so the tests stay fast; the layout's golden numbers are pinned
 //! by the unit tests in `src/layout.rs`.
 
-use ferrogram_text::{
+use larrygram_text::{
     Align, BULLET_RUN, Block, Bullet, Format, Insets, Paragraph, Run, VAlign, default_fonts, layout,
 };
 use proptest::prelude::*;
@@ -223,7 +223,7 @@ fn materialize(spec: &BlockSpec) -> Block<'_> {
             top: spec.margins[2],
             bottom: spec.margins[3],
         },
-        rotation: ferrogram_geom::Angle::from_radians(spec.rotation),
+        rotation: larrygram_geom::Angle::from_radians(spec.rotation),
         wrap: spec.wrap,
     }
 }
@@ -334,7 +334,7 @@ fn extreme_but_finite_values_never_panic() {
             top: f64::MAX,
             bottom: f64::MAX,
         },
-        rotation: ferrogram_geom::Angle::from_radians(f64::MAX),
+        rotation: larrygram_geom::Angle::from_radians(f64::MAX),
         wrap: false,
     };
     let _ = layout(&block, &default_fonts());

@@ -10,11 +10,11 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{CellValue, Document, DocumentKind, Page, PageId, SheetRef};
-use ferrogram_render::{
+use larrygram_model::{CellValue, Document, DocumentKind, Page, PageId, SheetRef};
+use larrygram_render::{
     BuildOptions, PngOptions, Rgba, Scene, SvgOptions, build_scene, render_png, render_svg,
 };
-use ferrogram_vsdx::{Limits, Package, read_package, to_model, write_document};
+use larrygram_vsdx::{Limits, Package, read_package, to_model, write_document};
 
 use crate::app::{AppCtx, DocumentSession, ViewState};
 use crate::error::{CommandError, NeededInput, PathPurpose};
@@ -23,7 +23,7 @@ use crate::{Invocation, Outcome, UiRequest};
 use super::{no_document, outcome, record_warnings};
 
 /// The default device scale: 96 pixels per inch (ADR 0025).
-pub(crate) const DEFAULT_SCALE: f64 = ferrogram_render::build::DEFAULT_SCALE;
+pub(crate) const DEFAULT_SCALE: f64 = larrygram_render::build::DEFAULT_SCALE;
 
 /// The output formats of `render` and `export` (ADR 0026).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -730,7 +730,7 @@ pub fn kind_text(kind: DocumentKind) -> &'static str {
 pub fn shape_count(doc: &Document, page: &Page) -> usize {
     let mut seen = vec![false; doc.shapes.len()];
     let mut count = 0usize;
-    let mut stack: Vec<ferrogram_model::ShapeId> = page.shapes.to_vec();
+    let mut stack: Vec<larrygram_model::ShapeId> = page.shapes.to_vec();
     while let Some(id) = stack.pop() {
         let Some(slot) = seen.get_mut(id.index as usize) else {
             continue;
@@ -749,15 +749,15 @@ pub fn shape_count(doc: &Document, page: &Page) -> usize {
 
 /// One warning line, e.g. `shape 12 LineWeight: no cached value, using 0`
 /// (ADR 0021).
-pub fn warning_line(doc: &Document, warning: &ferrogram_model::CellWarning) -> String {
+pub fn warning_line(doc: &Document, warning: &larrygram_model::CellWarning) -> String {
     let used = value_text(&warning.substituted);
     let reason = match &warning.kind {
-        ferrogram_model::WarningKind::Missing => format!("no cached value, using {used}"),
-        ferrogram_model::WarningKind::ErrorValue(error) => {
+        larrygram_model::WarningKind::Missing => format!("no cached value, using {used}"),
+        larrygram_model::WarningKind::ErrorValue(error) => {
             format!("cached error {error:?}, using {used}")
         }
-        ferrogram_model::WarningKind::KindMismatch => format!("wrong kind, using {used}"),
-        ferrogram_model::WarningKind::UnresolvedTheme => {
+        larrygram_model::WarningKind::KindMismatch => format!("wrong kind, using {used}"),
+        larrygram_model::WarningKind::UnresolvedTheme => {
             format!("the theme cannot supply it, using {used}")
         }
         _ => format!("value unavailable, using {used}"),
@@ -799,8 +799,8 @@ pub fn value_text(value: &CellValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{Cell, CellName, Row, Section, SectionName, Shape, ShapeId};
-    use ferrogram_vsdx::{ContentType, Part, PartData, PartName, from_model};
+    use larrygram_model::{Cell, CellName, Row, Section, SectionName, Shape, ShapeId};
+    use larrygram_vsdx::{ContentType, Part, PartData, PartName, from_model};
 
     use crate::{ArgValue, Args, Source};
 

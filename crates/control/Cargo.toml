@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-control"
+name = "larrygram-control"
 description = "JSON control channel and MCP server"
 version.workspace = true
 edition.workspace = true

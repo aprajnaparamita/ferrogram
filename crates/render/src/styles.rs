@@ -29,7 +29,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrogram_geom::{Path, Point, Segment, Size};
+use larrygram_geom::{Path, Point, Segment, Size};
 use serde::Deserialize;
 
 use crate::error::Error;

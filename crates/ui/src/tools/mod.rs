@@ -23,9 +23,9 @@ pub mod pointer;
 pub mod stencil;
 pub mod text;
 
-use ferrogram_commands::AppCtx;
-use ferrogram_geom::Point;
-use ferrogram_render::Overlay;
+use larrygram_commands::AppCtx;
+use larrygram_geom::Point;
+use larrygram_render::Overlay;
 
 use crate::{Intent, UiError};
 
@@ -171,7 +171,7 @@ impl ToolMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::Settings;
+    use larrygram_commands::Settings;
 
     #[test]
     fn every_tool_is_a_no_op_without_a_document() {

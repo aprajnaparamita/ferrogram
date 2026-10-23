@@ -19,11 +19,11 @@
 //! of the undo test is over the reachable page state, not the arena
 //! length. That is the same rule as the P5-04 insert edits.
 
-use ferrogram_geom::{Point, Rect};
-use ferrogram_model::{
+use larrygram_geom::{Point, Rect};
+use larrygram_model::{
     CellName, CellReader, CellValue, CellWrite, Connect, Document, PageId, Shape, ShapeId, SheetRef,
 };
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
@@ -1068,14 +1068,14 @@ fn select(ctx: &mut AppCtx, session: SessionId, page: PageId, shapes: &[ShapeId]
 mod tests {
     use super::*;
     use crate::app::{AppCtx, DocumentSession, Settings};
-    use ferrogram_model::{Cell, CellValue, Preserved};
+    use larrygram_model::{Cell, CellValue, Preserved};
 
     fn shape_cell(name: &str, value: f64) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: Some(format!("{value}")),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }
@@ -1083,7 +1083,7 @@ mod tests {
     fn context() -> (AppCtx, SessionId, PageId, ShapeId) {
         let mut doc = Document::new();
         let page = doc.add_page("Page-1").expect("page");
-        let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 0);
+        let mut shape = larrygram_model::Shape::new(ShapeId { index: 0 }, 0);
         for (name, value) in [
             ("PinX", 0.0),
             ("PinY", 0.0),
@@ -1119,7 +1119,7 @@ mod tests {
         let (mut ctx, session, page, first) = context();
         let second = {
             let doc = document_mut(&mut ctx, session).expect("doc");
-            let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 0);
+            let mut shape = larrygram_model::Shape::new(ShapeId { index: 0 }, 0);
             for (name, value) in [
                 ("PinX", 2.0),
                 ("PinY", 0.0),
@@ -1263,7 +1263,7 @@ mod tests {
         let second = doc
             .insert_shape(
                 page,
-                ferrogram_model::Shape::new(ShapeId { index: 0 }, 2),
+                larrygram_model::Shape::new(ShapeId { index: 0 }, 2),
                 None,
             )
             .expect("second");

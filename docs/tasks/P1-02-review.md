@@ -22,15 +22,15 @@ ADR 0008 has `crates/model/build.rs` write a gitignored `src/shapesheet_table.rs
 
 Fix: in Phase 1, P1-04 only produces the committed `ui-spec/shapesheet.toml`. Phase 2 adds `cargo xtask codegen`, which turns the committed TOML into a committed `crates/model/src/generated/shapesheet.rs` (header "generated, do not edit"); the gate checks that the generated file is up to date (CI can do this because the TOML is committed). Remove `crates/model/build.rs` from P1-04 ownership. Remove ui-spec as a consumer.
 
-**M2. Command id scopes must be functional, not ribbon tabs.**
-ADR 0006 allows `home`, `design` etc. as scopes (`home.align.left`, `home.insert.shape`). The 2016 and 365 layouts place commands on different tabs, and the same command appears on the ribbon, context menus, shortcuts and MCP. An id tied to a tab is wrong in one layout.
+**M2. Command id scopes must be functional, not command bar tabs.**
+ADR 0006 allows `home`, `design` etc. as scopes (`home.align.left`, `home.insert.shape`). The 2016 and 365 layouts place commands on different tabs, and the same command appears on the command bar, context menus, shortcuts and MCP. An id tied to a tab is wrong in one layout.
 
 Fix: scopes describe what the command does, e.g. `app`, `file`, `edit`, `view`, `insert`, `format`, `text`, `arrange`, `shape`, `connector`, `page`, `layer`, `tools`, `data`, `review`, `developer`, `help`. Examples: `arrange.align.left`, `tools.pointer`, `tools.connector`, `file.save`. Update ADR 0006, the schema pattern if needed, and the examples in all ADRs and task files.
 
 **M3. libvisio oracle: no git submodule, no wrapper crate.**
 ADR 0010 adds libvisio as a submodule under `tools/libvisio-oracle/libvisio/` and a wrapper crate outside the workspace that `crates/vsd-binary` tests would depend on. A submodule puts libvisio's source tree into our working tree (and every worktree) on the small drive, and a path dependency on an excluded crate is fragile.
 
-Fix: `build.sh` clones libvisio at the commit recorded in `NOTICE` into `/Volumes/Dara/ferrogram/build/libvisio-oracle/` (overridable with `--build-dir` / an env var for CI) and installs the CLI tools there. Tests find the tools via `FERROGRAM_LIBVISIO_ORACLE` (a directory) and skip with a clear message when it is unset or empty, unless `FERROGRAM_REQUIRE_ORACLE=1`. A small helper (e.g. `cargo xtask oracle <tool> <file>`) is fine. Oracle tests may live in any crate's `tests/` because they only run the binary and compare output; they contain no libvisio code.
+Fix: `build.sh` clones libvisio at the commit recorded in `NOTICE` into `/Volumes/Dara/larrygram/build/libvisio-oracle/` (overridable with `--build-dir` / an env var for CI) and installs the CLI tools there. Tests find the tools via `LARRYGRAM_LIBVISIO_ORACLE` (a directory) and skip with a clear message when it is unset or empty, unless `LARRYGRAM_REQUIRE_ORACLE=1`. A small helper (e.g. `cargo xtask oracle <tool> <file>`) is fine. Oracle tests may live in any crate's `tests/` because they only run the binary and compare output; they contain no libvisio code.
 
 **M4. Reserved fields: pick one rule.**
 ADR 0007 says the five reserved fields are not required by the schema and a custom lint enforces them; the Result says required-but-nullable. Make them `required` with type `[..., "null"]` in the schema and drop the custom lint.

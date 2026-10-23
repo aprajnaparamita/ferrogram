@@ -1,8 +1,8 @@
 //! Layout switching without a restart (task P4-09, ADR 0032).
 //!
 //! KICKOFF's exit criterion: "both layouts load and switch without a
-//! restart". The test starts with the 2016 ribbon, dispatches
-//! `view.ui_layout.visio_365`, and shows that the *same* frame series
+//! restart". The test starts with the 2016 Panel layout, dispatches
+//! `view.ui_layout.panel_365`, and shows that the *same* frame series
 //! (same egui `Context`, same `AppCtx`, same `Shell`) draws the 365
 //! tabs on the next frame: no restart, no widget rebuild from
 //! scratch. The switch is one registry command (ADR 0032), so the
@@ -11,15 +11,16 @@
 
 use std::collections::BTreeSet;
 
-use ferrogram_commands::Source;
-use ferrogram_ui_spec::LayoutKind;
+use larrygram_commands::Source;
+use larrygram_ui_spec::LayoutKind;
 
 use crate::{ShellRig, sets};
 
-/// The ribbon tab labels of one layout.
+/// The command-bar tab labels of one layout.
 fn tab_labels(kind: LayoutKind) -> BTreeSet<String> {
     sets()
         .get(kind)
+        .expect("the committed set")
         .layout
         .tabs
         .iter()
@@ -37,10 +38,10 @@ fn unique_tab(kind: LayoutKind, other: LayoutKind) -> Option<String> {
 }
 
 #[test]
-fn switching_the_ribbon_layout_needs_no_restart() {
+fn switching_the_panel_layout_needs_no_restart() {
     let mut rig = ShellRig::new();
     let shell = rig.shell.borrow();
-    assert_eq!(shell.layout_kind(), LayoutKind::Visio2016);
+    assert_eq!(shell.layout_kind(), LayoutKind::Panel2016);
     drop(shell);
 
     // State that must survive the switch: an open document, a
@@ -64,10 +65,10 @@ fn switching_the_ribbon_layout_needs_no_restart() {
     };
 
     // A tab only the 365 layout has: the switch marker.
-    let only_365 = unique_tab(LayoutKind::Visio365, LayoutKind::Visio2016)
+    let only_365 = unique_tab(LayoutKind::Panel365, LayoutKind::Panel2016)
         .expect("365 has a tab 2016 does not");
-    let shared_2016 = unique_tab(LayoutKind::Visio2016, LayoutKind::Visio365)
-        .or_else(|| tab_labels(LayoutKind::Visio2016).into_iter().next())
+    let shared_2016 = unique_tab(LayoutKind::Panel2016, LayoutKind::Panel365)
+        .or_else(|| tab_labels(LayoutKind::Panel2016).into_iter().next())
         .expect("2016 has tabs");
 
     // The first frame shows the 2016 tabs.
@@ -83,9 +84,9 @@ fn switching_the_ribbon_layout_needs_no_restart() {
     );
 
     // One command flips the setting; the next frame of the same
-    // harness shows the 365 ribbon.
+    // harness shows the Panel (365 data) layout.
     let outcome = rig
-        .dispatch("view.ui_layout.visio_365", Source::Ui)
+        .dispatch("view.ui_layout.panel_365", Source::Ui)
         .expect("the layout switch runs");
     assert!(outcome.message.is_some(), "the switch reports its message");
     rig.run();
@@ -103,7 +104,7 @@ fn switching_the_ribbon_layout_needs_no_restart() {
     // egui Context (its memory survived) and the open document too.
     {
         let shell = rig.shell.borrow();
-        assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
+        assert_eq!(shell.layout_kind(), LayoutKind::Panel365);
         assert_eq!(
             &shell.app as *const _ as usize, app_ptr,
             "the AppCtx instance did not change"
@@ -128,7 +129,7 @@ fn switching_the_ribbon_layout_needs_no_restart() {
     );
 
     // And back again: the 365-only tab leaves with the layout.
-    rig.dispatch("view.ui_layout.visio_2016", Source::Ui)
+    rig.dispatch("view.ui_layout.panel_2016", Source::Ui)
         .expect("the switch back runs");
     rig.run();
     let back = rig.names();
@@ -140,12 +141,13 @@ fn switching_the_ribbon_layout_needs_no_restart() {
 fn both_layouts_load_and_render_their_own_tabs() {
     // The other half of the criterion: each layout loads from the
     // embedded data and renders its own tab set.
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
         let mut rig = ShellRig::new();
         rig.dispatch(
             match kind {
-                LayoutKind::Visio2016 => "view.ui_layout.visio_2016",
-                LayoutKind::Visio365 => "view.ui_layout.visio_365",
+                LayoutKind::Panel2016 => "view.ui_layout.panel_2016",
+                LayoutKind::Panel365 => "view.ui_layout.panel_365",
+                other => panic!("not a Fluent-data layout: {other:?}"),
             },
             Source::Ui,
         )

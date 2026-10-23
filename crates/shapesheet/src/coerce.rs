@@ -31,7 +31,7 @@
 
 use crate::Error;
 use crate::value::{ErrorCode, Number, Value, color_to_string, list_raw, number_to_string};
-use ferrogram_model::Color;
+use larrygram_model::Color;
 
 /// The kind a value is coerced to (ADR 0052).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

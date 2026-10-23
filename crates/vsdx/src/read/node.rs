@@ -1,6 +1,6 @@
 //! Small helpers over preserved [`XmlNode`] trees.
 
-use ferrogram_model::{XmlAttribute, XmlChild, XmlNode};
+use larrygram_model::{XmlAttribute, XmlChild, XmlNode};
 
 /// The child elements of `node`, in document order.
 pub(crate) fn elements(node: &XmlNode) -> impl Iterator<Item = &XmlNode> {
@@ -32,7 +32,7 @@ pub(crate) fn attribute_node(node: &XmlNode, local: &str) -> Option<XmlAttribute
 /// `xmlns:prefix="..."`).
 ///
 /// Declarations are kept on [`XmlNode`] but are not data: they are neither
-/// mapped nor preserved, and [`diff`](ferrogram_model::diff) ignores them.
+/// mapped nor preserved, and [`diff`](larrygram_model::diff) ignores them.
 pub(crate) fn is_namespace_declaration(attribute: &XmlAttribute) -> bool {
     match attribute.name.prefix.as_deref() {
         Some(prefix) => prefix == "xmlns",
@@ -74,14 +74,14 @@ pub(crate) fn has_loose_content(node: &XmlNode) -> bool {
 mod tests {
     use super::*;
 
-    fn qname(name: &str) -> ferrogram_model::QName {
+    fn qname(name: &str) -> larrygram_model::QName {
         match name.split_once(':') {
-            Some((prefix, local)) => ferrogram_model::QName {
+            Some((prefix, local)) => larrygram_model::QName {
                 prefix: Some(prefix.to_owned()),
                 uri: None,
                 local: local.to_owned(),
             },
-            None => ferrogram_model::QName::local(name),
+            None => larrygram_model::QName::local(name),
         }
     }
 

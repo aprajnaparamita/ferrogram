@@ -1,4 +1,4 @@
-//! Hand-authored fixture builder for `ferrogram-vsdx` integration tests.
+//! Hand-authored fixture builder for `larrygram-vsdx` integration tests.
 //!
 //! Task P2-08. [`build`] generates every fixture byte by byte: a plain zip
 //! archive around a minimal, hand-written Visio part set. The XML is our own
@@ -295,7 +295,7 @@ fn build_malformed(malformed: Malformed) -> Vec<u8> {
             zip_entries(&entries)
         }
         Malformed::ManyEntries => {
-            let entries: Vec<Entry> = (0..=ferrogram_vsdx::Limits::DEFAULT.max_entries)
+            let entries: Vec<Entry> = (0..=larrygram_vsdx::Limits::DEFAULT.max_entries)
                 .map(|i| Entry {
                     name: format!("x{i:05}.bin"),
                     data: Vec::new(),
@@ -1470,14 +1470,14 @@ fn theme_xml() -> String {
     };
     format!(
         "{XML_DECL}\n<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
-         xmlns:vt=\"urn:ferrogram:visio-theme\" name=\"Ferrogram Test Theme\"><a:themeElements>\
-         <a:clrScheme name=\"Ferrogram\">{}{}{}{}{}{}{}{}{}{}{}{}\
-         <a:extLst><a:ext uri=\"urn:ferrogram:theme-ext\"><vt:bkgnd>\
+         xmlns:vt=\"urn:larrygram:visio-theme\" name=\"Larrygram Test Theme\"><a:themeElements>\
+         <a:clrScheme name=\"Larrygram\">{}{}{}{}{}{}{}{}{}{}{}{}\
+         <a:extLst><a:ext uri=\"urn:larrygram:theme-ext\"><vt:bkgnd>\
          <a:srgbClr val=\"FFFFFF\"/></vt:bkgnd></a:ext>\
-         <a:ext uri=\"urn:ferrogram:theme-ext\"><vt:variationClrSchemeLst>\
+         <a:ext uri=\"urn:larrygram:theme-ext\"><vt:variationClrSchemeLst>\
          <vt:variationClrScheme>{}{}{}{}{}{}{}</vt:variationClrScheme>\
          </vt:variationClrSchemeLst></a:ext></a:extLst></a:clrScheme>\
-         <a:fontScheme name=\"Ferrogram\"><a:majorFont><a:latin typeface=\"Selawik\"/>\
+         <a:fontScheme name=\"Larrygram\"><a:majorFont><a:latin typeface=\"Selawik\"/>\
          <a:ea typeface=\"\"/><a:cs typeface=\"\"/></a:majorFont>\
          <a:minorFont><a:latin typeface=\"Carlito\"/><a:ea typeface=\"\"/>\
          <a:cs typeface=\"\"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>",

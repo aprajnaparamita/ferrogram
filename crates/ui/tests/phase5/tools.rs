@@ -16,13 +16,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use ferrogram_commands::app::AppCtx;
-use ferrogram_commands::{
+use larrygram_commands::app::AppCtx;
+use larrygram_commands::{
     ActiveTool, Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled, Invocation,
     Outcome, Registry, builtins,
 };
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::Loader;
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::Loader;
 
 use crate::{PAGE_HEIGHT, app_with_one_shape};
 
@@ -82,7 +82,7 @@ impl ShellRig {
     fn dispatch(&self, id: &'static str) {
         let command = CommandId::parse(id).expect("id");
         let intent =
-            ferrogram_ui::Intent::new(command, Invocation::empty(ferrogram_commands::Source::Ui));
+            larrygram_ui::Intent::new(command, Invocation::empty(larrygram_commands::Source::Ui));
         let mut shell = self.shell.borrow_mut();
         let results = shell.dispatch(&[intent]).expect("dispatch");
         for result in results {
@@ -186,7 +186,7 @@ impl ShellRig {
     }
 
     /// The center of the first Shapes-window row named `name` (the row
-    /// buttons sit in the left panel).
+    /// buttons sit in the left pane).
     fn shapes_row(&self, name: &str) -> egui::Pos2 {
         self.harness
             .root()
@@ -251,7 +251,7 @@ fn a_shapes_window_drag_drops_one_master_and_escape_cancels() {
     assert_eq!(rig.page_shape_count(), before + 1, "Escape drops nothing");
 }
 
-fn shape_text(app: &AppCtx, shape: ferrogram_model::ShapeId) -> Option<String> {
+fn shape_text(app: &AppCtx, shape: larrygram_model::ShapeId) -> Option<String> {
     let session = app.active_document().expect("session");
     let entry = session.document.shape(shape)?;
     let text = entry.text.as_ref()?;
@@ -259,7 +259,7 @@ fn shape_text(app: &AppCtx, shape: ferrogram_model::ShapeId) -> Option<String> {
         text.parts
             .iter()
             .filter_map(|part| match part {
-                ferrogram_model::TextPart::Text(text) => Some(text.as_str()),
+                larrygram_model::TextPart::Text(text) => Some(text.as_str()),
                 _ => None,
             })
             .collect(),
@@ -330,20 +330,20 @@ fn a_double_click_on_a_group_still_enters_it() {
 /// under the pointer is the member and every hit maps through the walk.
 fn app_with_nested_groups() -> (
     AppCtx,
-    ferrogram_model::ShapeId,
-    ferrogram_model::ShapeId,
-    ferrogram_model::ShapeId,
+    larrygram_model::ShapeId,
+    larrygram_model::ShapeId,
+    larrygram_model::ShapeId,
 ) {
     let (mut app, _base) = app_with_one_shape();
     let (outer, inner, member) = {
         let session = app.active_document_mut().expect("session");
         let member = session.document.add_shape(crate::shape(5.0, 5.0, 5));
-        let inner = session.document.add_shape(ferrogram_model::Shape::new(
-            ferrogram_model::ShapeId { index: 0 },
+        let inner = session.document.add_shape(larrygram_model::Shape::new(
+            larrygram_model::ShapeId { index: 0 },
             6,
         ));
-        let outer = session.document.add_shape(ferrogram_model::Shape::new(
-            ferrogram_model::ShapeId { index: 0 },
+        let outer = session.document.add_shape(larrygram_model::Shape::new(
+            larrygram_model::ShapeId { index: 0 },
             7,
         ));
         for (child, parent) in [(member, inner), (inner, outer)] {

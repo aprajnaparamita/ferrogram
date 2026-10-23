@@ -61,7 +61,7 @@
 //!
 //! # Text
 //!
-//! Each glyph is one `path` from `ferrogram_text::Font::outline` (em
+//! Each glyph is one `path` from `larrygram_text::Font::outline` (em
 //! units, font orientation, y up), translated to its laid-out position
 //! and scaled by `size / 72` inches per em. The layout bakes the text
 //! block rotation into the glyph positions (ADR 0024 amendment), so
@@ -73,7 +73,7 @@
 //! `TextNode::runs` (the block colour is the fallback), as in `png.rs`.
 //! One private helper (`Writer::glyph_transform`) holds the placement.
 
-use ferrogram_geom::{Path, Point, Segment, Transform};
+use larrygram_geom::{Path, Point, Segment, Transform};
 
 use crate::error::Error;
 use crate::scene::{
@@ -894,8 +894,8 @@ fn unit(v: Point) -> Option<Point> {
 mod tests {
     use super::*;
     use crate::scene::Shadow;
-    use ferrogram_geom::Angle;
-    use ferrogram_text::{GlyphId, GlyphPos, Layout, Line, default_fonts};
+    use larrygram_geom::Angle;
+    use larrygram_text::{GlyphId, GlyphPos, Layout, Line, default_fonts};
 
     fn color(r: u8, g: u8, b: u8, a: u8) -> Rgba {
         Rgba::new(r, g, b, a)
@@ -1062,7 +1062,7 @@ mod tests {
                 foreground: Rgba::opaque(0, 0, 0),
                 background: Rgba::opaque(255, 255, 255),
                 tile: unit_path(&[(0.0, 0.0), (0.05, 0.05), (0.1, 0.0)], false),
-                tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                tile_size: larrygram_geom::Size::new(0.1, 0.1),
                 filled: false,
                 tile_stroke_width: 0.01,
             })),
@@ -1164,7 +1164,7 @@ mod tests {
                 foreground: color(0, 0, 0, 255),
                 background: color(255, 255, 255, 128),
                 tile: unit_path(&[(0.0, 0.0), (0.25, 0.0), (0.25, 0.5)], true),
-                tile_size: ferrogram_geom::Size::new(0.25, 0.5),
+                tile_size: larrygram_geom::Size::new(0.25, 0.5),
                 filled: true,
                 tile_stroke_width: 0.05,
             })),
@@ -1204,7 +1204,7 @@ mod tests {
                 foreground: Rgba::opaque(0, 0, 0),
                 background: Rgba::opaque(255, 255, 255),
                 tile: unit_path(&[(0.0, 0.0), (0.1, 0.1)], false),
-                tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                tile_size: larrygram_geom::Size::new(0.1, 0.1),
                 filled: false,
                 tile_stroke_width: 0.02,
             })),
@@ -1979,7 +1979,7 @@ mod tests {
                 foreground: color(0, 0, 0, 128),
                 background: Rgba::opaque(255, 255, 255),
                 tile: unit_path(&[(0.0, 0.0), (0.05, 0.05), (0.1, 0.0)], false),
-                tile_size: ferrogram_geom::Size::new(0.1, 0.1),
+                tile_size: larrygram_geom::Size::new(0.1, 0.1),
                 filled: false,
                 tile_stroke_width: f64::NAN,
             })),

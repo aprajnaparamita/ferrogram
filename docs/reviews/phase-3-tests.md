@@ -11,18 +11,18 @@ regression test and recorded under "Bug fixed" and "Open issues".
 
 | Crate | Untested paths found | Action |
 |---|---|---|
-| `ferrogram-geom` | none material | written reason (below) |
-| `ferrogram-model` | row typing on random rows/cells/`IX`/`Del`; `NURBS()`/`POLYLINE()` edge spellings | 2 property tests, 2 unit tests |
-| `ferrogram-vsdx` | `Text` marker `IX` bounds; nested `fld`; theme colour fall-through, alpha range, `ColorEntry` bounds | 5 unit tests |
-| `ferrogram-text` | layout on random runs; validator on random invalid blocks; extreme-but-finite inputs | 3 property tests |
-| `ferrogram-render` | empty and single-shape scenes end to end; zero-size and huge pages; huge scale; text overflow; outputs parse | 6 tests in a new file, 2 property tests extended |
-| `ferrogram-cli` | argument boundaries (`--page`, `--scale`, `--format`, `--background`, non-UTF-8); huge scale/page exit codes | 4 parse tests, 2 exec tests |
+| `larrygram-geom` | none material | written reason (below) |
+| `larrygram-model` | row typing on random rows/cells/`IX`/`Del`; `NURBS()`/`POLYLINE()` edge spellings | 2 property tests, 2 unit tests |
+| `larrygram-vsdx` | `Text` marker `IX` bounds; nested `fld`; theme colour fall-through, alpha range, `ColorEntry` bounds | 5 unit tests |
+| `larrygram-text` | layout on random runs; validator on random invalid blocks; extreme-but-finite inputs | 3 property tests |
+| `larrygram-render` | empty and single-shape scenes end to end; zero-size and huge pages; huge scale; text overflow; outputs parse | 6 tests in a new file, 2 property tests extended |
+| `larrygram-cli` | argument boundaries (`--page`, `--scale`, `--format`, `--background`, non-UTF-8); huge scale/page exit codes | 4 parse tests, 2 exec tests |
 
 Everything Phase 3 left untested and not listed here is covered by the
 tests the implementing tasks wrote (the naming convention makes them easy
 to find: one sentence per behavior).
 
-## `ferrogram-geom` (ADR 0022 math)
+## `larrygram-geom` (ADR 0022 math)
 
 Untested paths found: none material. Every `Curve::to_cubics` variant has
 its three levels per ADR 0027 section 1 (typing in `model`, math in
@@ -31,7 +31,7 @@ pinned tests, and `cargo xtask coverage` reports **100.0%** line
 coverage — there is no uncovered line to name. Written reason: nothing to
 add.
 
-## `ferrogram-model` (geometry typing)
+## `larrygram-model` (geometry typing)
 
 Untested paths found:
 
@@ -53,7 +53,7 @@ Untested paths found:
    `src/geometry.rs::parse_nurbs_data_edge_spellings` and
    `::parse_polyline_data_edge_spellings`.
 
-## `ferrogram-vsdx` (Phase 3 decoders: `Text`, theme XML)
+## `larrygram-vsdx` (Phase 3 decoders: `Text`, theme XML)
 
 Untested paths found:
 
@@ -82,7 +82,7 @@ tests (`a_theme_maps_its_schemes_and_keeps_the_rest` and its seven
 siblings); the theme parts are preserved-only, so unmapped content has no
 behavior beyond staying in `Preserved`, which the same tests assert.
 
-## `ferrogram-text` (layout)
+## `larrygram-text` (layout)
 
 Untested paths found:
 
@@ -107,7 +107,7 @@ alignment, spacing, bullets, tabs, vertical alignment, rotation,
 warnings): `src/layout.rs::layout_tests` already pins each with golden
 numbers; this task did not duplicate them.
 
-## `ferrogram-render` (scene builder, styles, backends)
+## `larrygram-render` (scene builder, styles, backends)
 
 Untested paths found:
 
@@ -142,7 +142,7 @@ visual; adding goldens for them would pin our own caps, not rendering
 fidelity. The metric itself is unit-tested (`compare_images` tests), so
 no new golden work was needed.
 
-## `ferrogram-cli` (ADR 0026)
+## `larrygram-cli` (ADR 0026)
 
 Untested paths found:
 
@@ -172,9 +172,9 @@ pinned by the implementing task's 23 tests in `exec.rs`/`inspect.rs`.
 
 ## Crates with no Phase 3 code
 
-`ferrogram-shapesheet`, `ferrogram-commands`, `ferrogram-control`,
-`ferrogram-ui`, `ferrogram-ui-spec`, `ferrogram-vsd-binary`,
-`apps/ferrogram`, `apps/ferrogram-web` received no Phase 3 code (the
+`larrygram-shapesheet`, `larrygram-commands`, `larrygram-control`,
+`larrygram-ui`, `larrygram-ui-spec`, `larrygram-vsd-binary`,
+`apps/larrygram`, `apps/larrygram-web` received no Phase 3 code (the
 phase touched geom, model, text, render, vsdx and the CLI). Written
 reason: no new untested paths; their existing suites and thresholds
 stand.
@@ -198,18 +198,18 @@ tests pass unmodified.
 
 | Crate | Before | After | Threshold | Ratchet |
 |---|---|---|---|---|
-| ferrogram | 66.7 | 66.7 | 50.0 | 66.6 |
-| ferrogram-cli | 94.6 | 95.0 | 50.0 | 66.6 |
-| ferrogram-geom | 100.0 | 100.0 | 85.0 | 100.0 |
-| ferrogram-model | 99.7 | 99.7 | 85.0 | 99.7 |
-| ferrogram-render | 94.5 | 94.4 | 75.0 | — |
-| ferrogram-shapesheet | 100.0 | 100.0 | 85.0 | 100.0 |
-| ferrogram-text | 96.8 | 97.0 | 75.0 | — |
-| ferrogram-ui-spec | 99.3 | 99.3 | 85.0 | 99.3 |
-| ferrogram-vsdx | 97.9 | 97.9 | 85.0 | 97.7 |
+| larrygram | 66.7 | 66.7 | 50.0 | 66.6 |
+| larrygram-cli | 94.6 | 95.0 | 50.0 | 66.6 |
+| larrygram-geom | 100.0 | 100.0 | 85.0 | 100.0 |
+| larrygram-model | 99.7 | 99.7 | 85.0 | 99.7 |
+| larrygram-render | 94.5 | 94.4 | 75.0 | — |
+| larrygram-shapesheet | 100.0 | 100.0 | 85.0 | 100.0 |
+| larrygram-text | 96.8 | 97.0 | 75.0 | — |
+| larrygram-ui-spec | 99.3 | 99.3 | 85.0 | 99.3 |
+| larrygram-vsdx | 97.9 | 97.9 | 85.0 | 97.7 |
 | xtask | 91.6 | 91.6 | — | 91.6 |
 
-No crate is below its threshold or its ratchet. `ferrogram-render` shows
+No crate is below its threshold or its ratchet. `larrygram-render` shows
 94.5 -> 94.4: the scene property tests draw random documents, so a few
 branch lines in `build.rs` differ run to run; the crate has no ratchet
 and is far above its 75.0 threshold.
@@ -229,11 +229,11 @@ and is far above its 75.0 threshold.
   contract (ADR 0025), so the test pins it
   (`a_huge_scale_caps_the_raster_not_the_svg_text`); P3-12 may want one
   shared cap for both backends.
-- **New dev-dependency:** `proptest` on `ferrogram-text` (already in the
+- **New dev-dependency:** `proptest` on `larrygram-text` (already in the
   workspace via geom, model, render, ui-spec and vsdx). `Cargo.lock`
   gains one dependency edge; the master resolves lock conflicts as
   usual.
 - The corpus-render and golden tests skip without `corpus/`; the run for
-  this report had the corpus linked (`FERROGRAM_REQUIRE_CORPUS` unset),
+  this report had the corpus linked (`LARRYGRAM_REQUIRE_CORPUS` unset),
   so all 15 corpus files rendered in `corpus_render.rs` and the
   `blue-box` golden compared.

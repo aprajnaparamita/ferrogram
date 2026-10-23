@@ -25,7 +25,7 @@ in page inches. It returns a `ToolEffect { intents, overlay }`:
 
 - **intents** are `crate::Intent`s dispatched through the registry
   (ADR 0028): the tool never mutates `AppCtx` (ADR 0029);
-- **overlay** marks are `ferrogram_render::OverlayMark`s (selection
+- **overlay** marks are `larrygram_render::OverlayMark`s (selection
   outlines, handles, rubber band, snap guides, connector previews).
 
 `ToolMachine::handle` takes `&AppCtx` read-only. The tool modules are

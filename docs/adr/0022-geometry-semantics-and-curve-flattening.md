@@ -9,13 +9,13 @@
 KICKOFF's Phase 3 covers "all Geometry row types". [MS-VSDX] and the
 ShapeSheet reference define each row's cells but not the curve
 mathematics; the renderer must convert every row to path primitives
-exactly once, in `ferrogram-geom` (L0), from sources we are allowed to
+exactly once, in `larrygram-geom` (L0), from sources we are allowed to
 use. NURBS and splines are not native path primitives, so flattening needs
 a tolerance.
 
 ## Decision
 
-### Curve types (`ferrogram_geom::curve`)
+### Curve types (`larrygram_geom::curve`)
 
 | Type | From row(s) | Meaning (sources: [MS-VSDX] and the ShapeSheet reference) |
 |---|---|---|
@@ -43,7 +43,7 @@ and warns (ADR 0021).
 
 ### Conversion and flattening
 
-`ferrogram_geom` exposes:
+`larrygram_geom` exposes:
 
 ```rust
 pub enum Curve {
@@ -113,7 +113,7 @@ segment to the row's `X`/`Y` and records one
 chord is the honest degradation (libvisio draws the same chord for empty
 NURBS data; that is corroboration only).
 
-The knot lists are assembled in the form `ferrogram-geom` documents
+The knot lists are assembled in the form `larrygram-geom` documents
 ("Knot vectors" in `curve.rs`): one stored knot per control point plus a
 final knot. For `NurbsTo` that is the current point (knot `C`, weight
 `D`) followed by the formula's control points and the row's `(X, Y)`
@@ -147,7 +147,7 @@ is open; revisit when a file or the screenshot pass needs it.
 **Degenerate curves degrade silently (P3-12 minor 8).** The sentence in
 "Degenerate inputs" above ("degrade to the straight chord or line and
 warn") is replaced by: **degrade to the straight chord or line without a
-warning**, or to nothing when the chord is not finite. `ferrogram-geom`
+warning**, or to nothing when the chord is not finite. `larrygram-geom`
 has no warning channel and the builder records nothing for these cases;
 the degradations reinterpret geometry the file did ask for, while cell
 substitutions warn (ADR 0021). Unknown row types and unparsable formulas

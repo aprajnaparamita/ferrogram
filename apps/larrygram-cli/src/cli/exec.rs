@@ -1,8 +1,8 @@
 //! Command execution (ADR 0026).
 //!
 //! `run_to` maps one [`Command`] to its registry command id and
-//! [`Args`](ferrogram_commands::Args) and dispatches through
-//! [`builtins::registry`](ferrogram_commands::builtins::registry) with
+//! [`Args`](larrygram_commands::Args) and dispatches through
+//! [`builtins::registry`](larrygram_commands::builtins::registry) with
 //! [`Source::Cli`] (the ADR 0026 seam moved to `crates/commands` in
 //! Phase 4). The printed output does not change: nothing to stdout
 //! except `inspect` output and `--help`; warnings and errors are one
@@ -10,14 +10,14 @@
 
 use std::io::Write;
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::builtins;
-use ferrogram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Source};
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::builtins;
+use larrygram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Source};
 
 use crate::cli::{Background, Command, Error, OutputFormat, exit};
 
 /// The default device scale: 96 pixels per inch (ADR 0025).
-pub(crate) const DEFAULT_SCALE: f64 = ferrogram_render::build::DEFAULT_SCALE;
+pub(crate) const DEFAULT_SCALE: f64 = larrygram_render::build::DEFAULT_SCALE;
 
 /// The ADR 0026 report prefixes of [`CommandError::Failed`]: the CLI
 /// maps them to its exit codes (`cannot read input` is the input error,
@@ -208,9 +208,9 @@ fn strict_exit(strict: bool, warnings: usize) -> i32 {
 #[cfg(test)]
 use crate::cli::{Export, Inspect, Render};
 #[cfg(test)]
-use ferrogram_commands::builtins::{sheet_text, value_text, warning_line};
+use larrygram_commands::builtins::{sheet_text, value_text, warning_line};
 #[cfg(test)]
-use ferrogram_model::Document;
+use larrygram_model::Document;
 #[cfg(test)]
 use std::path::Path;
 
@@ -220,11 +220,11 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    use ferrogram_model::{
+    use larrygram_model::{
         Cell, CellName, CellValue, CellWarning, Color, Page, PageId, Shape, ShapeId, SheetRef,
         Stylesheet, Theme, WarningKind,
     };
-    use ferrogram_vsdx::{from_model, write_package};
+    use larrygram_vsdx::{from_model, write_package};
 
     use super::*;
     use crate::cli::parse::USAGE_TEXT;
@@ -233,7 +233,7 @@ mod tests {
     fn temp_dir() -> PathBuf {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         let name = format!(
-            "ferrogram-cli-{}-{}",
+            "larrygram-cli-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
         );
@@ -358,7 +358,7 @@ mod tests {
         let out = dir.join("page.svg");
         let mut command = render_command(&file, &out);
         command.format = OutputFormat::Svg;
-        command.background = Some(Background::Color(ferrogram_render::Rgba::opaque(1, 2, 3)));
+        command.background = Some(Background::Color(larrygram_render::Rgba::opaque(1, 2, 3)));
         let (result, _, _) = run_buffered(&Command::Render(command));
         assert_eq!(result, Ok(exit::OK));
         let svg = std::fs::read_to_string(&out).expect("svg");

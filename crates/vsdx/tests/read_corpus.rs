@@ -2,17 +2,17 @@
 //!
 //! The corpus is fetched, never committed (ADR 0005); these tests skip with a
 //! message when `corpus/vsdx/` is absent, and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set. The expected page and master counts
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set. The expected page and master counts
 //! are recorded here (the corpus note of the task): they are the ground truth
 //! of `pages.xml` and `masters.xml`, and the reader must reproduce them.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::aliases::table_name;
-use ferrogram_model::generated::{CELLS, SECTIONS};
-use ferrogram_model::{CellLookup, CellName, Document, Preserved, ValueSource, XmlChild, XmlNode};
-use ferrogram_vsdx::{Limits, Package, PartData, read_document, read_package};
+use larrygram_model::aliases::table_name;
+use larrygram_model::generated::{CELLS, SECTIONS};
+use larrygram_model::{CellLookup, CellName, Document, Preserved, ValueSource, XmlChild, XmlNode};
+use larrygram_vsdx::{Limits, Package, PartData, read_document, read_package};
 
 /// The corpus directory with the real `.vsdx` packages.
 fn corpus_dir() -> PathBuf {
@@ -89,8 +89,8 @@ fn corpus_documents_read_with_the_expected_counts() {
     let files = corpus_files();
     if corpus_missing(&files) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }
@@ -109,7 +109,7 @@ fn corpus_documents_read_with_the_expected_counts() {
             read_document(&bytes, &Limits::DEFAULT).unwrap_or_else(|why| panic!("{name}: {why}"));
         assert_eq!(
             document.kind,
-            ferrogram_model::DocumentKind::Drawing,
+            larrygram_model::DocumentKind::Drawing,
             "{name}"
         );
         assert_eq!(document.pages.len(), expected.1, "{name}: pages");
@@ -125,8 +125,8 @@ fn corpus_every_cell_is_modeled_or_preserved() {
     let files = corpus_files();
     if corpus_missing(&files) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }
@@ -153,8 +153,8 @@ fn corpus_cell_and_section_names_are_known_after_aliasing() {
     let files = corpus_files();
     if corpus_missing(&files) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }
@@ -205,8 +205,8 @@ fn corpus_lineweight_resolves_from_the_shape_style() {
     let path = corpus_dir().join("blue-box.vsdx");
     if corpus_missing(&corpus_files()) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }
@@ -340,7 +340,7 @@ fn count_model_cells(document: &Document) -> usize {
 
 /// The cells of one sheet: direct cells, section-level cells, row cells, and
 /// the cells kept verbatim in sections and rows.
-fn sheet_cells(sheet: &ferrogram_model::Sheet) -> usize {
+fn sheet_cells(sheet: &larrygram_model::Sheet) -> usize {
     let mut count = sheet.cells.len();
     for section in &sheet.sections {
         count += section.cells.len() + preserved_cells(&section.preserved);

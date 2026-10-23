@@ -6,12 +6,12 @@
 //! local names to the sheet it is evaluated for, `#REF!` with one warning
 //! for a name that resolves to nothing, and case-insensitive lookup.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellLookup, CellName, CellValue, Color, Document, Master, MasterId, Page, PageId,
     Property, Section, SectionName, Shape, ShapeId, SheetRef, Style, StyleId, ValueSource,
 };
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     CellRef, DocumentResolver, ErrorCode, EvalContext, EvalWarningKind, Value,
 };
 
@@ -56,7 +56,7 @@ fn formula_cell(name: &str, formula: &str, value: f64) -> Cell {
 fn section(name: &str, rows: Vec<Vec<Cell>>) -> Section {
     let mut section = Section::new(SectionName::new(name));
     for (index, cells) in rows.into_iter().enumerate() {
-        let mut row = ferrogram_model::Row::new();
+        let mut row = larrygram_model::Row::new();
         row.ix = Some(i32::try_from(index).unwrap_or(0));
         row.cells = cells;
         section.rows.push(row);
@@ -68,7 +68,7 @@ fn section(name: &str, rows: Vec<Vec<Cell>>) -> Section {
 fn named_section(name: &str, rows: Vec<(&str, Vec<Cell>)>) -> Section {
     let mut section = Section::new(SectionName::new(name));
     for (row_name, cells) in rows {
-        let mut row = ferrogram_model::Row::new();
+        let mut row = larrygram_model::Row::new();
         row.name = Some(row_name.to_owned());
         row.cells = cells;
         section.rows.push(row);
@@ -920,9 +920,9 @@ fn a_setf_write_is_recorded_and_a_missing_target_is_refused() {
         .push(number_cell("PinX", 1.0));
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let sheet = SheetRef::Shape(fixture.target);
-    let value = Value::Number(ferrogram_shapesheet::Number::new(
+    let value = Value::Number(larrygram_shapesheet::Number::new(
         5.0,
-        ferrogram_shapesheet::Unit::Inches,
+        larrygram_shapesheet::Unit::Inches,
     ));
 
     // A missing target is refused (the evaluator turns the refusal into

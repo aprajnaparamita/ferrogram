@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeSet, VecDeque};
 
-use ferrogram_model::{CellValue, CellWrite, Document, SheetRef};
+use larrygram_model::{CellValue, CellWrite, Document, SheetRef};
 
 use crate::Error;
 use crate::ast::{Expr, ExprKind};
@@ -333,7 +333,7 @@ fn map_warning(target: Option<CellAddress>, warning: EvalWarning) -> Option<Reca
 /// ([`crate::MAX_NESTING`]).
 fn literal_text(value: &Value) -> String {
     match value {
-        Value::Number(number) => ferrogram_model::mutate::literal(number.magnitude),
+        Value::Number(number) => larrygram_model::mutate::literal(number.magnitude),
         Value::Str(text) => format!("\"{}\"", text.replace('"', "\"\"")),
         Value::Bool(true) => String::from("TRUE"),
         Value::Bool(false) => String::from("FALSE"),
@@ -538,7 +538,7 @@ fn apply_write(
     formula: &str,
     value: &CellValue,
     changes: &mut Vec<Change>,
-) -> Result<bool, ferrogram_model::Error> {
+) -> Result<bool, larrygram_model::Error> {
     let before = graph::local_cell(document, address).and_then(|cell| cell.value.clone());
     let previous = graph::local_cell(document, address).and_then(|cell| cell.formula.clone());
     let formula_changed = previous.as_deref() != Some(formula);
@@ -552,7 +552,7 @@ fn apply_write(
             document.write_row_cell(address.sheet, section, *row, &address.cell, &write)?
         }
         (None, Some(_)) => {
-            return Err(ferrogram_model::Error::BadCell("row without a section"));
+            return Err(larrygram_model::Error::BadCell("row without a section"));
         }
     }
     if let Some(existing) = changes.iter_mut().find(|change| change.target == *address) {
@@ -583,8 +583,8 @@ pub(crate) mod testing {
     //! real evaluator arrive with tasks P6-02 to P6-05.
 
     use super::*;
-    use ferrogram_model::CellName;
-    use ferrogram_model::mutate::literal;
+    use larrygram_model::CellName;
+    use larrygram_model::mutate::literal;
 
     /// The test engine described above.
     #[derive(Debug, Default)]
@@ -726,8 +726,8 @@ pub(crate) mod testing {
 mod tests {
     use super::testing::TestEngine;
     use super::*;
-    use ferrogram_geom::Unit;
-    use ferrogram_model::{
+    use larrygram_geom::Unit;
+    use larrygram_model::{
         Cell, CellName, Master, MasterId, Page, PageId, Preserved, Row, RowTarget, Section,
         SectionName, Shape, ShapeId,
     };
@@ -1463,7 +1463,7 @@ mod tests {
     fn literal_text_spells_every_value_kind() {
         use crate::units::Unit as FormulaUnit;
         use crate::value::{ErrorCode, Number};
-        use ferrogram_model::Color;
+        use larrygram_model::Color;
         assert_eq!(
             literal_text(&Value::Number(Number::new(2.5, FormulaUnit::Unitsless))),
             "2.5"

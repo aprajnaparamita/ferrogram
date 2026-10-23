@@ -10,7 +10,7 @@ KICKOFF Phase 5: copy, cut, paste, duplicate, delete; align, distribute,
 group/ungroup, bring forward/send backward; add, rename, delete and
 reorder pages. The planning brief (decision 10) asks for the clipboard
 format (internal, and whether there is a text or image export to the
-system clipboard, including on wasm), and which of these are ribbon
+system clipboard, including on wasm), and which of these are command bar
 controls with `commands.yaml` ids so the parity matrix moves.
 
 AGENTS.md section 6: every user action is a command; the clipboard must
@@ -65,7 +65,7 @@ P4-15 deferred item; owner P5-10).
 
 ### UI affordances
 
-Ribbon groups (Home: paste, arrange; Insert: pages) are generated from
+Command bar groups (Home: paste, arrange; Insert: pages) are generated from
 the layouts as today; the page-tab strip gains a context menu for
 rename/delete/reorder (P5-09 may add the menu lines to
 `crates/ui/src/canvas.rs`). Shortcuts come from `shortcuts.yaml` scopes.

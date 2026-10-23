@@ -56,20 +56,20 @@ Exit criteria (KICKOFF.md):
 - Every output regenerates from `reference/` with one command. **Met** (`cargo xtask extract`, checked with `--check`).
 - The schema validation tests pass. **Met:** xtask validates every committed file, and `crates/ui-spec/tests/committed.rs` loads the real data.
 
-The libvisio oracle builds locally. Its smoke test passes with `FERROGRAM_REQUIRE_ORACLE=1`.
+The libvisio oracle builds locally. Its smoke test passes with `LARRYGRAM_REQUIRE_ORACLE=1`.
 
 ## Coverage
 
 | Crate | Lines | Coverage | Threshold | Phase 0 | New ratchet |
 |---|---|---|---|---|---|
-| ferrogram-ui-spec | 1738 | 99.3% | 85 | — (empty) | 99.3 |
+| larrygram-ui-spec | 1738 | 99.3% | 85 | — (empty) | 99.3 |
 | xtask | 8607 | 91.4% | — | 55.6% | 91.3 |
-| ferrogram | 9 | 66.7% | 50 | 66.7% | 66.6 |
-| ferrogram-cli | 9 | 66.7% | 50 | 66.7% | 66.6 |
-| ferrogram-web | 2 | 0.0% | — | 0.0% | 0.0 |
+| larrygram | 9 | 66.7% | 50 | 66.7% | 66.6 |
+| larrygram-cli | 9 | 66.7% | 50 | 66.7% | 66.6 |
+| larrygram-web | 2 | 0.0% | — | 0.0% | 0.0 |
 | other library crates | 0 | n/a | 75–85 | n/a | — |
 
-`ferrogram-vsd-binary` reports 0 lines because its only code is the oracle test helper under `tests/`, which `llvm-cov` excludes. The number becomes meaningful in Phase 7.
+`larrygram-vsd-binary` reports 0 lines because its only code is the oracle test helper under `tests/`, which `llvm-cov` excludes. The number becomes meaningful in Phase 7.
 
 ## Reviewer findings and resolution
 
@@ -117,12 +117,12 @@ Fixes I made at merge during the phase:
 
 - **CI has never run:** there is no GitHub remote yet.
   - When a remote exists, CI should also build the libvisio oracle on Linux and macOS.
-  - Before the first push, delete the pre-rewrite backup at `/Volumes/Dara/ferrogram/backup/ferrogram-pre-rewrite.git`; it still holds the removed text.
+  - Before the first push, delete the pre-rewrite backup at `/Volumes/Dara/larrygram/backup/larrygram-pre-rewrite.git`; it still holds the removed text.
 - **Labels:** layout `label` values equal the Fluent ids, because the source has no display labels. Human labels come from `commands.yaml` and later from Phase 4.
 - **Skipped constants:** 15 VisUICmds constants with underscores are skipped, because of the `commands.yaml` id pattern.
 - **Data gaps:**
   - `shapesheet.toml` has no row-type families (MoveTo, LineTo, ...).
   - Shortcuts cannot mark held keys.
   - Serialized layouts lack two fields the schema requires for write-back.
-- **Repeated controls:** some controls repeat inside one container (`TabSave` x9 in one backstage tab). Review this when Phase 4 builds the ribbon.
+- **Repeated controls:** some controls repeat inside one container (`TabSave` x9 in one backstage tab). Review this when Phase 4 builds the command bar.
 - **Phase 2 planning item:** a task for `cargo xtask codegen` (ADR 0008).

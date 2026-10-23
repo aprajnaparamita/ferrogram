@@ -65,7 +65,7 @@ pub struct Cell {
 angles in **radians**, percentages as a fraction (`0.5` = 50%), and
 `Unitsless` values as plain numbers. The `unit` field records the unit the
 file wrote (`Unit::Feet`, `Unit::Degrees`, ...), so a write can restore the
-file's own spelling. P2-03 implements the conversions in `ferrogram-geom`.
+file's own spelling. P2-03 implements the conversions in `larrygram-geom`.
 
 **Amended by P2-06 (2026-10-13): the canonical angle unit is radians, not
 degrees.** A `.vsdx` file caches values in canonical units whatever `U`
@@ -76,10 +76,10 @@ inches, and `Value V='0.8' U='PER'` is 80% written as a fraction. [MS-VSDX]
 2.2.5.3.3.1 reads the same way: the cell default value of a cell whose `U`
 is `DEG`, `DA`, `AD` or `RAD` is "0.00 radians" and of a `MM`, `PT`, `IN_F`
 cell is "0.00 inches". The reader therefore uses the cached value as
-written; neither read nor write converts. `ferrogram_geom::UnitKind::Angle`
+written; neither read nor write converts. `larrygram_geom::UnitKind::Angle`
 still counts degrees as the canonical unit of *conversions*; that mismatch
 touches only callers that convert (the ShapeSheet table's `default_value`
-parsing in `ferrogram-model`), not the model itself. P2-06b closes that
+parsing in `larrygram-model`), not the model itself. P2-06b closes that
 mismatch too (see Amendments).
 
 `CellValue` is `Number(f64) | Str(String) | Bool(bool) | Color(Color) |
@@ -89,7 +89,7 @@ their structure is not needed before the formula engine.
 ### Formula text, not parsed formulas
 
 Phase 2 stores a formula as its source `String`. Parsing belongs to
-`ferrogram-shapesheet` (ADR 0014) and no Phase 2 test needs an AST.
+`larrygram-shapesheet` (ADR 0014) and no Phase 2 test needs an AST.
 
 ### Mutations and undo
 
@@ -98,7 +98,7 @@ model's job. What the model provides for Phase 4 is the **shape of
 mutations**: every setter that an editing command will need returns the
 previous value (`Cell::set_formula` -> `Option<String>`,
 `Cell::set_value` -> `Option<CellValue>`), so a command can record its own
-inverse. The undo stack itself lives in `ferrogram-commands` (L4), not here.
+inverse. The undo stack itself lives in `larrygram-commands` (L4), not here.
 Command design (transaction grouping, redo) is Phase 4 work; nothing in this
 ADR blocks it.
 
@@ -106,7 +106,7 @@ ADR blocks it.
 
 ### Amended 2026-10-14, P2-06b: radians everywhere, and the slots the files need
 
-- **The canonical angle unit is radians in `ferrogram-geom` too.**
+- **The canonical angle unit is radians in `larrygram-geom` too.**
   `Angle` stores radians and `UnitKind::Angle` converts to radians
   (`Unit::Radians` is the base unit, `Unit::Degrees` a factor of `pi/180`).
   The amendment of P2-06 already made the *model* radians; the mismatch it
@@ -140,7 +140,7 @@ ADR blocks it.
 - File-level identity (`ID`, `NameU`) is data, not key. Two shapes on
   different pages may carry the same `visio_id` without conflict.
 - Public fields make the model easy to test and to map, but nothing prevents
-  inconsistent edits; `ferrogram-commands` is the only writer in the app.
+  inconsistent edits; `larrygram-commands` is the only writer in the app.
 - Retiring arena entries needs a free list one day; do it inside `Document`
   without changing `ShapeId`.
 

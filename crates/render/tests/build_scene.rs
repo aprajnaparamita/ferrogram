@@ -11,18 +11,18 @@
 //! `Missing` warning for a cell with a documented default.
 //! Corpus files are fetched, never committed (ADR 0005); the tests skip
 //! with a message when `corpus/vsdx/` is absent, and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set.
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set.
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_geom::{Angle, Point, Segment, Transform};
-use ferrogram_model::{
+use larrygram_geom::{Angle, Point, Segment, Transform};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName, Shape, ShapeId,
     TextContent, TextPart, WarningKind,
 };
-use ferrogram_render::scene::{LineCap, LineJoin, Node, Paint, Rgba, Scene, Shape as SceneShape};
-use ferrogram_render::{BuildOptions, build_scene};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_render::scene::{LineCap, LineJoin, Node, Paint, Rgba, Scene, Shape as SceneShape};
+use larrygram_render::{BuildOptions, build_scene};
+use larrygram_vsdx::{Limits, read_document};
 
 // --- corpus plumbing -------------------------------------------------
 
@@ -56,13 +56,13 @@ fn corpus_document(name: &str) -> Option<Document> {
     Some(read_document(&bytes, &Limits::DEFAULT).expect("reads"))
 }
 
-/// Fails the calling test when `FERROGRAM_REQUIRE_CORPUS=1` is set and
+/// Fails the calling test when `LARRYGRAM_REQUIRE_CORPUS=1` is set and
 /// the corpus is absent.
 fn require_corpus_or(files: &[PathBuf]) -> bool {
     if files.is_empty() {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
         true
@@ -1180,7 +1180,7 @@ fn no_missing_warning_for_a_cell_with_a_documented_default() {
                 if !matches!(warning.kind, WarningKind::Missing) {
                     continue;
                 }
-                if ferrogram_model::documented_default(warning.cell.as_str()).is_some() {
+                if larrygram_model::documented_default(warning.cell.as_str()).is_some() {
                     documented.push((file.clone(), warning.cell.as_str().to_owned()));
                 } else {
                     undocumented += 1;

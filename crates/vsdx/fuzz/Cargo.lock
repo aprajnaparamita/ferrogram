@@ -60,32 +60,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
-name = "ferrogram-geom"
+name = "larrygram-geom"
 version = "0.0.1"
 
 [[package]]
-name = "ferrogram-model"
+name = "larrygram-model"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
+ "larrygram-geom",
 ]
 
 [[package]]
-name = "ferrogram-vsdx"
+name = "larrygram-vsdx"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
- "ferrogram-model",
+ "larrygram-geom",
+ "larrygram-model",
  "flate2",
  "quick-xml",
  "zip",
 ]
 
 [[package]]
-name = "ferrogram-vsdx-fuzz"
+name = "larrygram-vsdx-fuzz"
 version = "0.0.0"
 dependencies = [
- "ferrogram-vsdx",
+ "larrygram-vsdx",
  "libfuzzer-sys",
 ]
 

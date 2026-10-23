@@ -8,12 +8,12 @@
 //! construction, repeated `resolve` steps with rotating active scopes
 //! and the status accessors. A panic is a crash; a hang is a finding.
 //!
-//! The YAML parse itself is `ferrogram-ui-spec`'s `loader_fuzz`.
+//! The YAML parse itself is `larrygram-ui-spec`'s `loader_fuzz`.
 
 #![no_main]
 
-use ferrogram_ui::shortcuts::{ActiveScopes, ShortcutMap};
-use ferrogram_ui_spec::{CommandId, Shortcut, ShortcutScope, Shortcuts};
+use larrygram_ui::shortcuts::{ActiveScopes, ShortcutMap};
+use larrygram_ui_spec::{CommandId, Shortcut, ShortcutScope, Shortcuts};
 use libfuzzer_sys::fuzz_target;
 
 /// The token vocabulary: modifier and key tokens the table knows,
@@ -50,7 +50,7 @@ const SCOPES: &[ShortcutScope] = &[
     ShortcutScope::Global,
     ShortcutScope::Window,
     ShortcutScope::Page,
-    ShortcutScope::Ribbon,
+    ShortcutScope::CommandBar,
     ShortcutScope::Text,
     ShortcutScope::Selection,
 ];
@@ -150,13 +150,13 @@ fuzz_target!(|data: &[u8]| {
         out
     };
     for (index, tokens) in typed.iter().enumerate() {
-        let chord = ferrogram_ui::shortcuts::KeyChord::new(
+        let chord = larrygram_ui::shortcuts::KeyChord::new(
             tokens.last().cloned().unwrap_or_default(),
             tokens[..tokens.len().saturating_sub(1)].to_vec(),
         );
         let active = ActiveScopes {
             page: index % 2 == 0,
-            ribbon: index % 3 == 0,
+            command_bar: index % 3 == 0,
             text: index % 5 == 0,
             selection: index % 7 == 0,
         };

@@ -12,12 +12,12 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{ArgValue, Args, CommandError, Invocation, NeededInput, Source};
-use ferrogram_commands::{CommandId, Outcome};
-use ferrogram_ui::Intent;
-use ferrogram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
-use ferrogram_ui::shell::Shell;
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{ArgValue, Args, CommandError, Invocation, NeededInput, Source};
+use larrygram_commands::{CommandId, Outcome};
+use larrygram_ui::Intent;
+use larrygram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
+use larrygram_ui::shell::Shell;
 
 use crate::sets;
 
@@ -52,7 +52,7 @@ struct FakePicker {
 }
 
 impl FilePicker for FakePicker {
-    fn open(&self, request: &OpenRequest) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    fn open(&self, request: &OpenRequest) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         self.open_calls.borrow_mut().push(request.clone());
         Ok(self.open_with.clone())
     }
@@ -61,7 +61,7 @@ impl FilePicker for FakePicker {
         &self,
         request: &SaveRequest,
         data: &[u8],
-    ) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    ) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         self.save_calls
             .borrow_mut()
             .push((request.clone(), data.to_vec()));
@@ -75,7 +75,7 @@ impl FilePicker for FakePicker {
 
 /// A shell over the real registry with a recording picker.
 fn shell_with(picker: FakePicker) -> (Shell, Rc<RefCell<Vec<OpenRequest>>>) {
-    let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+    let registry = larrygram_commands::builtins::registry().expect("the registry builds");
     let mut shell = Shell::new(registry, sets().clone(), AppCtx::new(Settings::default()));
     let calls = Rc::clone(&picker.open_calls);
     shell.set_picker(Box::new(picker));
@@ -178,7 +178,7 @@ fn a_programmatic_source_gets_needs_input_and_no_dialog() {
         CommandError::NeedsInput(NeededInput::Path { purpose, .. }) => {
             assert_eq!(
                 purpose,
-                ferrogram_commands::PathPurpose::OpenFile,
+                larrygram_commands::PathPurpose::OpenFile,
                 "the purpose names the dialog kind"
             );
         }
@@ -196,7 +196,7 @@ fn a_never_saved_document_asks_where_to_save_and_writes_there() {
         save_with: Some(FileChoice::Path(tmp.clone())),
         ..FakePicker::default()
     };
-    let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+    let registry = larrygram_commands::builtins::registry().expect("the registry builds");
     let mut shell = Shell::new(registry, sets().clone(), AppCtx::new(Settings::default()));
     let save_calls = Rc::clone(&picker.save_calls);
     shell.set_picker(Box::new(picker));

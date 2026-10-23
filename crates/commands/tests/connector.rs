@@ -11,10 +11,10 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, CommandError, Registry};
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, CommandError, Registry};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Preserved, Row, Section, SectionName, Shape,
     ShapeId,
 };
@@ -24,7 +24,7 @@ fn cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -100,7 +100,7 @@ fn glue_args(connector: i32, target: i32, point: i32) -> Args {
 
 /// Page-space path points of one connector (the inverse of
 /// `write_connector_path`'s local mapping).
-fn path(ctx: &AppCtx, connector: i32) -> Vec<ferrogram_geom::Point> {
+fn path(ctx: &AppCtx, connector: i32) -> Vec<larrygram_geom::Point> {
     let doc = &ctx.active_document().expect("session").document;
     let shape = doc
         .shape_by_visio_id(PageId { index: 0 }, connector)
@@ -121,8 +121,8 @@ fn path(ctx: &AppCtx, connector: i32) -> Vec<ferrogram_geom::Point> {
             })
             .unwrap_or(0.0)
     };
-    let pin = ferrogram_geom::Point::new(reader("PinX"), reader("PinY"));
-    let loc = ferrogram_geom::Point::new(reader("LocPinX"), reader("LocPinY"));
+    let pin = larrygram_geom::Point::new(reader("PinX"), reader("PinY"));
+    let loc = larrygram_geom::Point::new(reader("LocPinX"), reader("LocPinY"));
     geometry
         .paths
         .first()
@@ -130,9 +130,9 @@ fn path(ctx: &AppCtx, connector: i32) -> Vec<ferrogram_geom::Point> {
             path.rows
                 .iter()
                 .filter_map(|row| match row {
-                    ferrogram_model::GeometryRow::MoveTo { x, y }
-                    | ferrogram_model::GeometryRow::LineTo { x, y } => Some(
-                        ferrogram_geom::Point::new(x - loc.x + pin.x, y - loc.y + pin.y),
+                    larrygram_model::GeometryRow::MoveTo { x, y }
+                    | larrygram_model::GeometryRow::LineTo { x, y } => Some(
+                        larrygram_geom::Point::new(x - loc.x + pin.x, y - loc.y + pin.y),
                     ),
                     _ => None,
                 })
@@ -355,7 +355,7 @@ fn unglue_and_style_report_missing_input_and_both_ends() {
     .expect_err("missing end");
     assert!(matches!(
         missing,
-        CommandError::NeedsInput(ferrogram_commands::NeededInput::Text { .. })
+        CommandError::NeedsInput(larrygram_commands::NeededInput::Text { .. })
     ));
 
     let outcome = dispatch(
@@ -397,7 +397,7 @@ fn unglue_and_style_report_missing_input_and_both_ends() {
         dispatch(&mut ctx, &registry, "connector.style", Args::new()).expect_err("missing style");
     assert!(matches!(
         missing,
-        CommandError::NeedsInput(ferrogram_commands::NeededInput::Text { .. })
+        CommandError::NeedsInput(larrygram_commands::NeededInput::Text { .. })
     ));
     let bad = dispatch(
         &mut ctx,
@@ -435,22 +435,22 @@ fn stale_and_detached_glue_records_are_dropped() {
     let (mut ctx, registry, page) = flow();
     {
         let doc = &mut ctx.active_document_mut().expect("session").document;
-        let mut stale_target = ferrogram_model::Connect::new();
+        let mut stale_target = larrygram_model::Connect::new();
         stale_target.from_sheet = 11;
         stale_target.from_cell = "BeginX".to_owned();
-        stale_target.from_part = ferrogram_model::mutate::VIS_BEGIN;
+        stale_target.from_part = larrygram_model::mutate::VIS_BEGIN;
         stale_target.to_sheet = 99;
         stale_target.to_cell = "PinX".to_owned();
-        stale_target.to_part = ferrogram_model::mutate::VIS_WHOLE_SHAPE;
+        stale_target.to_part = larrygram_model::mutate::VIS_WHOLE_SHAPE;
         doc.add_connect(page, stale_target).expect("connect");
 
-        let mut stale_connector = ferrogram_model::Connect::new();
+        let mut stale_connector = larrygram_model::Connect::new();
         stale_connector.from_sheet = 98;
         stale_connector.from_cell = "BeginX".to_owned();
-        stale_connector.from_part = ferrogram_model::mutate::VIS_BEGIN;
+        stale_connector.from_part = larrygram_model::mutate::VIS_BEGIN;
         stale_connector.to_sheet = 1;
         stale_connector.to_cell = "PinX".to_owned();
-        stale_connector.to_part = ferrogram_model::mutate::VIS_WHOLE_SHAPE;
+        stale_connector.to_part = larrygram_model::mutate::VIS_WHOLE_SHAPE;
         doc.add_connect(page, stale_connector).expect("connect");
     }
     dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("reroute");
@@ -713,7 +713,7 @@ fn connector_commands_need_an_active_page_and_a_whole_point() {
 // ---------------------------------------------------------------------------
 
 /// The `Connect` records of one page, in file order.
-fn connects(ctx: &AppCtx, page: PageId) -> Vec<ferrogram_model::Connect> {
+fn connects(ctx: &AppCtx, page: PageId) -> Vec<larrygram_model::Connect> {
     ctx.active_document()
         .expect("session")
         .document
@@ -749,14 +749,14 @@ fn a_glue_without_a_point_binds_the_shape_outline() {
     assert_eq!(record.from_cell, "BeginX");
     assert_eq!(
         record.from_part,
-        ferrogram_model::mutate::VIS_BEGIN,
+        larrygram_model::mutate::VIS_BEGIN,
         "the begin end (VisFromParts, ADR 0045)"
     );
     assert_eq!(record.to_sheet, 1, "to box 1");
     assert_eq!(record.to_cell, "PinX", "dynamic glue names the pin cells");
     assert_eq!(
         record.to_part,
-        ferrogram_model::mutate::VIS_WHOLE_SHAPE,
+        larrygram_model::mutate::VIS_WHOLE_SHAPE,
         "the whole-shape part (VisToParts, ADR 0045)"
     );
     // The routed begin is the nearest outline point of box 1: its bottom
@@ -907,7 +907,7 @@ fn deleting_the_target_drops_its_glue_and_undo_restores_it() {
 // ---------------------------------------------------------------------------
 
 /// The `Geometry` rows of one shape (the literal path rows).
-fn geometry_rows(ctx: &AppCtx, connector: i32) -> Vec<ferrogram_model::Row> {
+fn geometry_rows(ctx: &AppCtx, connector: i32) -> Vec<larrygram_model::Row> {
     let doc = &ctx.active_document().expect("session").document;
     let shape = doc
         .shape_by_visio_id(PageId { index: 0 }, connector)
@@ -1029,12 +1029,12 @@ fn a_duplicated_connector_leaves_the_page_re_route_stable() {
         .shapes
         .clone();
     let ids: Vec<i32> = tops.iter().map(|shape| visio(&ctx, *shape)).collect();
-    let before: Vec<(i32, Vec<ferrogram_model::Row>)> = ids
+    let before: Vec<(i32, Vec<larrygram_model::Row>)> = ids
         .iter()
         .map(|id| (*id, geometry_rows(&ctx, *id)))
         .collect();
     dispatch(&mut ctx, &registry, "connector.reroute_all", Args::new()).expect("reroute");
-    let after: Vec<(i32, Vec<ferrogram_model::Row>)> = ids
+    let after: Vec<(i32, Vec<larrygram_model::Row>)> = ids
         .iter()
         .map(|id| (*id, geometry_rows(&ctx, *id)))
         .collect();
@@ -1114,7 +1114,7 @@ fn a_drop_with_an_explicit_glue_point_names_the_row() {
     assert_eq!(record.to_cell, "Connections.X2", "the row's one-based cell");
     assert_eq!(
         record.to_part,
-        ferrogram_model::mutate::VIS_CONNECTION_POINT + 1,
+        larrygram_model::mutate::VIS_CONNECTION_POINT + 1,
         "the row's VisToParts value"
     );
 }

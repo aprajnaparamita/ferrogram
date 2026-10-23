@@ -7,8 +7,8 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_model::{Color, PageId, SheetRef};
-use ferrogram_shapesheet::{
+use larrygram_model::{Color, PageId, SheetRef};
+use larrygram_shapesheet::{
     BinaryOp, CellRef, Error, ErrorCode, EvalContext, EvalWarning, EvalWarningKind, Expr, ExprKind,
     Literal, Number, NumberLiteral, Span, UnaryOp, Unit, Value, eval,
 };

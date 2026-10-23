@@ -1,10 +1,10 @@
-# Kickoff: Ferrogram, a clean-room, Rust, Visio-compatible diagramming app (Alpha MVP)
+# Kickoff: Larrygram, a clean-room, Rust, Visio-compatible diagramming app (Alpha MVP)
 
 You are the lead engineer and orchestrator for a new open-source project: a clean-room reimplementation of a Microsoft Visio-style diagramming application, written in pure Rust and structured like the ArtCraft "Crafting Apps" (https://github.com/storytold, e.g. photocraft, gridcraft, cadcraft). Before Phase 0, read the README, AGENTS.md and docs/architecture.md of two of those repos and borrow their patterns. If you copy any of their code, keep their license notices (MIT OR Apache-2.0). 
 
 ## Settings (edit before running)
 
-- APP_NAME: `Ferrogram`.
+- APP_NAME: `Larrygram`.
 - CHECKPOINT_MODE: `pause`.
   - `pause` means: stop after each phase gate and wait for my "continue".
   - `auto` means: proceed when the gate is green.
@@ -27,7 +27,7 @@ changes into the main repo. The master agent will review and merge the
 commits. Ensure agents are aware of being on a shared main repo which is
 local to the machine.
 
-Major downloads, large files should be placed on /Volumes/Dara/ferrogram
+Major downloads, large files should be placed on /Volumes/Dara/larrygram
 due to limited space on the main drive.
 
 ### Clean-room
@@ -247,7 +247,7 @@ Tests:
 
 Exit: every corpus file renders without panics, and every geometry row type has tests.
 
-### Phase 4: App shell and switchable panels
+### Phase 4: App shell and switchable panes
 
 Build the eframe desktop app:
 - **Command bar:** generated from `ui-spec`, covering tabs, groups and controls. Galleries can start as basic dropdowns.
@@ -255,7 +255,7 @@ Build the eframe desktop app:
 - **Shapes window:** with original "Basic Shapes" and "Basic Flowchart" stencils.
 - **Drawing canvas:** pan, zoom, rulers and grid.
 - **Page tabs and status bar.**
-- **Panels:** basic Shape Data and Size & Position panels.
+- **Panes:** basic Shape Data and Size & Position panes.
 
 Layout switching (2016 ↔ 365) is available three ways, and both layouts bind to the same command registry:
 - From View/Options at runtime, with no restart.
@@ -355,7 +355,7 @@ Also:
   boundary: crates, binaries, environment variables, docs, the
   settings storage key, the web page title and the version
   (`1.0.0-alpha.1`, "Larrygram v1.0 alpha"). Side panels become
-  panes, so "Panel" names only the layouts.
+  panes, so "Pane" names only the layouts.
 - **The welcome wizard:** two pages (Welcome, then Choose your
   layout), opened on the first launch and again from Help >
   Welcome (ADR 0066).

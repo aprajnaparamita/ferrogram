@@ -23,7 +23,7 @@ P1-01 recorded in `docs/sources.md`:
   Autoconf 2.69, automake 1.11, libtool. C++.
 
 libvisio is **not** a runtime dependency and never linked into
-Ferrogram (AGENTS.md, KICKOFF.md). The oracle is a dev tool only.
+Larrygram (AGENTS.md, KICKOFF.md). The oracle is a dev tool only.
 
 The P1-02 review (M3) found three issues with an earlier draft:
 
@@ -45,9 +45,9 @@ The P1-02 review (M3) found three issues with an earlier draft:
 and **nothing else**. There is no submodule and no wrapper crate.
 The build script clones libvisio at the pinned commit into a build
 directory on the external drive and installs the CLI tools there.
-Tests find the tools via the `FERROGRAM_LIBVISIO_ORACLE` environment
+Tests find the tools via the `LARRYGRAM_LIBVISIO_ORACLE` environment
 variable and skip with a clear message when it is unset or empty,
-unless `FERROGRAM_REQUIRE_ORACLE=1`.
+unless `LARRYGRAM_REQUIRE_ORACLE=1`.
 
 ### Layout
 
@@ -66,9 +66,9 @@ tools/
 
 - Args: `tools/libvisio-oracle/build.sh [build|clean|status]`.
 - The build directory defaults to
-  `/Volumes/Dara/ferrogram/build/libvisio-oracle/`. Override with
-  `--build-dir <path>` or the `FERROGRAM_LIBVISIO_BUILD_DIR`
-  environment variable. CI sets `FERROGRAM_LIBVISIO_BUILD_DIR` to
+  `/Volumes/Dara/larrygram/build/libvisio-oracle/`. Override with
+  `--build-dir <path>` or the `LARRYGRAM_LIBVISIO_BUILD_DIR`
+  environment variable. CI sets `LARRYGRAM_LIBVISIO_BUILD_DIR` to
   whatever the runner exposes (e.g. `$HOME/libvisio-oracle` on
   Linux).
 - `status`: prints `built` and exits 0 if all six binaries exist
@@ -104,17 +104,17 @@ authors the harness and the smoke test) call a small helper:
 // or a tiny `xtask`-published helper crate (no path dep on
 // tools/libvisio-oracle).
 fn oracle_dir() -> Option<PathBuf> {
-    let p = std::env::var_os("FERROGRAM_LIBVISIO_ORACLE")?;
+    let p = std::env::var_os("LARRYGRAM_LIBVISIO_ORACLE")?;
     let p = PathBuf::from(p);
     if p.is_dir() { Some(p) } else { None }
 }
 ```
 
-The helper returns `Some(path)` when `FERROGRAM_LIBVISIO_ORACLE` is
+The helper returns `Some(path)` when `LARRYGRAM_LIBVISIO_ORACLE` is
 set to a directory that exists, and `None` otherwise. Tests that
 need the oracle are `#[ignore]` by default and are included only
-when the helper returns `Some`. Setting `FERROGRAM_REQUIRE_ORACLE=1`
-in addition to `FERROGRAM_LIBVISIO_ORACLE` flips the gate so a
+when the helper returns `Some`. Setting `LARRYGRAM_REQUIRE_ORACLE=1`
+in addition to `LARRYGRAM_LIBVISIO_ORACLE` flips the gate so a
 missing oracle is a failure (CI on Linux and macOS does this).
 
 The helper is published as a tiny **dev-dependency** in each
@@ -172,7 +172,7 @@ oracle-using tests are skipped (they are `#[ignore]`).
   apt / brew / choco cannot be in the gate.
 - A test that depends on the oracle is opt-in. The default `cargo
   test` run is fast and portable. The oracle-specific tests are
-  behind `FERROGRAM_REQUIRE_ORACLE=1`.
+  behind `LARRYGRAM_REQUIRE_ORACLE=1`.
 
 ### Why not in xtask
 
@@ -184,21 +184,21 @@ builds an external C++ project and is therefore in `tools/`.
 ## Consequences
 
 - The libvisio binary is built once, shared by every worktree on
-  the same machine (it lives on `/Volumes/Dara/ferrogram/build/`,
+  the same machine (it lives on `/Volumes/Dara/larrygram/build/`,
   overridable per-machine or per-CI-run).
 - Adding more oracle binaries (`vsd2xhtml`, `vss2raw`) is one
   `make` invocation; no Rust code changes.
 - A test that uses the oracle can be run locally with
-  `FERROGRAM_LIBVISIO_ORACLE=/Volumes/Dara/ferrogram/build/libvisio-oracle/bin \
-   cargo test -p ferrogram-vsd-binary -- --ignored`
+  `LARRYGRAM_LIBVISIO_ORACLE=/Volumes/Dara/larrygram/build/libvisio-oracle/bin \
+   cargo test -p larrygram-vsd-binary -- --ignored`
   after building.
 - CI on macOS and Linux runs the oracle build and
-  `FERROGRAM_REQUIRE_ORACLE=1 cargo test`. CI on Windows skips it.
+  `LARRYGRAM_REQUIRE_ORACLE=1 cargo test`. CI on Windows skips it.
 - A future P1-07 task owns the harness itself; P1-02 only designs
   the shape.
 - The `xtask` `oracle` arm is the only Rust code that calls
   `build.sh`. Everything else uses
-  `FERROGRAM_LIBVISIO_ORACLE` directly.
+  `LARRYGRAM_LIBVISIO_ORACLE` directly.
 
 ## Alternatives considered
 

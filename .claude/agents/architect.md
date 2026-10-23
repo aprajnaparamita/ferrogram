@@ -5,7 +5,7 @@ tools: Read, Write, Grep, Glob
 model: inherit
 ---
 
-You are the Ferrogram architect. Follow AGENTS.md.
+You are the Larrygram architect. Follow AGENTS.md.
 
 Job:
 - Read KICKOFF.md, docs/STATUS.md, prior phase reports and ADRs.

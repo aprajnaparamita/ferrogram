@@ -8,7 +8,7 @@
 
 AGENTS.md section 6: "One command registry (`crates/commands`). Every user
 action is a command with an id, a label, an enabled-state predicate and undo
-support. Menus, ribbon, shortcuts, CLI, the JSON control channel and MCP all
+support. Menus, command bar, shortcuts, CLI, the JSON control channel and MCP all
 dispatch by command id through the same registry. Programmatic calls never
 open dialogs."
 
@@ -45,7 +45,7 @@ pub enum ArgValue {
 }
 pub struct Args { /* name -> ArgValue, BTreeMap-backed */ }
 
-pub enum Source { Ui, Ribbon, Menu, Shortcut, Cli, Control, Mcp, Test }
+pub enum Source { Ui, CommandBar, Menu, Shortcut, Cli, Control, Mcp, Test }
 pub struct Invocation { pub args: Args, pub source: Source }
 
 pub struct Enabled { pub value: bool, pub reason: Option<String> }
@@ -93,9 +93,9 @@ disabled with a not-yet-implemented tooltip" state of ADR 0006; the UI reads
 ### Ids beyond `commands.yaml`
 
 `commands.yaml` is generated from Microsoft data (ADR 0006), so it has no
-entry for Ferrogram-only affordances: the CLI triad `file.inspect`,
+entry for Larrygram-only affordances: the CLI triad `file.inspect`,
 `file.render`, `file.export` (ADR 0026), `app.quit`, `page.next`,
-`page.previous`, `view.ui_layout.visio_2016`, `view.ui_layout.visio_365`,
+`page.previous`, `view.ui_layout.panel_2016`, `view.ui_layout.panel_365`,
 `view.zoom.fit`, `help.about`. Rule (amending ADR 0006): such ids are added
 to `commands.yaml` by the extractor from a static "our own commands" list in
 `xtask/src/extract/commands.rs`, with `fluent_ids: []` (or the Fluent ids of
@@ -119,7 +119,7 @@ input is missing, `execute` returns
 `Err(CommandError::NeedsInput(NeededInput::Path { purpose, suggested }))`
 (or `Text`/`Number`). The dispatcher decides what to do:
 
-- **Interactive** (`Source::Ui`, `Ribbon`, `Menu`, `Shortcut`): the UI shows
+- **Interactive** (`Source::Ui`, `CommandBar`, `Menu`, `Shortcut`): the UI shows
   the matching dialog (native on desktop, upload on wasm, ADR 0036),
   re-dispatches the same command id with the value filled into `Args`.
 - **Programmatic** (`Source::Cli`, `Control`, `Mcp`, `Test`): the caller
@@ -145,7 +145,7 @@ pub enum CommandError {
 ```
 
 `Failed` carries the domain error's message; the domain crates keep their
-own typed errors (`ferrogram_vsdx::Error`, `ferrogram_render::Error`) and
+own typed errors (`larrygram_vsdx::Error`, `larrygram_render::Error`) and
 `commands` maps them at the boundary. No error string is ever a panic path.
 Errors and warnings print as one line (ADR 0021/0026).
 
@@ -162,11 +162,11 @@ and produce no edits; Phase 5 fills the stack. Undo of a command is its
 
 ### The CLI move (ADR 0026)
 
-`ferrogram-cli`'s `Command` enum keeps its parser, exit codes and output.
+`larrygram-cli`'s `Command` enum keeps its parser, exit codes and output.
 `run` dispatches through `Registry::execute` with `Source::Cli` and the
 argument names above; `file.inspect`/`file.render`/`file.export` are real
 `Command` impls in `crates/commands`, so the CLI, the future control
-channel and MCP share one implementation. `ferrogram_commands::builtins::registry()`
+channel and MCP share one implementation. `larrygram_commands::builtins::registry()`
 is the one function that registers every implemented command; the app, the
 CLI and the parity generator (ADR 0037) all use it.
 

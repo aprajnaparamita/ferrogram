@@ -10,8 +10,8 @@ The exit criteria for Phase 8 require a parity report against libvisio
 (KICKOFF.md). The oracle is built and pinned (ADR 0010): six CLI tools
 (`vsd2raw`, `vsd2text`, `vsd2xhtml`, `vss2raw`, `vss2text`,
 `vss2xhtml`) live in a dev-only build on the external drive and are
-found through `FERROGRAM_LIBVISIO_ORACLE`, with
-`FERROGRAM_REQUIRE_ORACLE=1` in CI on macOS and Linux. The corpus has
+found through `LARRYGRAM_LIBVISIO_ORACLE`, with
+`LARRYGRAM_REQUIRE_ORACLE=1` in CI on macOS and Linux. The corpus has
 five `.vsd` files (`corpus/manifest.toml`).
 
 `vsd2raw` dumps the parsed document as a property-list tree
@@ -50,8 +50,8 @@ a bug or a documented limitation; it is never "fixed" by loosening the
 tolerance.
 
 **Availability:** the harness follows ADR 0010 exactly — it skips with
-a clear message when `FERROGRAM_LIBVISIO_ORACLE` is unset, and fails
-when `FERROGRAM_REQUIRE_ORACLE=1` and the oracle is missing. The gate
+a clear message when `LARRYGRAM_LIBVISIO_ORACLE` is unset, and fails
+when `LARRYGRAM_REQUIRE_ORACLE=1` and the oracle is missing. The gate
 keeps passing without the oracle.
 
 **Corpus census** (task P8-08): a list of further openly licensed

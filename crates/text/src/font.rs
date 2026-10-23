@@ -19,7 +19,7 @@
 
 use std::sync::OnceLock;
 
-use ferrogram_geom::{Path, Point, Segment};
+use larrygram_geom::{Path, Point, Segment};
 use skrifa::attribute::Style;
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};

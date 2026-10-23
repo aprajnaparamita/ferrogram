@@ -17,7 +17,7 @@ The ArtCraft apps solve the same problem by fetching corpora from a pinned, sha2
 
 - Third-party test files are never committed. `corpus/manifest.toml` lists each file: upstream source, path, pinned commit, sha256, size.
 - `cargo xtask corpus` fetches them into `corpus/vsd/`, `corpus/vsdx/` (gitignored), verifies sha256, and is idempotent. CI runs it before the gate.
-- Tests that need the corpus skip with a clear message when it has not been fetched, except in CI where `FERROGRAM_REQUIRE_CORPUS=1` turns a missing corpus into a failure.
+- Tests that need the corpus skip with a clear message when it has not been fetched, except in CI where `LARRYGRAM_REQUIRE_CORPUS=1` turns a missing corpus into a failure.
 - Hand-authored fixtures (our own work, including malformed files) are committed under `corpus/fixtures/` and listed in `corpus/PROVENANCE.md`.
 - Only libvisio files at the commit recorded in NOTICE are in the manifest for now. LibreOffice core files are dropped.
 

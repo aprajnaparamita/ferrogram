@@ -7,7 +7,7 @@
 //! twice); an unmapped attribute is emitted only when no mapped attribute
 //! takes its name.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellValue, Connect, Document, Master, Page, Preserved, Property, QName, Row, Section,
     Shape, Style, XmlAttribute, XmlChild, XmlNode,
 };
@@ -270,7 +270,7 @@ pub(crate) fn section_element(style: &NameStyle, section: &Section) -> XmlNode {
 pub(crate) fn sheet_children(
     node: &mut XmlNode,
     style: &NameStyle,
-    sheet: &ferrogram_model::Sheet,
+    sheet: &larrygram_model::Sheet,
 ) {
     for cell in &sheet.cells {
         node.children
@@ -520,7 +520,7 @@ pub(crate) fn master_element(style: &NameStyle, master: &Master, rel_id: &str) -
 pub(crate) fn shapes_wrapper(
     document: &Document,
     style: &NameStyle,
-    shapes: &[ferrogram_model::ShapeId],
+    shapes: &[larrygram_model::ShapeId],
 ) -> XmlNode {
     let mut wrapper = empty(style, "Shapes");
     for id in shapes {
@@ -648,8 +648,8 @@ pub(crate) fn master_part_name(index: usize) -> PartName {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_geom::Unit;
-    use ferrogram_model::{CellName, CellValue, Document, Row, Section, SectionName, ShapeId};
+    use larrygram_geom::Unit;
+    use larrygram_model::{CellName, CellValue, Document, Row, Section, SectionName, ShapeId};
 
     use super::*;
 
@@ -802,11 +802,11 @@ mod tests {
     #[test]
     fn a_shape_element_names_its_master_and_sub_shapes() {
         let mut document = Document::new();
-        let mut master = Master::new(ferrogram_model::MasterId { index: 0 }, 5);
+        let mut master = Master::new(larrygram_model::MasterId { index: 0 }, 5);
         master.name_u = "Box".to_owned();
         document.masters.push(master);
         let mut group = Shape::new(ShapeId { index: 0 }, 1);
-        group.master = Some(ferrogram_model::MasterId { index: 0 });
+        group.master = Some(larrygram_model::MasterId { index: 0 });
         let group_id = document.add_shape(group);
         let sub_id = document.add_shape(Shape::new(ShapeId { index: 0 }, 2));
         document
@@ -886,7 +886,7 @@ mod tests {
     #[test]
     fn pages_and_masters_parts_carry_their_lists() {
         let mut document = Document::new();
-        let mut page = Page::new(ferrogram_model::PageId { index: 0 }, 1);
+        let mut page = Page::new(larrygram_model::PageId { index: 0 }, 1);
         page.name = "P".to_owned();
         document.pages.push(page);
         let root = pages_part(&document, &NameStyle::generated(), &["rId2".to_owned()]);
@@ -906,7 +906,7 @@ mod tests {
 
         document
             .masters
-            .push(Master::new(ferrogram_model::MasterId { index: 0 }, 1));
+            .push(Master::new(larrygram_model::MasterId { index: 0 }, 1));
         let root = masters_part(&document, &NameStyle::generated(), &["rId1".to_owned()]);
         assert_eq!(root.children.len(), 1);
     }
@@ -915,7 +915,7 @@ mod tests {
     fn contents_roots_hold_shapes_and_connects() {
         let mut document = Document::new();
         let id = document.add_shape(Shape::new(ShapeId { index: 0 }, 1));
-        let mut page = Page::new(ferrogram_model::PageId { index: 0 }, 1);
+        let mut page = Page::new(larrygram_model::PageId { index: 0 }, 1);
         page.shapes.push(id);
         page.connects.push(Connect::new());
         let root = page_contents(&document, &NameStyle::generated(), &page);
@@ -930,7 +930,7 @@ mod tests {
         assert_eq!(names, ["Shapes", "Connects"]);
 
         let master = {
-            let mut master = Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+            let mut master = Master::new(larrygram_model::MasterId { index: 0 }, 1);
             master.shapes.push(id);
             master
         };
@@ -942,7 +942,7 @@ mod tests {
     fn the_document_part_holds_properties_and_styles() {
         let mut document = Document::new();
         document.properties.push(Property::new("title", "T"));
-        let mut style = Style::new(ferrogram_model::StyleId { index: 0 });
+        let mut style = Style::new(larrygram_model::StyleId { index: 0 });
         style.visio_id = 1;
         document.stylesheet.styles.push(style);
         let root = document_part(&document, &NameStyle::generated());

@@ -29,7 +29,7 @@ rows, connection points). Rationale:
   same definitions headlessly in Phase 5; nothing about the stencils is
   UI-specific.
 - One test per stencil writes the built document to `.vssx` through
-  `ferrogram_vsdx::write_document` and reads it back (the writer is the
+  `larrygram_vsdx::write_document` and reads it back (the writer is the
   "export to .vssx" path KICKOFF's repo layout implies); the shipped
   product needs no binary asset at all.
 
@@ -56,7 +56,7 @@ pub struct MasterDef {
     /// Default line and fill (our own visual style defaults, ADR 0023).
     pub line: LineDefaults,
     pub fill: FillDefaults,
-    /// Shape Data rows shown in the Shape Data panel (ADR 0035).
+    /// Shape Data rows shown in the Shape Data pane (ADR 0035).
     pub shape_data: Vec<(&'static str, &'static str)>,
     /// Connection points in local coordinates (Phase 5 glues to these).
     pub connection_points: Vec<(f64, f64)>,
@@ -85,7 +85,7 @@ preparation, connector. Geometry is simple polygons, ellipses and rounded
 rectangles we define ourselves in inches; no shape is traced, copied or
 derived from a Microsoft stencil (AGENTS.md section 4). Provenance rows
 are added to `ATTRIBUTION.md` in the committing task: "original work,
-authored for Ferrogram, no third-party source".
+authored for Larrygram, no third-party source".
 
 ### Shapes window (Phase 4 scope)
 

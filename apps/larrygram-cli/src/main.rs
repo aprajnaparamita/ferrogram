@@ -1,11 +1,11 @@
-//! Ferrogram command-line tool: `inspect`, `render`, `export` (ADR 0026).
+//! Larrygram command-line tool: `inspect`, `render`, `export` (ADR 0026).
 //!
 //! `run-command` arrives with the Phase 4 command registry. Part of
-//! Ferrogram. Alpha.
+//! Larrygram. Alpha.
 
 #![forbid(unsafe_code)]
 
-use ferrogram_cli::cli;
+use larrygram_cli::cli;
 
 fn main() {
     match cli::main_from(std::env::args_os().skip(1)) {

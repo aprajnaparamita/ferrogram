@@ -137,7 +137,7 @@ fn scratch_dir() -> Result<PathBuf> {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "ferrogram-codegen-check-{}-{n}",
+        "larrygram-codegen-check-{}-{n}",
         std::process::id()
     ));
     if dir.exists() {

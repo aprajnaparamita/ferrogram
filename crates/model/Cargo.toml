@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-model"
+name = "larrygram-model"
 description = "Document model: documents, pages, shapes, masters, styles, ShapeSheet cells"
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ license = "MIT"
 publish = false
 
 [dependencies]
-ferrogram-geom = { path = "../geom" }
+larrygram-geom = { path = "../geom" }
 
 [dev-dependencies]
 proptest = "1"

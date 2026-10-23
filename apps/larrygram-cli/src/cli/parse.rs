@@ -18,15 +18,15 @@ use crate::cli::{Background, Command, Export, Inspect, OutputFormat, Render, Usa
 /// `--help` writes it to stdout; a usage error writes it to stderr after
 /// the error message (ADR 0026).
 pub const USAGE_TEXT: &str = "\
-ferrogram-cli - inspect, render and export Visio drawings
+larrygram-cli - inspect, render and export Visio drawings
 
 Usage:
-  ferrogram-cli inspect <file> [--json] [--page N]
-  ferrogram-cli render <file> --out <path> [--page N] [--format png|svg]
+  larrygram-cli inspect <file> [--json] [--page N]
+  larrygram-cli render <file> --out <path> [--page N] [--format png|svg]
     [--scale PPI] [--background #RRGGBB|none] [--strict]
-  ferrogram-cli export <file> --out <dir> [--format png|svg] [--scale PPI]
+  larrygram-cli export <file> --out <dir> [--format png|svg] [--scale PPI]
     [--strict]
-  ferrogram-cli --help
+  larrygram-cli --help
 
 Commands:
   inspect   Summarise a document: kind, pages, masters, styles, themes.
@@ -260,7 +260,7 @@ fn parse_background(text: &str) -> Result<Background, Usage> {
     let channel = |from: usize| -> u8 {
         u8::from_str_radix(hex.get(from..from + 2).unwrap_or("0"), 16).unwrap_or(0)
     };
-    Ok(Background::Color(ferrogram_render::Rgba::opaque(
+    Ok(Background::Color(larrygram_render::Rgba::opaque(
         channel(0),
         channel(2),
         channel(4),
@@ -313,7 +313,7 @@ fn unknown_option(arg: &Arg<'_>) -> Usage {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_render::Rgba;
+    use larrygram_render::Rgba;
 
     use super::*;
 

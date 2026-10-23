@@ -1,6 +1,6 @@
 //! Connector routing through the public API (task P5-08, ADR 0045).
 
-use ferrogram_geom::{Error, Point, RouteOptions, RouteStyle, route};
+use larrygram_geom::{Error, Point, RouteOptions, RouteStyle, route};
 use proptest::prelude::*;
 
 #[test]

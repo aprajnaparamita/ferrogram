@@ -5,8 +5,8 @@
 //!
 //! The test lives in `crates/commands/tests` and not in
 //! `crates/vsdx/tests` as the task file names it: `Value::to_cached`
-//! lives in `ferrogram-shapesheet`, and an L2 crate may not depend on
-//! an L2 crate (ADR 0002, the gate's `layers` step). `ferrogram-commands`
+//! lives in `larrygram-shapesheet`, and an L2 crate may not depend on
+//! an L2 crate (ADR 0002, the gate's `layers` step). `larrygram-commands`
 //! is the first crate above both and already depends on them (it drives
 //! the value pipeline in `builtins::file.rs`). The file-level kind
 //! spelling is pinned next to the writer in
@@ -18,10 +18,10 @@
 //! for a hand-fitted non-numeric unit is the one documented difference
 //! the file makes (ADR 0052).
 
-use ferrogram_geom::Unit as GeomUnit;
-use ferrogram_model::{Cell, CellName, Color, Document, Shape, ShapeId};
-use ferrogram_shapesheet::{ErrorCode, Number, Unit, Value};
-use ferrogram_vsdx::{Limits, from_model, read_package, to_model, write_document};
+use larrygram_geom::Unit as GeomUnit;
+use larrygram_model::{Cell, CellName, Color, Document, Shape, ShapeId};
+use larrygram_shapesheet::{ErrorCode, Number, Unit, Value};
+use larrygram_vsdx::{Limits, from_model, read_package, to_model, write_document};
 
 /// Every unit of the formula-side unit set (ADR 0052).
 const ALL_UNITS: &[Unit] = &[
@@ -67,9 +67,9 @@ const ALL_UNITS: &[Unit] = &[
 /// reads it back. Returns the value and unit the read produced.
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
 fn round_trip_cell(
-    value: ferrogram_model::CellValue,
+    value: larrygram_model::CellValue,
     unit: GeomUnit,
-) -> (ferrogram_model::CellValue, GeomUnit) {
+) -> (larrygram_model::CellValue, GeomUnit) {
     let mut cell = Cell::new(CellName::from_static("Probe"));
     cell.value = Some(value);
     cell.unit = unit;
@@ -98,7 +98,7 @@ fn round_trip_cell(
 
 /// The round trip of a value's cached form ([`Value::to_cached`]).
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)] // test helper
-fn round_trip(value: &Value) -> (ferrogram_model::CellValue, GeomUnit) {
+fn round_trip(value: &Value) -> (larrygram_model::CellValue, GeomUnit) {
     let cached = value.to_cached().expect("to_cached never fails");
     round_trip_cell(cached.value, cached.unit)
 }

@@ -12,12 +12,12 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::{
     PageSummary, Summary, kind_text, registry, shape_count, sheet_text, value_text, warning_line,
 };
-use ferrogram_commands::{ArgValue, Args, Registry};
-use ferrogram_model::{
+use larrygram_commands::{ArgValue, Args, Registry};
+use larrygram_model::{
     Cell, CellName, CellValue, CellWarning, Color, Connect, Document, DocumentKind, PageId,
     Preserved, Row, Section, SectionName, Shape, ShapeId, SheetRef, WarningKind,
 };
@@ -27,7 +27,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -136,14 +136,14 @@ fn zoom_fit_ignores_unusable_page_sheet_numbers() {
                 name: CellName::new("PageWidth"),
                 formula: Some("0".to_owned()),
                 value: Some(CellValue::Number(0.0)),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Preserved::new(),
             },
             Cell {
                 name: CellName::new("PageHeight"),
                 formula: Some("1/0".to_owned()),
                 value: Some(CellValue::Error("#DIV/0!".to_owned())),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Preserved::new(),
             },
         ];
@@ -330,10 +330,10 @@ fn a_connect_record_for_a_gone_connector_is_dropped_with_a_warning() {
     let mut stale = Connect::new();
     stale.from_sheet = 99;
     stale.from_cell = "BeginX".to_owned();
-    stale.from_part = ferrogram_model::mutate::VIS_BEGIN;
+    stale.from_part = larrygram_model::mutate::VIS_BEGIN;
     stale.to_sheet = 1;
     stale.to_cell = "PinX".to_owned();
-    stale.to_part = ferrogram_model::mutate::VIS_WHOLE_SHAPE;
+    stale.to_part = larrygram_model::mutate::VIS_WHOLE_SHAPE;
     ctx.active_document_mut()
         .expect("session")
         .document

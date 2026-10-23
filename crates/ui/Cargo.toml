@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-ui"
+name = "larrygram-ui"
 description = "egui user interface: the command bar, canvas, panes"
 version.workspace = true
 edition.workspace = true
@@ -14,16 +14,16 @@ publish = false
 # for the chrome text (ADR 0030 "Fonts in the UI chrome").
 egui = { version = "0.37", features = ["default_fonts"] }
 rfd = "0.17"
-ferrogram-commands = { path = "../commands" }
-ferrogram-geom = { path = "../geom" }
-ferrogram-model = { path = "../model" }
-# The ShapeSheet engine (ADR 0052): the panels type a cached value with
+larrygram-commands = { path = "../commands" }
+larrygram-geom = { path = "../geom" }
+larrygram-model = { path = "../model" }
+# The ShapeSheet engine (ADR 0052): the panes type a cached value with
 # `Value::from_cached` and parse a typed entry with the formula grammar
 # and the engine's unit table (ADR 0058, task P6-09; requested here
-# because the panels need the typed mapping in their own code).
-ferrogram-shapesheet = { path = "../shapesheet" }
-ferrogram-render = { path = "../render" }
-ferrogram-ui-spec = { path = "../ui-spec" }
+# because the panes need the typed mapping in their own code).
+larrygram-shapesheet = { path = "../shapesheet" }
+larrygram-render = { path = "../render" }
+larrygram-ui-spec = { path = "../ui-spec" }
 # The settings slot format (ADR 0032): `Settings` as JSON in the
 # eframe storage key. MIT OR Apache-2.0 (already in the tree).
 serde_json = "1"

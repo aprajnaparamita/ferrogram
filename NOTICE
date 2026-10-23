@@ -1,7 +1,7 @@
-Ferrogram
-Copyright (c) 2026 The Ferrogram contributors
+Larrygram
+Copyright (c) 2026 The Larrygram contributors
 
-Ferrogram is licensed under the MIT License (see LICENSE), with the
+Larrygram is licensed under the MIT License (see LICENSE), with the
 following exception:
 
 crates/vsd-binary
@@ -18,4 +18,4 @@ No libvisio-derived code appears outside crates/vsd-binary.
 Trademarks
 ----------
 Microsoft, Visio and Microsoft 365 are trademarks of Microsoft
-Corporation. Ferrogram is not affiliated with or endorsed by Microsoft.
+Corporation. Larrygram is not affiliated with or endorsed by Microsoft.

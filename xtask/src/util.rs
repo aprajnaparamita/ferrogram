@@ -123,14 +123,14 @@ pub mod test_support {
     /// A unique temp directory, removed when it is dropped.
     pub struct TempDir(PathBuf);
 
-    /// A unique temp path name: `ferrogram-xtask-<label>-<pid>-<n>`,
+    /// A unique temp path name: `larrygram-xtask-<label>-<pid>-<n>`,
     /// where the counter makes every call unique. The one naming
     /// helper for xtask test temp dirs.
     pub fn temp_path(label: &str) -> PathBuf {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!(
-            "ferrogram-xtask-{label}-{}-{n}",
+            "larrygram-xtask-{label}-{}-{n}",
             std::process::id()
         ))
     }

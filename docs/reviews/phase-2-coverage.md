@@ -10,7 +10,7 @@
 
 - `cargo xtask coverage` (which runs
   `cargo llvm-cov --workspace --all-features --json --summary-only`) in the
-  P2-12 worktree with `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/P2-12`.
+  P2-12 worktree with `CARGO_TARGET_DIR=/Volumes/Dara/larrygram/target/P2-12`.
   All tests green in that run (230 xtask tests plus every crate's tests).
 - `cargo llvm-cov report --lcov` for exact per-line execution counts.
   Findings below list only lines with a count of 0, i.e. lines no test
@@ -18,7 +18,7 @@
 - The corpus is present in the worktree (`corpus/vsdx`, 15 files), so the
   corpus tests ran and their execution counts are included; `cargo test
   --test read_corpus` was re-run separately to confirm it does not skip.
-- Everything large stayed on `/Volumes/Dara/ferrogram/` (worktree, target dir);
+- Everything large stayed on `/Volumes/Dara/larrygram/` (worktree, target dir);
   this audit changed no code.
 
 ## Per-crate table
@@ -31,24 +31,24 @@ P2-01 note in `docs/STATUS.md`). "Delta vs threshold" is measured minus the
 
 | Crate | Lines | Covered | Pct | Threshold | Ratchet | Delta vs ratchet | Delta vs threshold |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| ferrogram | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
-| ferrogram-cli | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
-| ferrogram-commands | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-control | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
-| ferrogram-geom | 542 | 542 | 100.0 | 85.0 | — | — | +15.0 |
-| ferrogram-model | 2479 | 2471 | 99.7 | 85.0 | — | — | +14.7 |
-| ferrogram-render | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
-| ferrogram-shapesheet | 45 | 45 | 100.0 | 85.0 | — | — | +15.0 |
-| ferrogram-text | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
-| ferrogram-ui | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
-| ferrogram-ui-spec | 1738 | 1726 | 99.3 | 85.0 | 99.3 | 0.0 | +14.3 |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
-| ferrogram-vsdx | 5889 | 5717 | 97.1 | 85.0 | — | — | +12.1 |
-| ferrogram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | — (no threshold) |
+| larrygram | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
+| larrygram-cli | 9 | 6 | 66.7 | 50.0 | 66.6 | +0.1 | +16.7 |
+| larrygram-commands | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-control | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
+| larrygram-geom | 542 | 542 | 100.0 | 85.0 | — | — | +15.0 |
+| larrygram-model | 2479 | 2471 | 99.7 | 85.0 | — | — | +14.7 |
+| larrygram-render | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
+| larrygram-shapesheet | 45 | 45 | 100.0 | 85.0 | — | — | +15.0 |
+| larrygram-text | 0 | 0 | n/a | 75.0 | — | — | pass (empty) |
+| larrygram-ui | 0 | 0 | n/a | 50.0 | — | — | pass (empty) |
+| larrygram-ui-spec | 1738 | 1726 | 99.3 | 85.0 | 99.3 | 0.0 | +14.3 |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85.0 | — | — | pass (empty) |
+| larrygram-vsdx | 5889 | 5717 | 97.1 | 85.0 | — | — | +12.1 |
+| larrygram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | — (no threshold) |
 | xtask | 9232 | 8457 | 91.6 | — | 91.3 | +0.3 | — (no threshold) |
 
 No crate is below its threshold or below its ratchet, so there is no blocker.
-`ferrogram-geom` and `ferrogram-shapesheet` are at 100%; `ferrogram-vsd-binary`
+`larrygram-geom` and `larrygram-shapesheet` are at 100%; `larrygram-vsd-binary`
 is still an empty placeholder (its 85% threshold becomes meaningful in
 Phase 7, per the P1-07 note).
 
@@ -60,20 +60,20 @@ one decimal, empty crates omitted):
 
 ```toml
 [ratchet]
-ferrogram = 66.6
-ferrogram-cli = 66.6
-ferrogram-geom = 100.0
-ferrogram-model = 99.6
-ferrogram-shapesheet = 100.0
-ferrogram-ui-spec = 99.3
-ferrogram-vsdx = 97.0
-ferrogram-web = 0.0
+larrygram = 66.6
+larrygram-cli = 66.6
+larrygram-geom = 100.0
+larrygram-model = 99.6
+larrygram-shapesheet = 100.0
+larrygram-ui-spec = 99.3
+larrygram-vsdx = 97.0
+larrygram-web = 0.0
 xtask = 91.6
 ```
 
 Notes:
 
-- The floored values (`ferrogram-model` 99.6, `ferrogram-vsdx` 97.0) are one
+- The floored values (`larrygram-model` 99.6, `larrygram-vsdx` 97.0) are one
   tenth below the displayed table numbers (99.7, 97.1). `--update-ratchet`
   floors deliberately so the ratchet never exceeds what was measured.
 - A ratchet of 100.0 for `geom` and `shapesheet` means any new line must come
@@ -223,6 +223,6 @@ any kind. Six candidates, all intentional and none is a real problem:
   977, 1028; `crates/model/src/lookup.rs:1539`;
   `crates/vsdx/src/read/mod.rs:1472-1480`) are never-hit panic arms and test
   helpers. They are harmless and not worth chasing.
-- `ferrogram` and `ferrogram-cli` remain one uncovered line above their
+- `larrygram` and `larrygram-cli` remain one uncovered line above their
   ratchet (6/9 lines, `main` itself). The 66.6 ratchet stays fragile until
   the apps have real entry points (same note as Phase 1).

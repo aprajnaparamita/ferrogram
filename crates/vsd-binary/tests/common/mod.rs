@@ -12,16 +12,16 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The oracle tools directory when `FERROGRAM_LIBVISIO_ORACLE` names an
+/// The oracle tools directory when `LARRYGRAM_LIBVISIO_ORACLE` names an
 /// existing directory; `None` when it is unset, empty or missing.
 pub fn oracle_dir() -> Option<PathBuf> {
-    oracle_dir_from(std::env::var_os("FERROGRAM_LIBVISIO_ORACLE"))
+    oracle_dir_from(std::env::var_os("LARRYGRAM_LIBVISIO_ORACLE"))
 }
 
-/// Whether `FERROGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a
+/// Whether `LARRYGRAM_REQUIRE_ORACLE=1` turns a missing oracle into a
 /// test failure instead of a skip (set in CI on Linux and macOS).
 pub fn require_oracle() -> bool {
-    require_from(std::env::var("FERROGRAM_REQUIRE_ORACLE").as_deref().ok())
+    require_from(std::env::var("LARRYGRAM_REQUIRE_ORACLE").as_deref().ok())
 }
 
 /// Runs the smoke check for one oracle tool: `<oracle>/<binary> --help`
@@ -40,13 +40,13 @@ pub fn smoke_with(oracle: Option<&Path>, require: bool, binary: &str) -> Result<
     let Some(dir) = oracle else {
         if require {
             return Err(
-                "FERROGRAM_REQUIRE_ORACLE=1 but no oracle: FERROGRAM_LIBVISIO_ORACLE \
+                "LARRYGRAM_REQUIRE_ORACLE=1 but no oracle: LARRYGRAM_LIBVISIO_ORACLE \
                  is unset or not a directory"
                     .to_owned(),
             );
         }
         eprintln!(
-            "skipping `{binary} --help`: no oracle; set FERROGRAM_LIBVISIO_ORACLE (ADR 0010)"
+            "skipping `{binary} --help`: no oracle; set LARRYGRAM_LIBVISIO_ORACLE (ADR 0010)"
         );
         return Ok(());
     };
@@ -118,7 +118,7 @@ mod tests {
     impl TempDir {
         fn new(label: &str) -> TempDir {
             let dir = std::env::temp_dir().join(format!(
-                "ferrogram-oracle-smoke-{label}-{}-{}",
+                "larrygram-oracle-smoke-{label}-{}-{}",
                 std::process::id(),
                 NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
             ));
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(oracle_dir_from(None), None);
         assert_eq!(oracle_dir_from(Some(OsString::new())), None);
         assert_eq!(
-            oracle_dir_from(Some(OsString::from("/nonexistent-ferrogram-oracle-dir"))),
+            oracle_dir_from(Some(OsString::from("/nonexistent-larrygram-oracle-dir"))),
             None
         );
         let tmp = TempDir::new("oracle-dir");
@@ -187,7 +187,7 @@ mod tests {
         assert!(!require_from(Some("true")));
         assert!(!require_from(None));
         // The env-reading wrapper agrees with the value it read.
-        let env = std::env::var("FERROGRAM_REQUIRE_ORACLE").ok();
+        let env = std::env::var("LARRYGRAM_REQUIRE_ORACLE").ok();
         assert_eq!(require_oracle(), require_from(env.as_deref()));
     }
 
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn fails_when_the_oracle_is_required_but_missing() {
         let err = smoke_with(None, true, "vsd2raw").unwrap_err();
-        assert!(err.contains("FERROGRAM_REQUIRE_ORACLE=1"), "{err}");
+        assert!(err.contains("LARRYGRAM_REQUIRE_ORACLE=1"), "{err}");
     }
 
     #[test]

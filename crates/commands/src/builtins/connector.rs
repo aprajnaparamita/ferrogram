@@ -23,13 +23,13 @@
 //! step): it drops glue whose target is detached and re-writes every
 //! affected connector path.
 
-use ferrogram_geom::{Point, Rect, RouteOptions, RouteStyle, Transform, route};
-use ferrogram_model::CellReader;
-use ferrogram_model::{
+use larrygram_geom::{Point, Rect, RouteOptions, RouteStyle, Transform, route};
+use larrygram_model::CellReader;
+use larrygram_model::{
     CellName, CellValue, CellWrite, Connect, Document, PageId, RowTarget, Section, ShapeId,
     SheetRef, mutate,
 };
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
@@ -875,7 +875,7 @@ impl PathEdit {
             for cell in ["X", "Y"] {
                 dirty.push(CellAddress::in_row(
                     SheetRef::Shape(connector),
-                    ferrogram_model::SectionName::from_static("Geometry"),
+                    larrygram_model::SectionName::from_static("Geometry"),
                     target,
                     CellName::new(cell),
                 ));
@@ -1252,7 +1252,7 @@ fn local_transform(reader: &mut CellReader<'_>, shape: ShapeId) -> Result<Transf
             if flip_x { -1.0 } else { 1.0 },
             if flip_y { -1.0 } else { 1.0 },
         ))
-        .then(Transform::rotate(ferrogram_geom::Angle::from_radians(
+        .then(Transform::rotate(larrygram_geom::Angle::from_radians(
             angle,
         )))
         .then(Transform::translate(pin)))
@@ -1352,8 +1352,8 @@ fn geometry_endpoints(
 
 /// One typed geometry row's absolute point, or `None` for a row without
 /// one (relative and curve-only rows).
-fn row_point(row: &ferrogram_model::GeometryRow) -> Option<Point> {
-    use ferrogram_model::GeometryRow as G;
+fn row_point(row: &larrygram_model::GeometryRow) -> Option<Point> {
+    use larrygram_model::GeometryRow as G;
     match row {
         G::MoveTo { x, y }
         | G::LineTo { x, y }
@@ -1402,14 +1402,14 @@ fn write_path(
 mod tests {
     use super::*;
     use crate::app::{DocumentSession, Settings};
-    use ferrogram_model::{Cell, Preserved, Row, Section, SectionName, Shape};
+    use larrygram_model::{Cell, Preserved, Row, Section, SectionName, Shape};
 
     fn cell(name: &str, value: f64) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: Some(format!("{value}")),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }
@@ -1428,14 +1428,14 @@ mod tests {
                 name: CellName::new("FlipX"),
                 formula: Some("0".to_owned()),
                 value: Some(CellValue::Bool(false)),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
                 preserved: Preserved::new(),
             },
             Cell {
                 name: CellName::new("FlipY"),
                 formula: Some("0".to_owned()),
                 value: Some(CellValue::Bool(false)),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
                 preserved: Preserved::new(),
             },
         ];

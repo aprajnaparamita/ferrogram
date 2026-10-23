@@ -56,7 +56,7 @@ const SHORTCUTS_FILE: &str = "shortcuts.yaml";
 /// file is supposed to contain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DocKind {
-    /// `panel-2016.yaml` / `panel-365.yaml`: a ribbon layout.
+    /// `panel-2016.yaml` / `panel-365.yaml`: a Panel layout.
     Layout,
     /// `commands.yaml`: the command mapping table.
     Commands,
@@ -81,17 +81,17 @@ impl DocKind {
 /// load call, so one `Loader` can serve both layouts:
 ///
 /// ```no_run
-/// use ferrogram_ui_spec::{FluentId, CommandId, LayoutKind, Loader};
+/// use larrygram_ui_spec::{FluentId, CommandId, LayoutKind, Loader};
 ///
 /// let loader = Loader::new(".")?;
 /// let both = loader.load_all()?;
-/// let set_2016 = both.get(LayoutKind::Visio2016);
+/// let set_2016 = both.get(LayoutKind::Panel2016).expect("the Panel (2016 data) set");
 /// let lookup = set_2016.command_lookup();
 /// assert_eq!(
 ///     lookup.commands.get(&FluentId::new("FileSave")),
 ///     Some(&CommandId::new("file.save")),
 /// );
-/// # Ok::<(), ferrogram_ui_spec::LoadError>(())
+/// # Ok::<(), larrygram_ui_spec::LoadError>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct Loader {
@@ -137,13 +137,17 @@ impl Loader {
     /// `.yaml` file is looked up as `.json` with the same stem.
     pub fn load(&self, kind: LayoutKind) -> Result<LayoutSet, LoadError> {
         let docs = self.read_documents()?;
+        let Some(layout) = docs.layout(kind) else {
+            return Err(LoadError::UnsupportedLayout { id: kind.id() });
+        };
         check_references(
-            &[docs.layout(kind)],
+            &[layout],
             &docs.fluent_union(),
             &docs.commands,
             &docs.shortcuts,
         )?;
-        Ok(docs.into_set(kind))
+        docs.into_set(kind)
+            .ok_or(LoadError::UnsupportedLayout { id: kind.id() })
     }
 
     /// Loads the data set for **both** layouts in one pass.
@@ -155,16 +159,16 @@ impl Loader {
     /// the `command_id` check against the shared shortcut table.
     ///
     /// ```no_run
-    /// # use ferrogram_ui_spec::{LayoutKind, Loader};
+    /// # use larrygram_ui_spec::{LayoutKind, Loader};
     /// let loader = Loader::new(".")?;
     /// let sets = loader.load_all()?;
-    /// let set_365 = sets.get(LayoutKind::Visio365);
-    /// # Ok::<(), ferrogram_ui_spec::LoadError>(())
+    /// let set_365 = sets.get(LayoutKind::Panel365).expect("the Panel (365 data) set");
+    /// # Ok::<(), larrygram_ui_spec::LoadError>(())
     /// ```
     pub fn load_all(&self) -> Result<LayoutSets, LoadError> {
         let docs = self.read_documents()?;
         check_references(
-            &[&docs.visio_2016, &docs.visio_365],
+            &[&docs.panel_2016, &docs.panel_365],
             &docs.fluent_union(),
             &docs.commands,
             &docs.shortcuts,
@@ -175,12 +179,12 @@ impl Loader {
     /// Reads and validates all four data documents, in file order:
     /// both layouts, then the shared command and shortcut tables.
     fn read_documents(&self) -> Result<Documents, LoadError> {
-        let visio_2016: Layout = self.load_document(
-            &self.data_file(LayoutKind::Visio2016.file_name())?,
+        let panel_2016: Layout = self.load_document(
+            &self.data_file(LayoutKind::Panel2016.file_name())?,
             DocKind::Layout,
         )?;
-        let visio_365: Layout = self.load_document(
-            &self.data_file(LayoutKind::Visio365.file_name())?,
+        let panel_365: Layout = self.load_document(
+            &self.data_file(LayoutKind::Panel365.file_name())?,
             DocKind::Layout,
         )?;
         let commands_path = self.data_file(COMMANDS_FILE)?;
@@ -191,8 +195,8 @@ impl Loader {
             self.load_document(&self.data_file(SHORTCUTS_FILE)?, DocKind::Shortcuts)?;
         let shortcuts = Shortcuts { entries };
         Ok(Documents {
-            visio_2016,
-            visio_365,
+            panel_2016,
+            panel_365,
             commands,
             shortcuts,
         })
@@ -283,16 +287,16 @@ impl Loader {
     /// kind, decode) and the three ADR 0007 cross-references run over
     /// the pair of layouts, exactly as on disk.
     pub fn from_embedded() -> Result<LayoutSets, LoadError> {
-        use crate::embedded::{COMMANDS_YAML, SHORTCUTS_YAML, VISIO_365_YAML, VISIO_2016_YAML};
+        use crate::embedded::{COMMANDS_YAML, PANEL_365_YAML, PANEL_2016_YAML, SHORTCUTS_YAML};
         let loader = Self {
             workspace_root: PathBuf::from(DATA_DIR),
             validator: compile_schema(SCHEMA_JSON)?,
         };
         let path = |name: &str| PathBuf::from(DATA_DIR).join(name);
-        let name_2016 = LayoutKind::Visio2016.file_name();
-        let name_365 = LayoutKind::Visio365.file_name();
-        let visio_2016 = loader.load_text(VISIO_2016_YAML, &path(name_2016), DocKind::Layout)?;
-        let visio_365 = loader.load_text(VISIO_365_YAML, &path(name_365), DocKind::Layout)?;
+        let name_2016 = LayoutKind::Panel2016.file_name();
+        let name_365 = LayoutKind::Panel365.file_name();
+        let panel_2016 = loader.load_text(PANEL_2016_YAML, &path(name_2016), DocKind::Layout)?;
+        let panel_365 = loader.load_text(PANEL_365_YAML, &path(name_365), DocKind::Layout)?;
         let commands_path = path(COMMANDS_FILE);
         let entries: Vec<CommandMapping> =
             loader.load_text(COMMANDS_YAML, &commands_path, DocKind::Commands)?;
@@ -302,13 +306,13 @@ impl Loader {
             loader.load_text(SHORTCUTS_YAML, &path(SHORTCUTS_FILE), DocKind::Shortcuts)?;
         let shortcuts = Shortcuts { entries };
         let docs = Documents {
-            visio_2016,
-            visio_365,
+            panel_2016,
+            panel_365,
             commands,
             shortcuts,
         };
         let union = docs.fluent_union();
-        let layouts = [&docs.visio_2016, &docs.visio_365];
+        let layouts = [&docs.panel_2016, &docs.panel_365];
         check_references(&layouts, &union, &docs.commands, &docs.shortcuts)?;
         Ok(docs.into_sets())
     }
@@ -318,9 +322,9 @@ impl Loader {
 /// together so the cross-references can see the whole data set.
 struct Documents {
     /// `ui-spec/panel-2016.yaml`.
-    visio_2016: Layout,
+    panel_2016: Layout,
     /// `ui-spec/panel-365.yaml`.
-    visio_365: Layout,
+    panel_365: Layout,
     /// `ui-spec/commands.yaml`, shared by both layouts.
     commands: Commands,
     /// `ui-spec/shortcuts.yaml`, shared by both layouts.
@@ -328,52 +332,55 @@ struct Documents {
 }
 
 impl Documents {
-    /// The layout for `kind`.
-    fn layout(&self, kind: LayoutKind) -> &Layout {
+    /// The layout for `kind`, when the kind has v1 data.
+    fn layout(&self, kind: LayoutKind) -> Option<&Layout> {
         match kind {
-            LayoutKind::Visio2016 => &self.visio_2016,
-            LayoutKind::Visio365 => &self.visio_365,
+            LayoutKind::Panel2016 => Some(&self.panel_2016),
+            LayoutKind::Panel365 => Some(&self.panel_365),
+            LayoutKind::PanelModern | LayoutKind::PanelClassic => None,
         }
     }
 
     /// The union of both layouts' Fluent ids (ADR 0007
     /// cross-reference 1: "must appear in at least one layout").
     fn fluent_union(&self) -> BTreeSet<FluentId> {
-        collect_fluent_ids(&self.visio_2016)
-            .union(&collect_fluent_ids(&self.visio_365))
+        collect_fluent_ids(&self.panel_2016)
+            .union(&collect_fluent_ids(&self.panel_365))
             .cloned()
             .collect()
     }
 
-    /// Turns the documents into the set for one layout.
-    fn into_set(self, kind: LayoutKind) -> LayoutSet {
+    /// Turns the documents into the set for one layout, when the kind
+    /// has v1 data.
+    fn into_set(self, kind: LayoutKind) -> Option<LayoutSet> {
         let Self {
-            visio_2016,
-            visio_365,
+            panel_2016,
+            panel_365,
             commands,
             shortcuts,
         } = self;
         let layout = match kind {
-            LayoutKind::Visio2016 => visio_2016,
-            LayoutKind::Visio365 => visio_365,
+            LayoutKind::Panel2016 => panel_2016,
+            LayoutKind::Panel365 => panel_365,
+            LayoutKind::PanelModern | LayoutKind::PanelClassic => return None,
         };
-        LayoutSet {
+        Some(LayoutSet {
             layout,
             commands,
             shortcuts,
-        }
+        })
     }
 
     /// Turns the documents into both sets.
     fn into_sets(self) -> LayoutSets {
         LayoutSets {
-            visio_2016: LayoutSet {
-                layout: self.visio_2016,
+            panel_2016: LayoutSet {
+                layout: self.panel_2016,
                 commands: self.commands.clone(),
                 shortcuts: self.shortcuts.clone(),
             },
-            visio_365: LayoutSet {
-                layout: self.visio_365,
+            panel_365: LayoutSet {
+                layout: self.panel_365,
                 commands: self.commands,
                 shortcuts: self.shortcuts,
             },
@@ -455,7 +462,7 @@ fn collect_fluent_ids(layout: &Layout) -> BTreeSet<FluentId> {
 
 /// Rejects a `commands.yaml` id used twice.
 ///
-/// The table is one entry per Ferrogram command id (ADR 0006), so a
+/// The table is one entry per Larrygram command id (ADR 0006), so a
 /// duplicate would silently merge two entries in the cross-reference
 /// checks and in `CommandLookup::build`. The layout id space is
 /// *not* checked here: the committed data reuses Fluent ids across
@@ -903,22 +910,39 @@ mod tests {
     }
 
     #[test]
+    fn load_refuses_the_curated_layout_kinds() {
+        // Panel Modern and Panel Classic have no v1 data file: the
+        // loader says so instead of guessing (task P7-00).
+        let loader = Loader::new(good_fixture()).expect("the fixture workspace loads");
+        for kind in [LayoutKind::PanelModern, LayoutKind::PanelClassic] {
+            let error = loader.load(kind).expect_err("no v1 data");
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "layout {} has no v1 data; load it through ui_spec::v2 (ADR 0061)",
+                    kind.id()
+                )
+            );
+        }
+    }
+
+    #[test]
     fn load_all_returns_both_layouts_and_get_picks_one() {
         let loader = Loader::new(good_fixture()).expect("the fixture workspace loads");
         let sets = loader.load_all().expect("the good fixture is consistent");
         // Same data as loading each kind on its own.
         assert_eq!(
-            sets.get(LayoutKind::Visio2016),
-            &loader.load(LayoutKind::Visio2016).expect("2016 loads")
+            sets.get(LayoutKind::Panel2016),
+            Some(&loader.load(LayoutKind::Panel2016).expect("2016 loads"))
         );
         assert_eq!(
-            sets.get(LayoutKind::Visio365),
-            &loader.load(LayoutKind::Visio365).expect("365 loads")
+            sets.get(LayoutKind::Panel365),
+            Some(&loader.load(LayoutKind::Panel365).expect("365 loads"))
         );
         // Distinct layouts, shared tables.
-        assert_ne!(sets.visio_2016.layout, sets.visio_365.layout);
-        assert_eq!(sets.visio_2016.commands, sets.visio_365.commands);
-        assert_eq!(sets.visio_2016.shortcuts, sets.visio_365.shortcuts);
+        assert_ne!(sets.panel_2016.layout, sets.panel_365.layout);
+        assert_eq!(sets.panel_2016.commands, sets.panel_365.commands);
+        assert_eq!(sets.panel_2016.shortcuts, sets.panel_365.shortcuts);
     }
 
     #[test]
@@ -1022,7 +1046,7 @@ mod tests {
     #[test]
     fn data_file_prefers_yaml_and_falls_back_to_json() {
         let dir = std::env::temp_dir().join(format!(
-            "ferrogram-ui-spec-data-file-{}",
+            "larrygram-ui-spec-data-file-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);

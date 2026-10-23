@@ -11,8 +11,8 @@
 // these helpers are test code and use `expect` freely.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_model::{CellValue, Color};
-use ferrogram_shapesheet::{
+use larrygram_model::{CellValue, Color};
+use larrygram_shapesheet::{
     Error, ErrorCode, Number, Span, SyntaxKind, Unit, UnitFamily, Value, ValueKind, as_bool,
     as_color, as_list, as_number, as_str, coerce, parse_unit,
 };
@@ -306,7 +306,7 @@ fn units_the_model_lacks_are_conversion_errors() {
         Err(Error::Conversion("unit has no model spelling"))
     );
     assert_eq!(
-        Unit::from_geom(ferrogram_geom::Unit::Millipoints),
+        Unit::from_geom(larrygram_geom::Unit::Millipoints),
         Err(Error::Conversion("model unit has no formula spelling"))
     );
 }
@@ -438,12 +438,12 @@ fn a_boolean_or_string_with_a_unit_drops_the_unit_on_write() {
         CellValue::Bool(true),
         CellValue::Color(Color::new(1, 2, 3)),
     ] {
-        let value = Value::from_cached(&cached_value, ferrogram_geom::Unit::Inches)
+        let value = Value::from_cached(&cached_value, larrygram_geom::Unit::Inches)
             .expect("from_cached never fails here");
         let cached = value.to_cached().expect("to_cached never fails");
-        assert_eq!(cached.unit, ferrogram_geom::Unit::Unitsless);
+        assert_eq!(cached.unit, larrygram_geom::Unit::Unitsless);
         assert_eq!(cached.value, cached_value);
-        let back = Value::from_cached(&cached.value, ferrogram_geom::Unit::Inches)
+        let back = Value::from_cached(&cached.value, larrygram_geom::Unit::Inches)
             .expect("from_cached never fails here");
         assert_eq!(back, value);
     }
@@ -458,7 +458,7 @@ fn a_non_finite_magnitude_is_num_in_both_directions() {
     assert_eq!(
         Value::from_cached(
             &CellValue::Number(f64::NEG_INFINITY),
-            ferrogram_geom::Unit::Inches
+            larrygram_geom::Unit::Inches
         ),
         Ok(Value::Err(ErrorCode::Num))
     );
@@ -474,7 +474,7 @@ fn a_number_reads_back_in_the_unit_the_file_recorded() {
     // inches (ADR 0011).
     let value = Value::from_cached(
         &CellValue::Number(11.69291338582677),
-        ferrogram_geom::Unit::Millimeters,
+        larrygram_geom::Unit::Millimeters,
     )
     .expect("from_cached never fails here");
     match value {
@@ -485,7 +485,7 @@ fn a_number_reads_back_in_the_unit_the_file_recorded() {
         other => panic!("wrong kind: {other:?}"),
     }
     let cached = value.to_cached().expect("to_cached never fails");
-    assert_eq!(cached.unit, ferrogram_geom::Unit::Millimeters);
+    assert_eq!(cached.unit, larrygram_geom::Unit::Millimeters);
     assert_close(
         match cached.value {
             CellValue::Number(magnitude) => magnitude,
@@ -519,7 +519,7 @@ fn every_error_value_round_trips_its_cached_text() {
 #[test]
 fn false_to_a_string_is_the_false_spelling() {
     assert_eq!(
-        ferrogram_shapesheet::as_str(&Value::Bool(false)).expect("a boolean spells"),
+        larrygram_shapesheet::as_str(&Value::Bool(false)).expect("a boolean spells"),
         "FALSE"
     );
 }

@@ -26,8 +26,13 @@ pub mod v2;
 
 pub use error::{IdError, LoadError};
 pub use loader::Loader;
+/// The one layout-kind enum (ADR 0061 amendment): the Phase 1 enum
+/// merged into [`v2::LayoutKind`] in task P7-00. Its `Panel2016` and
+/// `Panel365` variants carry the pre-rename spellings as serde
+/// aliases, so a settings store saved before the rename still loads.
+pub use v2::LayoutKind;
 
-/// A Ferrogram command id. See ADR 0006.
+/// A Larrygram command id. See ADR 0006.
 ///
 /// The grammar (enforced by `ui-spec/schema.json`):
 ///
@@ -69,7 +74,7 @@ impl CommandId {
     /// checks the grammar only, exactly like the schema pattern does.
     ///
     /// ```
-    /// use ferrogram_ui_spec::CommandId;
+    /// use larrygram_ui_spec::CommandId;
     /// assert!(CommandId::parse("file.save").is_ok());
     /// assert!(CommandId::parse("File.Save").is_err()); // uppercase
     /// assert!(CommandId::parse("file").is_err()); // no verb
@@ -149,7 +154,7 @@ impl FluentId {
     /// `^[A-Za-z_][A-Za-z0-9_]*$`.
     ///
     /// ```
-    /// use ferrogram_ui_spec::FluentId;
+    /// use larrygram_ui_spec::FluentId;
     /// assert!(FluentId::parse("FileSave").is_ok());
     /// assert!(FluentId::parse("2Cut").is_err()); // starts with a digit
     /// ```
@@ -330,7 +335,7 @@ pub struct Bounds {
 /// `ui-spec/schema.json#/definitions/control`.
 ///
 /// `id` is the Fluent control name (e.g. `FileSave`); `command` is
-/// the Ferrogram command id dispatched when the control is activated
+/// the Larrygram command id dispatched when the control is activated
 /// (e.g. `file.save`). `command` may be `None` for non-actionable
 /// controls and for controls whose mapping is not yet known.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -347,7 +352,7 @@ pub struct Control {
     /// Immediate parent control id (Fluent), or `None` for top-level.
     #[serde(default)]
     pub parent: Option<FluentId>,
-    /// Ferrogram command id dispatched on activation, or `None` if
+    /// Larrygram command id dispatched on activation, or `None` if
     /// the control is non-actionable or its mapping is unknown.
     #[serde(default)]
     pub command: Option<CommandId>,
@@ -620,11 +625,11 @@ impl Default for Layout {
     }
 }
 
-/// Mapping from Ferrogram command id to VisUICmds and to one or more
+/// Mapping from Larrygram command id to VisUICmds and to one or more
 /// Fluent control names. See `ui-spec/commands.yaml` and ADR 0006.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CommandMapping {
-    /// The Ferrogram command id.
+    /// The Larrygram command id.
     pub id: CommandId,
     /// Short UI label.
     pub label: String,
@@ -715,7 +720,7 @@ pub enum ShortcutScope {
     /// Always available.
     Global,
     /// Only when the command bar has focus.
-    Ribbon,
+    CommandBar,
     /// Only when a drawing page has focus.
     Page,
     /// Only when a text editor has focus.
@@ -731,7 +736,7 @@ impl ShortcutScope {
     pub fn parse(s: &str) -> Option<Self> {
         let v = match s {
             "global" => Self::Global,
-            "ribbon" => Self::Ribbon,
+            "command_bar" => Self::CommandBar,
             "page" => Self::Page,
             "text" => Self::Text,
             "selection" => Self::Selection,
@@ -745,7 +750,7 @@ impl ShortcutScope {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Global => "global",
-            Self::Ribbon => "ribbon",
+            Self::CommandBar => "command_bar",
             Self::Page => "page",
             Self::Text => "text",
             Self::Selection => "selection",
@@ -777,7 +782,7 @@ impl serde::Serialize for ShortcutScope {
 /// document round-trips through the on-disk format.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Commands {
-    /// One entry per Ferrogram command.
+    /// One entry per Larrygram command.
     pub entries: Vec<CommandMapping>,
 }
 
@@ -842,17 +847,24 @@ pub struct LayoutSet {
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct LayoutSets {
     /// The Office 2016 Fluent data.
-    pub visio_2016: LayoutSet,
+    pub panel_2016: LayoutSet,
     /// The Microsoft 365 Current Channel Fluent data.
-    pub visio_365: LayoutSet,
+    pub panel_365: LayoutSet,
 }
 
+/// The [`crate::v2::LayoutKind`] of the requested layout, borrowed.
+///
+/// Only the two Fluent-data layouts have a [`LayoutSet`]; Panel Modern
+/// and Panel Classic read the hand-curated v2 files (`ui_spec::v2`,
+/// ADR 0061) and return `None` here.
 impl LayoutSets {
-    /// The set for `kind` (borrowed, so the caller keeps both).
-    pub fn get(&self, kind: LayoutKind) -> &LayoutSet {
+    /// The set for `kind`, when the kind has v1 data (borrowed, so the
+    /// caller keeps both).
+    pub fn get(&self, kind: LayoutKind) -> Option<&LayoutSet> {
         match kind {
-            LayoutKind::Visio2016 => &self.visio_2016,
-            LayoutKind::Visio365 => &self.visio_365,
+            LayoutKind::Panel2016 => Some(&self.panel_2016),
+            LayoutKind::Panel365 => Some(&self.panel_365),
+            LayoutKind::PanelModern | LayoutKind::PanelClassic => None,
         }
     }
 }
@@ -892,25 +904,6 @@ impl CommandLookup {
     /// True if the lookup has no entries.
     pub fn is_empty(&self) -> bool {
         self.labels.is_empty()
-    }
-}
-
-/// Layout variant. Phase 1 ships two: 2016 and 365.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum LayoutKind {
-    /// Office 2016 Fluent control data.
-    Visio2016,
-    /// Microsoft 365 Current Channel.
-    Visio365,
-}
-
-impl LayoutKind {
-    /// The file name under `ui-spec/`.
-    pub fn file_name(self) -> &'static str {
-        match self {
-            Self::Visio2016 => "panel-2016.yaml",
-            Self::Visio365 => "panel-365.yaml",
-        }
     }
 }
 
@@ -963,7 +956,14 @@ mod tests {
 
     #[test]
     fn shortcut_scope_round_trip() {
-        for s in ["global", "ribbon", "page", "text", "selection", "window"] {
+        for s in [
+            "global",
+            "command_bar",
+            "page",
+            "text",
+            "selection",
+            "window",
+        ] {
             let v = ShortcutScope::parse(s).unwrap();
             assert_eq!(v.as_str(), s);
         }
@@ -972,8 +972,8 @@ mod tests {
 
     #[test]
     fn layout_kind_file_names() {
-        assert_eq!(LayoutKind::Visio2016.file_name(), "panel-2016.yaml");
-        assert_eq!(LayoutKind::Visio365.file_name(), "panel-365.yaml");
+        assert_eq!(LayoutKind::Panel2016.file_name(), "panel-2016.yaml");
+        assert_eq!(LayoutKind::Panel365.file_name(), "panel-365.yaml");
     }
 
     #[test]
@@ -1031,20 +1031,33 @@ mod tests {
     #[test]
     fn layout_sets_get_borrows_the_kind_matching_set() {
         let mut sets = LayoutSets::default();
-        sets.visio_2016.layout.source = "2016".to_owned();
-        sets.visio_365.layout.source = "365".to_owned();
-        assert_eq!(sets.get(LayoutKind::Visio2016).layout.source, "2016");
-        assert_eq!(sets.get(LayoutKind::Visio365).layout.source, "365");
+        sets.panel_2016.layout.source = "2016".to_owned();
+        sets.panel_365.layout.source = "365".to_owned();
+        assert_eq!(
+            sets.get(LayoutKind::Panel2016).map(|s| &s.layout.source),
+            Some(&"2016".to_owned())
+        );
+        assert_eq!(
+            sets.get(LayoutKind::Panel365).map(|s| &s.layout.source),
+            Some(&"365".to_owned())
+        );
         // Borrows, so both sets stay usable.
-        assert_eq!(sets.get(LayoutKind::Visio2016).layout.product, "visio");
-        assert_eq!(sets.visio_365.layout.source, "365");
+        assert_eq!(sets.panel_2016.layout.product, "visio");
+        assert_eq!(sets.panel_365.layout.source, "365");
         assert!(
             LayoutSets::default()
-                .get(LayoutKind::Visio365)
-                .layout
-                .tabs
-                .is_empty()
+                .get(LayoutKind::Panel365)
+                .is_some_and(|s| s.layout.tabs.is_empty())
         );
+    }
+
+    #[test]
+    fn layout_sets_get_is_empty_for_the_curated_layouts() {
+        // Panel Modern and Panel Classic read the v2 files (ADR 0061),
+        // so no `LayoutSet` backs them (task P7-00).
+        let sets = LayoutSets::default();
+        assert!(sets.get(LayoutKind::PanelModern).is_none());
+        assert!(sets.get(LayoutKind::PanelClassic).is_none());
     }
 
     #[test]
@@ -1089,11 +1102,11 @@ mod tests {
     fn layout_kind_eq_and_hash() {
         use std::collections::HashSet;
         let mut s = HashSet::new();
-        s.insert(LayoutKind::Visio2016);
-        s.insert(LayoutKind::Visio365);
-        s.insert(LayoutKind::Visio2016);
+        s.insert(LayoutKind::Panel2016);
+        s.insert(LayoutKind::Panel365);
+        s.insert(LayoutKind::Panel2016);
         assert_eq!(s.len(), 2);
-        assert_ne!(LayoutKind::Visio2016, LayoutKind::Visio365);
+        assert_ne!(LayoutKind::Panel2016, LayoutKind::Panel365);
     }
 
     #[test]
@@ -1215,7 +1228,14 @@ mod tests {
             let c: MappingConfidence = serde_json::from_str(&format!("\"{s}\"")).unwrap();
             assert_eq!(c.as_str(), s);
         }
-        for s in ["global", "ribbon", "page", "text", "selection", "window"] {
+        for s in [
+            "global",
+            "command_bar",
+            "page",
+            "text",
+            "selection",
+            "window",
+        ] {
             let v: ShortcutScope = serde_json::from_str(&format!("\"{s}\"")).unwrap();
             assert_eq!(v.as_str(), s);
         }
@@ -1431,7 +1451,7 @@ mod tests {
         round_trip(&control.command.clone().unwrap());
         round_trip(&MappingConfidence::Unknown);
         round_trip(&ShortcutScope::Window);
-        round_trip(&LayoutKind::Visio365);
+        round_trip(&LayoutKind::Panel365);
 
         let group = Group {
             id: FluentId::new("GroupFile"),
@@ -1527,8 +1547,8 @@ mod tests {
         };
         round_trip(&set);
         round_trip(&LayoutSets {
-            visio_2016: set.clone(),
-            visio_365: set,
+            panel_2016: set.clone(),
+            panel_365: set,
         });
         round_trip(&CommandLookup::empty());
         round_trip(&CommandLookup {

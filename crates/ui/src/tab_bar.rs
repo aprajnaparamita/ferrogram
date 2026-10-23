@@ -1,7 +1,7 @@
-//! The ribbon, the quick access toolbar, the backstage and the
+//! The command bar, the quick access toolbar, the backstage and the
 //! context menus (ADR 0031), built from the ui-spec layouts.
 //!
-//! The ribbon is data-driven: [`Ribbon::show`] walks the layout tree
+//! The command bar is data-driven: [`TabBar::show`] walks the layout tree
 //! by placement path and renders one widget per placement, with the
 //! ADR 0031 widget mapping per control type. Every actionable widget
 //! produces an [`Intent`] (ADR 0028); widgets never execute commands
@@ -15,8 +15,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use egui::{Button, ComboBox, RichText, Ui};
-use ferrogram_commands::{AppCtx, CommandId, CommandStatus, Enabled, Invocation, Registry, Source};
-use ferrogram_ui_spec::{
+use larrygram_commands::{AppCtx, CommandId, CommandStatus, Enabled, Invocation, Registry, Source};
+use larrygram_ui_spec::{
     Control, ControlType, FluentId, Group, LayoutKind, LayoutSet, embedded::is_out_of_scope,
 };
 
@@ -37,7 +37,7 @@ const DROPDOWN_TIP: &str = "More items";
 /// The label of the File button that opens the backstage (ADR 0031).
 const FILE_BUTTON: &str = "File";
 
-/// Placeholder icon size in the ribbon, in points (ADR 0030).
+/// Placeholder icon size in the command bar, in points (ADR 0030).
 const ICON_SIZE: f32 = 12.0;
 
 /// Recursion cap for nested control stacks (AGENTS.md section 6).
@@ -55,9 +55,9 @@ enum Action {
     },
 }
 
-/// How the ribbon resolves a control to its [`Action`].
+/// How the command bar resolves a control to its [`Action`].
 ///
-/// [`Ribbon::show`] resolves through the command registry (ADR 0028);
+/// [`TabBar::show`] resolves through the command registry (ADR 0028);
 /// the tests drive the same widget code with their own mapping. The
 /// registry seam is thin ([`action_for`]); everything else is shared.
 type Resolve<'a> = &'a dyn Fn(&Control) -> Action;
@@ -66,7 +66,7 @@ type Resolve<'a> = &'a dyn Fn(&Control) -> Action;
 /// (ADR 0031 control-to-command rules).
 ///
 /// An implemented and enabled command becomes an [`Intent`] with an
-/// empty [`Invocation`] from [`Source::Ribbon`]. Everything else
+/// empty [`Invocation`] from [`Source::CommandBar`]. Everything else
 /// renders disabled: the [`Enabled`] reason when the command is
 /// implemented but disabled, else "Not yet implemented".
 fn action_for_command(id: Option<CommandId>, status: CommandStatus, enabled: &Enabled) -> Action {
@@ -74,7 +74,7 @@ fn action_for_command(id: Option<CommandId>, status: CommandStatus, enabled: &En
         && status == CommandStatus::Implemented
         && enabled.is_enabled()
     {
-        return Action::Emit(Intent::new(id, Invocation::empty(Source::Ribbon)));
+        return Action::Emit(Intent::new(id, Invocation::empty(Source::CommandBar)));
     }
     let reason = if status == CommandStatus::Implemented {
         enabled
@@ -219,7 +219,7 @@ fn subtree<'c>(
 /// How the controls of one container flow (ADR 0031).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Flow {
-    /// Controls flow in rows (ribbon groups).
+    /// Controls flow in rows (command bar groups).
     Rows,
     /// One horizontal row (quick access toolbar).
     Row,
@@ -236,8 +236,8 @@ enum DropKind {
     Arrow,
 }
 
-/// The ribbon widget state (ADR 0031).
-pub struct Ribbon {
+/// The command-bar widget state (ADR 0031).
+pub struct TabBar {
     kind: LayoutKind,
     active_tab: usize,
     active_backstage_tab: usize,
@@ -250,8 +250,8 @@ pub struct Ribbon {
     toggles: BTreeSet<FluentId>,
 }
 
-impl Ribbon {
-    /// A ribbon for one layout kind, first tab active, backstage closed.
+impl TabBar {
+    /// A tab bar for one layout kind, first tab active, backstage closed.
     pub fn new(kind: LayoutKind) -> Self {
         Self {
             kind,
@@ -263,7 +263,7 @@ impl Ribbon {
         }
     }
 
-    /// The layout kind this ribbon renders.
+    /// The layout kind this tab bar renders.
     pub fn kind(&self) -> LayoutKind {
         self.kind
     }
@@ -283,7 +283,7 @@ impl Ribbon {
         self.active_backstage_tab
     }
 
-    /// The context menu [`Ribbon::show_context_menu`] draws, if any.
+    /// The context menu [`TabBar::show_context_menu`] draws, if any.
     pub fn context_menu(&self) -> Option<&FluentId> {
         self.context_menu.as_ref()
     }
@@ -311,7 +311,7 @@ impl Ribbon {
         self.active_backstage_tab = index;
     }
 
-    /// Selects the context menu drawn by [`Ribbon::show_context_menu`]
+    /// Selects the context menu drawn by [`TabBar::show_context_menu`]
     /// (`None` draws nothing, e.g. when no canvas was right-clicked).
     pub fn set_context_menu(&mut self, id: Option<FluentId>) {
         self.context_menu = id;
@@ -336,7 +336,7 @@ impl Ribbon {
     /// Draws the quick access toolbar (ADR 0031).
     ///
     /// A small row of the layout's QAT placements, with the same
-    /// control-to-command rules as the ribbon.
+    /// control-to-command rules as the command bar.
     pub fn show_quick_access(
         &mut self,
         ui: &mut Ui,
@@ -365,7 +365,7 @@ impl Ribbon {
 
     /// Draws one context menu from the layout (right-click, ADR 0031).
     ///
-    /// Which menu is drawn is state: [`Ribbon::set_context_menu`] names
+    /// Which menu is drawn is state: [`TabBar::set_context_menu`] names
     /// it (the canvas sets it on right-click, ADR 0031). With no menu
     /// selected nothing is drawn.
     pub fn show_context_menu(
@@ -378,7 +378,7 @@ impl Ribbon {
         self.show_context_menu_with(ui, set, &|control| action_for(control, registry, app))
     }
 
-    /// [`Ribbon::show`] with an injected command-state resolver.
+    /// [`TabBar::show`] with an injected command-state resolver.
     fn show_with(
         &mut self,
         ui: &mut Ui,
@@ -410,7 +410,7 @@ impl Ribbon {
         Ok(out)
     }
 
-    /// [`Ribbon::show_quick_access`] with an injected resolver.
+    /// [`TabBar::show_quick_access`] with an injected resolver.
     fn show_quick_access_with(
         &mut self,
         ui: &mut Ui,
@@ -429,7 +429,7 @@ impl Ribbon {
         Ok(out)
     }
 
-    /// [`Ribbon::show_backstage`] with an injected resolver.
+    /// [`TabBar::show_backstage`] with an injected resolver.
     fn show_backstage_with(
         &mut self,
         ui: &mut Ui,
@@ -462,7 +462,7 @@ impl Ribbon {
         Ok(out)
     }
 
-    /// [`Ribbon::show_context_menu`] with an injected resolver.
+    /// [`TabBar::show_context_menu`] with an injected resolver.
     fn show_context_menu_with(
         &mut self,
         ui: &mut Ui,
@@ -480,7 +480,7 @@ impl Ribbon {
         Ok(out)
     }
 
-    /// Renders one ribbon group: a titled panel with the controls in
+    /// Renders one command-bar group: a titled box with the controls in
     /// rows and a bottom caption holding the mark, the label and the
     /// dialog box launcher (ADR 0031).
     fn show_group(
@@ -825,8 +825,8 @@ mod tests {
     use crate::test_util::with_ui;
     use egui::accesskit::Role;
     use egui_kittest::{Harness, kittest::NodeT, kittest::Queryable};
-    use ferrogram_commands::Settings;
-    use ferrogram_ui_spec::{
+    use larrygram_commands::Settings;
+    use larrygram_ui_spec::{
         Backstage, BackstageTab, ContextMenu, LayoutSets, Loader, QuickAccessToolbar, Tab,
     };
     use std::cell::RefCell;
@@ -849,7 +849,7 @@ mod tests {
             label: label.to_owned(),
             order: 0,
             parent: None,
-            command: command.map(ferrogram_ui_spec::CommandId::new),
+            command: command.map(larrygram_ui_spec::CommandId::new),
             aliases: Vec::new(),
             bounds: None,
             icon_ref: None,
@@ -877,7 +877,7 @@ mod tests {
 
     /// A one-tab layout with the given group controls.
     fn set_with(controls: Vec<Control>) -> LayoutSet {
-        let mut layout = ferrogram_ui_spec::Layout::default();
+        let mut layout = larrygram_ui_spec::Layout::default();
         layout.tabs.push(Tab {
             id: FluentId::new("TabHome"),
             label: "TabHome".to_owned(),
@@ -910,7 +910,7 @@ mod tests {
     fn intent(id: &'static str) -> Intent {
         Intent::new(
             CommandId::parse(id).expect("a valid command id"),
-            Invocation::empty(Source::Ribbon),
+            Invocation::empty(Source::CommandBar),
         )
     }
 
@@ -919,28 +919,28 @@ mod tests {
     /// Which of the four `show` methods a [`Rig`] runs each frame.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum Surface {
-        /// [`Ribbon::show_with`].
-        Ribbon,
-        /// [`Ribbon::show_with`] and [`Ribbon::show_quick_access_with`].
-        RibbonAndQuickAccess,
-        /// [`Ribbon::show_quick_access_with`].
+        /// [`TabBar::show_with`].
+        CommandBar,
+        /// [`TabBar::show_with`] and [`TabBar::show_quick_access_with`].
+        CommandBarAndQuickAccess,
+        /// [`TabBar::show_quick_access_with`].
         QuickAccess,
-        /// [`Ribbon::show_backstage_with`].
+        /// [`TabBar::show_backstage_with`].
         Backstage,
-        /// [`Ribbon::show_context_menu_with`].
+        /// [`TabBar::show_context_menu_with`].
         ContextMenu,
-        /// [`Ribbon::show`], through the real command registry.
+        /// [`TabBar::show`], through the real command registry.
         Registry,
     }
 
-    /// A ribbon driven headlessly by `egui_kittest`.
+    /// A command bar driven headlessly by `egui_kittest`.
     ///
     /// The harness closure keeps running between the test's
-    /// assertions, so the ribbon, the intents and the resolved action
+    /// assertions, so the command bar, the intents and the resolved action
     /// are shared through `Rc<RefCell<..>>` and the test drives them
     /// between frames.
     struct Rig {
-        ribbon: Rc<RefCell<Ribbon>>,
+        tab_bar: Rc<RefCell<TabBar>>,
         intents: Rc<RefCell<Vec<Intent>>>,
         action: Rc<RefCell<Action>>,
         harness: Harness<'static>,
@@ -948,21 +948,21 @@ mod tests {
 
     impl Rig {
         /// Builds a rig for one layout set and surface. `set: None`
-        /// follows the ribbon's layout kind (the ADR 0032 switch).
+        /// follows the command bar's layout kind (the ADR 0032 switch).
         fn build(kind: LayoutKind, set: Option<LayoutSet>, surface: Surface) -> Self {
-            let ribbon = Rc::new(RefCell::new(Ribbon::new(kind)));
+            let tab_bar = Rc::new(RefCell::new(TabBar::new(kind)));
             let intents = Rc::new(RefCell::new(Vec::new()));
             let action = Rc::new(RefCell::new(Action::Disabled {
                 reason: NOT_YET_IMPLEMENTED.to_owned(),
             }));
             let fixed = set.map(Rc::new);
             // Wide enough that every placement of the committed
-            // ribbons sits inside the screen rect (clicks outside it
+            // command bars sits inside the screen rect (clicks outside it
             // never reach a widget).
             let harness = Harness::builder()
                 .with_size(egui::vec2(12000.0, 4000.0))
                 .build_ui({
-                    let ribbon = Rc::clone(&ribbon);
+                    let tab_bar = Rc::clone(&tab_bar);
                     let intents = Rc::clone(&intents);
                     let action = Rc::clone(&action);
                     let registry = Registry::new();
@@ -974,41 +974,43 @@ mod tests {
                         let set: &LayoutSet = match fixed {
                             Some(ref set) => set.as_ref(),
                             None => {
-                                dynamic = sets().get(ribbon.borrow().kind());
+                                dynamic = sets()
+                                    .get(tab_bar.borrow().kind())
+                                    .expect("the committed set");
                                 dynamic
                             }
                         };
-                        let mut ribbon = ribbon.borrow_mut();
+                        let mut tab_bar = tab_bar.borrow_mut();
                         let produced = match surface {
-                            Surface::Ribbon => ribbon.show_with(ui, set, &resolve),
-                            Surface::RibbonAndQuickAccess => {
-                                let mut intents = ribbon
+                            Surface::CommandBar => tab_bar.show_with(ui, set, &resolve),
+                            Surface::CommandBarAndQuickAccess => {
+                                let mut intents = tab_bar
                                     .show_with(ui, set, &resolve)
-                                    .expect("the ribbon renders");
+                                    .expect("the command bar renders");
                                 intents.extend(
-                                    ribbon
+                                    tab_bar
                                         .show_quick_access_with(ui, set, &resolve)
                                         .expect("the quick access renders"),
                                 );
                                 Ok(intents)
                             }
                             Surface::QuickAccess => {
-                                ribbon.show_quick_access_with(ui, set, &resolve)
+                                tab_bar.show_quick_access_with(ui, set, &resolve)
                             }
-                            Surface::Backstage => ribbon.show_backstage_with(ui, set, &resolve),
+                            Surface::Backstage => tab_bar.show_backstage_with(ui, set, &resolve),
                             Surface::ContextMenu => {
-                                ribbon.show_context_menu_with(ui, set, &resolve)
+                                tab_bar.show_context_menu_with(ui, set, &resolve)
                             }
-                            Surface::Registry => ribbon.show(ui, set, &registry, &app),
+                            Surface::Registry => tab_bar.show(ui, set, &registry, &app),
                         }
-                        .expect("the ribbon renders");
+                        .expect("the command bar renders");
                         // Accumulate: one `run` may take several
                         // frames and only the first sees the click.
                         intents.borrow_mut().extend(produced);
                     }
                 });
             let mut rig = Self {
-                ribbon,
+                tab_bar,
                 intents,
                 action,
                 harness,
@@ -1017,20 +1019,24 @@ mod tests {
             rig
         }
 
-        /// A rig for one layout set, drawing the ribbon.
+        /// A rig for one layout set, drawing the command bar.
         fn new(kind: LayoutKind, set: LayoutSet, surface: Surface) -> Self {
             Self::build(kind, Some(set), surface)
         }
 
-        /// A rig for one committed layout, drawing the ribbon.
+        /// A rig for one committed layout, drawing the command bar.
         fn committed(kind: LayoutKind) -> Self {
-            Self::new(kind, sets().get(kind).clone(), Surface::Ribbon)
+            Self::new(
+                kind,
+                sets().get(kind).expect("the committed set").clone(),
+                Surface::CommandBar,
+            )
         }
 
-        /// A rig over the committed layouts that follows the ribbon's
+        /// A rig over the committed layouts that follows the command bar's
         /// layout kind: the ADR 0032 switch.
         fn switching(kind: LayoutKind) -> Self {
-            Self::build(kind, None, Surface::Ribbon)
+            Self::build(kind, None, Surface::CommandBar)
         }
 
         /// Runs one frame.
@@ -1048,10 +1054,10 @@ mod tests {
             std::mem::take(&mut *self.intents.borrow_mut())
         }
 
-        /// Mutates the ribbon state between frames (layout switch,
+        /// Mutates the command bar state between frames (layout switch,
         /// backstage, ...).
-        fn ribbon(&self) -> std::cell::RefMut<'_, Ribbon> {
-            self.ribbon.borrow_mut()
+        fn tab_bar(&self) -> std::cell::RefMut<'_, TabBar> {
+            self.tab_bar.borrow_mut()
         }
 
         /// Clicks the first widget with this role and label, then
@@ -1314,15 +1320,15 @@ mod tests {
         }
         let layout = &set.layout;
         let line = |label: &str, value: usize| format!("{label}: {value}");
-        let mut ribbon_roots = 0;
-        let mut ribbon_items = 0;
+        let mut tab_bar_roots = 0;
+        let mut tab_bar_items = 0;
         let mut groups = 0;
         for tab in &layout.tabs {
             groups += tab.groups.len();
             for group in &tab.groups {
                 let (roots, items) = split(&group.controls);
-                ribbon_roots += roots;
-                ribbon_items += items;
+                tab_bar_roots += roots;
+                tab_bar_items += items;
             }
         }
         let mut backstage_roots = 0;
@@ -1342,10 +1348,10 @@ mod tests {
         let (qat_roots, qat_items) = split(&layout.quick_access_toolbar.controls);
         [
             format!("layout: {}", kind_label(kind)),
-            line("ribbon tabs", layout.tabs.len()),
-            line("ribbon groups", groups),
-            line("ribbon controls", ribbon_roots),
-            line("ribbon nested controls", ribbon_items),
+            line("command bar tabs", layout.tabs.len()),
+            line("command bar groups", groups),
+            line("command bar controls", tab_bar_roots),
+            line("command bar nested controls", tab_bar_items),
             line("backstage tabs", layout.backstage.tabs.len()),
             line("backstage controls", backstage_roots),
             line("backstage nested controls", backstage_items),
@@ -1358,48 +1364,45 @@ mod tests {
         .join("\n")
     }
 
-    /// The snapshot name of one layout kind.
+    /// The snapshot name of one layout kind (its layout id).
     fn kind_label(kind: LayoutKind) -> &'static str {
-        match kind {
-            LayoutKind::Visio2016 => "panel-2016",
-            LayoutKind::Visio365 => "panel-365",
-        }
+        kind.id()
     }
 
     // --- state ------------------------------------------------------
 
     #[test]
-    fn ribbon_state_transitions() {
-        let mut ribbon = Ribbon::new(LayoutKind::Visio2016);
-        assert_eq!(ribbon.kind(), LayoutKind::Visio2016);
-        assert_eq!(ribbon.active_tab(), 0);
-        assert_eq!(ribbon.active_backstage_tab(), 0);
-        assert!(!ribbon.backstage_open());
-        assert_eq!(ribbon.context_menu(), None);
+    fn tab_bar_state_transitions() {
+        let mut tab_bar = TabBar::new(LayoutKind::Panel2016);
+        assert_eq!(tab_bar.kind(), LayoutKind::Panel2016);
+        assert_eq!(tab_bar.active_tab(), 0);
+        assert_eq!(tab_bar.active_backstage_tab(), 0);
+        assert!(!tab_bar.backstage_open());
+        assert_eq!(tab_bar.context_menu(), None);
 
-        ribbon.set_kind(LayoutKind::Visio365);
-        assert_eq!(ribbon.kind(), LayoutKind::Visio365);
-        assert_eq!(ribbon.active_tab(), 0);
+        tab_bar.set_kind(LayoutKind::Panel365);
+        assert_eq!(tab_bar.kind(), LayoutKind::Panel365);
+        assert_eq!(tab_bar.active_tab(), 0);
 
-        ribbon.set_active_tab(3);
-        assert_eq!(ribbon.active_tab(), 3);
-        ribbon.set_backstage_open(true);
-        assert!(ribbon.backstage_open());
-        ribbon.set_active_backstage_tab(2);
-        assert_eq!(ribbon.active_backstage_tab(), 2);
+        tab_bar.set_active_tab(3);
+        assert_eq!(tab_bar.active_tab(), 3);
+        tab_bar.set_backstage_open(true);
+        assert!(tab_bar.backstage_open());
+        tab_bar.set_active_backstage_tab(2);
+        assert_eq!(tab_bar.active_backstage_tab(), 2);
         let id = FluentId::new("ShapeShortcutMenu");
-        ribbon.set_context_menu(Some(id.clone()));
-        assert_eq!(ribbon.context_menu(), Some(&id));
+        tab_bar.set_context_menu(Some(id.clone()));
+        assert_eq!(tab_bar.context_menu(), Some(&id));
     }
 
     #[test]
     fn toggles_flip_and_return_to_false() {
-        let mut ribbon = Ribbon::new(LayoutKind::Visio2016);
+        let mut tab_bar = TabBar::new(LayoutKind::Panel2016);
         let id = FluentId::new("SnapToGrid");
-        ribbon.toggle(id.clone());
-        assert!(ribbon.toggles.contains(&id));
-        ribbon.toggle(id.clone());
-        assert!(!ribbon.toggles.contains(&id));
+        tab_bar.toggle(id.clone());
+        assert!(tab_bar.toggles.contains(&id));
+        tab_bar.toggle(id.clone());
+        assert!(!tab_bar.toggles.contains(&id));
     }
 
     // --- control-to-command rules ----------------------------------
@@ -1412,7 +1415,7 @@ mod tests {
             panic!("expected an intent, got {action:?}");
         };
         assert_eq!(got.command, id);
-        assert_eq!(got.invocation.source, Source::Ribbon);
+        assert_eq!(got.invocation.source, Source::CommandBar);
         assert!(got.invocation.args.is_empty());
     }
 
@@ -1621,7 +1624,7 @@ mod tests {
         set.layout.quick_access_toolbar = QuickAccessToolbar {
             controls: vec![control("QSave", "QSave", ControlType::Button, None)],
         };
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Registry);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::Registry);
         assert!(rig.take_intents().is_empty());
         let widgets = rig.widgets();
         let save = widgets
@@ -1656,7 +1659,7 @@ mod tests {
             ControlType::Button,
             Some("file.save"),
         )]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("file.save")));
         rig.run();
         // The enabled control is not disabled and carries no tooltip.
@@ -1679,7 +1682,7 @@ mod tests {
             ControlType::Button,
             Some("edit.undo"),
         )]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Disabled {
             reason: "no document".to_owned(),
         });
@@ -1701,14 +1704,14 @@ mod tests {
             ControlType::CheckBox,
             Some("view.snap_to_grid"),
         )]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("view.snap_to_grid")));
         rig.run();
         rig.click(Role::CheckBox, "Snap to grid");
         assert_eq!(rig.take_intents(), vec![intent("view.snap_to_grid")]);
-        assert!(rig.ribbon().toggles.contains(&FluentId::new("SnapToGrid")));
+        assert!(rig.tab_bar().toggles.contains(&FluentId::new("SnapToGrid")));
         rig.click(Role::CheckBox, "Snap to grid");
-        assert!(!rig.ribbon().toggles.contains(&FluentId::new("SnapToGrid")));
+        assert!(!rig.tab_bar().toggles.contains(&FluentId::new("SnapToGrid")));
     }
 
     // --- rendering: the widget mapping ------------------------------
@@ -1755,7 +1758,7 @@ mod tests {
                 1,
             ),
         ]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("file.save")));
         rig.run();
         let names = rig.names();
@@ -1815,7 +1818,7 @@ mod tests {
                 1,
             ),
         ]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("edit.paste")));
         rig.run();
         assert!(!rig.names().contains_key("Paste Special"));
@@ -1836,7 +1839,7 @@ mod tests {
             ),
             child("Paste", "Paste", ControlType::Button, None, "PasteSplit", 1),
         ]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("edit.paste")));
         rig.run();
         let names = rig.names();
@@ -1857,11 +1860,11 @@ mod tests {
             ControlType::ToggleButton,
             None,
         )]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("format.text.bold")));
         rig.run();
         rig.click(Role::Button, "Bold");
-        assert!(rig.ribbon().toggles.contains(&FluentId::new("Bold")));
+        assert!(rig.tab_bar().toggles.contains(&FluentId::new("Bold")));
     }
 
     #[test]
@@ -1886,7 +1889,7 @@ mod tests {
                 1,
             ),
         ]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("file.open")));
         rig.run();
         let names = rig.names();
@@ -1905,7 +1908,7 @@ mod tests {
                 control("SaveQuickAccess", "SaveQ", ControlType::Button, None),
             ],
         };
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::QuickAccess);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::QuickAccess);
         rig.set_action(Action::Emit(intent("edit.undo")));
         rig.run();
         let names = rig.names();
@@ -1954,10 +1957,10 @@ mod tests {
                 },
             ],
         };
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Backstage);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::Backstage);
         assert!(rig.names().is_empty(), "a closed backstage draws nothing");
 
-        rig.ribbon().set_backstage_open(true);
+        rig.tab_bar().set_backstage_open(true);
         rig.run();
         let names = rig.names();
         assert_eq!(names.get("TabInfo"), Some(&1));
@@ -1972,7 +1975,7 @@ mod tests {
             "the other entry is hidden"
         );
 
-        rig.ribbon().set_active_backstage_tab(1);
+        rig.tab_bar().set_active_backstage_tab(1);
         rig.run();
         let names = rig.names();
         assert_eq!(names.get("OpenBrowse"), Some(&1));
@@ -1998,10 +2001,10 @@ mod tests {
             visual_notes: None,
             controls: vec![control("Cut", "Cut", ControlType::Button, Some("edit.cut"))],
         }];
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::ContextMenu);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::ContextMenu);
         assert!(rig.names().is_empty(), "no menu selected draws nothing");
 
-        rig.ribbon()
+        rig.tab_bar()
             .set_context_menu(Some(FluentId::new("ShapeShortcutMenu")));
         rig.set_action(Action::Emit(intent("edit.cut")));
         rig.run();
@@ -2010,7 +2013,7 @@ mod tests {
         assert_eq!(rig.take_intents(), vec![intent("edit.cut")]);
 
         // A menu id the layout does not have draws nothing (no crash).
-        rig.ribbon()
+        rig.tab_bar()
             .set_context_menu(Some(FluentId::new("GhostMenu")));
         rig.run();
         assert!(rig.names().is_empty());
@@ -2027,7 +2030,7 @@ mod tests {
                 None,
             ),
         ]);
-        let mut rig = Rig::new(LayoutKind::Visio2016, set, Surface::Ribbon);
+        let mut rig = Rig::new(LayoutKind::Panel2016, set, Surface::CommandBar);
         rig.set_action(Action::Emit(intent("format.line")));
         rig.run();
         assert_eq!(rig.names().get("GroupClipboard"), Some(&1));
@@ -2040,20 +2043,20 @@ mod tests {
 
     #[test]
     fn both_layouts_render_one_widget_per_placement() {
-        for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
-            let set = sets().get(kind);
-            let mut rig = Rig::new(kind, set.clone(), Surface::RibbonAndQuickAccess);
+        for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
+            let set = sets().get(kind).expect("the committed set");
+            let mut rig = Rig::new(kind, set.clone(), Surface::CommandBarAndQuickAccess);
             rig.set_action(Action::Emit(intent("file.save")));
             rig.run();
 
-            // The ribbon and quick access are drawn together, like the
+            // The command bar and quick access are drawn together, like the
             // shell draws them.
             let qat = expected_names(&set.layout.quick_access_toolbar.controls, false);
 
-            // Every ribbon tab: one widget per tab, per group and per
+            // Every command-bar tab: one widget per tab, per group and per
             // root control of the active tab's groups.
             for (index, tab) in set.layout.tabs.iter().enumerate() {
-                rig.ribbon().set_active_tab(index);
+                rig.tab_bar().set_active_tab(index);
                 rig.run();
                 let mut expected = vec![FILE_BUTTON.to_owned()];
                 expected.extend(set.layout.tabs.iter().map(|t| t.label.clone()));
@@ -2065,7 +2068,7 @@ mod tests {
                 assert_eq!(
                     rig.names(),
                     counts_of(&expected),
-                    "{kind:?} ribbon tab {index} ({})",
+                    "{kind:?} command-bar tab {index} ({})",
                     tab.label
                 );
             }
@@ -2074,11 +2077,11 @@ mod tests {
             // full-window stack): one widget per entry and per root
             // control of the active entry.
             let mut rig = Rig::new(kind, set.clone(), Surface::Backstage);
-            rig.ribbon().set_backstage_open(true);
+            rig.tab_bar().set_backstage_open(true);
             rig.set_action(Action::Emit(intent("file.save")));
             rig.run();
             for (index, tab) in set.layout.backstage.tabs.iter().enumerate() {
-                rig.ribbon().set_active_backstage_tab(index);
+                rig.tab_bar().set_active_backstage_tab(index);
                 rig.run();
                 let mut expected = set
                     .layout
@@ -2101,24 +2104,29 @@ mod tests {
     #[test]
     fn the_layout_counts_are_pinned() {
         let mut report = String::new();
-        for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
-            report.push_str(&counts_report(kind, sets().get(kind)));
+        for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
+            report.push_str(&counts_report(
+                kind,
+                sets().get(kind).expect("the committed set"),
+            ));
             report.push('\n');
         }
         insta::assert_snapshot!("layout_counts", report);
     }
 
     #[test]
-    fn every_dropdown_of_the_2016_ribbon_lists_its_items() {
+    fn every_dropdown_of_the_2016_command_bar_lists_its_items() {
         // Every tab of the committed 2016 layout: open each dropdown
         // root and check the added widgets are exactly its nested
         // controls (ADR 0031).
-        let set = sets().get(LayoutKind::Visio2016);
-        let mut rig = Rig::committed(LayoutKind::Visio2016);
+        let set = sets()
+            .get(LayoutKind::Panel2016)
+            .expect("the committed set");
+        let mut rig = Rig::committed(LayoutKind::Panel2016);
         rig.set_action(Action::Emit(intent("file.save")));
         rig.run();
         for (index, tab) in set.layout.tabs.iter().enumerate() {
-            rig.ribbon().set_active_tab(index);
+            rig.tab_bar().set_active_tab(index);
             rig.run();
             for group in &tab.groups {
                 let kept = expected_kept(&group.controls);
@@ -2143,7 +2151,7 @@ mod tests {
                         added,
                         want,
                         "{:?} tab {} group {} control {}",
-                        kind_label(LayoutKind::Visio2016),
+                        kind_label(LayoutKind::Panel2016),
                         tab.label,
                         group.label,
                         control.label
@@ -2157,24 +2165,24 @@ mod tests {
 
     #[test]
     fn switching_layouts_rebuilds_the_tab_set() {
-        // ADR 0032: dispatching `view.ui_layout.visio_365` switches
+        // ADR 0032: dispatching `view.ui_layout.panel_365` switches
         // the layout without a restart. The dispatch is the shell's
         // (P4-03) and the command's (P4-02); here the intent is built
         // by hand and its documented effect applied to the same
-        // ribbon in the same egui context.
-        let dispatch = intent("view.ui_layout.visio_365");
-        let mut rig = Rig::switching(LayoutKind::Visio2016);
+        // command bar in the same egui context.
+        let dispatch = intent("view.ui_layout.panel_365");
+        let mut rig = Rig::switching(LayoutKind::Panel2016);
         rig.set_action(Action::Emit(intent("file.save")));
         rig.run();
         let tabs_2016: Vec<String> = sets()
-            .visio_2016
+            .panel_2016
             .layout
             .tabs
             .iter()
             .map(|t| t.label.clone())
             .collect();
         let tabs_365: Vec<String> = sets()
-            .visio_365
+            .panel_365
             .layout
             .tabs
             .iter()
@@ -2186,51 +2194,51 @@ mod tests {
         }
 
         // Apply the intent's effect (ADR 0032).
-        assert_eq!(dispatch.command.as_str(), "view.ui_layout.visio_365");
+        assert_eq!(dispatch.command.as_str(), "view.ui_layout.panel_365");
         let _ = dispatch;
-        rig.ribbon().set_kind(LayoutKind::Visio365);
+        rig.tab_bar().set_kind(LayoutKind::Panel365);
         rig.run();
         for label in &tabs_365 {
             assert!(rig.names().contains_key(label), "365 tab {label}");
         }
-        assert_eq!(rig.ribbon().kind(), LayoutKind::Visio365);
-        assert_eq!(rig.ribbon().active_tab(), 0, "switching resets the tab");
+        assert_eq!(rig.tab_bar().kind(), LayoutKind::Panel365);
+        assert_eq!(rig.tab_bar().active_tab(), 0, "switching resets the tab");
     }
 
     #[test]
     fn the_file_button_toggles_the_backstage() {
-        let mut rig = Rig::committed(LayoutKind::Visio2016);
-        assert!(!rig.ribbon().backstage_open());
+        let mut rig = Rig::committed(LayoutKind::Panel2016);
+        assert!(!rig.tab_bar().backstage_open());
         rig.click(Role::Button, FILE_BUTTON);
-        assert!(rig.ribbon().backstage_open());
+        assert!(rig.tab_bar().backstage_open());
         rig.click(Role::Button, FILE_BUTTON);
-        assert!(!rig.ribbon().backstage_open());
+        assert!(!rig.tab_bar().backstage_open());
     }
 
     #[test]
     fn clicking_a_tab_activates_it() {
-        let mut rig = Rig::committed(LayoutKind::Visio2016);
-        let second = sets().visio_2016.layout.tabs[1].label.clone();
+        let mut rig = Rig::committed(LayoutKind::Panel2016);
+        let second = sets().panel_2016.layout.tabs[1].label.clone();
         rig.click(Role::Button, &second);
-        assert_eq!(rig.ribbon().active_tab(), 1);
+        assert_eq!(rig.tab_bar().active_tab(), 1);
     }
 
     #[test]
-    fn the_builtin_registry_enables_its_ribbon_controls() {
+    fn the_builtin_registry_enables_its_command_bar_controls() {
         // P4-04 was written against the registry stub; with P4-02's
-        // builtins every ribbon control bound to `view.toggle_grid` or
+        // builtins every command bar control bound to `view.toggle_grid` or
         // `view.zoom.fit` resolves to an implemented command, enabled
         // once a document is open.
-        let registry = ferrogram_commands::builtins::registry().expect("registry");
+        let registry = larrygram_commands::builtins::registry().expect("registry");
         let mut app = AppCtx::new(Settings::default());
         // One rectangle on a new page: `view.zoom.fit` needs a page.
-        let mut document = ferrogram_model::Document::new();
-        let master = ferrogram_model::stencils::basic_shapes().masters[0].clone();
-        ferrogram_model::stencils::instantiate(&mut document, &master);
-        app.open_document(ferrogram_commands::DocumentSession::new(document, None));
-        for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+        let mut document = larrygram_model::Document::new();
+        let master = larrygram_model::stencils::basic_shapes().masters[0].clone();
+        larrygram_model::stencils::instantiate(&mut document, &master);
+        app.open_document(larrygram_commands::DocumentSession::new(document, None));
+        for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
             let mut bound = 0;
-            for tab in &sets().get(kind).layout.tabs {
+            for tab in &sets().get(kind).expect("the committed set").layout.tabs {
                 for group in &tab.groups {
                     for control in &group.controls {
                         let command = control.command.as_ref().map(|id| id.as_str());
@@ -2250,25 +2258,28 @@ mod tests {
     }
 
     #[test]
-    fn with_ui_renders_a_whole_ribbon_without_panicking() {
+    fn with_ui_renders_a_whole_command_bar_without_panicking() {
         // Smoke test on the plain egui test ui (no harness).
-        let set = sets().get(LayoutKind::Visio365).clone();
-        let mut ribbon = Ribbon::new(LayoutKind::Visio365);
+        let set = sets()
+            .get(LayoutKind::Panel365)
+            .expect("the committed set")
+            .clone();
+        let mut tab_bar = TabBar::new(LayoutKind::Panel365);
         let registry = Registry::new();
         let app = AppCtx::new(Settings::default());
         with_ui(|ui| {
-            let intents = ribbon.show(ui, &set, &registry, &app).expect("renders");
+            let intents = tab_bar.show(ui, &set, &registry, &app).expect("renders");
             assert!(intents.is_empty());
-            let intents = ribbon
+            let intents = tab_bar
                 .show_quick_access(ui, &set, &registry, &app)
                 .expect("renders");
             assert!(intents.is_empty());
-            ribbon.set_backstage_open(true);
-            let intents = ribbon
+            tab_bar.set_backstage_open(true);
+            let intents = tab_bar
                 .show_backstage(ui, &set, &registry, &app)
                 .expect("renders");
             assert!(intents.is_empty());
-            let intents = ribbon
+            let intents = tab_bar
                 .show_context_menu(ui, &set, &registry, &app)
                 .expect("renders");
             assert!(intents.is_empty());

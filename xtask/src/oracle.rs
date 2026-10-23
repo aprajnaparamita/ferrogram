@@ -3,7 +3,7 @@
 //! The oracle is the set of six libvisio CLI tools built by
 //! `tools/libvisio-oracle/build.sh` (ADR 0010). It is dev-only and
 //! optional: a missing build never fails the gate, and tests that need
-//! it are `#[ignore]`d and gated on `FERROGRAM_REQUIRE_ORACLE=1`.
+//! it are `#[ignore]`d and gated on `LARRYGRAM_REQUIRE_ORACLE=1`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -13,7 +13,7 @@ use crate::util::{self, Result};
 
 /// Default build directory: the external drive, shared by every
 /// worktree (AGENTS.md, "Disk usage"). CI overrides it.
-pub const DEFAULT_BUILD_DIR: &str = "/Volumes/Dara/ferrogram/build/libvisio-oracle";
+pub const DEFAULT_BUILD_DIR: &str = "/Volumes/Dara/larrygram/build/libvisio-oracle";
 
 /// The six libvisio CLI tools the oracle provides. Keep in sync with
 /// `BINARIES` in `tools/libvisio-oracle/build.sh`.
@@ -38,7 +38,7 @@ const USAGE: &str =
   build               clone libvisio and build its CLI tools (ADR 0010)
   clean               remove <build-dir>/bin and <build-dir>/src
   --build-dir <path>  override the build directory (default:
-                      FERROGRAM_LIBVISIO_BUILD_DIR or /Volumes/Dara/ferrogram/build/libvisio-oracle)
+                      LARRYGRAM_LIBVISIO_BUILD_DIR or /Volumes/Dara/larrygram/build/libvisio-oracle)
   --jobs <n>          parallel jobs for make (build only)";
 
 /// Outcome of `build.sh status`.
@@ -84,7 +84,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     BINARIES.len()
                 ),
                 None => println!(
-                    "oracle: oracle dir: not set (FERROGRAM_LIBVISIO_ORACLE; oracle tests skip)"
+                    "oracle: oracle dir: not set (LARRYGRAM_LIBVISIO_ORACLE; oracle tests skip)"
                 ),
             }
             Ok(())
@@ -122,30 +122,30 @@ pub fn status() -> (OracleStatus, PathBuf) {
 }
 
 /// Runs `build.sh build` for the default (or
-/// `FERROGRAM_LIBVISIO_BUILD_DIR`) build dir and returns its stdout.
+/// `LARRYGRAM_LIBVISIO_BUILD_DIR`) build dir and returns its stdout.
 /// The error carries the failing command's output.
 pub fn build() -> Result<String> {
     build_in(&build_dir(), None)
 }
 
 /// Runs `build.sh clean` for the default (or
-/// `FERROGRAM_LIBVISIO_BUILD_DIR`) build dir and returns its stdout.
+/// `LARRYGRAM_LIBVISIO_BUILD_DIR`) build dir and returns its stdout.
 pub fn clean() -> Result<String> {
     clean_in(&build_dir())
 }
 
-/// The build directory: `FERROGRAM_LIBVISIO_BUILD_DIR`, else the
+/// The build directory: `LARRYGRAM_LIBVISIO_BUILD_DIR`, else the
 /// default on the external drive.
 pub fn build_dir() -> PathBuf {
-    build_dir_from(std::env::var_os("FERROGRAM_LIBVISIO_BUILD_DIR"))
+    build_dir_from(std::env::var_os("LARRYGRAM_LIBVISIO_BUILD_DIR"))
 }
 
-/// The tools directory tests use: `FERROGRAM_LIBVISIO_ORACLE`, but only
+/// The tools directory tests use: `LARRYGRAM_LIBVISIO_ORACLE`, but only
 /// when it names an existing directory. This is the same helper as in
 /// `crates/vsd-binary/tests/common/mod.rs` (ADR 0010: no wrapper
 /// crate; the helper is copied per consumer).
 pub fn oracle_dir() -> Option<PathBuf> {
-    oracle_dir_from(std::env::var_os("FERROGRAM_LIBVISIO_ORACLE"))
+    oracle_dir_from(std::env::var_os("LARRYGRAM_LIBVISIO_ORACLE"))
 }
 
 /// Runs `build.sh status --build-dir <dir>` and parses its output.
@@ -182,7 +182,7 @@ pub fn clean_in(dir: &Path) -> Result<String> {
 }
 
 /// How many of the six tools exist directly under `dir` (the directory
-/// `FERROGRAM_LIBVISIO_ORACLE` points at, usually `<build-dir>/bin`).
+/// `LARRYGRAM_LIBVISIO_ORACLE` points at, usually `<build-dir>/bin`).
 pub fn count_tools(dir: &Path) -> usize {
     BINARIES
         .iter()
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn build_dir_reads_the_env() {
-        let env = std::env::var_os("FERROGRAM_LIBVISIO_BUILD_DIR");
+        let env = std::env::var_os("LARRYGRAM_LIBVISIO_BUILD_DIR");
         let dir = build_dir();
         assert_eq!(dir, build_dir_from(env.clone()));
         match env {
@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(oracle_dir_from(None), None);
         assert_eq!(oracle_dir_from(Some(OsString::new())), None);
         assert_eq!(
-            oracle_dir_from(Some(OsString::from("/nonexistent-ferrogram-oracle-dir"))),
+            oracle_dir_from(Some(OsString::from("/nonexistent-larrygram-oracle-dir"))),
             None
         );
         let tmp = TempDir::new("oracle-dir");
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(status_in(tmp.path()), OracleStatus::Built);
     }
 
-    /// The script's own `FERROGRAM_LIBVISIO_BUILD_DIR` override: tests
+    /// The script's own `LARRYGRAM_LIBVISIO_BUILD_DIR` override: tests
     /// pass the variable to the child process, never to this one.
     #[cfg(unix)]
     #[test]
@@ -448,7 +448,7 @@ mod tests {
                     .join("build.sh"),
             )
             .arg("status")
-            .env("FERROGRAM_LIBVISIO_BUILD_DIR", tmp.path())
+            .env("LARRYGRAM_LIBVISIO_BUILD_DIR", tmp.path())
             .output()
             .unwrap();
         assert!(out.status.success());
@@ -462,7 +462,7 @@ mod tests {
                     .join("build.sh"),
             )
             .arg("status")
-            .env("FERROGRAM_LIBVISIO_BUILD_DIR", tmp.path())
+            .env("LARRYGRAM_LIBVISIO_BUILD_DIR", tmp.path())
             .output()
             .unwrap();
         assert!(out.status.success());

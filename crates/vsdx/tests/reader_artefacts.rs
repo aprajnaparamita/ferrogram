@@ -23,8 +23,8 @@
 
 mod common;
 
-use ferrogram_model::{Document, Preserved, QName, XmlAttribute, XmlChild, XmlNode, diff};
-use ferrogram_vsdx::{
+use larrygram_model::{Document, Preserved, QName, XmlAttribute, XmlChild, XmlNode, diff};
+use larrygram_vsdx::{
     ContentType, Limits, Package, Part, PartData, PartName, Relationship, RelationshipId,
     TargetMode, read_package, to_model, write_document,
 };

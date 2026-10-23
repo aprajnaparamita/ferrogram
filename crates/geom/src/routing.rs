@@ -6,7 +6,7 @@
 //! re-route, which endpoints are glued) lives in `crates/commands`
 //! (L4); these functions are pure geometry in inches (ADR 0011).
 //!
-//! Part of Ferrogram. Alpha.
+//! Part of Larrygram. Alpha.
 
 use crate::error::Error;
 use crate::point::Point;

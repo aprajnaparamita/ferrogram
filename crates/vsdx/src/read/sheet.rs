@@ -11,8 +11,8 @@
 //! processing instruction) has nowhere to put it: both are kept verbatim in
 //! the parent's [`Preserved`] instead of being mapped.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellName, CellValue, Preserved, Row, Section, SectionName, Sheet, XmlNode,
 };
 
@@ -131,7 +131,7 @@ pub(crate) fn map_cell(node: &XmlNode, part: &str) -> Result<Option<Cell>, Error
 /// modeled and must be kept verbatim by the caller.
 ///
 /// The `Cell` children a section writes outside its rows map to
-/// [`Section::cells`](ferrogram_model::Section) (P2-06b decision 1), in file
+/// [`Section::cells`](larrygram_model::Section) (P2-06b decision 1), in file
 /// order.
 pub(crate) fn map_section(node: &XmlNode, part: &str) -> Result<Option<Section>, Error> {
     let Some(name) = node::attribute(node, "N") else {
@@ -199,7 +199,7 @@ pub(crate) fn map_row(node: &XmlNode, part: &str) -> Result<Option<Row>, Error> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{Color, QName, XmlAttribute, XmlChild};
+    use larrygram_model::{Color, QName, XmlAttribute, XmlChild};
 
     fn qname(name: &str) -> QName {
         match name.split_once(':') {

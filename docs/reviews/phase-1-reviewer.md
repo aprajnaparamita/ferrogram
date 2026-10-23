@@ -111,7 +111,7 @@ Two related flakiness sources:
   `reference/`), but it will bite the planned Windows run.
 - Test temp directories are mostly keyed by `std::process::id()` but several are
   fixed names shared by every concurrent process:
-  `xtask/src/extract/diff.rs:369` (`ferrogram-diff-test`),
+  `xtask/src/extract/diff.rs:369` (`larrygram-diff-test`),
   `xtask/src/extract/parity.rs:270`, `:306`, `xtask/src/extract/util.rs:134`,
   `:147`, `:158`. Two agents running `cargo test` at once (e.g. P1-09/P1-10/P1-11
   worktrees) can delete each other's directories mid-test.
@@ -169,7 +169,7 @@ for the `.json` fallback of `data_file` (`loader.rs:201-216`); today only
 ### 9. minor — `crates/ui-spec` public API: rough edges before Phase 4
 
 Nothing blocking, but each item below is a likely breaking change once
-`crates/commands` and the Phase 4 ribbon build on these types:
+`crates/commands` and the Phase 4 command bar build on these types:
 
 - No `serde::Serialize` on any model type. The screenshot pass (ADR 0007) must
   write `bounds`/`keytip`/`size_variant` back; with today's API the app would

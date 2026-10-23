@@ -7,12 +7,12 @@
 //! parts) and the second write must be byte-identical to the first (writer
 //! stability). The corpus is fetched, never committed (ADR 0005): the tests
 //! skip with a message when `corpus/vsdx/` is absent, and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set.
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set.
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{XmlNode, diff};
-use ferrogram_vsdx::{Limits, Package, PartData, read_package, to_model, write_document};
+use larrygram_model::{XmlNode, diff};
+use larrygram_vsdx::{Limits, Package, PartData, read_package, to_model, write_document};
 
 /// The corpus directory with the real `.vsdx` packages.
 fn corpus_dir() -> PathBuf {
@@ -41,8 +41,8 @@ fn corpus_files() -> Vec<PathBuf> {
 #[allow(clippy::panic)] // test helper: a missing corpus must be loud here
 fn corpus_missing(files: &[PathBuf]) -> bool {
     if files.is_empty() {
-        if std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_some_and(|v| v == "1") {
-            panic!("corpus/vsdx is absent and FERROGRAM_REQUIRE_CORPUS=1");
+        if std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_some_and(|v| v == "1") {
+            panic!("corpus/vsdx is absent and LARRYGRAM_REQUIRE_CORPUS=1");
         }
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
     }

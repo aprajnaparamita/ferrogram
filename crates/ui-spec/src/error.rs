@@ -93,6 +93,15 @@ pub enum LoadError {
         /// What was expected and what was found.
         message: String,
     },
+
+    /// The layout kind has no v1 data file: Panel Modern and Panel
+    /// Classic read the hand-curated v2 files (`ui_spec::v2`, ADR 0061)
+    /// and are not loaded by [`Loader`](crate::Loader).
+    #[error("layout {id} has no v1 data; load it through ui_spec::v2 (ADR 0061)")]
+    UnsupportedLayout {
+        /// The layout id (`panel-modern` or `panel-classic`).
+        id: &'static str,
+    },
 }
 
 /// A rejected id string, from [`CommandId::parse`](crate::CommandId::parse)

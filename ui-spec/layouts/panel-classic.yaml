@@ -1494,7 +1494,7 @@ menu_bars:
     label: Help
     access: "h"
     items:
-    - id: drawing.help.ferrogram_help
+    - id: drawing.help.larrygram_help
       kind: button
       label: Larrygram Help
       access: "h"
@@ -1522,7 +1522,7 @@ menu_bars:
       command: help.welcome
       new_command: true
       begin_group: true
-    - id: drawing.help.about_ferrogram
+    - id: drawing.help.about_larrygram
       kind: button
       label: About Larrygram
       access: "a"
@@ -2256,7 +2256,7 @@ menu_bars:
     label: Help
     access: "h"
     items:
-    - id: shapesheet.help.ferrogram_help
+    - id: shapesheet.help.larrygram_help
       kind: button
       label: Larrygram Help
       access: "h"
@@ -2283,7 +2283,7 @@ menu_bars:
       command: help.welcome
       new_command: true
       begin_group: true
-    - id: shapesheet.help.about_ferrogram
+    - id: shapesheet.help.about_larrygram
       kind: button
       label: About Larrygram
       access: "a"
@@ -2843,7 +2843,7 @@ menu_bars:
     label: Help
     access: "h"
     items:
-    - id: stencil.help.ferrogram_help
+    - id: stencil.help.larrygram_help
       kind: button
       label: Larrygram Help
       access: "h"
@@ -2870,7 +2870,7 @@ menu_bars:
       command: help.welcome
       new_command: true
       begin_group: true
-    - id: stencil.help.about_ferrogram
+    - id: stencil.help.about_larrygram
       kind: button
       label: About Larrygram
       access: "a"
@@ -3124,7 +3124,7 @@ toolbars:
     label: Zoom
     command: shape.draw.zoom
     visuicmd: visCmdDrawZoom
-  - id: toolbar.standard.ferrogram_help
+  - id: toolbar.standard.larrygram_help
     kind: button
     label: Larrygram Help
     command: help.contents
@@ -4764,7 +4764,7 @@ toolbars:
     visuicmd: visCmdWindowCascadeAll
     shortcut: Alt+F7
     icon: view.cascade_all
-  - id: toolbar.shapesheet_standard.ferrogram_help
+  - id: toolbar.shapesheet_standard.larrygram_help
     kind: button
     label: Larrygram Help
     command: help.contents
@@ -4971,7 +4971,7 @@ toolbars:
     visuicmd: visCmdWindowCascadeAll
     shortcut: Alt+F7
     icon: view.cascade_all
-  - id: toolbar.stencil_standard.ferrogram_help
+  - id: toolbar.stencil_standard.larrygram_help
     kind: button
     label: Larrygram Help
     command: help.contents

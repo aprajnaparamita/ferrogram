@@ -37,7 +37,7 @@ use crate::id::{PageId, ShapeId};
 use crate::lookup::{CellLookup, ValueSource};
 use crate::name::CellName;
 
-use ferrogram_geom::Angle;
+use larrygram_geom::Angle;
 
 /// The sheet a cell is read from (ADR 0021).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

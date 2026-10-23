@@ -5,7 +5,7 @@
 //! `src/geometry.rs`; these properties stress the merge and the decoders
 //! (`NurbsTo` formula text, `PolylineTo` lists) with adversarial values.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Master, MasterId, Page, PageId, QName, Row, Section,
     SectionName, Shape, ShapeGeometry, ShapeId, XmlAttribute,
 };

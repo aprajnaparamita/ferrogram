@@ -28,7 +28,7 @@ pub use view::{ZOOM_MAX, ZOOM_MIN};
 
 use std::sync::OnceLock;
 
-use ferrogram_ui_spec::Commands;
+use larrygram_ui_spec::Commands;
 
 use crate::app::AppCtx;
 use crate::error::{CommandError, RegistryError};
@@ -143,14 +143,14 @@ const BUILTINS: &[(&str, &str, EnabledFn, RunFn)] = &[
     ("view.rulers", "Rulers", always, view::run_toggle_rulers),
     ("view.units", "Units", always, view::run_units),
     (
-        "view.ui_layout.visio_2016",
-        "Visio 2016 Ribbon",
+        "view.ui_layout.panel_2016",
+        "Panel (2016 data)",
         always,
         view::run_ui_layout_2016,
     ),
     (
-        "view.ui_layout.visio_365",
-        "Microsoft 365 Ribbon",
+        "view.ui_layout.panel_365",
+        "Panel (365 data)",
         always,
         view::run_ui_layout_365,
     ),
@@ -188,8 +188,8 @@ pub fn registry() -> Result<Registry, RegistryError> {
 /// The committed `ui-spec/commands.yaml`, parsed once per process.
 ///
 /// One parse path (P4-15 review minor 8): the rows come from
-/// [`Loader::from_embedded`](ferrogram_ui_spec::Loader::from_embedded),
-/// the same staged load (parse, schema validation, decode) the ribbon
+/// [`Loader::from_embedded`](larrygram_ui_spec::Loader::from_embedded),
+/// the same staged load (parse, schema validation, decode) the command bar
 /// and the loader tests run, instead of a second `include_str!` +
 /// YAML-to-JSON round trip that never saw the schema. The commands
 /// document is shared by both layouts; the 2016 set carries it. A load
@@ -198,8 +198,8 @@ pub fn registry() -> Result<Registry, RegistryError> {
 fn embedded_commands() -> Result<&'static Commands, RegistryError> {
     static COMMANDS: OnceLock<Result<Commands, String>> = OnceLock::new();
     let cached = COMMANDS.get_or_init(|| {
-        let sets = ferrogram_ui_spec::Loader::from_embedded().map_err(|error| error.to_string())?;
-        Ok(sets.visio_2016.commands)
+        let sets = larrygram_ui_spec::Loader::from_embedded().map_err(|error| error.to_string())?;
+        Ok(sets.panel_2016.commands)
     });
     match cached {
         Ok(commands) => Ok(commands),
@@ -321,7 +321,7 @@ pub(crate) fn has_selection(ctx: &AppCtx) -> Enabled {
 
 /// Wraps a model failure as [`CommandError::Failed`] (ADR 0028: the
 /// domain crates keep their typed errors, `commands` maps them).
-pub(crate) fn model_error(error: ferrogram_model::Error) -> CommandError {
+pub(crate) fn model_error(error: larrygram_model::Error) -> CommandError {
     CommandError::failed(error.to_string())
 }
 
@@ -468,7 +468,7 @@ mod tests {
 
         // A document with no pages says so (P4-12 coverage minor 4).
         ctx.open_document(crate::DocumentSession::new(
-            ferrogram_model::Document::new(),
+            larrygram_model::Document::new(),
             None,
         ));
         let error = view::run_page_next(&mut ctx, &inv).expect_err("no pages");
@@ -487,7 +487,7 @@ mod tests {
 
         let mut ctx = AppCtx::new(crate::Settings::default());
         ctx.open_document(crate::DocumentSession::new(
-            ferrogram_model::Document::new(),
+            larrygram_model::Document::new(),
             None,
         ));
         assert!(has_document(&ctx).is_enabled());

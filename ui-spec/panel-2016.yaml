@@ -7043,7 +7043,7 @@ tabs:
         controls:
           - aliases: []
             bounds: null
-            command: file.close.ink.tools.ribbon.tab
+            command: file.close.ink.tools.tab
             icon_ref: null
             id: InkToolsClose
             keytip: null

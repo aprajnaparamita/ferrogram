@@ -18,7 +18,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use ferrogram_ui_spec::v2::LayoutV2;
+use larrygram_ui_spec::v2::LayoutV2;
 
 /// A test failure with a formatted message.
 type Error = Box<dyn std::error::Error>;

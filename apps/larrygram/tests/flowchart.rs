@@ -45,16 +45,16 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{ArgValue, Args, CommandId, Invocation, Outcome, Source};
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{ArgValue, Args, CommandId, Invocation, Outcome, Source};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, PageId, Preserved, QName, Shape, ShapeId, Sheet,
     XmlAttribute, XmlChild, XmlNode,
 };
-use ferrogram_ui::Intent;
-use ferrogram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::Loader;
+use larrygram_ui::Intent;
+use larrygram_ui::dialogs::{FileChoice, FilePicker, OpenRequest, PickState, SaveRequest};
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::Loader;
 
 // ---------------------------------------------------------------------------
 // Dispatch plumbing
@@ -65,7 +65,7 @@ use ferrogram_ui_spec::Loader;
 struct NoDialogPicker;
 
 impl FilePicker for NoDialogPicker {
-    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    fn open(&self, _request: &OpenRequest) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         panic!("the exit-criterion test must never open a dialog")
     }
 
@@ -73,7 +73,7 @@ impl FilePicker for NoDialogPicker {
         &self,
         _request: &SaveRequest,
         _data: &[u8],
-    ) -> Result<Option<FileChoice>, ferrogram_ui::UiError> {
+    ) -> Result<Option<FileChoice>, larrygram_ui::UiError> {
         panic!("the exit-criterion test must never open a dialog")
     }
 
@@ -85,7 +85,7 @@ impl FilePicker for NoDialogPicker {
 /// The shell the test drives: the builtin registry and the committed
 /// layouts, the way the app builds them.
 fn shell() -> Shell {
-    let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+    let registry = larrygram_commands::builtins::registry().expect("the registry builds");
     let layouts = Loader::from_embedded().expect("the embedded ui-spec loads");
     let mut shell = Shell::new(registry, layouts, AppCtx::new(Settings::default()));
     shell.set_picker(Box::new(NoDialogPicker));
@@ -112,7 +112,7 @@ struct TempDir {
 impl TempDir {
     fn new(label: &str) -> Self {
         let path = std::env::temp_dir().join(format!(
-            "ferrogram-flowchart-{}-{label}",
+            "larrygram-flowchart-{}-{label}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&path);

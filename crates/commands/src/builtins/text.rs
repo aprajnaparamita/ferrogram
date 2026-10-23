@@ -17,7 +17,7 @@
 //! The old `TextContent` is captured verbatim, so undo restores the
 //! shape's text exactly, including a shape that had no text at all.
 
-use ferrogram_model::{Document, Preserved, ShapeId, TextContent, TextPart};
+use larrygram_model::{Document, Preserved, ShapeId, TextContent, TextPart};
 
 use crate::app::{AppCtx, SessionId};
 use crate::error::CommandError;
@@ -36,7 +36,7 @@ pub(crate) const TABLE: CommandTable = &[
 ];
 
 /// The selection's anchor shape, or the last selected shape when there
-/// is no anchor (the same subject rule as the Size & Position panel).
+/// is no anchor (the same subject rule as the Size & Position pane).
 fn target_shape(ctx: &AppCtx) -> Option<ShapeId> {
     ctx.selection
         .anchor
@@ -204,7 +204,7 @@ impl TextEdit {
         ctx: &mut AppCtx,
         session: SessionId,
         shape: ShapeId,
-    ) -> Result<&mut ferrogram_model::Shape, CommandError> {
+    ) -> Result<&mut larrygram_model::Shape, CommandError> {
         let doc = document_mut(ctx, session)?;
         doc.shape_mut(shape)
             .ok_or_else(|| CommandError::failed(format!("unknown shape id {}", shape.index)))
@@ -239,8 +239,8 @@ impl Edit for TextEdit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_geom::Unit;
-    use ferrogram_model::{Cell, CellName, CellValue, PageId, Row, Section, SectionName, Shape};
+    use larrygram_geom::Unit;
+    use larrygram_model::{Cell, CellName, CellValue, PageId, Row, Section, SectionName, Shape};
 
     fn document() -> (Document, PageId, ShapeId) {
         let mut doc = Document::new();
@@ -299,8 +299,8 @@ mod tests {
         {
             row.preserved
                 .attributes
-                .push(ferrogram_model::XmlAttribute {
-                    name: ferrogram_model::QName::local("Del"),
+                .push(larrygram_model::XmlAttribute {
+                    name: larrygram_model::QName::local("Del"),
                     value: "1".to_owned(),
                 });
         }

@@ -165,54 +165,54 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrogram-geom"
+name = "larrygram-geom"
 version = "0.0.1"
 
 [[package]]
-name = "ferrogram-model"
+name = "larrygram-model"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
+ "larrygram-geom",
 ]
 
 [[package]]
-name = "ferrogram-render"
+name = "larrygram-render"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
- "ferrogram-model",
- "ferrogram-text",
+ "larrygram-geom",
+ "larrygram-model",
+ "larrygram-text",
  "serde",
  "serde-saphyr",
  "tiny-skia",
 ]
 
 [[package]]
-name = "ferrogram-render-fuzz"
+name = "larrygram-render-fuzz"
 version = "0.0.0"
 dependencies = [
- "ferrogram-model",
- "ferrogram-render",
- "ferrogram-vsdx",
+ "larrygram-model",
+ "larrygram-render",
+ "larrygram-vsdx",
  "libfuzzer-sys",
 ]
 
 [[package]]
-name = "ferrogram-text"
+name = "larrygram-text"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
+ "larrygram-geom",
  "harfrust",
  "skrifa",
  "unicode-linebreak",
 ]
 
 [[package]]
-name = "ferrogram-vsdx"
+name = "larrygram-vsdx"
 version = "0.0.1"
 dependencies = [
- "ferrogram-geom",
- "ferrogram-model",
+ "larrygram-geom",
+ "larrygram-model",
  "flate2",
  "quick-xml",
  "zip",

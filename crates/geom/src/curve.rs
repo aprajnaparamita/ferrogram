@@ -1,7 +1,7 @@
 //! Curves: circular arcs, elliptical arcs, Béziers, NURBS and splines.
 //!
 //! These are the mathematical forms of the Geometry rows (ADR 0022); the
-//! typed rows live in `ferrogram-model` and the renderer maps them to
+//! typed rows live in `larrygram-model` and the renderer maps them to
 //! [`Curve`] values. [`Curve::to_cubics`] is the single flattening point:
 //! it approximates any curve with [`Cubic`] segments within a tolerance in
 //! inches (ADR 0022).

@@ -26,12 +26,12 @@
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use egui::{Context, Event, Key, Modifiers, RawInput};
-use ferrogram_commands::{AppCtx, Settings};
-use ferrogram_ui::Intent;
-use ferrogram_ui::shortcuts::{
+use larrygram_commands::{AppCtx, Settings};
+use larrygram_ui::Intent;
+use larrygram_ui::shortcuts::{
     ActiveScopes, KeyChord, SEQUENCE_TIMEOUT_SECONDS, ShortcutMap, dispatch, token_is_known,
 };
-use ferrogram_ui_spec::{CommandId as SpecCommandId, Shortcut, ShortcutScope, Shortcuts};
+use larrygram_ui_spec::{CommandId as SpecCommandId, Shortcut, ShortcutScope, Shortcuts};
 
 // ---------------------------------------------------------------------------
 // Helpers (the `shortcuts_dispatch.rs` pattern)
@@ -582,7 +582,7 @@ fn the_most_specific_active_scope_wins() {
         shortcut(&["Ctrl", "G"], "edit.copy", ShortcutScope::Global),
         shortcut(&["Ctrl", "G"], "edit.cut", ShortcutScope::Window),
         shortcut(&["Ctrl", "G"], "edit.paste", ShortcutScope::Page),
-        shortcut(&["Ctrl", "G"], "view.zoom.in", ShortcutScope::Ribbon),
+        shortcut(&["Ctrl", "G"], "view.zoom.in", ShortcutScope::CommandBar),
         shortcut(&["Ctrl", "G"], "view.zoom.out", ShortcutScope::Text),
         shortcut(&["Ctrl", "G"], "page.next", ShortcutScope::Selection),
     ]);
@@ -598,7 +598,7 @@ fn the_most_specific_active_scope_wins() {
         ),
         (
             ActiveScopes {
-                ribbon: true,
+                command_bar: true,
                 ..ActiveScopes::default()
             },
             "view.zoom.in",
@@ -620,7 +620,7 @@ fn the_most_specific_active_scope_wins() {
         (
             ActiveScopes {
                 page: true,
-                ribbon: true,
+                command_bar: true,
                 text: true,
                 selection: true,
             },
@@ -641,7 +641,7 @@ fn active_scopes_always_include_global_and_window() {
     assert!(!active.contains(ShortcutScope::Page));
     assert!(!active.contains(ShortcutScope::Text));
     assert!(!active.contains(ShortcutScope::Selection));
-    assert!(!active.contains(ShortcutScope::Ribbon));
+    assert!(!active.contains(ShortcutScope::CommandBar));
 }
 
 #[test]

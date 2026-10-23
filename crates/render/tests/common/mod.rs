@@ -1,20 +1,20 @@
-//! Shared plumbing for the `ferrogram-render` integration tests (task
+//! Shared plumbing for the `larrygram-render` integration tests (task
 //! P3-10): where the hand-authored fixtures and the fetched corpus live,
 //! how to read them as documents, and how to build one scene per page.
 //!
 //! Fixtures under `corpus/fixtures/` are committed (our own work, ADR
 //! 0005); corpus files under `corpus/vsdx/` are fetched and never
 //! committed, so corpus-dependent tests skip with a message when the
-//! directory is absent and fail instead when `FERROGRAM_REQUIRE_CORPUS=1`
+//! directory is absent and fail instead when `LARRYGRAM_REQUIRE_CORPUS=1`
 //! is set.
 
 #![allow(dead_code)] // each test binary uses a different subset of the helpers
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{Document, PageId};
-use ferrogram_render::{BuildOptions, Scene, build_scene};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_model::{Document, PageId};
+use larrygram_render::{BuildOptions, Scene, build_scene};
+use larrygram_vsdx::{Limits, read_document};
 
 /// The `corpus/fixtures/` directory in the repository root (committed
 /// hand-authored fixtures).
@@ -45,14 +45,14 @@ pub fn corpus_files() -> Vec<PathBuf> {
     files
 }
 
-/// Fails the calling test when `FERROGRAM_REQUIRE_CORPUS=1` is set and
+/// Fails the calling test when `LARRYGRAM_REQUIRE_CORPUS=1` is set and
 /// the corpus is absent; returns `true` (the test returns early) when the
 /// corpus is absent and the test may skip.
 pub fn require_corpus_or(files: &[PathBuf]) -> bool {
     if files.is_empty() {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
         true

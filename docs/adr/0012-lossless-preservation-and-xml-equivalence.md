@@ -18,7 +18,7 @@ against. That equality is **semantic XML equivalence**.
 ### Where preserved content lives
 
 1. **Unmapped parts** stay in the `Package` (the OPC layer of
-   `ferrogram-vsdx`): `PartData::Xml(XmlNode)` for XML parts,
+   `larrygram-vsdx`): `PartData::Xml(XmlNode)` for XML parts,
    `PartData::Binary(Vec<u8>)` otherwise. `write_document(document, preserve)`
    starts from the `preserve` package and replaces the supported parts, so an
    unknown part is copied byte for byte.
@@ -88,7 +88,7 @@ our own writer are ours.
 
 ## Consequences
 
-- `ferrogram_model::raw::diff` is the one place that defines equivalence; the
+- `larrygram_model::raw::diff` is the one place that defines equivalence; the
   test harness (P2-09) calls it and prints the `XmlDifference` path list on
   failure.
 - Parts preserved as bytes (images) compare byte-for-byte, which the part-list

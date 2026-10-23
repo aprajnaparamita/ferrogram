@@ -9,11 +9,11 @@
 
 mod common;
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Master, MasterId, Page, PageId, Row, Section, SectionName,
     Shape, ShapeId, TextContent, TextPart,
 };
-use ferrogram_render::{BuildOptions, PngOptions, SvgOptions, build_scene, render_png, render_svg};
+use larrygram_render::{BuildOptions, PngOptions, SvgOptions, build_scene, render_png, render_svg};
 use proptest::prelude::*;
 
 /// The value of one generated cell.

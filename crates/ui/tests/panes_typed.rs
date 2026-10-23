@@ -1,6 +1,6 @@
-//! The typed Shape Data and Size & Position panels (task P6-09, ADR 0058).
+//! The typed Shape Data and Size & Position panes (task P6-09, ADR 0058).
 //!
-//! The panels are drawn in real `egui_kittest` frames (ADR 0060) and the
+//! The panes are drawn in real `egui_kittest` frames (ADR 0060) and the
 //! typed fields are driven the way a user drives them: focus, type,
 //! Enter. What the criteria name is proven here:
 //!
@@ -15,7 +15,7 @@
 //! - A formula cell refuses edits (one status line) and the document is
 //!   unchanged.
 //! - Every accepted edit dispatches one registry command and is one undo
-//!   step (the panel never touches the model directly).
+//!   step (the pane never touches the model directly).
 
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
@@ -28,40 +28,40 @@ use egui_kittest::{
     Harness,
     kittest::{NodeT, Queryable},
 };
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::{DisplayUnits, dispatch};
-use ferrogram_geom::Unit as GeomUnit;
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::{DisplayUnits, dispatch};
+use larrygram_geom::Unit as GeomUnit;
+use larrygram_model::{
     Cell, CellName, CellValue, Color, Document, Master, MasterId, Page, PageId, Row, Section,
     SectionName, Shape, ShapeId,
 };
-use ferrogram_ui::Intent;
-use ferrogram_ui::panels::{
+use larrygram_ui::Intent;
+use larrygram_ui::panes::{
     shape_data_rows, show_shape_data, show_size_position, size_position_rows,
 };
 
-/// The unit under test: a text field of one of the two panels.
+/// The unit under test: a text field of one of the two panes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Panel {
-    /// The Shape Data panel.
+enum Pane {
+    /// The Shape Data pane.
     ShapeData,
-    /// The Size & Position panel.
+    /// The Size & Position pane.
     SizePosition,
 }
 
-/// One panel driven headlessly (the P4-04 rig pattern).
-struct PanelRig {
+/// One pane driven headlessly (the P4-04 rig pattern).
+struct PaneRig {
     /// The application state under test.
     app: Rc<RefCell<AppCtx>>,
-    /// The intents the panel produced since the last take.
+    /// The intents the pane produced since the last take.
     intents: Rc<RefCell<Vec<Intent>>>,
-    /// The harness drawing the panel every frame.
+    /// The harness drawing the pane every frame.
     harness: Harness<'static>,
 }
 
-impl PanelRig {
-    /// A rig over one app state, drawing `panel` every frame.
-    fn new(app: AppCtx, panel: Panel) -> Self {
+impl PaneRig {
+    /// A rig over one app state, drawing `pane` every frame.
+    fn new(app: AppCtx, pane: Pane) -> Self {
         let app = Rc::new(RefCell::new(app));
         let intents = Rc::new(RefCell::new(Vec::new()));
         let harness_app = Rc::clone(&app);
@@ -70,11 +70,11 @@ impl PanelRig {
             .with_size(egui::vec2(600.0, 900.0))
             .build_ui(move |ui| {
                 let mut app = harness_app.borrow_mut();
-                let produced = match panel {
-                    Panel::ShapeData => show_shape_data(ui, &mut app),
-                    Panel::SizePosition => show_size_position(ui, &mut app),
+                let produced = match pane {
+                    Pane::ShapeData => show_shape_data(ui, &mut app),
+                    Pane::SizePosition => show_size_position(ui, &mut app),
                 }
-                .expect("the panel renders");
+                .expect("the pane renders");
                 drop(app);
                 harness_intents.borrow_mut().extend(produced);
             });
@@ -93,7 +93,7 @@ impl PanelRig {
     }
 
     /// Types `text` into the `field`th text field and commits with
-    /// Enter, the way a user edits a panel field.
+    /// Enter, the way a user edits a pane field.
     fn type_entry(&mut self, field: usize, text: &str) -> Vec<Intent> {
         self.harness
             .query_all_by_role(Role::TextInput)
@@ -118,7 +118,7 @@ impl PanelRig {
     /// Dispatches the intents the way the shell does (one registry
     /// command each, one undo step).
     fn dispatch(&mut self, intents: Vec<Intent>) {
-        let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+        let registry = larrygram_commands::builtins::registry().expect("the registry builds");
         for intent in intents {
             let mut app = self.app.borrow_mut();
             dispatch(&registry, &mut app, &intent.command, intent.invocation)
@@ -314,7 +314,7 @@ fn shape_data_shows_a_number_with_its_unit() {
         vec![prop_row("Cost", CellValue::Number(2.0), GeomUnit::Inches)],
         DisplayUnits::Millimeters,
     );
-    let rig = PanelRig::new(app, Panel::ShapeData);
+    let rig = PaneRig::new(app, Pane::ShapeData);
     let texts = shown(&rig.harness);
     assert!(
         texts.iter().any(|text| text == "50.8 mm"),
@@ -333,7 +333,7 @@ fn shape_data_shows_a_boolean_as_a_check_box() {
         )],
         DisplayUnits::Inches,
     );
-    let rig = PanelRig::new(app, Panel::ShapeData);
+    let rig = PaneRig::new(app, Pane::ShapeData);
     assert!(
         check_box(&rig.harness, "TRUE"),
         "the boolean shows as a check box: {:?}",
@@ -352,7 +352,7 @@ fn shape_data_shows_a_colour_as_its_rgb_value() {
         )],
         DisplayUnits::Inches,
     );
-    let rig = PanelRig::new(app, Panel::ShapeData);
+    let rig = PaneRig::new(app, Pane::ShapeData);
     let texts = shown(&rig.harness);
     assert!(
         texts.iter().any(|text| text == "#FF0000"),
@@ -371,7 +371,7 @@ fn shape_data_shows_a_string_as_written() {
         )],
         DisplayUnits::Inches,
     );
-    let rig = PanelRig::new(app, Panel::ShapeData);
+    let rig = PaneRig::new(app, Pane::ShapeData);
     let texts = shown(&rig.harness);
     assert!(
         texts.iter().any(|text| text == "hello"),
@@ -382,7 +382,7 @@ fn shape_data_shows_a_string_as_written() {
 #[test]
 fn size_position_shows_the_evaluated_cells() {
     let (app, _id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let rig = PanelRig::new(app, Panel::SizePosition);
+    let rig = PaneRig::new(app, Pane::SizePosition);
     let texts = shown(&rig.harness);
     for expected in ["2 in", "1 in", "3 in", "4 in", "30°"] {
         assert!(
@@ -414,7 +414,7 @@ fn a_formula_cell_is_marked_read_only() {
         .expect("the height row");
     assert!(height.edit.is_some());
 
-    let rig = PanelRig::new(app, Panel::SizePosition);
+    let rig = PaneRig::new(app, Pane::SizePosition);
     let texts = shown(&rig.harness);
     assert!(
         texts.iter().any(|text| text == "(formula)"),
@@ -425,17 +425,17 @@ fn a_formula_cell_is_marked_read_only() {
 #[test]
 fn entering_2_5_cm_into_an_inch_field_stores_the_converted_value() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let before = rig.app.borrow().active_document().unwrap().document.clone();
     let intents = rig.type_entry(0, "2.5 cm");
 
-    // One registry command, and the panel itself never touched the model.
+    // One registry command, and the pane itself never touched the model.
     assert_eq!(intents.len(), 1, "{intents:?}");
     assert_eq!(intents[0].command.as_str(), "shape.set.width");
     assert_eq!(
         rig.app.borrow().active_document().unwrap().document,
         before,
-        "the panel itself never touches the model"
+        "the pane itself never touches the model"
     );
 
     // Dispatching it stores the converted value as one undo step.
@@ -457,7 +457,7 @@ fn entering_2_5_cm_into_an_inch_field_stores_the_converted_value() {
 #[test]
 fn a_mixed_fraction_entry_parses_like_the_grammar() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let intents = rig.type_entry(0, "5 1/2");
     assert_eq!(intents.len(), 1, "{intents:?}");
     rig.dispatch(intents);
@@ -468,7 +468,7 @@ fn a_mixed_fraction_entry_parses_like_the_grammar() {
 #[test]
 fn a_percent_entry_parses_like_the_grammar() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let intents = rig.type_entry(0, "37%");
     assert_eq!(intents.len(), 1, "{intents:?}");
     rig.dispatch(intents);
@@ -479,7 +479,7 @@ fn a_percent_entry_parses_like_the_grammar() {
 #[test]
 fn an_angle_entry_parses_like_the_grammar() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let intents = rig.type_entry(4, "45 deg");
     assert_eq!(intents.len(), 1, "{intents:?}");
     assert_eq!(intents[0].command.as_str(), "shape.set.angle");
@@ -494,7 +494,7 @@ fn an_angle_entry_parses_like_the_grammar() {
 #[test]
 fn every_accepted_edit_is_one_command_and_one_undo_step() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     for (field, text, command, cell) in [
         (1usize, "3 in", "shape.set.height", "Height"),
         (2, "5 in", "shape.set.pin", "PinX"),
@@ -515,7 +515,7 @@ fn every_accepted_edit_is_one_command_and_one_undo_step() {
 #[test]
 fn a_bad_entry_is_refused_with_one_status_line_and_no_model_change() {
     let (app, id) = fixture(geometry_cells(), Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let before = rig.app.borrow().active_document().unwrap().document.clone();
     let intents = rig.type_entry(0, "abc");
 
@@ -550,7 +550,7 @@ fn a_formula_cell_refuses_the_edit_with_one_status_line() {
         }
     }
     let (app, id) = fixture(cells, Vec::new(), DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::SizePosition);
+    let mut rig = PaneRig::new(app, Pane::SizePosition);
     let before = rig.app.borrow().active_document().unwrap().document.clone();
     let intents = rig.type_entry(0, "2.5 cm");
 
@@ -615,7 +615,7 @@ fn a_shape_data_value_entry_edits_the_row_through_the_command() {
         vec![prop_row("Cost", CellValue::Number(2.0), GeomUnit::Inches)],
         DisplayUnits::Inches,
     );
-    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let mut rig = PaneRig::new(app, Pane::ShapeData);
     let intents = rig.type_entry(0, "2.5 cm");
 
     // One `data.set.property` intent with the row's key and the typed
@@ -634,7 +634,7 @@ fn a_shape_data_value_entry_edits_the_row_through_the_command() {
     assert_eq!(
         rig.app.borrow().active_document().unwrap().document.clone(),
         rig.app.borrow().active_document().unwrap().document.clone(),
-        "the panel itself never touches the model"
+        "the pane itself never touches the model"
     );
 
     // Dispatching stores the value as one undo step.
@@ -663,7 +663,7 @@ fn a_shape_data_value_check_box_toggles_the_row() {
         )],
         DisplayUnits::Inches,
     );
-    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let mut rig = PaneRig::new(app, Pane::ShapeData);
     assert!(
         check_box(&rig.harness, "FALSE"),
         "{:?}",
@@ -702,7 +702,7 @@ fn a_shape_data_formula_value_refuses_the_edit() {
         .expect("the value cell")
         .set_formula(Some(String::from("Width*2")));
     let (app, id) = fixture(geometry_cells(), cells, DisplayUnits::Inches);
-    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let mut rig = PaneRig::new(app, Pane::ShapeData);
     let before = rig.app.borrow().active_document().unwrap().document.clone();
     let intents = rig.type_entry(0, "5 in");
 
@@ -732,7 +732,7 @@ fn a_shape_data_formula_value_refuses_the_edit() {
 #[test]
 fn an_inherited_shape_data_value_edit_writes_a_local_row() {
     let (app, id, rung) = master_fixture();
-    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let mut rig = PaneRig::new(app, Pane::ShapeData);
     // The pane lists the master's row (the P6-09 note's union).
     let texts = shown(&rig.harness);
     assert!(
@@ -758,10 +758,10 @@ fn an_inherited_shape_data_value_edit_writes_a_local_row() {
 
     // Undo removes the local row again: the inherited one is back.
     rig.dispatch(vec![Intent::new(
-        ferrogram_commands::CommandId::parse("edit.undo").expect("id"),
-        ferrogram_commands::Invocation::new(
-            ferrogram_commands::Args::new(),
-            ferrogram_commands::Source::Test,
+        larrygram_commands::CommandId::parse("edit.undo").expect("id"),
+        larrygram_commands::Invocation::new(
+            larrygram_commands::Args::new(),
+            larrygram_commands::Source::Test,
         ),
     )]);
     let app = rig.app.borrow();

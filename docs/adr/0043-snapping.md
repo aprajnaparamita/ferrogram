@@ -51,7 +51,7 @@ observed Visio behaviour.
   modifier; a black-box check of Visio's own modifier is on the
   screenshot-pass list).
 
-The math lives in `ferrogram_geom::snap` (`snap_point`, `snap_axis`,
+The math lives in `larrygram_geom::snap` (`snap_point`, `snap_axis`,
 `snap_grid`); the policy (which candidates, priority, pixel distance)
 lives in `crates/ui::snap` and is unit-tested against a fake `AppCtx`.
 

@@ -32,12 +32,12 @@ Phase 3 maps into the model **for reading only**. The new fields are typed
 copies of content that stays in `Preserved`; the writer is not taught to
 write them back. Editing text, theme or layers is written back in Phase 4/5
 when the editor needs it. This keeps the Phase 2 round-trip criterion
-(`FERROGRAM_REQUIRE_CORPUS=1 cargo test -p ferrogram-vsdx --test
+(`LARRYGRAM_REQUIRE_CORPUS=1 cargo test -p larrygram-vsdx --test
 roundtrip`) green by construction.
 
 ### 2. Typed geometry rows (hand-written enum)
 
-`ferrogram_model::geometry` (L1) types one `Geometry` section from the
+`larrygram_model::geometry` (L1) types one `Geometry` section from the
 rows' `T` attribute and cells. The row kinds are a **hand-written enum
 backed by [MS-VSDX] and the ShapeSheet reference**, not codegen:
 
@@ -81,7 +81,7 @@ enum is the single source the renderer matches on. If the formula engine
 
 ### 3. Shape text
 
-`ferrogram_model::text` types the `Text` element: its mixed content is a
+`larrygram_model::text` types the `Text` element: its mixed content is a
 list of parts — literal text, `cp`/`pp`/`tp` run markers carrying the `IX`
 of the `Character`/`Paragraph`/`Tabs` row they select, and `fld` field
 insertions carrying the `IX` of the field. Run semantics follow the
@@ -93,7 +93,7 @@ Phase 6.
 
 ### 4. Theme, colour table, fonts, layers, page geometry
 
-- `ferrogram_model::theme`: the theme parts' `a:clrScheme` (dk1, lt1, dk2,
+- `larrygram_model::theme`: the theme parts' `a:clrScheme` (dk1, lt1, dk2,
   lt2, accent1..6, hlink, folHlink) and `a:fontScheme` (major/minor latin,
   ea, cs) into `ThemeColors`/`ThemeFonts`; effects (`a:fmtScheme`) stay
   preserved. `Document::themes: Vec<Theme>`, one per theme part. For the
@@ -102,7 +102,7 @@ Phase 6.
 - `Document::color_table: Vec<ColorTableEntry>` from the document colour
   table (`Colors`/`ColorEntry`, indices from 24). Indices 0..23 are the
   fixed Visio palette, our own table of derived facts in
-  `ferrogram_model::values`. A color cell may cache an RGB (`#rrggbb`), a
+  `larrygram_model::values`. A color cell may cache an RGB (`#rrggbb`), a
   palette index or a table index; the reader resolves all three to `Color`.
 - `FaceNames` stays preserved; the font a run uses is its `Character` row's
   `Font` cell (cached), with theme fonts as fallback (ADR 0024).
@@ -117,7 +117,7 @@ Phase 6.
 
 ### 5. Row-aware and page-sheet resolution
 
-The lookup (ADR 0013) gains two capabilities, in `ferrogram-model`:
+The lookup (ADR 0013) gains two capabilities, in `larrygram-model`:
 
 - `Document::resolve_row_cell(sheet, section, row_pos, cell)` resolves one
   cell of one row of a repeated section. The rungs are: the local row's
@@ -139,7 +139,7 @@ cell resolved per the rules above.
 
 Indices 0..23 of Visio's color list are fixed. The table is our own
 transcription of observed Visio output (black-box rule 7 of AGENTS.md
-section 4), kept in `ferrogram_model::values::palette` as a constant with
+section 4), kept in `larrygram_model::values::palette` as a constant with
 the observation noted in `docs/sources.md`. It is data, not code: if a later
 source contradicts it, one constant changes.
 

@@ -1,6 +1,6 @@
 # Phase 3 report: Rendering from cached values, plus the CLI
 
-Phase 3 renders pages from cached cell values (no formula evaluation) to PNG and SVG, and adds the `ferrogram-cli` tool. Started 2026-10-14, closed 2026-10-16, tag `phase-3`.
+Phase 3 renders pages from cached cell values (no formula evaluation) to PNG and SVG, and adds the `larrygram-cli` tool. Started 2026-10-14, closed 2026-10-16, tag `phase-3`.
 
 ## What was built
 
@@ -11,16 +11,16 @@ Phase 3 renders pages from cached cell values (no formula evaluation) to PNG and
 | `crates/text` (L1) | Text layout with `rustybuzz` shaping: runs, paragraphs, alignment, wrapping, bullets, tabs, rotation. Bundled Carlito (for Calibri) and Selawik (for Segoe UI) under the OFL. | P3-04 |
 | `crates/vsdx` read additions (L2) | Theme part, `Text` mixed content with `cp`/`pp`/`tp`/`fld` markers, colour table, layers | P3-02 |
 | `crates/render` (L3) | Scene graph (ADR 0020) with parent-relative transforms; the builder from model to scene (geometry, fills, gradients, patterns, lines, line ends, shadows, text, masters, themes, layers, page size, background pages); our own visual style data (`visual-styles.yaml`, ADR 0023); PNG backend on `tiny-skia`; SVG backend with a fixed output format. | P3-05..P3-08, P3-15, P3-16 |
-| `apps/ferrogram-cli` (L7) | `inspect`, `render` and `export` subcommands; exit codes 0 OK, 1 usage, 2 read, 3 render, 4 warnings with `--strict` | P3-09 |
+| `apps/larrygram-cli` (L7) | `inspect`, `render` and `export` subcommands; exit codes 0 OK, 1 usage, 2 read, 3 render, 4 warnings with `--strict` | P3-09 |
 | Test harness | 11 rendering fixtures, 12 golden images (ADR 0027 metric), 3 SVG snapshots, corpus render test, libvisio `vsd2xhtml` structural comparison, scene and layout property tests, boundary tests, `render_document` fuzz target | P3-10, P3-11, P3-17 |
 
 ## Exit criterion
 
 **Every corpus file renders without panics, and every geometry row type has tests: met.**
 
-- `FERROGRAM_REQUIRE_CORPUS=1 cargo test -p ferrogram-render --test corpus_render` renders every page of all 15 corpus files through both backends with `Ok` and no panic.
+- `LARRYGRAM_REQUIRE_CORPUS=1 cargo test -p larrygram-render --test corpus_render` renders every page of all 15 corpus files through both backends with `Ok` and no panic.
 - The P3-10 Result has the geometry row test table: all 16 `GeometryRow` variants have typing, curve-math (where a curve applies) and scene-mapping tests. P3-11 added property tests over random row sequences.
-- The oracle comparison (`FERROGRAM_REQUIRE_ORACLE=1`) passes. It compares page counts for every file and full per-page structure on three pages; the reasons for the others are under Known issues.
+- The oracle comparison (`LARRYGRAM_REQUIRE_ORACLE=1`) passes. It compares page counts for every file and full per-page structure on three pages; the reasons for the others are under Known issues.
 
 ## Gate results
 
@@ -38,24 +38,24 @@ cargo xtask gate (full, 2026-10-16, main)
   PASS  fuzz      (crates/ui-spec/fuzz, crates/vsdx/fuzz, crates/render/fuzz)
 gate: GREEN
 
-FERROGRAM_REQUIRE_CORPUS=1 cargo test -p ferrogram-render --test corpus_render --test golden: OK
-FERROGRAM_REQUIRE_ORACLE=1 cargo test -p ferrogram-render --test oracle_render: OK
+LARRYGRAM_REQUIRE_CORPUS=1 cargo test -p larrygram-render --test corpus_render --test golden: OK
+LARRYGRAM_REQUIRE_ORACLE=1 cargo test -p larrygram-render --test oracle_render: OK
 ```
 
 ## Coverage
 
 | Crate | Lines | Coverage | Threshold | Phase 2 ratchet | New ratchet |
 |---|---|---|---|---|---|
-| ferrogram-geom | 1677 | 100.0% | 85 | 100.0 | 100.0 |
-| ferrogram-model | 6832 | 99.7% | 85 | 99.7 | 99.7 |
-| ferrogram-text | 1768 | 98.9% | 75 | — | 98.8 |
-| ferrogram-render | 6532 | 98.5% | 75 | — | 98.4 |
-| ferrogram-vsdx | 7229 | 98.0% | 85 | 97.7 | 98.0 |
-| ferrogram-cli | 1408 | 96.9% | 50 | 66.6 | 96.8 |
-| ferrogram-shapesheet | 45 | 100.0% | 85 | 100.0 | 100.0 |
-| ferrogram-ui-spec | 1738 | 99.3% | 85 | 99.3 | 99.3 |
+| larrygram-geom | 1677 | 100.0% | 85 | 100.0 | 100.0 |
+| larrygram-model | 6832 | 99.7% | 85 | 99.7 | 99.7 |
+| larrygram-text | 1768 | 98.9% | 75 | — | 98.8 |
+| larrygram-render | 6532 | 98.5% | 75 | — | 98.4 |
+| larrygram-vsdx | 7229 | 98.0% | 85 | 97.7 | 98.0 |
+| larrygram-cli | 1408 | 96.9% | 50 | 66.6 | 96.8 |
+| larrygram-shapesheet | 45 | 100.0% | 85 | 100.0 | 100.0 |
+| larrygram-ui-spec | 1738 | 99.3% | 85 | 99.3 | 99.3 |
 | xtask | 9232 | 91.6% | — | 91.6 | 91.6 |
-| ferrogram | 9 | 66.7% | 50 | 66.6 | 66.6 |
+| larrygram | 9 | 66.7% | 50 | 66.6 | 66.6 |
 
 The percentages count inline `#[cfg(test)]` code as instrumented lines (see the caveats in [the coverage audit](../reviews/phase-3-coverage.md)).
 
@@ -102,7 +102,7 @@ The percentages count inline `#[cfg(test)]` code as instrumented lines (see the 
 
 ## Known issues
 
-- **CI has still never run** (no remote). When it exists, set `FERROGRAM_REQUIRE_CORPUS=1` and provide the libvisio oracle.
+- **CI has still never run** (no remote). When it exists, set `LARRYGRAM_REQUIRE_CORPUS=1` and provide the libvisio oracle.
 - **Fidelity gaps** (all in `docs/STATUS.md` deferred items):
   - master-sized geometry on resized instances (Phase 6 formula engine);
   - the Quick Style matrix colour shading (about a 0.73 factor) is not applied;

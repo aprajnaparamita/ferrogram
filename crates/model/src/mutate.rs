@@ -44,7 +44,7 @@ use crate::shape::Shape;
 use crate::text::{TextContent, TextPart};
 use crate::values::{CellReader, RowTarget, SheetRef};
 
-use ferrogram_geom::{Angle, Point, Size, Transform, Unit};
+use larrygram_geom::{Angle, Point, Size, Transform, Unit};
 
 use std::collections::{BTreeSet, HashSet};
 

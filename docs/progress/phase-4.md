@@ -1,20 +1,20 @@
-# Phase 4 report: App shell and switchable ribbon
+# Phase 4 report: App shell and switchable command bar
 
-Phase 4 builds the desktop and web app shell around one command registry. The ribbon is generated from the committed Visio 2016 and Microsoft 365 layouts and switches without a restart. The canvas shows the Phase 3 raster, and there are read-only panels, original stencils, keyboard shortcuts, and file open, save and export. Started 2026-10-16, closed 2026-10-18, tag `phase-4`.
+Phase 4 builds the desktop and web app shell around one command registry. The command bar is generated from the committed Visio 2016 and Microsoft 365 layouts and switches without a restart. The canvas shows the Phase 3 raster, and there are read-only panes, original stencils, keyboard shortcuts, and file open, save and export. Started 2026-10-16, closed 2026-10-18, tag `phase-4`.
 
 ## What was built
 
 | Area | Content | Tasks |
 |---|---|---|
 | `crates/commands` (L4) | One command registry (ADR 0028): `CommandId`, `Intent`, `Source`, `Invocation`, `Outcome`, `UiRequest`, `CommandError` including `NeedsInput`. `AppCtx` and `DocumentSession` with a session `id` (ADR 0029). An undo stack with a capped capacity. 24 builtin ids for file, view, page, window and edit actions, and a stub for every other `commands.yaml` row. The Options, Quit and `view.units` commands. | P4-02, P4-15 |
-| `apps/ferrogram-cli` | Runs on the registry (programmatic source, no dialogs). | P4-02 |
+| `apps/larrygram-cli` | Runs on the registry (programmatic source, no dialogs). | P4-02 |
 | `crates/ui` shell (L6) | `Shell::show_in`, menus, status bar and dispatch. Every command error goes to the status bar as one line. Dialogs, downloads and quit run only for interactive sources. Edits go onto the undo stack of the session the command ran against. Settings are persisted as a JSON slot (`TextStore`), and Options dispatches registry commands (ADR 0032 amended). Native and wasm file pickers sit behind a testable seam. | P4-03, P4-16 |
-| Ribbon (L6) | Generated from `ui-spec` layouts (ADR 0031) in both layouts. Switching uses `view.ui_layout.*` on the next frame. Backstage and QAT are included. | P4-04 |
+| Command bar (L6) | Generated from `ui-spec` layouts (ADR 0031) in both layouts. Switching uses `view.ui_layout.*` on the next frame. Backstage and QAT are included. | P4-04 |
 | Canvas (L6) | Phase 3 PNG raster as a texture (ADR 0033), zoom and pan, grid and rulers in the chosen units. The raster cache is keyed by snapshot, page and zoom, and a failed key is not retried every frame. | P4-05, P4-16 |
-| Panels (L6) | Read-only Shape Data, Size & Position, and page panels (ADR 0035). | P4-07 |
+| Panes (L6) | Read-only Shape Data, Size & Position, and page panes (ADR 0035). | P4-07 |
 | Stencils (L6) | 12 + 9 original masters in the Shapes window (ADR 0034), with previews rendered from our own scene. | P4-06 |
-| Shortcuts (L6) | A chord-sequence trie from `ui-spec` shortcuts (ADR 0036). Bindings are scope-aware (Text > Selection > Page > Ribbon > Window > Global), and egui keeps its own text-editing chords. A mismatching chord starts a new sequence. The table has 74 bindings. | P4-08, P4-14, P4-16 |
-| Apps (L7) | `apps/ferrogram` (eframe desktop, `--ui-layout 2016\|365`) and `apps/ferrogram-web` (wasm). | P4-03 |
+| Shortcuts (L6) | A chord-sequence trie from `ui-spec` shortcuts (ADR 0036). Bindings are scope-aware (Text > Selection > Page > CommandBar > Window > Global), and egui keeps its own text-editing chords. A mismatching chord starts a new sequence. The table has 74 bindings. | P4-08, P4-14, P4-16 |
+| Apps (L7) | `apps/larrygram` (eframe desktop, `--ui-layout 2016\|365`) and `apps/larrygram-web` (wasm). | P4-03 |
 | Parity | `cargo xtask parity` derives `docs/parity/controls.md` from the layouts and the registry (ADR 0037), and the gate checks that it is fresh (11 gate steps). Current counts: 7 implemented, 685 stub, 14 out-of-scope. | P4-09 |
 | Test harness | Phase 4 integration flows, `egui_kittest` interaction tests, a corpus open test, insta snapshots, and proptest for settings. A `crates/ui/fuzz` crate (`settings_json`, `shortcuts_map`) with a seed corpus. Gate-runner and parity-error tests in `xtask`. | P4-09, P4-10, P4-16, P4-17 |
 
@@ -22,8 +22,8 @@ Phase 4 builds the desktop and web app shell around one command registry. The ri
 
 **Both layouts load and switch without a restart, and opening corpus files shows them on the canvas. Met, with 5 known blank renders.**
 
-- `switching_layouts_from_the_options_dialog_needs_no_restart` (`crates/ui/tests/phase4/interactions.rs`) switches 2016 to 365 from the Options dialog through the registry. The ribbon changes on the next frame. The menu and ribbon paths have their own flow tests.
-- `FERROGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features` passes (1904 tests, 2 ignored). `apps/ferrogram/tests/open_corpus.rs` opens all 15 corpus files through `file.open` and reads the canvas raster.
+- `switching_layouts_from_the_options_dialog_needs_no_restart` (`crates/ui/tests/phase4/interactions.rs`) switches 2016 to 365 from the Options dialog through the registry. The command bar changes on the next frame. The menu and command-bar paths have their own flow tests.
+- `LARRYGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features` passes (1904 tests, 2 ignored). `apps/larrygram/tests/open_corpus.rs` opens all 15 corpus files through `file.open` and reads the canvas raster.
 - 10 of the 15 files paint visible content. 5 files are blank by known cause (`KNOWN_BLANK`/`SKIP_RASTER`):
   - their shape or page cells have no cached values, and the builder substitutes 0;
   - `recursion-cycle.vsdx` has no page part.
@@ -46,28 +46,28 @@ cargo xtask gate (full, 2026-10-18, main after the P4-16 merge)
   PASS  fuzz      (crates/ui-spec/fuzz, crates/vsdx/fuzz, crates/render/fuzz, crates/ui/fuzz)
 gate: GREEN
 
-FERROGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features: OK
+LARRYGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features: OK
 ```
 
 ## Coverage
 
 | Crate | Lines | Coverage | Threshold | Phase 3 ratchet | New ratchet |
 |---|---|---|---|---|---|
-| ferrogram-geom | 1677 | 100.0% | 85 | 100.0 | 100.0 |
-| ferrogram-model | 7700 | 99.7% | 85 | 99.7 | 99.6 |
-| ferrogram-ui-spec | 1884 | 99.4% | 85 | 99.3 | 99.3 |
-| ferrogram-text | 1768 | 98.9% | 75 | 98.8 | 98.8 |
-| ferrogram-render | 6601 | 98.5% | 75 | 98.4 | 98.4 |
-| ferrogram-commands | 2155 | 98.2% | 85 | — | 98.1 |
-| ferrogram-vsdx | 7233 | 98.0% | 85 | 98.0 | 97.9 |
-| ferrogram-cli | 1266 | 96.8% | 50 | 96.8 | 96.7 |
-| ferrogram-ui | 6065 | 96.5% | 50 | — | 96.4 |
-| ferrogram-shapesheet | 45 | 100.0% | 85 | 100.0 | 100.0 |
+| larrygram-geom | 1677 | 100.0% | 85 | 100.0 | 100.0 |
+| larrygram-model | 7700 | 99.7% | 85 | 99.7 | 99.6 |
+| larrygram-ui-spec | 1884 | 99.4% | 85 | 99.3 | 99.3 |
+| larrygram-text | 1768 | 98.9% | 75 | 98.8 | 98.8 |
+| larrygram-render | 6601 | 98.5% | 75 | 98.4 | 98.4 |
+| larrygram-commands | 2155 | 98.2% | 85 | — | 98.1 |
+| larrygram-vsdx | 7233 | 98.0% | 85 | 98.0 | 97.9 |
+| larrygram-cli | 1266 | 96.8% | 50 | 96.8 | 96.7 |
+| larrygram-ui | 6065 | 96.5% | 50 | — | 96.4 |
+| larrygram-shapesheet | 45 | 100.0% | 85 | 100.0 | 100.0 |
 | xtask | 10245 | 93.3% | — | 91.6 | 93.3 |
-| ferrogram | 250 | 80.0% | 50 | 66.6 | 80.0 |
-| ferrogram-web | 140 | 77.9% | — | 0.0 | 77.8 |
+| larrygram | 250 | 80.0% | 50 | 66.6 | 80.0 |
+| larrygram-web | 140 | 77.9% | — | 0.0 | 77.8 |
 
-`cargo xtask coverage --update-ratchet` rounds down to one decimal place. For this reason the model, vsdx and cli ratchets are 0.1 below their displayed values. The percentages include inline `#[cfg(test)]` code as instrumented lines (see the caveats in [the coverage audit](../reviews/phase-4-coverage.md)). `ferrogram-control` and `ferrogram-vsd-binary` are still empty placeholders.
+`cargo xtask coverage --update-ratchet` rounds down to one decimal place. For this reason the model, vsdx and cli ratchets are 0.1 below their displayed values. The percentages include inline `#[cfg(test)]` code as instrumented lines (see the caveats in [the coverage audit](../reviews/phase-4-coverage.md)). `larrygram-control` and `larrygram-vsd-binary` are still empty placeholders.
 
 ## Reviewer findings and resolution
 
@@ -90,7 +90,7 @@ FERROGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features: OK
 
 ## Decisions made during the phase
 
-- **One registry for every source:** the menus, ribbon, shortcuts, CLI and Options dialog all dispatch command ids. Programmatic sources never open a dialog, download or quit. The shell acts on `UiRequest` only for interactive sources.
+- **One registry for every source:** the menus, command bar, shortcuts, CLI and Options dialog all dispatch command ids. Programmatic sources never open a dialog, download or quit. The shell acts on `UiRequest` only for interactive sources.
 - **No shell intercepts:** quitting and Options are registry commands (`app.quit`/`file.exit` → `UiRequest::Quit`, `app.office.center.options` → `UiRequest::ShowOptions`).
 - **Settings:** Options returns intents. Grid and rulers in `Settings` are the defaults for new sessions, and `ViewState` is seeded from them.
 - **Shortcut scopes:** the conflict key is sequence + scope. The most specific active scope wins, and an exact repeat is dropped silently (ADR 0036 amended).
@@ -102,22 +102,22 @@ FERROGRAM_REQUIRE_CORPUS=1 cargo test --workspace --all-features: OK
 - 0028 command registry and invocation
 - 0029 application state
 - 0030 GUI stack (amended: dependency table)
-- 0031 ribbon from ui-spec
+- 0031 command bar from ui-spec
 - 0032 layout switching and settings (amended: Options dispatches commands)
 - 0033 canvas raster backend
 - 0034 original stencils and the Shapes window
-- 0035 Shape Data and Size & Position panels
+- 0035 Shape Data and Size & Position panes
 - 0036 shortcuts and file I/O (amended: scope-aware conflicts, egui text chords, `resolve` signature)
 - 0037 Phase 4 test strategy and parity (amended: out-of-scope beats implemented)
 
 ## Known issues
 
-- **The app is a viewer, not an editor.** 685 of 706 ribbon controls are stubs. Selection, shape editing and drop-to-page are Phase 5 work.
+- **The app is a viewer, not an editor.** 685 of 706 command bar controls are stubs. Selection, shape editing and drop-to-page are Phase 5 work.
 - **CI has still never run** (no remote).
 - **Rendering:** 5 of 15 corpus files are blank because of missing cached values (Phase 6). The canvas compares a document snapshot every frame because `DocumentSession` has no change counter.
-- **Ribbon data:** the extractor emits nine `TabSave` placements. The 365 backstage has 205 placements for 127 unique ids.
+- **Command bar data:** the extractor emits nine `TabSave` placements. The 365 backstage has 205 placements for 127 unique ids.
 - **Shell:**
-  - panel warnings appear as a "Warning" row, not in the status bar;
+  - pane warnings appear as a "Warning" row, not in the status bar;
   - focus scope follows pointer presses only;
   - the context menus are parked;
   - the rfd dialog calls are untested (desktop only).
