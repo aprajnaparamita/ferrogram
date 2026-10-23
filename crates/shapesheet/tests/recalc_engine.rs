@@ -988,7 +988,7 @@ fn a_row_address_without_its_section_is_a_warning_not_a_panic() {
         }
         fn evaluate(
             &mut self,
-            document: &mut Document,
+            _document: &mut Document,
             _formula: &Formula,
             sheet: SheetRef,
         ) -> Result<Evaluation, Error> {

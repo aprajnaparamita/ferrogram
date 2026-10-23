@@ -992,10 +992,12 @@ fn a_stored_formula_that_does_not_parse_reads_as_ref_without_a_value() {
         .sheet
         .cells
         .push(formula_cell("Bad", "FORMATEX(1,)", 0.0));
-    if let Some(shape) = fixture.doc.shape_mut(fixture.target) {
-        if let Some(entry) = shape.sheet.cells.first_mut() {
-            entry.value = None;
-        }
+    if let Some(entry) = fixture
+        .doc
+        .shape_mut(fixture.target)
+        .and_then(|shape| shape.sheet.cells.first_mut())
+    {
+        entry.value = None;
     }
 
     let mut resolver = DocumentResolver::new(&mut fixture.doc);

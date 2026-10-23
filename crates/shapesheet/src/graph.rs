@@ -644,11 +644,11 @@ fn resolve_address(
 
 /// The sheets a reference may name, in rung order (ADR 0013): the target
 /// sheet first, then the master rungs behind it when `walk_rungs`.
-fn candidate_sheets<'d>(
-    document: &'d Document,
+fn candidate_sheets(
+    document: &Document,
     target: SheetRef,
     walk_rungs: bool,
-) -> Vec<(SheetRef, &'d Sheet)> {
+) -> Vec<(SheetRef, &Sheet)> {
     let mut out = Vec::new();
     if let Some(data) = sheet_of(document, target) {
         out.push((target, data));
