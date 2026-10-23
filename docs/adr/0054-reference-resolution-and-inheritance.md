@@ -73,18 +73,18 @@ written), resolved here:
 | Written | Resolves to |
 |---|---|
 | `Width` | the cell on the target sheet |
-| `Star!Angle` | the named shape's cell on the same page |
-| `Executive.2!Height` | the shape named `Executive` with `ID` 2 |
-| `Char.Font[3]` | `Character` section, `Font` column, row `IX`/position 3 |
-| `Scratch.A5` | `Scratch` section, `A` column, row 5 |
+| `Wheel!Angle` | the named shape's cell on the same page |
+| `Frame.2!Height` | the shape named `Frame` with `ID` 2 |
+| `Char.Size[3]` | `Character` section, `Size` column, row `IX`/position 3 |
+| `Scratch.B3` | `Scratch` section, `B` column, row 3 |
 | `Prop.Cost`, `User.Name` | the **named row's default cell** (`Value`) of `Prop`/`User` |
 | `Geometry1.X2` | `Geometry` section 1, row 2, `X` cell |
-| `Sheet.8!FillForegnd` | the shape with `ID` 8 on the target's page |
-| `Masters[Gear]!Shaft!Geometry1.X1` | a master's named sub-shape's cell |
-| `Pages[Page-3]!Sheet.4!BeginX` | a page's shape's cell |
-| `Styles!Manager!LineColor` | a stylesheet row's cell |
-| `ThePage!User.Vanishing_Point`, `TheDoc!PreviewQuality` | the page sheet / document sheet |
-| `'1-D'!LineColor` | a nonstandard name; `''` is the quote escape |
+| `Sheet.12!FillForegnd` | the shape with `ID` 12 on the target's page |
+| `Masters[Bearing]!Hub!Geometry1.X1` | a master's named sub-shape's cell |
+| `Pages[Sheet-3]!Sheet.4!BeginX` | a page's shape's cell |
+| `Styles!Ledger!LineColor` | a stylesheet row's cell |
+| `ThePage!User.Anchor_Point`, `TheDoc!DocScale` | the page sheet / document sheet |
+| `'2-C'!LineColor` | a nonstandard name; `''` is the quote escape |
 
 The column-versus-row split of a bare name (`Char.Size` is a column,
 `Prop.Cost` is a row) is decided **against the section**: a name matches
@@ -92,6 +92,14 @@ a column of the section's row shape first (with trailing digits or `[n]`
 as the row index, default row 0), and a named row of a named-row section
 second. Names match **case-insensitively** (flagged for the black-box
 black-box check); the file's own spelling is what gets written back.
+
+**One rule, one home (P6-17 amendment).** The split and the name
+splitters sit in one module (`crates/shapesheet/src/names.rs`) that both
+the resolver and the dependency graph (ADR 0055) ask: a name cannot mean
+one thing to the resolver and another to the graph (the P6-12 review's
+F2). The graph resolves a reference through the same rungs — a formula
+that reads a master's cell is edged to that cell — so an edit of a
+master cell re-evaluates its instances' formulas.
 
 A name that resolves to nothing is `#REF!` with one `MissingReference`
 warning (`about-error-values.md`), never an error and never a dropped

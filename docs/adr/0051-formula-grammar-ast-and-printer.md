@@ -36,7 +36,8 @@ concat    = additive { "&" additive } ;
 additive  = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative = power { ( "*" | "/" ) power } ;
 power     = unary [ "^" power ] ;
-unary     = ( "+" | "-" | "%" ) unary | primary ;
+unary     = ( "+" | "-" | "%" ) unary | postfix ;
+postfix   = primary { "%" } ;        (* "37%" is 0.37 *)
 primary   = number | string | bool | call | reference | "(" expr ")" ;
 call      = ident "(" [ expr { "," expr } ] ")" ;
 bool      = "TRUE" | "FALSE" ;
@@ -51,7 +52,10 @@ mixed     = digits "/" digits ;            (* "5 1/2" is 5.5 *)
   the equality comparisons (`= <>`) last. `^` is right-associative; the
   binary operators are left-associative. Parentheses override the order.
 - **Alternative comparison operators** `_GT_`, `_LT_`, `_GE_`, `_LE_`,
-  `_EQ_`, `_NE_` parse to the same six comparison operators.
+  `_EQ_`, `_NE_` parse to the same six comparison operators. They
+  compare exactly at the full 15 significant digits Visio stores values
+  in, where the symbolic forms are the everyday choice (P6-02 flagged
+  this difference for the black-box track).
 - **Strings** use `"` delimiters and double themselves as the escape
   (`"say ""hi"""` is `say "hi"`).
 - **Numbers** are decimal with an optional exponent, an optional unit
@@ -60,20 +64,23 @@ mixed     = digits "/" digits ;            (* "5 1/2" is 5.5 *)
   keeps `unit` and `flag` (`A`, `D`, `E`, `P`, `T`) on the literal.
 - **Function calls** need their parentheses even with no arguments
   (`about-functions.md`); arguments are comma-separated. Names are
-  case-insensitive and are kept as written.
+  case-insensitive and are kept as written. **No argument may be left
+  out**: the grammar has no empty-argument production (`FORMATEX(a,,b)`
+  is a syntax error, P6-02), and one is added only when a function in
+  the evaluated set needs it (P6-12 review F5 ruling).
 - **References** are every form of `about-cell-references.md`: `Width`,
-  `Star!Angle`, `Executive.2!Height`, `Char.Font[3]`, `Scratch.A5`,
-  `Sheet.8!FillForegnd`, `Masters[Gear]!Shaft!Geometry1.X1`,
-  `ThePage!User.Vanishing_Point`, `Pages[Page-3]!Sheet.4!BeginX`,
-  `Styles!Manager!LineColor`, `TheDoc!PreviewQuality`, and a quoted
-  nonstandard name (`'1-D'!LineColor`, with `''` as the quote escape).
+  `Wheel!Angle`, `Frame.2!Height`, `Char.Size[3]`, `Scratch.B3`,
+  `Sheet.12!FillForegnd`, `Masters[Bearing]!Hub!Geometry1.X1`,
+  `ThePage!User.Anchor_Point`, `Pages[Sheet-3]!Sheet.4!BeginX`,
+  `Styles!Ledger!LineColor`, `TheDoc!DocScale`, and a quoted
+  nonstandard name (`'2-C'!LineColor`, with `''` as the quote escape).
 
 ### Parts are kept as written
 
 A [`CellRef`] holds the sheet parts before the `!` separators, the section
 part and the dotted name parts after it, **verbatim**. The parser does not
 decide whether `Prop.Cost` names a row (the `Cost` row's `Value` cell) or
-`Scratch.A5` a column at row 5: that depends on the section the name
+`Scratch.B3` a column at row 3: that depends on the section the name
 resolves against, so it is a resolution rule (ADR 0054), not a syntax
 rule. Splitting at parse time was tried first and rejected: it cannot be
 done without the document.
@@ -123,7 +130,7 @@ the matching kind, never a panic and never an unbounded recursion.
   dependency and a build step for a small grammar, and error messages
   with spans are easier to control by hand.
 - **Split references into structured `section`/`row`/`cell` fields at
-  parse time.** Rejected: `Prop.Cost`, `Scratch.A5` and `Char.Size` need
+  parse time.** Rejected: `Prop.Cost`, `Scratch.B3` and `Char.Size` need
   the section's row shape to split correctly (see above).
 - **Store the parsed row index in the AST.** Same problem; the resolver
   already has to look the section up.

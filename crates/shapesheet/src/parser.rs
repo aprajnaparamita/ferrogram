@@ -96,7 +96,7 @@ fn binary(op: BinaryOp, left: Expr, right: Expr) -> Expr {
 /// One reference segment: its text as written and its dot-separated
 /// name pieces.
 struct Segment {
-    /// The whole segment (`Sheet.4`, `Geometry1.X2`, `Masters[Gear]`).
+    /// The whole segment (`Sheet.4`, `Geometry1.X2`, `Masters[Bearing]`).
     text: String,
     /// The pieces between the dots (`Geometry1`, `X2`).
     pieces: Vec<String>,
@@ -189,7 +189,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// True when the current token is a quoted name (`'1-D'`).
+    /// True when the current token is a quoted name (`'2-C'`).
     fn peek_is_quoted(&self) -> bool {
         self.current_text().starts_with('\'')
     }
@@ -559,7 +559,7 @@ impl<'a> Parser<'a> {
     }
 
     /// One name piece: a word, a number or a call, with its bracket
-    /// suffix (`Font[3]`, `Masters[Gear]`, `Pages[Page-3]`).
+    /// suffix (`Font[3]`, `Masters[Bearing]`, `Pages[Sheet-3]`).
     ///
     /// A call used as a part keeps its own text (`Sheet.30!SheetRef()`);
     /// what such a part means is a resolution rule (ADR 0054).
@@ -742,31 +742,6 @@ const fn offset(at: usize) -> u32 {
 mod tests {
     use super::*;
 
-    /// The tree with every span cleared, so trees compare by shape.
-    fn without_spans(expr: &Expr) -> Expr {
-        let kind = match &expr.kind {
-            ExprKind::Literal(literal) => ExprKind::Literal(literal.clone()),
-            ExprKind::Ref(r) => ExprKind::Ref(r.clone()),
-            ExprKind::Unary { op, operand } => ExprKind::Unary {
-                op: *op,
-                operand: Box::new(without_spans(operand)),
-            },
-            ExprKind::Binary { op, left, right } => ExprKind::Binary {
-                op: *op,
-                left: Box::new(without_spans(left)),
-                right: Box::new(without_spans(right)),
-            },
-            ExprKind::Call { name, args } => ExprKind::Call {
-                name: name.clone(),
-                args: args.iter().map(without_spans).collect(),
-            },
-        };
-        Expr {
-            span: Span::default(),
-            kind,
-        }
-    }
-
     fn number(value: f64, unit: Option<&str>, flag: Option<char>) -> Expr {
         Expr {
             span: Span::default(),
@@ -790,7 +765,9 @@ mod tests {
     }
 
     fn tree(source: &str) -> Expr {
-        without_spans(&parse(source).expect("the source parses"))
+        // `Expr` equality ignores spans (ADR 0051), so the parse itself
+        // is the shape to compare.
+        parse(source).expect("the source parses")
     }
 
     fn error(source: &str) -> Error {
@@ -870,17 +847,17 @@ mod tests {
     fn every_reference_form_of_the_table_parses() {
         for source in [
             "Width",
-            "Star!Angle",
-            "Executive.2!Height",
-            "Char.Font[3]",
-            "Scratch.A5",
-            "Sheet.8!FillForegnd",
-            "Masters[Gear]!Shaft!Geometry1.X1",
-            "ThePage!User.Vanishing_Point",
-            "Pages[Page-3]!Sheet.4!BeginX",
-            "Styles!Manager!LineColor",
-            "TheDoc!PreviewQuality",
-            "'1-D'!LineColor",
+            "Wheel!Angle",
+            "Frame.2!Height",
+            "Char.Size[3]",
+            "Scratch.B3",
+            "Sheet.12!FillForegnd",
+            "Masters[Bearing]!Hub!Geometry1.X1",
+            "ThePage!User.Anchor_Point",
+            "Pages[Sheet-3]!Sheet.4!BeginX",
+            "Styles!Ledger!LineColor",
+            "TheDoc!DocScale",
+            "'2-C'!LineColor",
         ] {
             assert!(parse(source).is_ok(), "{source} should parse");
         }
@@ -888,13 +865,13 @@ mod tests {
 
     #[test]
     fn a_reference_keeps_its_parts_as_written() {
-        let expr = tree("Masters[Gear]!Shaft!Geometry1.X1");
+        let expr = tree("Masters[Bearing]!Hub!Geometry1.X1");
         let ExprKind::Ref(r) = expr.kind else {
             panic!("expected a reference");
         };
         assert_eq!(
             r.sheets,
-            vec![String::from("Masters[Gear]"), String::from("Shaft")]
+            vec![String::from("Masters[Bearing]"), String::from("Hub")]
         );
         assert_eq!(r.section.as_deref(), Some("Geometry1"));
         assert_eq!(r.names, vec![String::from("X1")]);
@@ -902,11 +879,11 @@ mod tests {
 
     #[test]
     fn a_quoted_name_keeps_its_quotes_in_the_part() {
-        let expr = tree("'1-D'!LineColor");
+        let expr = tree("'2-C'!LineColor");
         let ExprKind::Ref(r) = expr.kind else {
             panic!("expected a reference");
         };
-        assert_eq!(r.sheets, vec![String::from("'1-D'")]);
+        assert_eq!(r.sheets, vec![String::from("'2-C'")]);
         assert_eq!(r.names, vec![String::from("LineColor")]);
     }
 
@@ -1082,7 +1059,7 @@ mod tests {
 
     #[test]
     fn an_unbalanced_bracket_is_an_error() {
-        assert_eq!(syntax_kind("Char.Font[3"), SyntaxKind::UnexpectedEnd);
+        assert_eq!(syntax_kind("Char.Size[3"), SyntaxKind::UnexpectedEnd);
         assert_eq!(syntax_kind("5[in"), SyntaxKind::UnexpectedEnd);
     }
 
@@ -1090,7 +1067,7 @@ mod tests {
     fn parse_formula_reads_the_source_text() {
         let f = Formula::new("Width*0.5");
         assert_eq!(
-            without_spans(&parse_formula(&f).expect("the formula parses")),
+            parse_formula(&f).expect("the formula parses"),
             tree("Width*0.5")
         );
     }

@@ -971,3 +971,30 @@ fn a_literal_with_an_unknown_unit_is_value_error() {
     assert_eq!(out, Value::Err(ErrorCode::Value));
     assert!(matches!(one_warning(&ctx), EvalWarningKind::Coercion(_)));
 }
+
+// ---------- P6-17: the cheap coverage minors ----------
+
+/// The arity edges the coverage audit found dark: `IF()` with no
+/// arguments, `IF(FALSE, 1)` with no else branch and `SETF` with one
+/// argument are all `#VALUE!`, and the one-argument `SETF` writes
+/// nothing.
+#[test]
+fn the_arity_edges_evaluate_to_value_errors() {
+    let mut ctx = Ctx::new();
+    assert_eq!(
+        run(&call("IF", vec![]), &mut ctx),
+        Value::Err(ErrorCode::Value),
+        "IF() with no arguments"
+    );
+    assert_eq!(
+        run(&call("IF", vec![boolean(false), plain(1.0)]), &mut ctx),
+        Value::Err(ErrorCode::Value),
+        "IF(FALSE, 1) with no else branch"
+    );
+    assert_eq!(
+        run(&call("SETF", vec![cell("Tgt")]), &mut ctx),
+        Value::Err(ErrorCode::Value),
+        "SETF with one argument"
+    );
+    assert!(ctx.writes.is_empty(), "a one-argument SETF writes nothing");
+}

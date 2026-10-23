@@ -51,9 +51,9 @@ impl Number {
 pub enum ErrorCode {
     /// `#DIV/0!`, division by zero.
     Div0,
-    /// `#VALUE!`, an argument or operand of the wrong type.
+    /// `#VALUE!`, a wrongly typed operand or argument.
     Value,
-    /// `#REF!`, a reference to a cell that does not exist.
+    /// `#REF!`, a reference naming a cell the document does not hold.
     Ref,
     /// `#NUM!`, an invalid number (also a non-finite result, P3-11).
     Num,

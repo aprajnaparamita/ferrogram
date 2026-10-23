@@ -21,7 +21,7 @@ use ferrogram_model::{CellValue, CellWrite, Document, SheetRef};
 use crate::Error;
 use crate::ast::{Expr, ExprKind};
 use crate::error::SyntaxKind;
-use crate::eval::{EvalContext, EvalWarning, EvalWarningKind};
+use crate::eval::{EvalWarning, EvalWarningKind};
 use crate::formula::{CellRef, Formula};
 use crate::graph::{self, CellAddress, DepGraph, EffectiveCell};
 use crate::resolve::DocumentResolver;
@@ -155,8 +155,14 @@ pub struct Evaluation {
     /// cached value (ADR 0053).
     pub warnings: Vec<RecalcWarning>,
     /// The cells the formula wrote (`SETF`). The pass applies them in
-    /// order and dirties their dependents within the same budget.
+    /// order and dirties their dependents within the same budget. The
+    /// writes of an evaluation that stands back are dropped (ADR 0056:
+    /// a cell that keeps its cached value has no side effects).
     pub writes: Vec<CellWriteOp>,
+    /// How many formula evaluations this call ran: its own plus every
+    /// nested one a read of an uncached cell triggered (ADR 0055's
+    /// budget counts them, P6-12 review F7). Never 0.
+    pub evaluations: u32,
 }
 
 /// The formula engine the graph and the recalc pass drive (ADR 0055).
@@ -207,13 +213,12 @@ impl FormulaEngine for DocumentEngine {
         formula: &Formula,
         sheet: SheetRef,
     ) -> Result<Evaluation, Error> {
-        let (value, raw_writes, eval_warnings) = {
+        let (value, traced, raw_writes, nested) = {
+            // The resolver records `SETF` writes and attributes warnings
+            // to the cell whose formula raised them (ADR 0056, P6-12
+            // reviews F1 and F16); nothing writes the document here.
             let mut resolver = DocumentResolver::new(document);
-            let mut recording = RecordingContext {
-                resolver: &mut resolver,
-                writes: Vec::new(),
-            };
-            let value = match crate::eval::eval_formula(formula, sheet, &mut recording) {
+            let value = match crate::eval::eval_formula(formula, sheet, &mut resolver) {
                 Ok(value) => value,
                 Err(Error::Syntax { kind, .. }) => {
                     // A formula the parser rejects is document data, not
@@ -228,28 +233,41 @@ impl FormulaEngine for DocumentEngine {
                             kind: RecalcWarningKind::Syntax(kind),
                         }],
                         writes: Vec::new(),
+                        evaluations: 1,
                     });
                 }
                 Err(error) => return Err(error),
             };
-            let RecordingContext { writes, .. } = recording;
-            (value, writes, resolver.into_warnings())
+            let nested = resolver.evaluations();
+            let (traced, raw_writes) = resolver.into_parts();
+            (value, traced, raw_writes, nested)
         };
         let cached = value.to_cached()?;
-        let mut warnings: Vec<RecalcWarning> =
-            eval_warnings.into_iter().filter_map(map_warning).collect();
+        let mut warnings: Vec<RecalcWarning> = Vec::new();
+        for trace in traced {
+            // A warning raised inside a referenced cell's formula names
+            // that cell (P6-12 review F16); the outer cell fills in for
+            // a warning the top-level formula raised itself.
+            let target = trace
+                .origin
+                .as_ref()
+                .and_then(|origin| graph::resolve_ref_address(document, sheet, origin));
+            warnings.extend(map_warning(target, trace.warning));
+        }
         let mut writes: Vec<CellWriteOp> = Vec::new();
-        for (sheet, reference, value) in raw_writes {
-            let cached_write = value.to_cached()?;
-            match graph::resolve_ref_address(document, sheet, &reference) {
+        for write in raw_writes {
+            let cached_write = write.value.to_cached()?;
+            match graph::resolve_write_address(document, write.sheet, &write.target) {
                 Some(target) => writes.push(CellWriteOp {
                     target,
-                    formula: literal_text(&value),
+                    formula: literal_text(&write.value),
                     value: cached_write.value,
                 }),
                 None => warnings.push(RecalcWarning {
                     target: None,
-                    kind: RecalcWarningKind::MissingReference(reference.name().unwrap_or_default()),
+                    kind: RecalcWarningKind::MissingReference(
+                        write.target.name().unwrap_or_default(),
+                    ),
                 }),
             }
         }
@@ -257,37 +275,8 @@ impl FormulaEngine for DocumentEngine {
             value: cached.value,
             warnings,
             writes,
+            evaluations: nested.saturating_add(1),
         })
-    }
-}
-
-/// The raw `SETF` writes one evaluation recorded.
-type RawWrite = (SheetRef, CellRef, Value);
-
-/// The [`EvalContext`] that records `SETF` writes instead of applying
-/// them (reads and warnings go to the resolver).
-struct RecordingContext<'a, 'd> {
-    resolver: &'a mut DocumentResolver<'d>,
-    writes: Vec<RawWrite>,
-}
-
-impl EvalContext for RecordingContext<'_, '_> {
-    fn cell_value(&mut self, sheet: SheetRef, reference: &CellRef) -> Result<Value, Error> {
-        self.resolver.cell_value(sheet, reference)
-    }
-
-    fn set_cell(
-        &mut self,
-        sheet: SheetRef,
-        reference: &CellRef,
-        value: Value,
-    ) -> Result<(), Error> {
-        self.writes.push((sheet, reference.clone(), value));
-        Ok(())
-    }
-
-    fn warn(&mut self, warning: EvalWarning) {
-        self.resolver.warn(warning);
     }
 }
 
@@ -311,8 +300,9 @@ fn collect_refs(expr: &Expr, out: &mut Vec<CellRef>) {
 
 /// Maps an evaluator warning to the recalc vocabulary. A cut evaluation
 /// cycle is not a recalc warning (the pass reports its own [`RecalcWarningKind::Cycle`])
-/// and is dropped here; every other kind keeps its content (P6-11).
-fn map_warning(warning: EvalWarning) -> Option<RecalcWarning> {
+/// and is dropped here; every other kind keeps its content and its
+/// target (P6-11, P6-12 review F16).
+fn map_warning(target: Option<CellAddress>, warning: EvalWarning) -> Option<RecalcWarning> {
     let kind = match &warning.kind {
         EvalWarningKind::UnknownFunction(name) => RecalcWarningKind::UnknownFunction(name.clone()),
         EvalWarningKind::UnsupportedReference(name) => {
@@ -334,7 +324,7 @@ fn map_warning(warning: EvalWarning) -> Option<RecalcWarning> {
         EvalWarningKind::NonFinite => RecalcWarningKind::NonFinite,
         EvalWarningKind::Cycle => return None,
     };
-    Some(RecalcWarning { target: None, kind })
+    Some(RecalcWarning { target, kind })
 }
 
 /// The literal formula text a `SETF` write stores (ADR 0056): the
@@ -435,12 +425,14 @@ pub fn recalc_with(
             });
             break;
         }
-        evaluations = evaluations.saturating_add(1);
         let evaluation = engine.evaluate(
             document,
             &Formula::new(effective.formula.as_str()),
             address.sheet,
         )?;
+        // The budget counts every evaluation the call ran, nested ones
+        // included (ADR 0055, P6-12 review F7).
+        evaluations = evaluations.saturating_add(evaluation.evaluations.max(1));
         let keep_cached = evaluation.warnings.iter().any(|warning| {
             matches!(
                 warning.kind,
@@ -453,32 +445,37 @@ pub fn recalc_with(
             }
             outcome.warnings.push(warning);
         }
-        if !keep_cached && let Some(text) = formula_text(&effective, options) {
-            match apply_write(document, &address, &text, &evaluation.value, &mut changes) {
-                Ok(true) => touched.push(address.clone()),
-                Ok(false) => {}
-                Err(_) => outcome.warnings.push(missing_cell(&address)),
-            }
-        }
-        for op in evaluation.writes {
-            let target = graph::normalize_address(document, &op.target);
-            match apply_write(document, &target, &op.formula, &op.value, &mut changes) {
-                Ok(true) => touched.push(target.clone()),
-                Ok(false) => {}
-                Err(_) => {
-                    outcome.warnings.push(missing_cell(&target));
-                    continue;
+        // A standing-back evaluation keeps its cached value and drops
+        // its `SETF` writes (ADR 0056, P6-12 review F3): a cell that
+        // keeps its value has no side effects.
+        if !keep_cached {
+            if let Some(text) = formula_text(&effective, options) {
+                match apply_write(document, &address, &text, &evaluation.value, &mut changes) {
+                    Ok(true) => touched.push(address.clone()),
+                    Ok(false) => {}
+                    Err(_) => outcome.warnings.push(missing_cell(&address)),
                 }
             }
-            // The write dirties its target and the target's dependents
-            // (ADR 0056); anything already done or queued is cut by the
-            // cycle rule and evaluates at most once per pass.
-            for extra in graph.order_and_cycles(std::slice::from_ref(&target)).0 {
-                if done.contains(&extra) || queued.contains(&extra) {
-                    continue;
+            for op in evaluation.writes {
+                let target = graph::normalize_address(document, &op.target);
+                match apply_write(document, &target, &op.formula, &op.value, &mut changes) {
+                    Ok(true) => touched.push(target.clone()),
+                    Ok(false) => {}
+                    Err(_) => {
+                        outcome.warnings.push(missing_cell(&target));
+                        continue;
+                    }
                 }
-                queued.insert(extra.clone());
-                queue.push_back(extra);
+                // The write dirties its target and the target's dependents
+                // (ADR 0056); anything already done or queued is cut by the
+                // cycle rule and evaluates at most once per pass.
+                for extra in graph.order_and_cycles(std::slice::from_ref(&target)).0 {
+                    if done.contains(&extra) || queued.contains(&extra) {
+                        continue;
+                    }
+                    queued.insert(extra.clone());
+                    queue.push_back(extra);
+                }
             }
         }
     }
@@ -626,6 +623,7 @@ pub(crate) mod testing {
                         kind: RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
                     }],
                     writes: Vec::new(),
+                    evaluations: 1,
                 });
             }
             Ok(evaluate_test(document, formula.as_str(), sheet))
@@ -682,7 +680,7 @@ pub(crate) mod testing {
             let magnitude: f64 = value.trim().parse().unwrap_or(0.0);
             let value = CellValue::Number(magnitude);
             let reference = CellRef::new(name.trim().to_owned());
-            let target = graph::resolve_ref_address(document, sheet, &reference)
+            let target = graph::resolve_write_address(document, sheet, &reference)
                 .unwrap_or_else(|| CellAddress::new(sheet, CellName::new(name.trim().to_owned())));
             return Evaluation {
                 value: value.clone(),
@@ -692,6 +690,7 @@ pub(crate) mod testing {
                     formula: literal(magnitude),
                     value,
                 }],
+                evaluations: 1,
             };
         }
         let number = if let Some((left, right)) = text.split_once('+') {
@@ -705,6 +704,7 @@ pub(crate) mod testing {
             value: CellValue::Number(number.unwrap_or_else(|| read_operand(document, sheet, text))),
             warnings: Vec::new(),
             writes: Vec::new(),
+            evaluations: 1,
         }
     }
 
@@ -1340,10 +1340,13 @@ mod tests {
 
     #[test]
     fn map_warning_keeps_only_the_recalc_kinds() {
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::UnknownFunction(String::from("THEMEVAL")),
-        });
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::UnknownFunction(String::from("THEMEVAL")),
+            },
+        );
         assert_eq!(
             mapped,
             Some(RecalcWarning {
@@ -1351,10 +1354,13 @@ mod tests {
                 kind: RecalcWarningKind::UnknownFunction(String::from("THEMEVAL")),
             })
         );
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::UnsupportedReference(String::from("Sheet.9!PinX")),
-        });
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::UnsupportedReference(String::from("Sheet.9!PinX")),
+            },
+        );
         assert_eq!(
             mapped.map(|warning| warning.kind),
             Some(RecalcWarningKind::MissingReference(String::from(
@@ -1362,10 +1368,13 @@ mod tests {
             )))
         );
         assert_eq!(
-            map_warning(EvalWarning {
-                sheet: SheetRef::Page(PageId { index: 0 }),
-                kind: EvalWarningKind::Cycle,
-            }),
+            map_warning(
+                None,
+                EvalWarning {
+                    sheet: SheetRef::Page(PageId { index: 0 }),
+                    kind: EvalWarningKind::Cycle,
+                }
+            ),
             None
         );
     }
@@ -1374,15 +1383,18 @@ mod tests {
     /// recalc outcome with every field kept.
     #[test]
     fn map_warning_keeps_a_wrong_argument_count() {
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::WrongArgumentCount {
-                function: String::from("ABS"),
-                min: 1,
-                max: Some(1),
-                got: 2,
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::WrongArgumentCount {
+                    function: String::from("ABS"),
+                    min: 1,
+                    max: Some(1),
+                    got: 2,
+                },
             },
-        });
+        );
         assert_eq!(
             mapped.map(|warning| warning.kind),
             Some(RecalcWarningKind::WrongArgumentCount {
@@ -1398,10 +1410,13 @@ mod tests {
     /// outcome with its target kept.
     #[test]
     fn map_warning_keeps_a_refused_setf() {
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::SetfRefused(String::from("\"User.Nope\"")),
-        });
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::SetfRefused(String::from("\"User.Nope\"")),
+            },
+        );
         assert_eq!(
             mapped.map(|warning| warning.kind),
             Some(RecalcWarningKind::SetfRefused(String::from(
@@ -1414,10 +1429,13 @@ mod tests {
     /// outcome with its reason kept.
     #[test]
     fn map_warning_keeps_a_coercion() {
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::Coercion(String::from("sheep")),
-        });
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::Coercion(String::from("sheep")),
+            },
+        );
         assert_eq!(
             mapped.map(|warning| warning.kind),
             Some(RecalcWarningKind::Coercion(String::from("sheep")))
@@ -1428,10 +1446,13 @@ mod tests {
     /// outcome.
     #[test]
     fn map_warning_keeps_a_non_finite() {
-        let mapped = map_warning(EvalWarning {
-            sheet: SheetRef::Page(PageId { index: 0 }),
-            kind: EvalWarningKind::NonFinite,
-        });
+        let mapped = map_warning(
+            None,
+            EvalWarning {
+                sheet: SheetRef::Page(PageId { index: 0 }),
+                kind: EvalWarningKind::NonFinite,
+            },
+        );
         assert_eq!(
             mapped.map(|warning| warning.kind),
             Some(RecalcWarningKind::NonFinite)
@@ -1495,6 +1516,7 @@ mod tests {
                         formula: String::from("1"),
                         value: num(1.0),
                     }],
+                    evaluations: 1,
                 })
             }
         }

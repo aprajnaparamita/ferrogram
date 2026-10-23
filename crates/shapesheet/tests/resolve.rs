@@ -183,19 +183,19 @@ fn a_bare_name_resolves_to_the_cell_on_the_target_sheet() {
 
 #[test]
 fn a_named_shape_resolves_on_the_same_page() {
-    // `Star!Angle` -> the named shape's cell on the same page.
+    // `Wheel!Angle` -> the named shape's cell on the same page.
     let mut fixture = Fixture::new();
-    let star = fixture.add_shape("Star", 2);
+    let wheel = fixture.add_shape("Wheel", 2);
     fixture
         .doc
-        .shape_mut(star)
-        .expect("star")
+        .shape_mut(wheel)
+        .expect("wheel")
         .sheet
         .cells
         .push(number_cell_in("Angle", 0.5, Unit::Radians));
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
-        sheets: vec![String::from("Star")],
+        sheets: vec![String::from("Wheel")],
         section: None,
         names: vec![String::from("Angle")],
     };
@@ -211,10 +211,10 @@ fn a_named_shape_resolves_on_the_same_page() {
 
 #[test]
 fn a_named_shape_with_an_id_picks_that_shape() {
-    // `Executive.2!Height` -> the shape named `Executive` with `ID` 2.
+    // `Frame.2!Height` -> the shape named `Frame` with `ID` 2.
     let mut fixture = Fixture::new();
-    let other = fixture.add_shape("Executive", 5);
-    let wanted = fixture.add_shape("Executive", 2);
+    let other = fixture.add_shape("Frame", 5);
+    let wanted = fixture.add_shape("Frame", 2);
     fixture
         .doc
         .shape_mut(other)
@@ -231,7 +231,7 @@ fn a_named_shape_with_an_id_picks_that_shape() {
         .push(number_cell("Height", 3.0));
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
-        sheets: vec![String::from("Executive.2")],
+        sheets: vec![String::from("Frame.2")],
         section: None,
         names: vec![String::from("Height")],
     };
@@ -247,7 +247,8 @@ fn a_named_shape_with_an_id_picks_that_shape() {
 #[test]
 fn a_column_of_the_section_row_shape_resolves_with_its_row_index() {
     // `Char.Size` -> `Character`, `Size` column, row 0;
-    // `Char.Font[3]` -> `Character`, `Font` column, row `IX`/position 3.
+    // A column at an indexed row: the `Character` section's `Font`
+    // column, row `IX`/position 3.
     let mut fixture = Fixture::new();
     let character = section(
         "Character",
@@ -286,7 +287,8 @@ fn a_column_of_the_section_row_shape_resolves_with_its_row_index() {
 
 #[test]
 fn a_scratch_row_resolves_by_column_and_row_number() {
-    // `Scratch.A5` -> `Scratch`, `A` column, row 5.
+    // An unnamed column at an indexed row: the `Scratch` section's
+    // `A` column, row 5.
     let mut fixture = Fixture::new();
     let rows: Vec<Vec<Cell>> = (0..6)
         .map(|index| vec![number_cell("A", f64::from(index) + 0.25)])
@@ -419,7 +421,7 @@ fn a_numbered_section_names_the_section_instance() {
 
 #[test]
 fn a_shape_id_on_the_targets_page_resolves() {
-    // `Sheet.8!FillForegnd` -> the shape with `ID` 8 on the target's page.
+    // A `Sheet.<id>` part: the shape with `ID` 8 on the target's page.
     let mut fixture = Fixture::new();
     let shape = fixture.add_shape("Other", 8);
     let mut cell = Cell::new(CellName::new("FillForegnd"));
@@ -448,18 +450,18 @@ fn a_shape_id_on_the_targets_page_resolves() {
 
 #[test]
 fn a_masters_named_sub_shape_resolves() {
-    // `Masters[Gear]!Shaft!Geometry1.X1` -> a master's named sub-shape's
+    // `Masters[Bearing]!Hub!Geometry1.X1` -> a master's named sub-shape's
     // cell.
     let mut fixture = Fixture::new();
-    let (gear, content) = fixture.add_master("Gear");
-    let shaft = fixture.doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
-    if let Some(entity) = fixture.doc.shape_mut(shaft) {
-        entity.name = String::from("Shaft");
-        entity.name_u = String::from("Shaft");
+    let (bearing, content) = fixture.add_master("Bearing");
+    let hub = fixture.doc.add_shape(Shape::new(ShapeId { index: 0 }, 2));
+    if let Some(entity) = fixture.doc.shape_mut(hub) {
+        entity.name = String::from("Hub");
+        entity.name_u = String::from("Hub");
         entity.parent = Some(content);
     }
     if let Some(entity) = fixture.doc.shape_mut(content) {
-        entity.children.push(shaft);
+        entity.children.push(hub);
     }
     let first = section("Geometry", vec![vec![number_cell("X", 0.25)]]);
     let second = section(
@@ -467,7 +469,7 @@ fn a_masters_named_sub_shape_resolves() {
         vec![vec![number_cell("X", 0.5)], vec![number_cell("X", 0.75)]],
     );
     {
-        let sheet = &mut fixture.doc.shape_mut(shaft).expect("shaft").sheet;
+        let sheet = &mut fixture.doc.shape_mut(hub).expect("hub").sheet;
         for mut section in [first, second] {
             for (position, row) in section.rows.iter_mut().enumerate() {
                 row.ix = Some(i32::try_from(position.saturating_add(1)).unwrap_or(i32::MAX));
@@ -477,7 +479,7 @@ fn a_masters_named_sub_shape_resolves() {
     }
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
-        sheets: vec![String::from("Masters[Gear]"), String::from("Shaft")],
+        sheets: vec![String::from("Masters[Bearing]"), String::from("Hub")],
         section: Some(String::from("Geometry2")),
         names: vec![String::from("X2")],
     };
@@ -491,12 +493,12 @@ fn a_masters_named_sub_shape_resolves() {
     );
     // The master is reachable by name only; a name that is not there is
     // `#REF!`.
-    assert_eq!(gear.index, 0);
+    assert_eq!(bearing.index, 0);
 }
 
 #[test]
 fn a_pages_shape_resolves() {
-    // `Pages[Page-3]!Sheet.4!BeginX` -> a page's shape's cell.
+    // `Pages[Sheet-3]!Sheet.4!BeginX` -> a page's shape's cell.
     let mut fixture = Fixture::new();
     let page_id = PageId { index: 1 };
     let shape = fixture.doc.add_shape(Shape::new(ShapeId { index: 0 }, 4));
@@ -508,13 +510,13 @@ fn a_pages_shape_resolves() {
         .cells
         .push(number_cell("BeginX", 6.5));
     let mut page = Page::new(page_id, 3);
-    page.name = String::from("Page-3");
-    page.name_u = String::from("Page-3");
+    page.name = String::from("Sheet-3");
+    page.name_u = String::from("Sheet-3");
     page.shapes.push(shape);
     fixture.doc.pages.push(page);
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
-        sheets: vec![String::from("Pages[Page-3]"), String::from("Sheet.4")],
+        sheets: vec![String::from("Pages[Sheet-3]"), String::from("Sheet.4")],
         section: None,
         names: vec![String::from("BeginX")],
     };
@@ -529,17 +531,17 @@ fn a_pages_shape_resolves() {
 
 #[test]
 fn a_stylesheet_rows_cell_resolves() {
-    // `Styles!Manager!LineColor` -> a stylesheet row's cell.
+    // `Styles!Ledger!LineColor` -> a stylesheet row's cell.
     let mut fixture = Fixture::new();
     let mut style = Style::new(StyleId { index: 0 });
     style.visio_id = 1;
-    style.name = String::from("Manager");
-    style.name_u = String::from("Manager");
+    style.name = String::from("Ledger");
+    style.name_u = String::from("Ledger");
     style.sheet.cells.push(number_cell("LineColor", 0.125));
     fixture.doc.stylesheet.styles.push(style);
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
     let reference = CellRef {
-        sheets: vec![String::from("Styles"), String::from("Manager")],
+        sheets: vec![String::from("Styles"), String::from("Ledger")],
         section: None,
         names: vec![String::from("LineColor")],
     };
@@ -555,26 +557,23 @@ fn a_stylesheet_rows_cell_resolves() {
 
 #[test]
 fn the_page_sheet_and_the_document_sheet_resolve() {
-    // `ThePage!User.Vanishing_Point` -> the page sheet;
-    // `TheDoc!PreviewQuality` -> the document sheet.
+    // `ThePage!User.Anchor_Point` -> the page sheet;
+    // `TheDoc!DocScale` -> the document sheet.
     let mut fixture = Fixture::new();
     let user = named_section(
         "User",
-        vec![("Vanishing_Point", vec![number_cell("Value", 1.5)])],
+        vec![("Anchor_Point", vec![number_cell("Value", 1.5)])],
     );
     if let Some(page) = fixture.doc.pages.get_mut(0) {
         page.sheet.sections.push(user);
     }
-    fixture
-        .doc
-        .properties
-        .push(Property::new("PreviewQuality", "2"));
+    fixture.doc.properties.push(Property::new("DocScale", "2"));
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
 
     let page_reference = CellRef {
         sheets: vec![String::from("ThePage")],
         section: Some(String::from("User")),
-        names: vec![String::from("Vanishing_Point")],
+        names: vec![String::from("Anchor_Point")],
     };
     let resolved = resolver
         .resolve(SheetRef::Shape(fixture.target), &page_reference)
@@ -587,7 +586,7 @@ fn the_page_sheet_and_the_document_sheet_resolve() {
     let doc_reference = CellRef {
         sheets: vec![String::from("TheDoc")],
         section: None,
-        names: vec![String::from("PreviewQuality")],
+        names: vec![String::from("DocScale")],
     };
     let resolved = resolver
         .resolve(SheetRef::Shape(fixture.target), &doc_reference)
@@ -601,9 +600,9 @@ fn the_page_sheet_and_the_document_sheet_resolve() {
 
 #[test]
 fn a_quoted_nonstandard_name_resolves_with_its_quote_escape() {
-    // `'1-D'!LineColor` -> a nonstandard name; `''` is the quote escape.
+    // `'2-C'!LineColor` -> a nonstandard name; `''` is the quote escape.
     let mut fixture = Fixture::new();
-    let odd = fixture.add_shape("1-D", 3);
+    let odd = fixture.add_shape("2-C", 3);
     fixture
         .doc
         .shape_mut(odd)
@@ -622,7 +621,7 @@ fn a_quoted_nonstandard_name_resolves_with_its_quote_escape() {
     let mut resolver = DocumentResolver::new(&mut fixture.doc);
 
     let quoted = CellRef {
-        sheets: vec![String::from("'1-D'")],
+        sheets: vec![String::from("'2-C'")],
         section: None,
         names: vec![String::from("LineColor")],
     };
@@ -829,7 +828,7 @@ fn a_missing_cell_row_or_sheet_is_ref_with_one_warning() {
     assert_eq!(warnings.len(), 4);
     for warning in warnings {
         assert!(matches!(
-            warning.kind,
+            warning.warning.kind,
             EvalWarningKind::UnsupportedReference(_)
         ));
     }
@@ -851,11 +850,11 @@ fn names_match_case_insensitively() {
     // Acceptance: name lookup is case-insensitive; a case-only difference
     // resolves.
     let mut fixture = Fixture::new();
-    let star = fixture.add_shape("Star", 2);
+    let wheel = fixture.add_shape("Wheel", 2);
     fixture
         .doc
-        .shape_mut(star)
-        .expect("star")
+        .shape_mut(wheel)
+        .expect("wheel")
         .sheet
         .cells
         .push(number_cell("Angle", 0.5));
@@ -877,7 +876,7 @@ fn names_match_case_insensitively() {
     let sheet = SheetRef::Shape(fixture.target);
 
     let lower_shape = CellRef {
-        sheets: vec![String::from("star")],
+        sheets: vec![String::from("wheel")],
         section: None,
         names: vec![String::from("angle")],
     };
@@ -908,7 +907,9 @@ fn names_match_case_insensitively() {
 }
 
 #[test]
-fn a_setf_write_lands_on_the_local_cell_or_is_refused() {
+fn a_setf_write_is_recorded_and_a_missing_target_is_refused() {
+    // ADR 0056 (P6-12 review F1): the resolver records the write and
+    // the recalc pass applies it, so nothing writes the document here.
     let mut fixture = Fixture::new();
     fixture
         .doc
@@ -925,27 +926,83 @@ fn a_setf_write_lands_on_the_local_cell_or_is_refused() {
     ));
 
     // A missing target is refused (the evaluator turns the refusal into
-    // `#REF!`).
+    // `#REF!`), and nothing is recorded for it.
     let missing = resolver.set_cell(sheet, &CellRef::new("NoSuchCell"), value.clone());
     assert!(missing.is_err());
+    assert!(resolver.writes().is_empty());
 
-    // A write goes through once the value mapping (P6-03) does; before
-    // that the mapping itself is the error.
-    let write = resolver.set_cell(sheet, &CellRef::new("PinX"), value.clone());
-    match value.to_cached() {
-        Ok(cached) => {
-            write.expect("writes");
-            let cell = resolver
-                .document()
-                .shape(fixture.target)
-                .expect("target")
-                .sheet
-                .cells
-                .first()
-                .expect("cell");
-            assert_eq!(cell.value, Some(cached.value));
-            assert_eq!(cell.formula, None);
-        }
-        Err(_) => assert!(write.is_err()),
+    // A write the target check accepts is recorded, not applied.
+    resolver
+        .set_cell(sheet, &CellRef::new("PinX"), value.clone())
+        .expect("records");
+    assert_eq!(resolver.writes().len(), 1);
+    assert_eq!(resolver.writes()[0].sheet, sheet);
+    assert_eq!(resolver.writes()[0].target, CellRef::new("PinX"));
+    assert_eq!(resolver.writes()[0].value, value);
+    let cell = resolver
+        .document()
+        .shape(fixture.target)
+        .expect("target")
+        .sheet
+        .cells
+        .first()
+        .expect("cell");
+    assert_eq!(cell.value, Some(CellValue::Number(1.0)), "untouched");
+    assert_eq!(cell.formula, None);
+}
+
+#[test]
+fn a_rung_unit_is_the_unit_the_defining_rung_recorded() {
+    // The coverage audit (P6-13) found `rung_unit`'s two returns dark:
+    // a master's cell that records a non-inch unit must give that unit
+    // to the value an instance reads.
+    let mut fixture = Fixture::new();
+    let (master, content) = fixture.add_master("Ruler");
+    fixture
+        .doc
+        .shape_mut(content)
+        .expect("content")
+        .sheet
+        .cells
+        .push(number_cell_in("Width", 2.0, Unit::Millimeters));
+    fixture.instance_of(fixture.target, master);
+
+    let mut resolver = DocumentResolver::new(&mut fixture.doc);
+    let resolved = resolver
+        .resolve(SheetRef::Shape(fixture.target), &CellRef::new("Width"))
+        .expect("resolves");
+    assert_eq!(
+        resolved.value,
+        expected(CellValue::Number(2.0), Unit::Millimeters),
+        "the master rung's unit comes back with the value"
+    );
+    assert_eq!(resolved.source, ValueSource::Master(master));
+}
+
+#[test]
+fn a_stored_formula_that_does_not_parse_reads_as_ref_without_a_value() {
+    // A hostile file: a formula the parser rejects on a cell that
+    // caches nothing has no value to answer with (the resolver's own
+    // eval fallback).
+    let mut fixture = Fixture::new();
+    fixture
+        .doc
+        .shape_mut(fixture.target)
+        .expect("target")
+        .sheet
+        .cells
+        .push(formula_cell("Bad", "FORMATEX(1,)", 0.0));
+    if let Some(entry) = fixture
+        .doc
+        .shape_mut(fixture.target)
+        .and_then(|shape| shape.sheet.cells.first_mut())
+    {
+        entry.value = None;
     }
+
+    let mut resolver = DocumentResolver::new(&mut fixture.doc);
+    let value = resolver
+        .cell_value(SheetRef::Shape(fixture.target), &CellRef::new("Bad"))
+        .expect("value");
+    assert_eq!(value, Value::Err(ErrorCode::Ref));
 }

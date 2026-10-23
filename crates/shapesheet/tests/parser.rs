@@ -15,35 +15,10 @@ use ferrogram_shapesheet::{
     NumberLiteral, Span, SyntaxKind, UnaryOp, parse, parse_formula, print,
 };
 
-/// The tree with every span cleared, so trees compare by shape.
-fn strip(expr: &Expr) -> Expr {
-    let kind = match &expr.kind {
-        ExprKind::Literal(literal) => ExprKind::Literal(literal.clone()),
-        ExprKind::Ref(r) => ExprKind::Ref(r.clone()),
-        ExprKind::Unary { op, operand } => ExprKind::Unary {
-            op: *op,
-            operand: Box::new(strip(operand)),
-        },
-        ExprKind::Binary { op, left, right } => ExprKind::Binary {
-            op: *op,
-            left: Box::new(strip(left)),
-            right: Box::new(strip(right)),
-        },
-        ExprKind::Call { name, args } => ExprKind::Call {
-            name: name.clone(),
-            args: args.iter().map(strip).collect(),
-        },
-        _ => panic!("a parsed tree holds no other kind"),
-    };
-    Expr {
-        span: Span::default(),
-        kind,
-    }
-}
-
-/// The parsed tree, spans cleared.
+/// The parsed tree. `Expr` equality ignores spans (ADR 0051), so the
+/// parse itself is the shape to compare.
 fn tree(source: &str) -> Expr {
-    strip(&parse(source).expect("the source parses"))
+    parse(source).expect("the source parses")
 }
 
 /// The [`SyntaxKind`] the source fails with.
@@ -95,19 +70,19 @@ fn every_reference_form_of_the_table_parses_and_prints_back() {
     // where a call names the sheet or the cell.
     for source in [
         "Width",
-        "Star!Angle",
-        "Executive.2!Height",
-        "Char.Font[3]",
-        "Scratch.A5",
+        "Wheel!Angle",
+        "Frame.2!Height",
+        "Char.Size[3]",
+        "Scratch.B3",
         "Prop.Cost",
         "Geometry1.X2",
-        "Sheet.8!FillForegnd",
-        "Masters[Gear]!Shaft!Geometry1.X1",
-        "ThePage!User.Vanishing_Point",
-        "Pages[Page-3]!Sheet.4!BeginX",
-        "Styles!Manager!LineColor",
-        "TheDoc!PreviewQuality",
-        "'1-D'!LineColor",
+        "Sheet.12!FillForegnd",
+        "Masters[Bearing]!Hub!Geometry1.X1",
+        "ThePage!User.Anchor_Point",
+        "Pages[Sheet-3]!Sheet.4!BeginX",
+        "Styles!Ledger!LineColor",
+        "TheDoc!DocScale",
+        "'2-C'!LineColor",
         "LISTSHEETREF()!User.Direction",
         "Sheet.30!SheetRef()",
     ] {
@@ -119,24 +94,24 @@ fn every_reference_form_of_the_table_parses_and_prints_back() {
 
 #[test]
 fn a_reference_keeps_every_part_as_written() {
-    let expr = tree("Masters[Gear]!Shaft!Geometry1.X1");
+    let expr = tree("Masters[Bearing]!Hub!Geometry1.X1");
     let ExprKind::Ref(r) = expr.kind else {
         panic!("expected a reference");
     };
     assert_eq!(
         r.sheets,
-        vec![String::from("Masters[Gear]"), String::from("Shaft")]
+        vec![String::from("Masters[Bearing]"), String::from("Hub")]
     );
     assert_eq!(r.section.as_deref(), Some("Geometry1"));
     assert_eq!(r.names, vec![String::from("X1")]);
     assert_eq!(r.name().as_deref(), Some("X1"));
     // The parser does not decide what a part *means* (ADR 0054).
-    let expr = tree("Scratch.A5");
+    let expr = tree("Scratch.B3");
     let ExprKind::Ref(r) = expr.kind else {
         panic!("expected a reference");
     };
     assert_eq!(r.section.as_deref(), Some("Scratch"));
-    assert_eq!(r.names, vec![String::from("A5")]);
+    assert_eq!(r.names, vec![String::from("B3")]);
 }
 
 #[test]
@@ -280,7 +255,7 @@ fn the_nesting_limit_is_a_syntax_error() {
 fn parse_formula_reads_the_source_text_of_the_formula() {
     let formula = Formula::new("Width*0.5");
     let back = parse_formula(&formula).expect("the formula parses");
-    assert_eq!(strip(&back), tree("Width*0.5"));
+    assert_eq!(back, tree("Width*0.5"));
 }
 
 #[test]
@@ -345,8 +320,8 @@ fn arb_bare_name() -> impl proptest::strategy::Strategy<Value = String> {
         Just(String::from("Font[3]")),
         Just(String::from("A5")),
         Just(String::from("Cost")),
-        Just(String::from("Vanishing_Point")),
-        Just(String::from("'1-D'")),
+        Just(String::from("Anchor_Point")),
+        Just(String::from("'2-C'")),
     ]
 }
 
@@ -448,7 +423,7 @@ proptest::proptest! {
     fn parse_print_parse_is_the_identity(expr in arb_expr()) {
         let text = print(&expr).expect("the tree prints");
         let back = parse(&text).expect("the text parses");
-        proptest::prop_assert_eq!(strip(&back), strip(&expr));
+        proptest::prop_assert_eq!(back, expr);
     }
 
     /// The same trip for a number literal alone: the printer writes the
@@ -458,6 +433,6 @@ proptest::proptest! {
         let expr = Expr { span: Span::default(), kind: ExprKind::Literal(Literal::Number(literal)) };
         let text = print(&expr).expect("the literal prints");
         let back = parse(&text).expect("the text parses");
-        proptest::prop_assert_eq!(strip(&back), expr);
+        proptest::prop_assert_eq!(back, expr);
     }
 }

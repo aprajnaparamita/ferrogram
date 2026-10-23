@@ -89,3 +89,125 @@ fn evaluation_order_covers_the_dirty_set_once() {
     assert_eq!(order.len(), 1);
     assert_eq!(order.first(), dirty.first());
 }
+
+// ---------------------------------------------------------------------------
+// Reference addressing (P6-17, P6-12 review F2 and the coverage audit)
+// ---------------------------------------------------------------------------
+
+/// A formula that reads another shape **by name** builds its edge to
+/// that shape's cell (`PinX = Beta!Width`).
+#[test]
+fn a_cross_shape_reference_by_name_builds_its_edge() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+    let mut beta = Shape::new(ShapeId { index: 0 }, 2);
+    beta.name = String::from("Beta");
+    beta.name_u = String::from("Beta");
+    beta.sheet.cells = vec![cell("Width", Some("4"))];
+    let beta = doc.insert_shape(page, beta, None).expect("insert");
+    let mut alpha = Shape::new(ShapeId { index: 0 }, 3);
+    alpha.sheet.cells = vec![cell("PinX", Some("Beta!Width*2"))];
+    let alpha = doc.insert_shape(page, alpha, None).expect("insert");
+
+    let graph = DepGraph::build(&doc).expect("build");
+    let source = CellAddress::new(SheetRef::Shape(alpha), CellName::from_static("PinX"));
+    let reads = CellAddress::new(SheetRef::Shape(beta), CellName::from_static("Width"));
+    assert!(
+        graph.dependencies(&source).expect("deps").contains(&reads),
+        "{:?}",
+        graph.dependencies(&source)
+    );
+    assert!(graph.dependents(&reads).expect("deps").contains(&source));
+}
+
+/// A bare name that matches a **row cell** (`A = X`, `X` sitting in a
+/// geometry row) builds its edge to the row cell's address.
+#[test]
+fn a_bare_row_cell_reference_builds_its_edge() {
+    let mut doc = Document::new();
+    let mut shape = Shape::new(ShapeId { index: 0 }, 1);
+    {
+        let mut section =
+            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Geometry"));
+        let mut row = ferrogram_model::Row::new();
+        row.ix = Some(0);
+        row.cells = vec![cell("X", Some("1"))];
+        section.rows.push(row);
+        shape.sheet.sections.push(section);
+    }
+    shape.sheet.cells = vec![cell("Alpha", Some("X*3"))];
+    let shape = doc.add_shape(shape);
+    doc.pages.push(Page::new(PageId { index: 0 }, 1));
+    if let Some(page) = doc.pages.first_mut() {
+        page.shapes.push(shape);
+    }
+
+    let graph = DepGraph::build(&doc).expect("build");
+    let source = CellAddress::new(SheetRef::Shape(shape), CellName::from_static("Alpha"));
+    let reads = CellAddress::in_row(
+        SheetRef::Shape(shape),
+        ferrogram_model::SectionName::from_static("Geometry"),
+        ferrogram_model::RowTarget {
+            position: Some(0),
+            ix: Some(0),
+        },
+        CellName::from_static("X"),
+    );
+    assert!(
+        graph.dependencies(&source).expect("deps").contains(&reads),
+        "{:?}",
+        graph.dependencies(&source)
+    );
+}
+
+/// A reference a master defines is edged to the **master rung's** cell
+/// (P6-12 review F2): an instance with no own `Character` rows reads
+/// `Char.Size` from its master, and an edit of that cell must reach the
+/// dependent.
+#[test]
+fn a_reference_resolved_through_a_master_builds_its_edge() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The master: a `Character` section whose first row carries `Size`.
+    let mut master_shape = Shape::new(ShapeId { index: 0 }, 10);
+    {
+        let mut section =
+            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Character"));
+        let mut row = ferrogram_model::Row::new();
+        row.ix = Some(0);
+        row.cells = vec![cell("Size", Some("5"))];
+        section.rows.push(row);
+        master_shape.sheet.sections.push(section);
+    }
+    let master_root = doc.add_shape(master_shape);
+    let mut master = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+    master.name = String::from("Badge");
+    master.name_u = String::from("Badge");
+    master.shapes = vec![master_root];
+    let master = doc.add_master(master).expect("master");
+
+    // The instance: no own `Character` rows, `PinX = Char.Size*2`.
+    let mut instance = Shape::new(ShapeId { index: 0 }, 11);
+    instance.master = Some(master);
+    instance.sheet.cells = vec![cell("PinX", Some("Char.Size*2"))];
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let graph = DepGraph::build(&doc).expect("build");
+    let source = CellAddress::new(SheetRef::Shape(instance), CellName::from_static("PinX"));
+    let reads = CellAddress::in_row(
+        SheetRef::Shape(master_root),
+        ferrogram_model::SectionName::from_static("Character"),
+        ferrogram_model::RowTarget {
+            position: Some(0),
+            ix: Some(0),
+        },
+        CellName::from_static("Size"),
+    );
+    assert!(
+        graph.dependencies(&source).expect("deps").contains(&reads),
+        "{:?}",
+        graph.dependencies(&source)
+    );
+    assert!(graph.dependents(&reads).expect("deps").contains(&source));
+}

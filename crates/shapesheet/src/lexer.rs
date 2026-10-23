@@ -9,7 +9,7 @@
 //! and [`crate::NumberLiteral`] values. A number token holds the
 //! magnitude only: a unit suffix is its own token, and the mixed
 //! fraction `5 1/2` folds into one magnitude here. A quoted name
-//! (`'1-D'`) scans as [`TokenKind::Ident`] with the name text as written
+//! (`'2-C'`) scans as [`TokenKind::Ident`] with the name text as written
 //! between the quotes; the parser reads the spelling from the source
 //! span, so quote escapes survive.
 
@@ -50,7 +50,7 @@ pub enum TokenKind {
     /// An identifier or name part (`IF`, `Width`, `Sheet.4`'s `Sheet`).
     ///
     /// A quoted name carries its text as written between the quotes
-    /// (`1-D` of `'1-D'`, doubled quotes not folded).
+    /// (`2-C` of `'2-C'`, doubled quotes not folded).
     Ident(String),
     /// `TRUE` or `FALSE` (any case).
     Bool(bool),
@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn a_quoted_name_keeps_its_text_as_written() {
-        assert_eq!(kinds("'1-D'")[0], TokenKind::Ident(String::from("1-D")));
+        assert_eq!(kinds("'2-C'")[0], TokenKind::Ident(String::from("2-C")));
         // `''` is one quote inside a name and is not folded.
         assert_eq!(kinds("'a''b'")[0], TokenKind::Ident(String::from("a''b")));
     }

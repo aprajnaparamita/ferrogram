@@ -23,7 +23,10 @@ use ferrogram_model::{
     Cell, CellName, CellValue, Document, Master, MasterId, Preserved, Row, Section, SectionName,
     Shape, ShapeId, SheetRef, Style, StyleId,
 };
-use ferrogram_shapesheet::{CellAddress, RecalcOptions, RecalcWarningKind, recalc};
+use ferrogram_shapesheet::{
+    CellAddress, CellRef, CellWriteOp, DepGraph, Error, Evaluation, Formula, FormulaEngine,
+    RecalcOptions, RecalcWarningKind, recalc, recalc_with,
+};
 
 /// A cell with `formula` and a cached `value`, in `Unit::Unitsless`.
 fn cell(name: &str, formula: Option<&str>, value: Option<f64>) -> Cell {
@@ -688,11 +691,11 @@ fn broken_references_are_warnings_not_failures() {
         ("Named", "Nope!Width"),
         ("Row", "Geometry1.X9"),
         ("Prop", "Prop.Nope"),
-        ("Char", "Char.Font[3]"),
-        ("Master", "Masters[Gear]!Shaft!Geometry1.X1"),
+        ("Char", "Char.Size[3]"),
+        ("Master", "Masters[Bearing]!Hub!Geometry1.X1"),
         ("Page", "Pages[Page-9]!Sheet.4!BeginX"),
-        ("Style", "Styles!Manager!LineColor"),
-        ("Doc", "TheDoc!PreviewQuality"),
+        ("Style", "Styles!Ledger!LineColor"),
+        ("Doc", "TheDoc!DocScale"),
     ]);
     for name in [
         "Gone", "Named", "Row", "Prop", "Char", "Master", "Page", "Style", "Doc",
@@ -772,4 +775,355 @@ fn a_formula_cycle_keeps_the_cached_values() {
         .filter(|kind| matches!(kind, RecalcWarningKind::Cycle(_)))
         .collect();
     assert_eq!(cycles.len(), 1, "{:?}", outcome.warnings);
+}
+
+// ---------------------------------------------------------------------------
+// P6-17: the fix-task regressions
+// ---------------------------------------------------------------------------
+
+/// A `SETF` inside a **referenced** cell's formula is recorded and the
+/// pass applies it (P6-12 review F1): the write lands with a
+/// [`CellUpdate`] and the dependents are dirtied in the same pass.
+#[test]
+fn a_nested_setf_lands_through_the_pass() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![
+        cell("Width", None, Some(0.0)),
+        cell("Mid", Some("SETF(Width,5)+1"), None),
+        cell("Top", Some("Mid*2"), Some(0.0)),
+    ];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let outcome = recalc(&mut doc, &[at(ids[0], "Top")], &RecalcOptions::new()).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Top")),
+        Some(12.0),
+        "the nested evaluation returned Mid = 6"
+    );
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Width")),
+        Some(5.0),
+        "the nested write landed through the pass"
+    );
+    assert!(
+        outcome.updates.iter().any(|update| {
+            update.target == at(ids[0], "Width") && update.after == Some(CellValue::Number(5.0))
+        }),
+        "{:?}",
+        outcome.updates
+    );
+}
+
+/// The "F1 reproduces" path: the referenced cell stands back (an
+/// unknown function) and its `SETF` write is dropped (ADR 0056, P6-12
+/// review F3), so nothing writes outside the pass's snapshot; the
+/// warning names the referenced cell (F16).
+#[test]
+fn a_standing_back_evaluation_drops_its_writes_and_names_the_cell() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![
+        cell("Width", None, Some(0.0)),
+        cell("Mid", Some("SETF(Width,5)+THEMEVAL(x)"), None),
+        cell("Top", Some("Mid+1"), Some(0.0)),
+    ];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let outcome = recalc(&mut doc, &[at(ids[0], "Top")], &RecalcOptions::new()).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Width")),
+        Some(0.0),
+        "a cell that keeps its cached value has no side effects"
+    );
+    assert!(
+        !outcome
+            .updates
+            .iter()
+            .any(|update| update.target == at(ids[0], "Width")),
+        "{:?}",
+        outcome.updates
+    );
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Top")),
+        Some(0.0),
+        "the outer cell keeps its cached value too"
+    );
+    let unknown = outcome
+        .warnings
+        .iter()
+        .find(|warning| matches!(warning.kind, RecalcWarningKind::UnknownFunction(_)))
+        .expect("one unknown-function warning");
+    assert_eq!(
+        unknown.target,
+        Some(at(ids[0], "Mid")),
+        "the warning names the cell whose formula raised it (F16)"
+    );
+}
+
+/// `SETF` writes into a section-level cell, a row cell and the page
+/// sheet (the write arms the coverage audit found dark): each write
+/// lands in its own slot with its `CellUpdate`.
+#[test]
+fn a_setf_writes_into_a_section_a_row_and_the_page() {
+    let mut shape = shape_with(1, &[]);
+    let mut geometry = Section::new(SectionName::from_static("Geometry"));
+    geometry.cells.push(cell("NoFill", None, Some(0.0)));
+    for ix in 0..2 {
+        let mut row = Row::new();
+        row.ix = Some(ix);
+        row.cells = vec![cell("X", None, Some(0.0))];
+        geometry.rows.push(row);
+    }
+    shape.sheet.sections.push(geometry);
+    shape.sheet.cells = vec![
+        cell("S", Some("SETF(Geometry1.NoFill, 3)"), None),
+        cell("R", Some("SETF(Geometry1.X1, 4)"), None),
+        cell("P", Some("SETF(ThePage!Tgt, 5)"), None),
+    ];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let page = doc.pages.first_mut().expect("page");
+    page.sheet.cells = vec![cell("Tgt", None, Some(0.0))];
+
+    let dirty = [at(ids[0], "S"), at(ids[0], "R"), at(ids[0], "P")];
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(outcome.warnings, Vec::new(), "{:?}", outcome.warnings);
+
+    // The section-level cell.
+    assert_eq!(
+        number_of(&doc, &section_at(ids[0], "Geometry", "NoFill")),
+        Some(3.0)
+    );
+    // The row cell (`X1` is the row with `IX` 1).
+    let row_cell = &doc
+        .shape(ids[0])
+        .expect("shape")
+        .sheet
+        .sections
+        .first()
+        .expect("geometry")
+        .rows
+        .get(1)
+        .expect("row 1")
+        .cells[0];
+    assert_eq!(row_cell.value, Some(CellValue::Number(4.0)));
+    assert_eq!(row_cell.formula.as_deref(), Some("4"), "a literal write");
+    // The page sheet's cell.
+    let page_cell = doc
+        .page(ferrogram_model::PageId { index: 0 })
+        .expect("page")
+        .sheet
+        .cells
+        .first()
+        .expect("Tgt");
+    assert_eq!(page_cell.value, Some(CellValue::Number(5.0)));
+
+    for target in [
+        section_at(ids[0], "Geometry", "NoFill"),
+        CellAddress::in_row(
+            SheetRef::Shape(ids[0]),
+            SectionName::from_static("Geometry"),
+            ferrogram_model::RowTarget {
+                position: Some(1),
+                ix: Some(1),
+            },
+            CellName::from_static("X"),
+        ),
+        CellAddress::new(
+            SheetRef::Page(ferrogram_model::PageId { index: 0 }),
+            CellName::from_static("Tgt"),
+        ),
+    ] {
+        assert!(
+            outcome.updates.iter().any(|update| update.target == target),
+            "{target:?} missing from {:?}",
+            outcome.updates
+        );
+    }
+}
+
+/// An engine failure aborts the pass with an error and no panic (the
+/// hard-error chain of `recalc_with` and `DocumentEngine::evaluate`;
+/// the product engine cannot fail on document data, so the test drives
+/// the seam with a broken engine).
+#[test]
+fn a_failing_engine_aborts_the_pass_with_an_error() {
+    struct Broken;
+    impl FormulaEngine for Broken {
+        fn references(&mut self, _formula: &Formula) -> Result<Vec<CellRef>, Error> {
+            Ok(Vec::new())
+        }
+        fn evaluate(
+            &mut self,
+            _document: &mut Document,
+            _formula: &Formula,
+            _sheet: SheetRef,
+        ) -> Result<Evaluation, Error> {
+            Err(Error::Conversion("broken test engine"))
+        }
+    }
+    let (mut doc, ids) = document_with(vec![shape_with(1, &[("Alpha", "1"), ("Beta", "2")])]);
+    let dirty = [at(ids[0], "Alpha"), at(ids[0], "Beta")];
+    let mut graph = DepGraph::build_with(&doc, &mut Broken).expect("build");
+    let outcome = recalc_with(
+        &mut doc,
+        &dirty,
+        &RecalcOptions::new(),
+        &mut graph,
+        &mut Broken,
+    );
+    assert!(outcome.is_err(), "the pass propagates the hard error");
+    assert_eq!(
+        formula_of(&doc, &at(ids[0], "Alpha")),
+        Some(String::from("1")),
+        "the document is untouched"
+    );
+}
+
+/// A write whose [`CellAddress`] names a row without its section is an
+/// error the pass reports as a warning, never a panic (AGENTS.md
+/// section 6).
+#[test]
+fn a_row_address_without_its_section_is_a_warning_not_a_panic() {
+    struct RowWithoutSection;
+    impl FormulaEngine for RowWithoutSection {
+        fn references(&mut self, _formula: &Formula) -> Result<Vec<CellRef>, Error> {
+            Ok(Vec::new())
+        }
+        fn evaluate(
+            &mut self,
+            _document: &mut Document,
+            _formula: &Formula,
+            sheet: SheetRef,
+        ) -> Result<Evaluation, Error> {
+            let shape = match sheet {
+                SheetRef::Shape(id) => id,
+                SheetRef::Page(_) => ferrogram_model::ShapeId { index: 0 },
+            };
+            Ok(Evaluation {
+                value: CellValue::Number(0.0),
+                warnings: Vec::new(),
+                writes: vec![CellWriteOp {
+                    target: CellAddress {
+                        sheet: SheetRef::Shape(shape),
+                        section: None,
+                        row: Some(ferrogram_model::RowTarget::at(0)),
+                        cell: CellName::from_static("X"),
+                    },
+                    formula: String::from("1"),
+                    value: CellValue::Number(1.0),
+                }],
+                evaluations: 1,
+            })
+        }
+    }
+    let (mut doc, ids) = document_with(vec![shape_with(1, &[("Alpha", "1")])]);
+    let mut graph = DepGraph::build_with(&doc, &mut RowWithoutSection).expect("build");
+    let outcome = recalc_with(
+        &mut doc,
+        &[at(ids[0], "Alpha")],
+        &RecalcOptions::new(),
+        &mut graph,
+        &mut RowWithoutSection,
+    )
+    .expect("the error is a warning, not a failure");
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::MissingReference(_))),
+        "{:?}",
+        outcome.warnings
+    );
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Alpha")),
+        Some(0.0),
+        "the cell itself was written; only the malformed write was refused"
+    );
+}
+
+/// The budget counts the nested evaluations a read triggers (P6-12
+/// review F7): each dirty cell costs one evaluation plus one nested
+/// one, so a budget of 2 runs out at the second cell.
+#[test]
+fn the_budget_counts_nested_evaluations() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![
+        cell("Alpha", Some("Beta+1"), Some(0.0)),
+        cell("Beta", Some("1"), None),
+        cell("Gamma", Some("Delta+1"), Some(0.0)),
+        cell("Delta", Some("2"), None),
+    ];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let dirty = [at(ids[0], "Alpha"), at(ids[0], "Gamma")];
+    let options = RecalcOptions {
+        max_evaluations: 2,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, &dirty, &options).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &at(ids[0], "Alpha")),
+        Some(2.0),
+        "the nested read evaluated Beta"
+    );
+    assert!(outcome.truncated, "{:?}", outcome.warnings);
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::BudgetExceeded))
+    );
+}
+
+/// The "F2 reproduces" path: an instance with no own `Character` rows
+/// reads `Char.Size` from its master, and an edit of the master's cell
+/// re-evaluates the dependent formula (P6-12 review F2).
+#[test]
+fn an_edit_of_a_master_cell_reevaluates_the_dependent_formula() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The master: a `Character` section whose first row carries `Size`.
+    let mut master_shape = Shape::new(ShapeId { index: 0 }, 10);
+    {
+        let mut section = Section::new(SectionName::from_static("Character"));
+        let mut row = Row::new();
+        row.ix = Some(0);
+        row.cells = vec![cell("Size", None, Some(5.0))];
+        section.rows.push(row);
+        master_shape.sheet.sections.push(section);
+    }
+    let master_root = doc.add_shape(master_shape);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name = String::from("Badge");
+    master.name_u = String::from("Badge");
+    master.shapes = vec![master_root];
+    let master = doc.add_master(master).expect("master");
+
+    // The instance: no own `Character` rows and one stale dependent.
+    let mut instance = Shape::new(ShapeId { index: 0 }, 11);
+    instance.master = Some(master);
+    instance.sheet.cells = vec![cell("PinX", Some("Char.Size*2"), Some(0.0))];
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    // The edit changes the master's `Size`; the pass must reach `PinX`.
+    let edited = CellAddress::in_row(
+        SheetRef::Shape(master_root),
+        SectionName::from_static("Character"),
+        ferrogram_model::RowTarget {
+            position: Some(0),
+            ix: Some(0),
+        },
+        CellName::from_static("Size"),
+    );
+    let outcome = recalc(
+        &mut doc,
+        std::slice::from_ref(&edited),
+        &RecalcOptions::new(),
+    )
+    .expect("recalc");
+    assert_eq!(
+        number_of(&doc, &at(instance, "PinX")),
+        Some(10.0),
+        "the dependent recomputes from the master's cell"
+    );
+    assert!(outcome.updates.iter().any(|update| {
+        update.target == at(instance, "PinX") && update.after == Some(CellValue::Number(10.0))
+    }));
 }
