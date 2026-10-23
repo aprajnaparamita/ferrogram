@@ -586,6 +586,7 @@ pub const OUR_COMMANDS: &[(&str, &str)] = &[
     ("connector.reroute_all", "Reroute All"),
     ("connector.style", "Connector Style"),
     ("connector.unglue", "Unglue"),
+    ("data.set.property", "Value"),
     ("edit.delete", "Delete"),
     ("edit.deselect", "Deselect"),
     ("edit.select", "Select"),
