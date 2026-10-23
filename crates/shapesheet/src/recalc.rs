@@ -20,6 +20,7 @@ use ferrogram_model::{CellValue, CellWrite, Document, SheetRef};
 
 use crate::Error;
 use crate::ast::{Expr, ExprKind};
+use crate::error::SyntaxKind;
 use crate::eval::{EvalContext, EvalWarning, EvalWarningKind};
 use crate::formula::{CellRef, Formula};
 use crate::graph::{self, CellAddress, DepGraph, EffectiveCell};
@@ -95,6 +96,30 @@ pub enum RecalcWarningKind {
     Cycle(Vec<CellAddress>),
     /// The pass ran out of its evaluation budget and stopped.
     BudgetExceeded,
+    /// A call passed a count outside the table's bounds; the call
+    /// evaluated to `#VALUE!` (ADR 0053).
+    WrongArgumentCount {
+        /// The function name as written.
+        function: String,
+        /// The fewest arguments the function takes.
+        min: u8,
+        /// The most arguments it takes, or `None` for a variadic call.
+        max: Option<u8>,
+        /// How many arguments the call passed.
+        got: usize,
+    },
+    /// A `SETF` whose target is not a writable cell reference; the call
+    /// evaluated to `#REF!` (ADR 0056).
+    SetfRefused(String),
+    /// A value had to be coerced to the type an operator needed and the
+    /// conversion was lossy or defaulted (ADR 0052).
+    Coercion(String),
+    /// A computed number was not finite; it became `#NUM!` (P3-11).
+    NonFinite,
+    /// The formula text does not parse ([`SyntaxKind`]); the cell keeps
+    /// its cached value, the ADR 0053 rule for a formula the engine
+    /// cannot compute.
+    Syntax(SyntaxKind),
 }
 
 /// What one recalc pass did (ADR 0055).
@@ -126,7 +151,8 @@ pub struct Evaluation {
     /// The cached value to store for the cell.
     pub value: CellValue,
     /// What the evaluation could not do. A [`RecalcWarningKind::UnknownFunction`]
-    /// warning means the cell keeps its cached value (ADR 0053).
+    /// or [`RecalcWarningKind::Syntax`] warning means the cell keeps its
+    /// cached value (ADR 0053).
     pub warnings: Vec<RecalcWarning>,
     /// The cells the formula wrote (`SETF`). The pass applies them in
     /// order and dirties their dependents within the same budget.
@@ -187,7 +213,25 @@ impl FormulaEngine for DocumentEngine {
                 resolver: &mut resolver,
                 writes: Vec::new(),
             };
-            let value = crate::eval::eval_formula(formula, sheet, &mut recording)?;
+            let value = match crate::eval::eval_formula(formula, sheet, &mut recording) {
+                Ok(value) => value,
+                Err(Error::Syntax { kind, .. }) => {
+                    // A formula the parser rejects is document data, not
+                    // a broken engine: the cell keeps its cached value
+                    // (the ADR 0053 rule) and one warning says why.
+                    return Ok(Evaluation {
+                        // Never written: the warning keeps the cell's
+                        // cached value.
+                        value: CellValue::Error(String::from("#VALUE!")),
+                        warnings: vec![RecalcWarning {
+                            target: None,
+                            kind: RecalcWarningKind::Syntax(kind),
+                        }],
+                        writes: Vec::new(),
+                    });
+                }
+                Err(error) => return Err(error),
+            };
             let RecordingContext { writes, .. } = recording;
             (value, writes, resolver.into_warnings())
         };
@@ -265,15 +309,30 @@ fn collect_refs(expr: &Expr, out: &mut Vec<CellRef>) {
     }
 }
 
-/// Maps an evaluator warning to the recalc vocabulary. A coercion or a
-/// cut evaluation cycle is not a recalc warning and is dropped here.
+/// Maps an evaluator warning to the recalc vocabulary. A cut evaluation
+/// cycle is not a recalc warning (the pass reports its own [`RecalcWarningKind::Cycle`])
+/// and is dropped here; every other kind keeps its content (P6-11).
 fn map_warning(warning: EvalWarning) -> Option<RecalcWarning> {
     let kind = match &warning.kind {
         EvalWarningKind::UnknownFunction(name) => RecalcWarningKind::UnknownFunction(name.clone()),
         EvalWarningKind::UnsupportedReference(name) => {
             RecalcWarningKind::MissingReference(name.clone())
         }
-        _ => return None,
+        EvalWarningKind::WrongArgumentCount {
+            function,
+            min,
+            max,
+            got,
+        } => RecalcWarningKind::WrongArgumentCount {
+            function: function.clone(),
+            min: *min,
+            max: *max,
+            got: *got,
+        },
+        EvalWarningKind::SetfRefused(target) => RecalcWarningKind::SetfRefused(target.clone()),
+        EvalWarningKind::Coercion(why) => RecalcWarningKind::Coercion(why.clone()),
+        EvalWarningKind::NonFinite => RecalcWarningKind::NonFinite,
+        EvalWarningKind::Cycle => return None,
     };
     Some(RecalcWarning { target: None, kind })
 }
@@ -382,10 +441,12 @@ pub fn recalc_with(
             &Formula::new(effective.formula.as_str()),
             address.sheet,
         )?;
-        let keep_cached = evaluation
-            .warnings
-            .iter()
-            .any(|warning| matches!(warning.kind, RecalcWarningKind::UnknownFunction(_)));
+        let keep_cached = evaluation.warnings.iter().any(|warning| {
+            matches!(
+                warning.kind,
+                RecalcWarningKind::UnknownFunction(_) | RecalcWarningKind::Syntax(_)
+            )
+        });
         for mut warning in evaluation.warnings {
             if warning.target.is_none() {
                 warning.target = Some(address.clone());
@@ -487,10 +548,8 @@ fn apply_write(
     let write = CellWrite::new(formula, value.clone());
     match (&address.section, &address.row) {
         (None, None) => document.write_cell(address.sheet, &address.cell, &write)?,
-        (Some(_), None) => {
-            return Err(ferrogram_model::Error::BadCell(
-                "section cell without a row",
-            ));
+        (Some(section), None) => {
+            document.write_section_cell(address.sheet, section, &address.cell, &write)?
         }
         (Some(section), Some(row)) => {
             document.write_row_cell(address.sheet, section, *row, &address.cell, &write)?
@@ -1135,8 +1194,11 @@ mod tests {
         );
     }
 
+    /// P6-11: a section-level cell (a section, no row) is evaluated and
+    /// written through the section write, not skipped as an unresolvable
+    /// direct cell (the P6-08 open issue).
     #[test]
-    fn a_section_cell_without_a_row_reports_an_unwritable_target() {
+    fn a_section_cell_is_evaluated_and_written_in_place() {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 1);
         shape.sheet.sections.push({
@@ -1166,12 +1228,20 @@ mod tests {
             &mut engine,
         );
         assert_eq!(
-            outcome.warnings,
-            vec![RecalcWarning {
-                target: Some(target),
-                kind: RecalcWarningKind::MissingReference(String::from("NoFill")),
+            engine.evaluated,
+            vec!["0", "NoFill+1"],
+            "the section cell evaluates, and its row reads it"
+        );
+        assert_eq!(value_of(&doc, &target), Some(num(0.0)));
+        assert_eq!(
+            outcome.updates,
+            vec![CellUpdate {
+                target: target.clone(),
+                before: Some(num(1.0)),
+                after: Some(num(0.0)),
             }]
         );
+        assert_eq!(outcome.warnings, Vec::new(), "nothing is unwritable");
     }
 
     #[test]
@@ -1294,9 +1364,77 @@ mod tests {
         assert_eq!(
             map_warning(EvalWarning {
                 sheet: SheetRef::Page(PageId { index: 0 }),
-                kind: EvalWarningKind::NonFinite,
+                kind: EvalWarningKind::Cycle,
             }),
             None
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::WrongArgumentCount`] reaches the
+    /// recalc outcome with every field kept.
+    #[test]
+    fn map_warning_keeps_a_wrong_argument_count() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::WrongArgumentCount {
+                function: String::from("ABS"),
+                min: 1,
+                max: Some(1),
+                got: 2,
+            },
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::WrongArgumentCount {
+                function: String::from("ABS"),
+                min: 1,
+                max: Some(1),
+                got: 2,
+            })
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::SetfRefused`] reaches the recalc
+    /// outcome with its target kept.
+    #[test]
+    fn map_warning_keeps_a_refused_setf() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::SetfRefused(String::from("\"User.Nope\"")),
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::SetfRefused(String::from(
+                "\"User.Nope\""
+            )))
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::Coercion`] reaches the recalc
+    /// outcome with its reason kept.
+    #[test]
+    fn map_warning_keeps_a_coercion() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::Coercion(String::from("sheep")),
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::Coercion(String::from("sheep")))
+        );
+    }
+
+    /// P6-11: a [`EvalWarningKind::NonFinite`] reaches the recalc
+    /// outcome.
+    #[test]
+    fn map_warning_keeps_a_non_finite() {
+        let mapped = map_warning(EvalWarning {
+            sheet: SheetRef::Page(PageId { index: 0 }),
+            kind: EvalWarningKind::NonFinite,
+        });
+        assert_eq!(
+            mapped.map(|warning| warning.kind),
+            Some(RecalcWarningKind::NonFinite)
         );
     }
 

@@ -13,6 +13,10 @@ libfuzzer-sys = "0.4"
 [dependencies.ferrogram-shapesheet]
 path = ".."
 
+# The fuzz targets name a sheet (the evaluator's `SheetRef`).
+[dependencies.ferrogram-model]
+path = "../../model"
+
 # Prevent this from interfering with workspaces (the cargo-fuzz way).
 [workspace]
 members = ["."]
@@ -20,6 +24,13 @@ members = ["."]
 [[bin]]
 name = "parse"
 path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "eval_source"
+path = "fuzz_targets/eval_source.rs"
 test = false
 doc = false
 bench = false

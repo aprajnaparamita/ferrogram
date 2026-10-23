@@ -19,8 +19,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use ferrogram_model::{
-    Cell, CellLookup, CellName, Document, Row, RowTarget, Section, SectionName, Sheet, SheetRef,
-    ValueSource,
+    Cell, CellLookup, CellName, Document, MasterId, Resolved, Row, RowTarget, Section, SectionName,
+    Sheet, SheetRef, ValueSource,
 };
 
 use crate::Error;
@@ -450,33 +450,88 @@ pub(crate) fn effective(
     address: &CellAddress,
 ) -> Result<Option<EffectiveCell>, ferrogram_model::Error> {
     let local = local_cell(document, address);
-    let resolved = match (address.sheet, &address.section, &address.row) {
-        (SheetRef::Shape(id), None, None) => Some(document.resolve(id, &address.cell)?),
-        (SheetRef::Page(id), None, None) => Some(document.resolve_page_cell(id, &address.cell)?),
+    let defined = match (address.sheet, &address.section, &address.row) {
+        (SheetRef::Shape(id), None, None) => defined(document.resolve(id, &address.cell)?),
+        (SheetRef::Page(id), None, None) => defined(document.resolve_page_cell(id, &address.cell)?),
         (sheet, Some(section), Some(row)) => {
             let position = row_position(document, sheet, section, *row)
                 .ok_or(ferrogram_model::Error::BadCell("no such row"))?;
-            Some(document.resolve_row_cell(sheet, section.as_str(), position, &address.cell)?)
+            defined(document.resolve_row_cell(sheet, section.as_str(), position, &address.cell)?)
         }
-        (sheet, Some(_), None) => match sheet {
-            SheetRef::Shape(id) => Some(document.resolve(id, &address.cell)?),
-            SheetRef::Page(id) => Some(document.resolve_page_cell(id, &address.cell)?),
-        },
+        (sheet, Some(section), None) => section_rung(document, sheet, section, &address.cell),
         (_, None, Some(_)) => None,
     };
-    let Some(resolved) = resolved else {
-        return Ok(None);
-    };
-    let Some(formula) = resolved.formula.map(str::to_owned) else {
+    let Some((formula, source)) = defined else {
         return Ok(None);
     };
     Ok(Some(EffectiveCell {
         formula,
-        own: resolved.source == ValueSource::Local,
+        own: source == ValueSource::Local,
         local_formula: local.and_then(|cell| cell.formula.clone()),
         local_value: local.and_then(|cell| cell.value.clone()),
-        source: resolved.source,
+        source,
     }))
+}
+
+/// The formula a resolution found and the rung that defines it, when one
+/// does (a default or an `Inh` cell defines nothing, ADR 0054).
+fn defined(resolved: Resolved<'_>) -> Option<(String, ValueSource)> {
+    let formula = resolved.formula.map(str::to_owned)?;
+    Some((formula, resolved.source))
+}
+
+/// The rung that defines a **section-level** cell (a section, no row:
+/// the `NoFill` family of `Geometry`, ADR 0019) and its formula: the
+/// section's own cell first, then the corresponding cell of the master
+/// chain, with [`rung_address`]'s rule (the master's first top-level
+/// shape). A cell whose formula is `Inh` or absent defines nothing
+/// (ADR 0054), and there is no style rung for a repeated-section cell
+/// (ADR 0019 decision 5).
+fn section_rung(
+    document: &Document,
+    sheet: SheetRef,
+    section: &SectionName,
+    cell: &CellName,
+) -> Option<(String, ValueSource)> {
+    let own = sheet_of(document, sheet)
+        .and_then(|data| find_section(data, section))
+        .and_then(|found| find_cell(&found.cells, cell))
+        .and_then(defining_formula);
+    if let Some(formula) = own {
+        return Some((formula.to_owned(), ValueSource::Local));
+    }
+    let mut master_id = match sheet {
+        SheetRef::Shape(id) => document.shape(id)?.master,
+        SheetRef::Page(_) => None,
+    };
+    let mut visited: Vec<MasterId> = Vec::new();
+    while let Some(master) = master_id {
+        // A cyclic master chain is cut (ADR 0013), never looped on.
+        if visited.contains(&master) {
+            break;
+        }
+        visited.push(master);
+        let rung = document.shape(*document.master(master)?.shapes.first()?)?;
+        // A rung that has no such section or cell defines nothing; the
+        // chain continues at that rung's own master.
+        let defined = find_section(&rung.sheet, section)
+            .and_then(|found| find_cell(&found.cells, cell))
+            .and_then(defining_formula);
+        if let Some(formula) = defined {
+            return Some((formula.to_owned(), ValueSource::Master(master)));
+        }
+        master_id = rung.master;
+    }
+    None
+}
+
+/// The formula that defines a cell: a present formula that is not the
+/// `Inh` marker (ADR 0054: `Inh` means "the next rung's formula").
+fn defining_formula(cell: &Cell) -> Option<&str> {
+    match cell.formula.as_deref() {
+        Some(formula) if formula != INHERIT_FORMULA => Some(formula),
+        _ => None,
+    }
 }
 
 /// The cell's own entry at `address`, before any inheritance lookup.

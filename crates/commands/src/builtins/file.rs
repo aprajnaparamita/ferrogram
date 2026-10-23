@@ -928,11 +928,13 @@ mod tests {
             Some(CellValue::Number(2.0))
         );
         assert_eq!(cell_value(&document, "X"), Some(CellValue::Number(6.0)));
-        // The section cell: the formula survives the file round trip but
-        // `recalc` resolves a section-level cell as a direct cell (the
-        // `graph::effective` dispatch, P6-06), so nothing evaluates it
-        // (Result open issue).
-        assert_eq!(cell_value(&document, "SectionCell"), None);
+        // The section cell too (P6-11): a section-level cell resolves
+        // against its section (the `graph::effective` dispatch), so the
+        // fill-in pass evaluates it like any other cell.
+        assert_eq!(
+            cell_value(&document, "SectionCell"),
+            Some(CellValue::Number(4.0))
+        );
         for shape in &document.shapes {
             for section in &shape.sheet.sections {
                 for cell in &section.cells {

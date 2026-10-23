@@ -1472,6 +1472,23 @@ mod tests {
         assert_eq!(current(&node, "ID"), Some("0007"));
     }
 
+    /// P5-20 open item, closed by P6-11: the overwrite and set-new
+    /// arms of `sync_uint` (a different spelling is replaced, a missing
+    /// attribute is set when the value is not the default and left
+    /// absent when it is).
+    #[test]
+    fn sync_uint_overwrites_a_different_spelling_and_sets_the_new_one() {
+        let mut node = element("X", &[("ID", "3")], Vec::new());
+        sync_uint(&mut node, "ID", 7, 0);
+        assert_eq!(current(&node, "ID"), Some("7"));
+        let mut node = element("X", &[], Vec::new());
+        sync_uint(&mut node, "ID", 7, 0);
+        assert_eq!(current(&node, "ID"), Some("7"));
+        let mut node = element("X", &[], Vec::new());
+        sync_uint(&mut node, "ID", 0, 0);
+        assert!(current(&node, "ID").is_none(), "the default stays absent");
+    }
+
     #[test]
     fn sync_bool_writes_only_what_changed() {
         let mut node = element("X", &[("Hidden", "true")], Vec::new());

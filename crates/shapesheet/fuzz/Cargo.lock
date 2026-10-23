@@ -49,6 +49,7 @@ dependencies = [
 name = "ferrogram-shapesheet-fuzz"
 version = "0.0.0"
 dependencies = [
+ "ferrogram-model",
  "ferrogram-shapesheet",
  "libfuzzer-sys",
 ]

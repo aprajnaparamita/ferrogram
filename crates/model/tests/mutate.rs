@@ -1056,6 +1056,102 @@ fn id_allocation_stops_at_the_visio_id_cap() {
     );
 }
 
+/// P6-11: `write_section_cell` writes a section-level cell (the
+/// `NoFill` family of `Geometry`, ADR 0019): an existing entry takes
+/// the formula, the value and the ShapeSheet table's unit, and a
+/// missing one is created.
+#[test]
+fn write_section_cell_writes_and_creates_a_section_level_cell() {
+    let (mut doc, page) = document();
+    let mut shape = box_shape(1.0, 1.0);
+    let mut section = Section::new(SectionName::from_static("Geometry"));
+    section.cells.push(number_cell("NoFill", 1.0));
+    shape.sheet.sections.push(section);
+    let shape = doc.insert_shape(page, shape, None).expect("shape");
+    let section = SectionName::from_static("Geometry");
+    doc.write_section_cell(
+        SheetRef::Shape(shape),
+        &section,
+        &CellName::from_static("NoFill"),
+        &CellWrite::new("1", CellValue::Number(2.0)),
+    )
+    .expect("write");
+    doc.write_section_cell(
+        SheetRef::Shape(shape),
+        &section,
+        &CellName::from_static("NoShow"),
+        &CellWrite::new("0", CellValue::Number(0.0)),
+    )
+    .expect("write");
+    let written = geometry(&doc, shape);
+    let entry = written
+        .cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "NoFill")
+        .expect("NoFill");
+    assert_eq!(entry.formula.as_deref(), Some("1"));
+    assert_eq!(entry.value, Some(CellValue::Number(2.0)));
+    assert_eq!(entry.unit, Unit::Unitsless);
+    let created = written
+        .cells
+        .iter()
+        .find(|cell| cell.name.as_str() == "NoShow")
+        .expect("NoShow");
+    assert_eq!(created.formula.as_deref(), Some("0"));
+    assert_eq!(created.value, Some(CellValue::Number(0.0)));
+}
+
+/// P6-11: `write_section_cell` reports a stale sheet, a missing
+/// section and a non-finite number; a page sheet with no such section
+/// is the same error as a shape without one.
+#[test]
+fn write_section_cell_reports_a_stale_sheet_a_missing_section_and_a_bad_number() {
+    let (mut doc, page) = document();
+    let stale = ShapeId { index: 999 };
+    let section = SectionName::from_static("Geometry");
+    assert_eq!(
+        doc.write_section_cell(
+            SheetRef::Shape(stale),
+            &section,
+            &CellName::from_static("NoFill"),
+            &CellWrite::new("1", CellValue::Number(1.0)),
+        ),
+        Err(Error::UnknownShape(stale))
+    );
+    assert_eq!(
+        doc.write_section_cell(
+            SheetRef::Page(PageId { index: 999 }),
+            &section,
+            &CellName::from_static("NoFill"),
+            &CellWrite::new("1", CellValue::Number(1.0)),
+        ),
+        Err(Error::UnknownPage(PageId { index: 999 }))
+    );
+    assert_eq!(
+        doc.write_section_cell(
+            SheetRef::Page(page),
+            &section,
+            &CellName::from_static("NoFill"),
+            &CellWrite::new("1", CellValue::Number(1.0)),
+        ),
+        Err(Error::BadCell("no such section"))
+    );
+    let mut shape = box_shape(1.0, 1.0);
+    let mut empty = Section::new(SectionName::from_static("Geometry"));
+    empty.cells.push(number_cell("NoFill", 1.0));
+    shape.sheet.sections.push(empty);
+    let shape = doc.insert_shape(page, shape, None).expect("shape");
+    assert_eq!(
+        doc.write_section_cell(
+            SheetRef::Shape(shape),
+            &section,
+            &CellName::from_static("NoFill"),
+            &CellWrite::new("nan", CellValue::Number(f64::NAN)),
+        ),
+        Err(Error::BadCell("non-finite number"))
+    );
+}
+
 #[test]
 fn write_row_cell_reports_a_stale_sheet_and_a_bad_number() {
     let (mut doc, _page) = document();

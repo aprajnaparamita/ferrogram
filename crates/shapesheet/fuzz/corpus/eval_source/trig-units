@@ -1,0 +1,1 @@
+SIN(90DEG)+DEG(PI())+ATAN2(1,0)

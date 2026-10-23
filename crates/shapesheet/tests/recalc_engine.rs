@@ -1,0 +1,775 @@
+//! The real pipeline at scale and on malformed input (task P6-11).
+//!
+//! `src/recalc.rs`'s unit tests pin the pass's own rules with a small
+//! test engine. This file drives the **production** engine
+//! ([`recalc`] with [`DocumentEngine`]) over documents the unit tests
+//! cannot build cheaply:
+//!
+//! - a section-level cell (a section, no row) resolves against its
+//!   section and its master chain and fills its hole (the P6-08 open
+//!   issue, fixed in P6-11);
+//! - every warning kind the evaluator can raise reaches
+//!   [`RecalcOutcome`] (the P6-11 mapping);
+//! - recalculation order and budget over bigger documents, with the
+//!   determinism and idempotence ADR 0055 promises;
+//! - broken references and cyclic `SETF` are warnings, never a panic
+//!   (AGENTS.md section 6).
+
+// The never-crash lints apply to non-test code only (clippy.toml).
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
+use ferrogram_geom::Unit;
+use ferrogram_model::{
+    Cell, CellName, CellValue, Document, Master, MasterId, Preserved, Row, Section, SectionName,
+    Shape, ShapeId, SheetRef, Style, StyleId,
+};
+use ferrogram_shapesheet::{CellAddress, RecalcOptions, RecalcWarningKind, recalc};
+
+/// A cell with `formula` and a cached `value`, in `Unit::Unitsless`.
+fn cell(name: &str, formula: Option<&str>, value: Option<f64>) -> Cell {
+    Cell {
+        name: CellName::new(name),
+        formula: formula.map(str::to_owned),
+        value: value.map(CellValue::Number),
+        unit: Unit::Unitsless,
+        preserved: Preserved::new(),
+    }
+}
+
+/// A one-page document holding `shapes`, with their arena ids in order.
+fn document_with(shapes: Vec<Shape>) -> (Document, Vec<ShapeId>) {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+    let ids = shapes
+        .into_iter()
+        .map(|shape| doc.insert_shape(page, shape, None).expect("insert"))
+        .collect();
+    (doc, ids)
+}
+
+/// A shape whose sheet cells carry `formulas` and no cached values.
+fn shape_with(visio_id: i32, formulas: &[(&str, &str)]) -> Shape {
+    let mut shape = Shape::new(ShapeId { index: 0 }, visio_id);
+    shape.sheet.cells = formulas
+        .iter()
+        .map(|(name, formula)| cell(name, Some(formula), None))
+        .collect();
+    shape
+}
+
+/// The address of a shape's direct cell.
+fn at(shape: ShapeId, name: &str) -> CellAddress {
+    CellAddress::new(SheetRef::Shape(shape), CellName::new(name))
+}
+
+/// The address of a section-level cell (a section, no row).
+fn section_at(shape: ShapeId, section: &str, name: &str) -> CellAddress {
+    CellAddress {
+        sheet: SheetRef::Shape(shape),
+        section: Some(SectionName::new(section.to_owned())),
+        row: None,
+        cell: CellName::new(name),
+    }
+}
+
+/// A `Geometry` section whose section-level `NoFill` cell carries
+/// `formula` and `value`, and that holds one empty row.
+fn geometry_section(formula: Option<&str>, value: Option<f64>) -> Section {
+    let mut section = Section::new(SectionName::from_static("Geometry"));
+    section.cells.push(cell("NoFill", formula, value));
+    section.rows.push(Row::new());
+    section
+}
+
+/// The cached value of `address`, wherever the cell sits.
+fn value_of(doc: &Document, address: &CellAddress) -> Option<CellValue> {
+    let name = address.cell.as_str();
+    match (address.sheet, &address.section) {
+        (SheetRef::Shape(id), None) => doc
+            .shape(id)?
+            .sheet
+            .cells
+            .iter()
+            .find(|entry| entry.name.as_str() == name)
+            .and_then(|entry| entry.value.clone()),
+        (SheetRef::Shape(id), Some(section)) => {
+            let sheet = &doc.shape(id)?.sheet;
+            let section = sheet.sections.iter().find(|entry| entry.name == *section)?;
+            section
+                .cells
+                .iter()
+                .find(|entry| entry.name.as_str() == name)
+                .and_then(|entry| entry.value.clone())
+        }
+        (SheetRef::Page(id), None) => doc
+            .page(id)?
+            .sheet
+            .cells
+            .iter()
+            .find(|entry| entry.name.as_str() == name)
+            .and_then(|entry| entry.value.clone()),
+        (SheetRef::Page(_), Some(_)) => None,
+    }
+}
+
+/// The cached number of `address`, or `None`.
+fn number_of(doc: &Document, address: &CellAddress) -> Option<f64> {
+    match value_of(doc, address) {
+        Some(CellValue::Number(number)) => Some(number),
+        _ => None,
+    }
+}
+
+/// The formula text of `address`, or `None`.
+fn formula_of(doc: &Document, address: &CellAddress) -> Option<String> {
+    let name = address.cell.as_str();
+    match (address.sheet, &address.section) {
+        (SheetRef::Shape(id), None) => doc
+            .shape(id)?
+            .sheet
+            .cells
+            .iter()
+            .find(|entry| entry.name.as_str() == name)?
+            .formula
+            .clone(),
+        (SheetRef::Shape(id), Some(section)) => {
+            let sheet = &doc.shape(id)?.sheet;
+            let section = sheet.sections.iter().find(|entry| entry.name == *section)?;
+            section
+                .cells
+                .iter()
+                .find(|entry| entry.name.as_str() == name)?
+                .formula
+                .clone()
+        }
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Section-level cells (the P6-08 open issue, fixed in P6-11)
+// ---------------------------------------------------------------------------
+
+/// A section-level cell resolves against its section: the fill-in
+/// contract (`fill_missing_only`) fills its hole like any other cell.
+#[test]
+fn a_section_level_cell_fills_its_hole() {
+    let mut shape = shape_with(1, &[]);
+    shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("2*3"), None));
+    let (mut doc, ids) = document_with(vec![shape]);
+    let target = section_at(ids[0], "Geometry", "NoFill");
+    let options = RecalcOptions {
+        fill_missing_only: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(number_of(&doc, &target), Some(6.0));
+    assert_eq!(outcome.warnings, Vec::new());
+    assert_eq!(outcome.updates.len(), 1);
+}
+
+/// An `Inh` section-level cell takes its formula from the master's
+/// section and materialises it when the pass recomputes it (ADR 0056):
+/// the instance carries the master's formula text and the value it
+/// computes at the instance.
+#[test]
+fn a_section_level_cell_inherits_its_master_formula() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The master: `Geometry!NoFill = Width*2` over its own `Width = 5`.
+    let mut master_shape = shape_with(1, &[("Width", "5")]);
+    master_shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("Width*2"), Some(10.0)));
+    let master_root = doc.add_shape(master_shape);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name = "Box".to_owned();
+    master.name_u = "Box".to_owned();
+    master.shapes = vec![master_root];
+    let master = doc.add_master(master).expect("master");
+
+    // The instance: its own `Width = 7` and an `Inh` `NoFill`.
+    let mut instance = shape_with(2, &[("Width", "7")]);
+    instance.master = Some(master);
+    instance
+        .sheet
+        .sections
+        .push(geometry_section(Some("Inh"), Some(10.0)));
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = section_at(instance, "Geometry", "NoFill");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(
+        value_of(&doc, &target),
+        Some(CellValue::Number(14.0)),
+        "the master's formula computes at the instance's Width"
+    );
+    let materialised = &doc
+        .shape(instance)
+        .expect("instance")
+        .sheet
+        .sections
+        .first()
+        .expect("geometry")
+        .cells;
+    assert_eq!(
+        materialised.first().expect("NoFill").formula.as_deref(),
+        Some("Width*2"),
+        "the master's formula is materialised (ADR 0056)"
+    );
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+/// The master chain continues at a master's own master (a master that
+/// is itself an instance): the instance inherits the top master's
+/// section-level formula through the middle one.
+#[test]
+fn a_section_level_cell_walks_a_master_chain() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The top master: `Geometry!NoFill = 7`.
+    let mut top_shape = shape_with(1, &[]);
+    top_shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("7"), Some(7.0)));
+    let top_root = doc.add_shape(top_shape);
+    let mut top = Master::new(MasterId { index: 0 }, 1);
+    top.name_u = "Top".to_owned();
+    top.shapes = vec![top_root];
+    let top = doc.add_master(top).expect("top master");
+
+    // The middle master: an instance of the top master, its `NoFill` is `Inh`.
+    let mut middle_shape = shape_with(2, &[]);
+    middle_shape.master = Some(top);
+    middle_shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("Inh"), Some(7.0)));
+    let middle_root = doc.add_shape(middle_shape);
+    let mut middle = Master::new(MasterId { index: 1 }, 2);
+    middle.name_u = "Middle".to_owned();
+    middle.shapes = vec![middle_root];
+    let middle = doc.add_master(middle).expect("middle master");
+
+    // The instance: an instance of the middle master, no `NoFill` at all.
+    let mut instance = shape_with(3, &[]);
+    instance.master = Some(middle);
+    instance.sheet.sections.push(geometry_section(None, None));
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = section_at(instance, "Geometry", "NoFill");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(number_of(&doc, &target), Some(7.0));
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+/// A rung that has no such section defines nothing but does not stop
+/// the chain: the walk continues at that rung's own master.
+#[test]
+fn a_rung_without_the_section_does_not_stop_the_chain() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The top master: `Geometry!NoFill = 7`.
+    let mut top_shape = shape_with(1, &[]);
+    top_shape
+        .sheet
+        .sections
+        .push(geometry_section(Some("7"), Some(7.0)));
+    let top_root = doc.add_shape(top_shape);
+    let mut top = Master::new(MasterId { index: 0 }, 1);
+    top.name_u = "Top".to_owned();
+    top.shapes = vec![top_root];
+    let top = doc.add_master(top).expect("top master");
+
+    // The middle master: an instance of the top master with **no**
+    // `Geometry` section at all.
+    let mut middle_shape = shape_with(2, &[]);
+    middle_shape.master = Some(top);
+    let middle_root = doc.add_shape(middle_shape);
+    let mut middle = Master::new(MasterId { index: 1 }, 2);
+    middle.name_u = "Middle".to_owned();
+    middle.shapes = vec![middle_root];
+    let middle = doc.add_master(middle).expect("middle master");
+
+    // The instance: an instance of the middle master, an empty
+    // `Geometry` section so the write has somewhere to land.
+    let mut instance = shape_with(3, &[]);
+    instance.master = Some(middle);
+    instance.sheet.sections.push(geometry_section(None, None));
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = section_at(instance, "Geometry", "NoFill");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(number_of(&doc, &target), Some(7.0));
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+/// A cyclic master chain is cut (ADR 0013), never looped on: the pass
+/// finds no formula, writes nothing and does not hang.
+#[test]
+fn a_cyclic_master_chain_is_cut() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // A master whose root is an instance of itself.
+    let mut root = shape_with(1, &[]);
+    root.master = Some(MasterId { index: 0 });
+    root.sheet.sections.push(geometry_section(None, None));
+    let root_id = doc.add_shape(root);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name_u = "Loop".to_owned();
+    master.shapes = vec![root_id];
+    let master = doc.add_master(master).expect("master");
+
+    let mut instance = shape_with(2, &[]);
+    instance.master = Some(master);
+    instance.sheet.sections.push(geometry_section(None, None));
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = section_at(instance, "Geometry", "NoFill");
+    let outcome = recalc(
+        &mut doc,
+        std::slice::from_ref(&target),
+        &RecalcOptions::new(),
+    )
+    .expect("recalc");
+    assert_eq!(outcome.updates, Vec::new());
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Style rungs (P6-15's rule through the engine)
+// ---------------------------------------------------------------------------
+
+/// P6-15's rule through the engine (ADR 0013 amendment): a formula the
+/// master's **style link** supplies is what the pass evaluates for an
+/// instance whose master defines nothing, and the instance materialises
+/// it (ADR 0056). The link is the shape's own when it sets one; here
+/// only the master sets it.
+#[test]
+fn a_style_formula_reaches_the_instance_through_the_masters_style_link() {
+    let mut doc = Document::new();
+    let page = doc.add_page("Page-1").expect("page");
+
+    // The style the master links to: `LineWeight = 0.5*2`.
+    let mut style = Style::new(StyleId { index: 0 });
+    style.name = "Normal".to_owned();
+    style.name_u = "Normal".to_owned();
+    style.visio_id = 1;
+    style.sheet.cells = vec![cell("LineWeight", Some("0.5*2"), Some(1.0))];
+    doc.stylesheet.styles.push(style);
+
+    // The master: no `LineWeight`, one `LineStyle` link to the style.
+    let mut master_shape = shape_with(1, &[]);
+    master_shape.line_style = Some(1);
+    let master_root = doc.add_shape(master_shape);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.name_u = "Box".to_owned();
+    master.shapes = vec![master_root];
+    let master = doc.add_master(master).expect("master");
+
+    // The instance: an `Inh` `LineWeight` its master defines nothing for.
+    let mut instance = shape_with(2, &[]);
+    instance.master = Some(master);
+    instance.sheet.cells = vec![cell("LineWeight", Some("Inh"), None)];
+    let instance = doc.insert_shape(page, instance, None).expect("insert");
+
+    let target = at(instance, "LineWeight");
+    let options = RecalcOptions {
+        materialise_inherited: true,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, std::slice::from_ref(&target), &options).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &target),
+        Some(1.0),
+        "the style's formula computed at the instance"
+    );
+    assert_eq!(
+        formula_of(&doc, &target).as_deref(),
+        Some("0.5*2"),
+        "the instance materialises the style's formula (ADR 0056)"
+    );
+    assert_eq!(outcome.warnings, Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// The warning kinds reach the outcome (the P6-11 mapping)
+// ---------------------------------------------------------------------------
+
+/// One shape carrying `formulas` in its direct cells, recalculated
+/// over all of them.
+fn pass_over(
+    formulas: &[(&str, &str)],
+) -> (Document, ShapeId, ferrogram_shapesheet::RecalcOutcome) {
+    let (mut doc, ids) = document_with(vec![shape_with(1, formulas)]);
+    let dirty: Vec<CellAddress> = formulas.iter().map(|(name, _)| at(ids[0], name)).collect();
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    (doc, ids[0], outcome)
+}
+
+/// A call outside the table's arity bounds is `#VALUE!` and one
+/// [`RecalcWarningKind::WrongArgumentCount`] warning (ADR 0053).
+#[test]
+fn a_wrong_argument_count_warning_reaches_the_outcome() {
+    let (doc, shape, outcome) = pass_over(&[("Alpha", "ABS(1,2)")]);
+    assert_eq!(
+        value_of(&doc, &at(shape, "Alpha")),
+        Some(CellValue::Error(String::from("#VALUE!")))
+    );
+    assert!(outcome.warnings.iter().any(|warning| matches!(
+        &warning.kind,
+        RecalcWarningKind::WrongArgumentCount { function, min: 1, max: Some(1), got: 2 }
+            if function == "ABS"
+    )));
+}
+
+/// A `SETF` target that is not a writable cell reference is `#REF!`
+/// and one [`RecalcWarningKind::SetfRefused`] warning (ADR 0056).
+#[test]
+fn a_refused_setf_warning_reaches_the_outcome() {
+    let (doc, shape, outcome) = pass_over(&[("Alpha", "SETF(\"Width\",3)")]);
+    assert_eq!(
+        value_of(&doc, &at(shape, "Alpha")),
+        Some(CellValue::Error(String::from("#REF!")))
+    );
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::SetfRefused(_)))
+    );
+}
+
+/// A lossy or defaulted conversion is one
+/// [`RecalcWarningKind::Coercion`] warning and the typed default
+/// (ADR 0052: `5 * "sheep"` is 0).
+#[test]
+fn a_coercion_warning_reaches_the_outcome() {
+    let (doc, shape, outcome) = pass_over(&[("Alpha", "5*\"sheep\"")]);
+    assert_eq!(number_of(&doc, &at(shape, "Alpha")), Some(0.0));
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::Coercion(_)))
+    );
+}
+
+/// A computed non-finite number is `#NUM!` and one
+/// [`RecalcWarningKind::NonFinite`] warning (P3-11).
+#[test]
+fn a_non_finite_result_reaches_the_outcome() {
+    let (doc, shape, outcome) = pass_over(&[("Alpha", "10^1000")]);
+    assert_eq!(
+        value_of(&doc, &at(shape, "Alpha")),
+        Some(CellValue::Error(String::from("#NUM!")))
+    );
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::NonFinite))
+    );
+}
+
+/// A huge numeric literal is a syntax error (the parser rejects a
+/// non-finite literal), and a formula that does not parse keeps the
+/// cell's cached value with one [`RecalcWarningKind::Syntax`] warning
+/// (the ADR 0053 rule): it never fails the pass.
+#[test]
+fn a_formula_that_does_not_parse_keeps_the_cached_value() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![cell("Alpha", Some("1e999999"), Some(3.0))];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let dirty = [at(ids[0], "Alpha")];
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(
+        number_of(&doc, &dirty[0]),
+        Some(3.0),
+        "the cached value stays"
+    );
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::Syntax(_))),
+        "{:?}",
+        outcome.warnings
+    );
+    assert_eq!(outcome.updates, Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Order and budget over bigger documents (ADR 0055)
+// ---------------------------------------------------------------------------
+
+/// A chain of `length` cells: `A0 = 0` and `A(n) = A(n-1)+1`.
+fn chain_shape(visio_id: i32, length: usize) -> Shape {
+    let formulas: Vec<(String, String)> = (0..length)
+        .map(|index| {
+            (
+                format!("A{index}"),
+                if index == 0 {
+                    String::from("0")
+                } else {
+                    format!("A{}+1", index - 1)
+                },
+            )
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str)> = formulas
+        .iter()
+        .map(|(name, formula)| (name.as_str(), formula.as_str()))
+        .collect();
+    shape_with(visio_id, &borrowed)
+}
+
+/// A 200-cell dependency chain recomputes in dependency order, in the
+/// same order every run (determinism), and a second pass over the same
+/// cells changes nothing (idempotence, ADR 0055).
+#[test]
+fn a_long_chain_recomputes_in_order_and_is_idempotent() {
+    let (mut doc, ids) = document_with(vec![chain_shape(1, 200)]);
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
+    let outcome = recalc(&mut doc, &chain, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(outcome.updates.len(), 200);
+    for (index, update) in outcome.updates.iter().enumerate() {
+        assert_eq!(update.target, chain[index], "dependencies first");
+        assert_eq!(update.after, Some(CellValue::Number(index as f64)));
+    }
+    assert!(!outcome.truncated);
+    assert_eq!(outcome.warnings, Vec::new());
+
+    // Determinism: the same input, the same outcome.
+    let (mut again, ids) = document_with(vec![chain_shape(1, 200)]);
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
+    let second = recalc(&mut again, &chain, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(second.updates, outcome.updates);
+
+    // Idempotence: the computed document recomputes to the same values.
+    let third = recalc(&mut doc, &chain, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(third.updates, Vec::new());
+}
+
+/// A tiny budget truncates a long chain: the first cells compute, the
+/// rest stay stale and one [`RecalcWarningKind::BudgetExceeded`]
+/// warning says so (ADR 0055).
+#[test]
+fn a_tiny_budget_truncates_a_long_chain() {
+    let (mut doc, ids) = document_with(vec![chain_shape(1, 200)]);
+    let chain: Vec<CellAddress> = (0..200)
+        .map(|index| at(ids[0], &format!("A{index}")))
+        .collect();
+    let options = RecalcOptions {
+        max_evaluations: 50,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, &chain, &options).expect("recalc");
+    assert!(outcome.truncated);
+    assert_eq!(outcome.updates.len(), 50);
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::BudgetExceeded))
+    );
+    assert_eq!(number_of(&doc, &chain[49]), Some(49.0));
+    assert_eq!(number_of(&doc, &chain[50]), None, "the rest stays stale");
+}
+
+/// A page of 200 shapes (1 000 formula cells) recomputes fully within
+/// the default budget, and the same pass under a tiny budget truncates
+/// and reports it: the budget is measured in evaluations, not time.
+#[test]
+fn a_thousand_cell_page_serves_the_budget_rule() {
+    let shapes: Vec<Shape> = (0..200)
+        .map(|index| {
+            let mut shape = shape_with(
+                index + 1,
+                &[
+                    ("Width", "2"),
+                    ("Height", "3"),
+                    ("PinX", "Width*0.5"),
+                    ("PinY", "Height*0.5"),
+                    ("LocPinX", "Width*0.25"),
+                ],
+            );
+            if index % 2 == 0 {
+                // Half the shapes also carry a `Geometry` row that
+                // reads their transform.
+                let mut section = Section::new(SectionName::from_static("Geometry"));
+                let mut row = Row::new();
+                row.ix = Some(0);
+                row.cells = vec![cell("X", Some("PinX"), None), cell("Y", Some("PinY"), None)];
+                section.rows.push(row);
+                shape.sheet.sections.push(section);
+            }
+            shape
+        })
+        .collect();
+    let (mut doc, ids) = document_with(shapes);
+    let mut dirty: Vec<CellAddress> = Vec::new();
+    for id in &ids {
+        for name in ["Width", "Height", "PinX", "PinY", "LocPinX"] {
+            dirty.push(at(*id, name));
+        }
+        if id.index % 2 == 0 {
+            for name in ["X", "Y"] {
+                dirty.push(CellAddress::in_row(
+                    SheetRef::Shape(*id),
+                    SectionName::from_static("Geometry"),
+                    ferrogram_model::RowTarget {
+                        position: Some(0),
+                        ix: Some(0),
+                    },
+                    CellName::new(name),
+                ));
+            }
+        }
+    }
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert!(!outcome.truncated);
+    assert_eq!(outcome.updates.len(), dirty.len());
+    assert_eq!(outcome.warnings, Vec::new());
+
+    let options = RecalcOptions {
+        max_evaluations: 100,
+        ..RecalcOptions::new()
+    };
+    let outcome = recalc(&mut doc, &dirty, &options).expect("recalc");
+    assert!(
+        outcome.truncated,
+        "1 200 cells do not fit in 100 evaluations"
+    );
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .any(|warning| matches!(warning.kind, RecalcWarningKind::BudgetExceeded))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Malformed documents: broken references and cyclic SETF
+// ---------------------------------------------------------------------------
+
+/// A document whose formulas name cells that do not exist: every one is
+/// a warning and an error value (or the documented default), never a
+/// panic and never a failed document (ADR 0054).
+#[test]
+fn broken_references_are_warnings_not_failures() {
+    let (doc, shape, outcome) = pass_over(&[
+        ("Gone", "Sheet.99!PinX"),
+        ("Named", "Nope!Width"),
+        ("Row", "Geometry1.X9"),
+        ("Prop", "Prop.Nope"),
+        ("Char", "Char.Font[3]"),
+        ("Master", "Masters[Gear]!Shaft!Geometry1.X1"),
+        ("Page", "Pages[Page-9]!Sheet.4!BeginX"),
+        ("Style", "Styles!Manager!LineColor"),
+        ("Doc", "TheDoc!PreviewQuality"),
+    ]);
+    for name in [
+        "Gone", "Named", "Row", "Prop", "Char", "Master", "Page", "Style", "Doc",
+    ] {
+        assert!(
+            value_of(&doc, &at(shape, name)).is_some(),
+            "{name} has a value"
+        );
+    }
+    assert!(!outcome.warnings.is_empty());
+    assert!(!outcome.truncated);
+}
+
+/// A `SETF` cycle is cut by the cycle rule (ADR 0056): the cells keep
+/// their cached values, one [`RecalcWarningKind::Cycle`] warning names
+/// them, and the pass terminates instead of looping writes.
+#[test]
+fn a_cyclic_setf_is_cut_without_a_panic() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![
+        cell("Ping", Some("SETF(Pong,Pong+1)"), Some(1.0)),
+        cell("Pong", Some("SETF(Ping,Ping+1)"), Some(2.0)),
+    ];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let dirty = [at(ids[0], "Ping"), at(ids[0], "Pong")];
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert!(!outcome.truncated, "the pass never loops");
+    assert_eq!(number_of(&doc, &dirty[0]), Some(1.0), "cached values stay");
+    assert_eq!(number_of(&doc, &dirty[1]), Some(2.0));
+    let cycles: Vec<&RecalcWarningKind> = outcome
+        .warnings
+        .iter()
+        .map(|warning| &warning.kind)
+        .filter(|kind| matches!(kind, RecalcWarningKind::Cycle(_)))
+        .collect();
+    assert_eq!(cycles.len(), 1, "{:?}", outcome.warnings);
+}
+
+/// A `SETF` that writes its own cell is a cycle of one (ADR 0055): the
+/// cached value stays and the pass terminates.
+#[test]
+fn a_self_referencing_setf_is_a_cycle_of_one() {
+    let mut shape = shape_with(1, &[]);
+    shape.sheet.cells = vec![cell("Self", Some("SETF(Self,Self+1)"), Some(1.0))];
+    let (mut doc, ids) = document_with(vec![shape]);
+    let dirty = [at(ids[0], "Self")];
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert!(!outcome.truncated);
+    assert_eq!(
+        number_of(&doc, &dirty[0]),
+        Some(1.0),
+        "the cached value stays"
+    );
+    assert_eq!(outcome.updates, Vec::new());
+}
+
+/// A formula cycle keeps the cached values and reports one
+/// [`RecalcWarningKind::Cycle`] warning (ADR 0055).
+#[test]
+fn a_formula_cycle_keeps_the_cached_values() {
+    let (mut doc, ids) = document_with(vec![shape_with(1, &[])]);
+    {
+        let shape = doc.shape_mut(ids[0]).expect("shape");
+        shape.sheet.cells = vec![
+            cell("Alpha", Some("Beta+1"), Some(1.0)),
+            cell("Beta", Some("Alpha+1"), Some(2.0)),
+        ];
+    }
+    let dirty = [at(ids[0], "Alpha"), at(ids[0], "Beta")];
+    let outcome = recalc(&mut doc, &dirty, &RecalcOptions::new()).expect("recalc");
+    assert_eq!(number_of(&doc, &dirty[0]), Some(1.0), "cached values stay");
+    assert_eq!(number_of(&doc, &dirty[1]), Some(2.0));
+    let cycles: Vec<&RecalcWarningKind> = outcome
+        .warnings
+        .iter()
+        .map(|warning| &warning.kind)
+        .filter(|kind| matches!(kind, RecalcWarningKind::Cycle(_)))
+        .collect();
+    assert_eq!(cycles.len(), 1, "{:?}", outcome.warnings);
+}

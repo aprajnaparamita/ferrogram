@@ -1,0 +1,1 @@
+SETF(Self,Self+1)+SETF(Beta,Beta+1)
