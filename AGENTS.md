@@ -99,7 +99,7 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 | codegen | `cargo xtask codegen --check` (generated files are fresh; never skipped) |
 | fmt | `cargo fmt --all -- --check` |
 | clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
-| test | `cargo test --workspace --all-features` |
+| test | `cargo test --workspace --all-features`; when coverage also runs, only the doc tests (`--doc`), because coverage runs every other test |
 | doc | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` |
 | coverage | `cargo llvm-cov`, per-crate thresholds and ratchet from `coverage.toml` |
 | deny | `cargo deny check` |

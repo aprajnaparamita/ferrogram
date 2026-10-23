@@ -95,7 +95,8 @@ pub fn run(args: &[String]) -> Result<()> {
 /// `std::io::stdout()` bypasses the test harness's output capture).
 fn run_to(args: &[String], out: &mut dyn std::io::Write) -> Result<()> {
     let skip = parse_args(args)?;
-    drive(&skip, &mut run_step, out)
+    let coverage_runs = !skip.iter().any(|s| s == "coverage");
+    drive(&skip, &mut |step| run_step(step, coverage_runs), out)
 }
 
 /// Drives the gate over [`STEPS`]: runs every step that is not
@@ -160,10 +161,23 @@ fn cargo() -> Command {
     Command::new(util::cargo())
 }
 
+/// The `test` step when the `coverage` step also runs. `cargo llvm-cov`
+/// runs every unit and integration test and fails on a failing test, so
+/// running them again here only doubles the gate's longest step. Doc
+/// tests are the one kind `llvm-cov` leaves out, so they run here.
+const DOC_TESTS_ONLY: CargoStep = CargoStep {
+    args: &["test", "--workspace", "--all-features", "--doc"],
+    env: None,
+    needs: None,
+};
+
 /// Maps one step name to the work it runs. Unknown names are an
-/// error; every name in [`STEPS`] has a plan.
-fn plan(step: &str) -> Result<Plan> {
+/// error; every name in [`STEPS`] has a plan. `coverage_runs` says
+/// whether the `coverage` step runs in this gate: then `test` runs the
+/// doc tests only ([`DOC_TESTS_ONLY`]).
+fn plan(step: &str, coverage_runs: bool) -> Result<Plan> {
     match step {
+        "test" if coverage_runs => Ok(Plan::Cargo(DOC_TESTS_ONLY)),
         // ADR 0015: `--quick` does not skip this step (it is fast).
         "codegen" => Ok(Plan::Codegen),
         "parity" => Ok(Plan::Parity),
@@ -259,8 +273,11 @@ fn fail(e: String) -> Outcome {
 }
 
 /// Plans and executes one step.
-fn run_step(step: &str) -> Outcome {
-    match plan(step) {
+fn run_step(step: &str, coverage_runs: bool) -> Outcome {
+    if step == "test" && coverage_runs {
+        println!("gate: test runs the doc tests only; the coverage step runs every other test");
+    }
+    match plan(step, coverage_runs) {
         Ok(plan) => execute(plan),
         Err(e) => fail(e),
     }
@@ -567,7 +584,7 @@ mod tests {
     #[test]
     fn an_unknown_step_name_fails_the_step() {
         assert_eq!(
-            run_step("bogus"),
+            run_step("bogus", false),
             Outcome::Fail("unknown step `bogus`".to_owned())
         );
     }
@@ -576,8 +593,8 @@ mod tests {
     /// (check mode: read-only).
     #[test]
     fn the_fast_xtask_steps_pass() {
-        assert_eq!(run_step("codegen"), Outcome::Pass);
-        assert_eq!(run_step("parity"), Outcome::Pass);
+        assert_eq!(run_step("codegen", false), Outcome::Pass);
+        assert_eq!(run_step("parity", false), Outcome::Pass);
     }
 
     /// The gate entry point with every step skipped runs no step and
@@ -669,13 +686,30 @@ mod tests {
         assert_eq!(expected.len(), STEPS.len());
         for (name, want) in expected {
             assert!(STEPS.contains(name), "{name} is not a gate step");
-            assert_eq!(&plan(name).unwrap(), want, "plan of {name}");
+            assert_eq!(&plan(name, false).unwrap(), want, "plan of {name}");
+        }
+    }
+
+    /// When coverage runs, `test` runs the doc tests only (coverage runs
+    /// the rest); every other step keeps its plan.
+    #[test]
+    fn the_test_step_runs_doc_tests_only_when_coverage_runs() {
+        assert_eq!(
+            plan("test", true).unwrap(),
+            Plan::Cargo(CargoStep {
+                args: &["test", "--workspace", "--all-features", "--doc"],
+                env: None,
+                needs: None,
+            })
+        );
+        for step in STEPS.iter().filter(|step| **step != "test") {
+            assert_eq!(plan(step, true), plan(step, false), "plan of {step}");
         }
     }
 
     #[test]
     fn planning_an_unknown_step_is_an_error() {
-        assert_eq!(plan("bogus").unwrap_err(), "unknown step `bogus`");
+        assert_eq!(plan("bogus", false).unwrap_err(), "unknown step `bogus`");
     }
 
     // ---- the fuzz step (P4-17) -----------------------------------
