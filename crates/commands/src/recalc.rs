@@ -1121,8 +1121,7 @@ mod tests {
             SheetRef::Shape(shape),
             CellName::new("Top"),
         )];
-        let mut wrapped =
-            RecalcEdit::wrap(&mut ctx, id, Box::new(StubEdit(dirty))).expect("wrap");
+        let mut wrapped = RecalcEdit::wrap(&mut ctx, id, Box::new(StubEdit(dirty))).expect("wrap");
         let doc = &ctx.active_document().expect("doc").document;
         assert_eq!(number(doc, shape, "Width"), Some(5.0), "the write landed");
         assert_eq!(number(doc, shape, "Top"), Some(12.0), "the read saw it");
@@ -1220,9 +1219,12 @@ mod tests {
             SheetRef::Shape(shape),
             CellName::new("Width"),
         )];
-        let mut wrapped =
-            RecalcEdit::wrap(&mut ctx, ghost_session(), Box::new(StubEdit(dirty.to_vec())))
-                .expect("wrap");
+        let mut wrapped = RecalcEdit::wrap(
+            &mut ctx,
+            ghost_session(),
+            Box::new(StubEdit(dirty.to_vec())),
+        )
+        .expect("wrap");
         assert_eq!(ctx.warnings.len(), 1, "{:?}", ctx.warnings);
 
         wrapped
@@ -1273,10 +1275,7 @@ mod tests {
                 RecalcWarningKind::Coercion(String::from("sheep")),
                 "coerced (sheep) of X",
             ),
-            (
-                RecalcWarningKind::NonFinite,
-                "a number was not finite of X",
-            ),
+            (RecalcWarningKind::NonFinite, "a number was not finite of X"),
             (
                 RecalcWarningKind::Syntax(SyntaxKind::UnexpectedEnd),
                 "the formula does not parse",
