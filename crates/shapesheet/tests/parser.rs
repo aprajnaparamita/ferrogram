@@ -15,35 +15,10 @@ use ferrogram_shapesheet::{
     NumberLiteral, Span, SyntaxKind, UnaryOp, parse, parse_formula, print,
 };
 
-/// The tree with every span cleared, so trees compare by shape.
-fn strip(expr: &Expr) -> Expr {
-    let kind = match &expr.kind {
-        ExprKind::Literal(literal) => ExprKind::Literal(literal.clone()),
-        ExprKind::Ref(r) => ExprKind::Ref(r.clone()),
-        ExprKind::Unary { op, operand } => ExprKind::Unary {
-            op: *op,
-            operand: Box::new(strip(operand)),
-        },
-        ExprKind::Binary { op, left, right } => ExprKind::Binary {
-            op: *op,
-            left: Box::new(strip(left)),
-            right: Box::new(strip(right)),
-        },
-        ExprKind::Call { name, args } => ExprKind::Call {
-            name: name.clone(),
-            args: args.iter().map(strip).collect(),
-        },
-        _ => panic!("a parsed tree holds no other kind"),
-    };
-    Expr {
-        span: Span::default(),
-        kind,
-    }
-}
-
-/// The parsed tree, spans cleared.
+/// The parsed tree. `Expr` equality ignores spans (ADR 0051), so the
+/// parse itself is the shape to compare.
 fn tree(source: &str) -> Expr {
-    strip(&parse(source).expect("the source parses"))
+    parse(source).expect("the source parses")
 }
 
 /// The [`SyntaxKind`] the source fails with.
@@ -280,7 +255,7 @@ fn the_nesting_limit_is_a_syntax_error() {
 fn parse_formula_reads_the_source_text_of_the_formula() {
     let formula = Formula::new("Width*0.5");
     let back = parse_formula(&formula).expect("the formula parses");
-    assert_eq!(strip(&back), tree("Width*0.5"));
+    assert_eq!(back, tree("Width*0.5"));
 }
 
 #[test]
@@ -448,7 +423,7 @@ proptest::proptest! {
     fn parse_print_parse_is_the_identity(expr in arb_expr()) {
         let text = print(&expr).expect("the tree prints");
         let back = parse(&text).expect("the text parses");
-        proptest::prop_assert_eq!(strip(&back), strip(&expr));
+        proptest::prop_assert_eq!(back, expr);
     }
 
     /// The same trip for a number literal alone: the printer writes the
@@ -458,6 +433,6 @@ proptest::proptest! {
         let expr = Expr { span: Span::default(), kind: ExprKind::Literal(Literal::Number(literal)) };
         let text = print(&expr).expect("the literal prints");
         let back = parse(&text).expect("the text parses");
-        proptest::prop_assert_eq!(strip(&back), expr);
+        proptest::prop_assert_eq!(back, expr);
     }
 }

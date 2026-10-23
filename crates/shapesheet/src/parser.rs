@@ -742,31 +742,6 @@ const fn offset(at: usize) -> u32 {
 mod tests {
     use super::*;
 
-    /// The tree with every span cleared, so trees compare by shape.
-    fn without_spans(expr: &Expr) -> Expr {
-        let kind = match &expr.kind {
-            ExprKind::Literal(literal) => ExprKind::Literal(literal.clone()),
-            ExprKind::Ref(r) => ExprKind::Ref(r.clone()),
-            ExprKind::Unary { op, operand } => ExprKind::Unary {
-                op: *op,
-                operand: Box::new(without_spans(operand)),
-            },
-            ExprKind::Binary { op, left, right } => ExprKind::Binary {
-                op: *op,
-                left: Box::new(without_spans(left)),
-                right: Box::new(without_spans(right)),
-            },
-            ExprKind::Call { name, args } => ExprKind::Call {
-                name: name.clone(),
-                args: args.iter().map(without_spans).collect(),
-            },
-        };
-        Expr {
-            span: Span::default(),
-            kind,
-        }
-    }
-
     fn number(value: f64, unit: Option<&str>, flag: Option<char>) -> Expr {
         Expr {
             span: Span::default(),
@@ -790,7 +765,9 @@ mod tests {
     }
 
     fn tree(source: &str) -> Expr {
-        without_spans(&parse(source).expect("the source parses"))
+        // `Expr` equality ignores spans (ADR 0051), so the parse itself
+        // is the shape to compare.
+        parse(source).expect("the source parses")
     }
 
     fn error(source: &str) -> Error {
@@ -1090,7 +1067,7 @@ mod tests {
     fn parse_formula_reads_the_source_text() {
         let f = Formula::new("Width*0.5");
         assert_eq!(
-            without_spans(&parse_formula(&f).expect("the formula parses")),
+            parse_formula(&f).expect("the formula parses"),
             tree("Width*0.5")
         );
     }

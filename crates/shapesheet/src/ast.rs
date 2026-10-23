@@ -13,12 +13,22 @@ use crate::Span;
 use crate::formula::CellRef;
 
 /// One parsed expression with its source span.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Expr {
     /// Where the expression sits in the formula source.
     pub span: Span,
     /// What the expression is.
     pub kind: ExprKind,
+}
+
+/// Two expressions are equal when their kinds are (ADR 0051: the span is
+/// a position in the source text, not part of the tree's identity). The
+/// derived [`ExprKind`] equality recurses through this, so whole trees
+/// compare by shape alone.
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
 }
 
 /// What an [`Expr`] is (ADR 0051).
