@@ -32,8 +32,8 @@ use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
 use ferrogram_commands::{DisplayUnits, dispatch};
 use ferrogram_geom::Unit as GeomUnit;
 use ferrogram_model::{
-    Cell, CellName, CellValue, Color, Document, Page, PageId, Row, Section, SectionName, Shape,
-    ShapeId,
+    Cell, CellName, CellValue, Color, Document, Master, MasterId, Page, PageId, Row, Section,
+    SectionName, Shape, ShapeId,
 };
 use ferrogram_ui::Intent;
 use ferrogram_ui::panels::{
@@ -254,6 +254,57 @@ fn cached(app: &AppCtx, shape: ShapeId, cell: &str) -> Option<CellValue> {
 /// The undo steps of the open document.
 fn undo_len(app: &AppCtx) -> usize {
     app.active_document().expect("document").undo.len()
+}
+
+/// The cached `Value` of the shape's own `Property` row `row`.
+fn prop_value(app: &AppCtx, shape: ShapeId, row: &str) -> Option<CellValue> {
+    app.active_document()
+        .expect("document")
+        .document
+        .property_rows(shape)
+        .into_iter()
+        .find(|entry| !entry.inherited && entry.key == row)
+        .and_then(|entry| {
+            entry
+                .row
+                .cells
+                .into_iter()
+                .find(|cell| cell.name.as_str() == "Value")
+                .and_then(|cell| cell.value)
+        })
+}
+
+/// A session whose shape is an instance of a master carrying one
+/// `Mastered` Shape Data row (the P6-09 note's inheritance case).
+fn master_fixture() -> (AppCtx, ShapeId, ShapeId) {
+    let mut doc = Document::new();
+    let mut rung = Shape::new(ShapeId { index: 0 }, 1);
+    let mut section = Section::new(SectionName::new("Property"));
+    section.rows.push(prop_row(
+        "Mastered",
+        CellValue::Number(3.0),
+        GeomUnit::Inches,
+    ));
+    rung.sheet.sections.push(section);
+    let rung = doc.add_shape(rung);
+    let mut master = Master::new(MasterId { index: 0 }, 1);
+    master.shapes = vec![rung];
+    doc.masters.push(master);
+
+    let mut shape = Shape::new(ShapeId { index: 1 }, 7);
+    shape.name = String::from("Box");
+    shape.master = Some(MasterId { index: 0 });
+    shape.sheet.cells = geometry_cells();
+    let id = doc.add_shape(shape);
+    let mut page = page();
+    page.shapes.push(id);
+    doc.pages.push(page);
+    let mut app = AppCtx::new(Settings::default());
+    app.open_document(DocumentSession::new(doc, None));
+    app.selection.shapes = vec![id];
+    app.selection.anchor = Some(id);
+    app.selection.page = Some(PageId { index: 0 });
+    (app, id, rung)
 }
 
 #[test]
@@ -555,4 +606,164 @@ fn shape_data_rows_show_the_typed_values() {
         values,
         vec!["Box", "7", "50.8 mm", "FALSE", "#0080FF", "hello"]
     );
+}
+
+#[test]
+fn a_shape_data_value_entry_edits_the_row_through_the_command() {
+    let (app, id) = fixture(
+        geometry_cells(),
+        vec![prop_row("Cost", CellValue::Number(2.0), GeomUnit::Inches)],
+        DisplayUnits::Inches,
+    );
+    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let intents = rig.type_entry(0, "2.5 cm");
+
+    // One `data.set.property` intent with the row's key and the typed
+    // text (the command parses it again in the row's kind).
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0].command.as_str(), "data.set.property");
+    let args = &intents[0].invocation.args;
+    assert_eq!(
+        args.text("row").map(str::to_owned),
+        Some(String::from("Row_Cost"))
+    );
+    assert_eq!(
+        args.text("value").map(str::to_owned),
+        Some(String::from("2.5 cm"))
+    );
+    assert_eq!(
+        rig.app.borrow().active_document().unwrap().document.clone(),
+        rig.app.borrow().active_document().unwrap().document.clone(),
+        "the panel itself never touches the model"
+    );
+
+    // Dispatching stores the value as one undo step.
+    rig.dispatch(intents);
+    let app = rig.app.borrow();
+    match prop_value(&app, id, "Row_Cost").expect("the value") {
+        CellValue::Number(number) => {
+            assert!(
+                (number - 2.5 / 2.54).abs() < 1.0e-9,
+                "2.5 cm is {number} in"
+            )
+        }
+        other => panic!("the value is a number, got {other:?}"),
+    }
+    assert_eq!(undo_len(&app), 1);
+}
+
+#[test]
+fn a_shape_data_value_check_box_toggles_the_row() {
+    let (app, id) = fixture(
+        geometry_cells(),
+        vec![prop_row(
+            "Rounded",
+            CellValue::Bool(false),
+            GeomUnit::Unitsless,
+        )],
+        DisplayUnits::Inches,
+    );
+    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    assert!(
+        check_box(&rig.harness, "FALSE"),
+        "{:?}",
+        shown(&rig.harness)
+    );
+    rig.harness
+        .query_all_by_role(Role::CheckBox)
+        .next()
+        .expect("the check box")
+        .click();
+    rig.harness.run();
+    let intents = rig.take_intents();
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    assert_eq!(intents[0].command.as_str(), "data.set.property");
+    assert_eq!(
+        intents[0].invocation.args.text("value").map(str::to_owned),
+        Some(String::from("TRUE"))
+    );
+    rig.dispatch(intents);
+    let app = rig.app.borrow();
+    assert_eq!(
+        prop_value(&app, id, "Row_Rounded"),
+        Some(CellValue::Bool(true))
+    );
+    assert_eq!(undo_len(&app), 1);
+}
+
+#[test]
+fn a_shape_data_formula_value_refuses_the_edit() {
+    let mut cells = vec![prop_row("Cost", CellValue::Number(2.0), GeomUnit::Inches)];
+    cells
+        .first_mut()
+        .expect("the row")
+        .cells
+        .last_mut()
+        .expect("the value cell")
+        .set_formula(Some(String::from("Width*2")));
+    let (app, id) = fixture(geometry_cells(), cells, DisplayUnits::Inches);
+    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    let before = rig.app.borrow().active_document().unwrap().document.clone();
+    let intents = rig.type_entry(0, "5 in");
+
+    assert!(intents.is_empty(), "the refusal dispatches nothing");
+    {
+        let app = rig.app.borrow();
+        assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
+        assert!(
+            app.warnings[0].contains("is a formula cell"),
+            "{:?}",
+            app.warnings
+        );
+    }
+    rig.dispatch(intents);
+    let app = rig.app.borrow();
+    assert_eq!(
+        app.active_document().unwrap().document,
+        before,
+        "the document is unchanged"
+    );
+    assert_eq!(
+        prop_value(&app, id, "Row_Cost"),
+        Some(CellValue::Number(2.0))
+    );
+}
+
+#[test]
+fn an_inherited_shape_data_value_edit_writes_a_local_row() {
+    let (app, id, rung) = master_fixture();
+    let mut rig = PanelRig::new(app, Panel::ShapeData);
+    // The pane lists the master's row (the P6-09 note's union).
+    let texts = shown(&rig.harness);
+    assert!(
+        texts.iter().any(|text| text == "3 in"),
+        "the inherited value shows: {texts:?}"
+    );
+    let intents = rig.type_entry(0, "7 in");
+    assert_eq!(intents.len(), 1, "{intents:?}");
+    rig.dispatch(intents);
+    {
+        let app = rig.app.borrow();
+        match prop_value(&app, id, "Row_Mastered").expect("a local row now") {
+            CellValue::Number(number) => assert!((number - 7.0).abs() < 1.0e-9, "{number}"),
+            other => panic!("the value is a number, got {other:?}"),
+        }
+        // The master's own row is untouched.
+        assert_eq!(
+            prop_value(&app, rung, "Row_Mastered"),
+            Some(CellValue::Number(3.0))
+        );
+        assert_eq!(undo_len(&app), 1);
+    }
+
+    // Undo removes the local row again: the inherited one is back.
+    rig.dispatch(vec![Intent::new(
+        ferrogram_commands::CommandId::parse("edit.undo").expect("id"),
+        ferrogram_commands::Invocation::new(
+            ferrogram_commands::Args::new(),
+            ferrogram_commands::Source::Test,
+        ),
+    )]);
+    let app = rig.app.borrow();
+    assert_eq!(prop_value(&app, id, "Row_Mastered"), None);
 }
