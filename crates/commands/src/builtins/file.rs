@@ -10,13 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{
-    Cell, CellValue, Document, DocumentKind, Page, PageId, RowTarget, SectionName, Sheet, SheetRef,
-};
+use ferrogram_model::{CellValue, Document, DocumentKind, Page, PageId, SheetRef};
 use ferrogram_render::{
     BuildOptions, PngOptions, Rgba, Scene, SvgOptions, build_scene, render_png, render_svg,
 };
-use ferrogram_shapesheet::{CellAddress, RecalcOptions, recalc};
 use ferrogram_vsdx::{Limits, Package, read_package, to_model, write_document};
 
 use crate::app::{AppCtx, DocumentSession, ViewState};
@@ -199,101 +196,54 @@ fn render_error(cause: impl std::fmt::Display) -> CommandError {
 /// a cell with a formula and no cached value gains one, so every
 /// consumer of a read document (the session, `render`, `export`,
 /// `inspect`) sees the same values.
-fn read_package_document(bytes: &[u8], label: &Path) -> Result<(Document, Package), CommandError> {
+fn read_package_document(
+    ctx: &mut AppCtx,
+    bytes: &[u8],
+    label: &Path,
+) -> Result<(Document, Package), CommandError> {
     let package =
         read_package(bytes, &Limits::DEFAULT).map_err(|error| read_error(label, error))?;
     let mut document = to_model(&package).map_err(|error| read_error(label, error))?;
-    fill_in_values(&mut document);
+    fill_read_document(ctx, &mut document);
     Ok((document, package))
 }
 
-/// Fills the cached values a read document is missing (ADR 0057).
+/// Fills the cached values a read document is missing (ADR 0057) with
+/// the one fill-in pass of the workspace,
+/// [`commands::recalc::fill_missing`](crate::recalc::fill_missing)
+/// (task P6-18 F10: the copies `fill_in_values`/`missing_value_cells`
+/// kept here are gone).
 ///
-/// One pass evaluates every cell that has a formula and no cached value
+/// The pass evaluates every cell that has a formula and no cached value
 /// and writes what it computes. A cell that has a value keeps it: the
 /// file's cache is Visio's own last computation and the cross-check
 /// measures against it (ADR 0059). The pass runs at load, before the
-/// session exists, so it takes no undo entry and does not bump the
-/// change counter.
+/// document is opened, so it takes no undo entry and does not bump the
+/// change counter: the document sits in a transient session slot the
+/// helper removes again (nothing changes about the open documents or
+/// the active one).
 ///
 /// The pass never fails the read: a formula the engine cannot evaluate
-/// keeps its cell as it was, and the pass outcome is dropped (its
-/// warnings belong to editing, ADR 0056, not to opening a file).
-///
-/// `commands::recalc::fill_missing` (task P6-07) is the future home of
-/// this entry point; until it lands, the pass drives
-/// [`recalc`] with [`RecalcOptions::fill_missing_only`] directly.
-fn fill_in_values(document: &mut Document) {
-    let dirty = missing_value_cells(document);
-    if dirty.is_empty() {
-        return;
-    }
-    let options = RecalcOptions {
-        fill_missing_only: true,
-        ..RecalcOptions::new()
-    };
-    let _ = recalc(document, &dirty, &options);
-}
-
-/// The addresses of every cell that has a formula and no cached value
-/// (the ADR 0057 fill-in contract), sorted for a deterministic pass.
-fn missing_value_cells(document: &Document) -> Vec<CellAddress> {
-    let mut out = Vec::new();
-    for (sheet, data) in sheet_refs(document) {
-        collect_missing(sheet, &data.cells, None, None, &mut out);
-        for section in &data.sections {
-            let name = Some(section.name.clone());
-            collect_missing(sheet, &section.cells, name.clone(), None, &mut out);
-            for (position, row) in section.rows.iter().enumerate() {
-                let target = RowTarget {
-                    position: Some(position),
-                    ix: row.ix,
-                };
-                collect_missing(sheet, &row.cells, name.clone(), Some(target), &mut out);
-            }
-        }
-    }
-    out.sort();
-    out.dedup();
-    out
-}
-
-/// The sheets of a document: page sheets and shape sheets, in the
-/// deterministic order the dependency graph walks them (ADR 0055).
-fn sheet_refs(document: &Document) -> Vec<(SheetRef, &Sheet)> {
-    let mut out = Vec::new();
-    for page in &document.pages {
-        out.push((SheetRef::Page(page.id), &page.sheet));
-    }
-    for shape in &document.shapes {
-        out.push((SheetRef::Shape(shape.id), &shape.sheet));
-    }
-    out
-}
-
-/// Collects the addresses of the `cells` that have a formula and no
-/// cached value, under `section` and `row` (when they apply).
-fn collect_missing(
-    sheet: SheetRef,
-    cells: &[Cell],
-    section: Option<SectionName>,
-    row: Option<RowTarget>,
-    out: &mut Vec<CellAddress>,
-) {
-    for cell in cells {
-        if cell.formula.is_some() && cell.value.is_none() {
-            let mut address = CellAddress::new(sheet, cell.name.clone());
-            address.section = section.clone();
-            address.row = row;
-            out.push(address);
-        }
+/// keeps its cell as it was, and the pass outcome is dropped. Its
+/// warning lines are dropped with it: they belong to editing (ADR
+/// 0056), not to opening a file.
+fn fill_read_document(ctx: &mut AppCtx, document: &mut Document) {
+    let mut slot = DocumentSession::new(std::mem::replace(document, Document::new()), None);
+    let session = slot.id;
+    slot.graph = None;
+    ctx.documents.push(slot);
+    let warnings = ctx.warnings.clone();
+    let _ = crate::recalc::fill_missing(ctx, session);
+    ctx.warnings = warnings;
+    if let Some(slot) = ctx.documents.pop() {
+        *document = slot.document;
     }
 }
 
 /// Reads and parses the input file (ADR 0026 exit code 2).
-fn load(path: &Path) -> Result<(Document, Option<Package>), CommandError> {
+fn load(ctx: &mut AppCtx, path: &Path) -> Result<(Document, Option<Package>), CommandError> {
     let bytes = std::fs::read(path).map_err(|error| read_error(path, error))?;
-    let (document, package) = read_package_document(&bytes, path)?;
+    let (document, package) = read_package_document(ctx, &bytes, path)?;
     Ok((document, Some(package)))
 }
 
@@ -362,7 +312,7 @@ pub(super) fn run_open(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
     let (document, package, path, label) = match inv.args.path("path") {
         Some(path) => {
             let bytes = std::fs::read(path).map_err(|error| read_error(path, error))?;
-            let (document, package) = read_package_document(&bytes, path)?;
+            let (document, package) = read_package_document(ctx, &bytes, path)?;
             (
                 document,
                 package,
@@ -372,7 +322,7 @@ pub(super) fn run_open(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
         }
         None => match (inv.args.text("name"), inv.args.bytes("data")) {
             (Some(name), Some(data)) => {
-                let (document, package) = read_package_document(data, Path::new(name))?;
+                let (document, package) = read_package_document(ctx, data, Path::new(name))?;
                 (document, package, None, name.to_owned())
             }
             _ => {
@@ -443,8 +393,8 @@ fn save_document(
     let session = ctx.active_document_mut().ok_or_else(no_document)?;
     let empty = Package::new();
     let preserve = session.preserve.as_ref().unwrap_or(&empty);
-    let bytes =
-        write_document(&session.document, preserve).map_err(|error| io_error(&path, error))?;
+    let encoded = write_document(&session.document, preserve);
+    let bytes = encoded.map_err(|error| io_error(&path, error))?;
     write_file(&path, &bytes)?;
     if set_path {
         session.path = Some(path.clone());
@@ -552,7 +502,7 @@ pub(super) fn run_inspect(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome,
     let page = optional_page(&inv.args)?;
     let (text, warnings) = match inv.args.path("path") {
         Some(path) => {
-            let (document, _package) = load(path)?;
+            let (document, _package) = load(ctx, path)?;
             inspect_document(&document, page, json)?
         }
         None => match ctx.active_document() {
@@ -617,7 +567,7 @@ pub(super) fn run_render(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
     let scale = scale_arg(&inv.args)?;
     let background = background_arg(&inv.args)?;
     let page = page_arg(&inv.args)?;
-    let (document, _package) = load(&path)?;
+    let (document, _package) = load(ctx, &path)?;
     let selected = select_page(&document, Some(page))?;
     let mut scene = build(&document, selected.id, scale)?;
     match background {
@@ -643,7 +593,7 @@ pub(super) fn run_export(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
     let out = need_path(&inv.args, "out", PathPurpose::SaveFile)?;
     let format = format_arg(&inv.args, &out)?;
     let scale = scale_arg(&inv.args)?;
-    let (document, _package) = load(&path)?;
+    let (document, _package) = load(ctx, &path)?;
     if document.pages.is_empty() {
         return Err(read_error_text("the document has no pages to export"));
     }
@@ -849,7 +799,7 @@ pub fn value_text(value: &CellValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{CellName, Row, Section, SectionName, Shape, ShapeId};
+    use ferrogram_model::{Cell, CellName, Row, Section, SectionName, Shape, ShapeId};
     use ferrogram_vsdx::{ContentType, Part, PartData, PartName, from_model};
 
     use crate::{ArgValue, Args, Source};
@@ -922,7 +872,9 @@ mod tests {
             vec![probe_cell("SheetCell", Some("1+1"), None)],
             vec![section],
         );
-        let (document, _) = read_package_document(&bytes, Path::new("probe.vsdx")).expect("read");
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let (document, _) =
+            read_package_document(&mut ctx, &bytes, Path::new("probe.vsdx")).expect("read");
         assert_eq!(
             cell_value(&document, "SheetCell"),
             Some(CellValue::Number(2.0))
@@ -957,7 +909,9 @@ mod tests {
             )],
             Vec::new(),
         );
-        let (document, _) = read_package_document(&bytes, Path::new("probe.vsdx")).expect("read");
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        let (document, _) =
+            read_package_document(&mut ctx, &bytes, Path::new("probe.vsdx")).expect("read");
         assert_eq!(cell_value(&document, "Probe"), Some(CellValue::Number(7.0)));
     }
 
@@ -987,6 +941,17 @@ mod tests {
         );
     }
 
+    /// Task P6-18 (the coverage report): `file.close` over a stale
+    /// active index reports no open document, never a panic.
+    #[test]
+    fn close_with_a_stale_active_index_reports_no_document() {
+        let mut ctx = AppCtx::new(crate::Settings::default());
+        ctx.active = Some(5);
+        let error =
+            run_close(&mut ctx, &Invocation::new(Args::new(), Source::Test)).expect_err("stale");
+        assert!(error.to_string().contains("no open document"), "{error}");
+    }
+
     /// P4-15 review minor 7: the no-target save (the wasm download
     /// path, kept compiled on every target) returns a payload and
     /// reports a write failure with the ADR 0026 `cannot write
@@ -997,12 +962,13 @@ mod tests {
         ctx.open_document(DocumentSession::new(Document::new(), None));
         let outcome = payload_save(&mut ctx).expect("payload");
         assert_eq!(outcome.message.as_deref(), Some("Saved Untitled.vsdx"));
-        match outcome.payload {
-            Some(crate::Payload::Bytes { name, data }) => {
-                assert_eq!(name, "Untitled.vsdx");
-                assert!(!data.is_empty(), "a package was written");
-            }
-            other => panic!("expected a payload, got {other:?}"),
+        assert!(matches!(
+            outcome.payload,
+            Some(crate::Payload::Bytes { .. })
+        ));
+        if let Some(crate::Payload::Bytes { name, data }) = outcome.payload {
+            assert_eq!(name, "Untitled.vsdx");
+            assert!(!data.is_empty(), "a package was written");
         }
         let session = ctx.active_document().expect("session");
         assert!(!session.dirty);
