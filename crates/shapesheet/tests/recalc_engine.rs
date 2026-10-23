@@ -691,11 +691,11 @@ fn broken_references_are_warnings_not_failures() {
         ("Named", "Nope!Width"),
         ("Row", "Geometry1.X9"),
         ("Prop", "Prop.Nope"),
-        ("Char", "Char.Font[3]"),
-        ("Master", "Masters[Gear]!Shaft!Geometry1.X1"),
+        ("Char", "Char.Size[3]"),
+        ("Master", "Masters[Bearing]!Hub!Geometry1.X1"),
         ("Page", "Pages[Page-9]!Sheet.4!BeginX"),
-        ("Style", "Styles!Manager!LineColor"),
-        ("Doc", "TheDoc!PreviewQuality"),
+        ("Style", "Styles!Ledger!LineColor"),
+        ("Doc", "TheDoc!DocScale"),
     ]);
     for name in [
         "Gone", "Named", "Row", "Prop", "Char", "Master", "Page", "Style", "Doc",
@@ -806,8 +806,7 @@ fn a_nested_setf_lands_through_the_pass() {
     );
     assert!(
         outcome.updates.iter().any(|update| {
-            update.target == at(ids[0], "Width")
-                && update.after == Some(CellValue::Number(5.0))
+            update.target == at(ids[0], "Width") && update.after == Some(CellValue::Number(5.0))
         }),
         "{:?}",
         outcome.updates
@@ -1113,8 +1112,12 @@ fn an_edit_of_a_master_cell_reevaluates_the_dependent_formula() {
         },
         CellName::from_static("Size"),
     );
-    let outcome = recalc(&mut doc, std::slice::from_ref(&edited), &RecalcOptions::new())
-        .expect("recalc");
+    let outcome = recalc(
+        &mut doc,
+        std::slice::from_ref(&edited),
+        &RecalcOptions::new(),
+    )
+    .expect("recalc");
     assert_eq!(
         number_of(&doc, &at(instance, "PinX")),
         Some(10.0),

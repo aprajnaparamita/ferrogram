@@ -463,14 +463,14 @@ mod tests {
         assert_eq!(printed("Width"), "Width");
         assert_eq!(printed("Sheet.4!PinX"), "Sheet.4!PinX");
         assert_eq!(
-            printed("Masters[Gear]!Shaft!Geometry1.X1"),
-            "Masters[Gear]!Shaft!Geometry1.X1"
+            printed("Masters[Bearing]!Hub!Geometry1.X1"),
+            "Masters[Bearing]!Hub!Geometry1.X1"
         );
-        assert_eq!(printed("'1-D'!LineColor"), "'1-D'!LineColor");
+        assert_eq!(printed("'2-C'!LineColor"), "'2-C'!LineColor");
         assert_eq!(printed("Controls.Row_1.Y"), "Controls.Row_1.Y");
         assert_eq!(
-            printed("Pages[Page-3]!Sheet.4!BeginX"),
-            "Pages[Page-3]!Sheet.4!BeginX"
+            printed("Pages[Sheet-3]!Sheet.4!BeginX"),
+            "Pages[Sheet-3]!Sheet.4!BeginX"
         );
     }
 
@@ -515,19 +515,19 @@ mod tests {
     fn every_reference_form_round_trips() {
         for source in [
             "Width",
-            "Star!Angle",
-            "Executive.2!Height",
-            "Char.Font[3]",
-            "Scratch.A5",
+            "Wheel!Angle",
+            "Frame.2!Height",
+            "Char.Size[3]",
+            "Scratch.B3",
             "Prop.Cost",
             "Geometry1.X2",
-            "Sheet.8!FillForegnd",
-            "Masters[Gear]!Shaft!Geometry1.X1",
-            "ThePage!User.Vanishing_Point",
-            "Pages[Page-3]!Sheet.4!BeginX",
-            "Styles!Manager!LineColor",
-            "TheDoc!PreviewQuality",
-            "'1-D'!LineColor",
+            "Sheet.12!FillForegnd",
+            "Masters[Bearing]!Hub!Geometry1.X1",
+            "ThePage!User.Anchor_Point",
+            "Pages[Sheet-3]!Sheet.4!BeginX",
+            "Styles!Ledger!LineColor",
+            "TheDoc!DocScale",
+            "'2-C'!LineColor",
         ] {
             let expr = tree(source);
             let text = print(&expr).expect("the reference prints");

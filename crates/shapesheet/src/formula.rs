@@ -4,7 +4,7 @@
 //! turns one into an [`crate::Expr`] and [`crate::print`] turns an
 //! expression back into source text. A [`CellRef`] keeps every part of a
 //! reference **as written**: the parser does not decide what `Prop.Cost`
-//! or `Scratch.A5` means, the resolver does (ADR 0054), because the rule
+//! or `Scratch.B3` means, the resolver does (ADR 0054), because the rule
 //! depends on the section the name points at.
 
 use std::fmt;
@@ -34,7 +34,7 @@ impl fmt::Display for Formula {
     }
 }
 
-/// A cell reference, e.g. `Sheet.4!PinX`, `ThePage!User.Vanishing_Point`
+/// A cell reference, e.g. `Sheet.4!PinX`, `ThePage!User.Anchor_Point`
 /// or `Geometry1.X2`.
 ///
 /// Every part is kept **as written** (ADR 0051): the sheet parts before
@@ -46,7 +46,7 @@ impl fmt::Display for Formula {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct CellRef {
     /// The sheet parts before the `!` separators, in order
-    /// (`Sheet.4`, `ThePage`, `Star`, `Shaft`).
+    /// (`Sheet.4`, `ThePage`, `Wheel`, `Hub`).
     pub sheets: Vec<String>,
     /// The section part (`Geometry1`, `Char`, `Prop`), or `None` for a
     /// plain cell name such as `Width`.

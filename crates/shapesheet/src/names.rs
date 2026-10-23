@@ -208,7 +208,10 @@ pub(crate) fn table_spelling(name: &str) -> Option<String> {
 }
 
 /// The sections of `sheet` the written section name names, in file order.
-pub(crate) fn sections_named<'a>(sheet: &'a Sheet, canon: &str) -> impl Iterator<Item = &'a Section> {
+pub(crate) fn sections_named<'a>(
+    sheet: &'a Sheet,
+    canon: &str,
+) -> impl Iterator<Item = &'a Section> {
     sheet
         .sections
         .iter()
@@ -434,17 +437,23 @@ mod tests {
         let mut section = section_with("Geometry", vec![vec!["X"], vec!["X"]]);
         section.rows[0].ix = Some(5);
         assert_eq!(
-            row_index_of(&section, &RowKind::Column {
-                column: String::from("X"),
-                index: 5
-            }),
+            row_index_of(
+                &section,
+                &RowKind::Column {
+                    column: String::from("X"),
+                    index: 5
+                }
+            ),
             Some(0)
         );
         assert_eq!(
-            row_index_of(&section, &RowKind::Column {
-                column: String::from("X"),
-                index: 1
-            }),
+            row_index_of(
+                &section,
+                &RowKind::Column {
+                    column: String::from("X"),
+                    index: 1
+                }
+            ),
             Some(1)
         );
         section.rows[1].name = Some(String::from("Cost"));
@@ -461,8 +470,14 @@ mod tests {
     /// A section name folds its instance number and its aliases.
     #[test]
     fn section_names_fold_the_instance_and_the_aliases() {
-        assert_eq!(split_section_name("Geometry1"), (String::from("Geometry"), 1));
-        assert_eq!(split_section_name("Geometry"), (String::from("Geometry"), 0));
+        assert_eq!(
+            split_section_name("Geometry1"),
+            (String::from("Geometry"), 1)
+        );
+        assert_eq!(
+            split_section_name("Geometry"),
+            (String::from("Geometry"), 0)
+        );
         assert_eq!(section_instance_position(1), 0);
         assert_eq!(canonical_section("char"), "Character");
         assert_eq!(canonical_section("Char"), "Character");

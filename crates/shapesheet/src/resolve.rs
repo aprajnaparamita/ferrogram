@@ -23,8 +23,8 @@
 
 use ferrogram_geom::Unit;
 use ferrogram_model::{
-    Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, PageId, Shape,
-    ShapeId, Sheet, SheetRef, StyleId, ValueSource,
+    Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, PageId, Shape, ShapeId,
+    Sheet, SheetRef, StyleId, ValueSource,
 };
 
 use crate::Error;
@@ -201,7 +201,7 @@ impl<'d> DocumentResolver<'d> {
             let part = unquote_part(part);
             index += 1;
             if names::eq_ci(&part, "Styles") {
-                // `Styles!Manager`: the stylesheet row named next.
+                // `Styles!Ledger`: the stylesheet row named next.
                 let name = unquote_part(parts.get(index)?);
                 index += 1;
                 current = Target::Style(self.style_named(&name)?);
@@ -241,8 +241,8 @@ impl<'d> DocumentResolver<'d> {
     }
 
     /// The named sub-shape or page shape one bare sheet part names: the
-    /// target's descendants first (a master's `Shaft`), then the shapes of
-    /// the target's page (`Star` on the same page).
+    /// target's descendants first (a master's `Hub`), then the shapes of
+    /// the target's page (`Wheel` on the same page).
     fn named_shape(&self, current: Target, name: &str) -> Option<ShapeId> {
         self.descendant_named(current, name).or_else(|| {
             let page = self.page_context(current)?;
@@ -256,7 +256,7 @@ impl<'d> DocumentResolver<'d> {
     }
 
     /// The named descendant of the current shape's sheet: the shape's own
-    /// children first (a master's `Shaft`), then the root itself.
+    /// children first (a master's `Hub`), then the root itself.
     fn descendant_named(&self, current: Target, name: &str) -> Option<ShapeId> {
         let root = self.sheet_shape(current)?;
         let children = self
@@ -317,7 +317,9 @@ impl<'d> DocumentResolver<'d> {
             .masters
             .iter()
             .enumerate()
-            .find(|(_, master)| names::eq_ci(&master.name, name) || names::eq_ci(&master.name_u, name))
+            .find(|(_, master)| {
+                names::eq_ci(&master.name, name) || names::eq_ci(&master.name_u, name)
+            })
             .map(|(index, _)| MasterId {
                 index: u32::try_from(index).unwrap_or(u32::MAX),
             })
@@ -349,7 +351,7 @@ impl<'d> DocumentResolver<'d> {
         }
     }
 
-    /// A document-sheet cell (`TheDoc!PreviewQuality`). The model keeps
+    /// A document-sheet cell (`TheDoc!DocScale`). The model keeps
     /// the document sheet as its `properties`, so a property by that name
     /// is the cell.
     fn find_document_cell(&self, section: Option<&str>, names: &[String]) -> Option<Found> {
@@ -418,7 +420,7 @@ impl<'d> DocumentResolver<'d> {
         }
     }
 
-    /// A bare cell name (`Width`, `Sheet.8!FillForegnd`): the model's
+    /// A bare cell name (`Width`, `Sheet.12!FillForegnd`): the model's
     /// lookup runs the rungs of ADR 0013 for it. The local entry's own
     /// cached value wins over the rung's (the `Inh` snapshot rule), and a
     /// case-only spelling difference still resolves.
@@ -481,7 +483,7 @@ impl<'d> DocumentResolver<'d> {
         Unit::Unitsless
     }
 
-    /// A section-form reference (`Char.Size`, `Prop.Cost`, `Scratch.A5`,
+    /// A section-form reference (`Char.Size`, `Prop.Cost`, `Scratch.B3`,
     /// `Geometry1.X2`): the section's row shape decides whether the name
     /// is a column or a named row (ADR 0054).
     fn find_section_cell(
@@ -750,7 +752,7 @@ enum Target {
     Document,
 }
 
-/// Removes the quoting of a nonstandard name (`'1-D'`, with `''` as the
+/// Removes the quoting of a nonstandard name (`'2-C'`, with `''` as the
 /// quote escape) and returns the name itself.
 fn unquote_part(part: &str) -> String {
     let unescaped = part.replace("''", "'");
@@ -764,7 +766,7 @@ fn unquote_part(part: &str) -> String {
     unescaped
 }
 
-/// Splits `Masters[Gear]` into the name inside its brackets when the part
+/// Splits `Masters[Bearing]` into the name inside its brackets when the part
 /// carries `prefix`.
 fn bracketed(part: &str, prefix: &str) -> Option<String> {
     let rest = part.strip_prefix(prefix)?.strip_prefix('[')?;
@@ -772,7 +774,7 @@ fn bracketed(part: &str, prefix: &str) -> Option<String> {
     Some(unquote_part(name))
 }
 
-/// Splits `Sheet.8` or `Executive.2` into the written name and the
+/// Splits `Sheet.8` or `Frame.2` into the written name and the
 /// numeric suffix. A part with no numeric suffix comes back whole.
 fn split_numbered(part: &str) -> (String, Option<i32>) {
     let Some(dot) = part.rfind('.') else {
@@ -1024,8 +1026,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::names::NameParts;
     use crate::eval::EvalWarningKind;
+    use crate::names::NameParts;
     use ferrogram_model::{Page, PageId, Row, Section, SectionName, Shape, Sheet};
 
     fn sheet() -> SheetRef {
@@ -1118,33 +1120,30 @@ mod tests {
 
     #[test]
     fn quoted_names_unescape_their_quotes() {
-        assert_eq!(unquote_part("'1-D'"), "1-D");
+        assert_eq!(unquote_part("'2-C'"), "2-C");
         assert_eq!(unquote_part("'A''B'"), "A'B");
-        assert_eq!(unquote_part("Star"), "Star");
+        assert_eq!(unquote_part("Wheel"), "Wheel");
     }
 
     #[test]
     fn bracketed_parts_split_the_name() {
         assert_eq!(
-            bracketed("Masters[Gear]", "Masters"),
-            Some(String::from("Gear"))
+            bracketed("Masters[Bearing]", "Masters"),
+            Some(String::from("Bearing"))
         );
         assert_eq!(
-            bracketed("Pages[Page-3]", "Pages"),
-            Some(String::from("Page-3"))
+            bracketed("Pages[Sheet-3]", "Pages"),
+            Some(String::from("Sheet-3"))
         );
-        assert_eq!(bracketed("Pages[Page-3]", "Masters"), None);
+        assert_eq!(bracketed("Pages[Sheet-3]", "Masters"), None);
         assert_eq!(bracketed("Pages[]", "Pages"), Some(String::new()));
     }
 
     #[test]
     fn numbered_parts_split_the_visio_id() {
         assert_eq!(split_numbered("Sheet.8"), (String::from("Sheet"), Some(8)));
-        assert_eq!(
-            split_numbered("Executive.2"),
-            (String::from("Executive"), Some(2))
-        );
-        assert_eq!(split_numbered("Star"), (String::from("Star"), None));
+        assert_eq!(split_numbered("Frame.2"), (String::from("Frame"), Some(2)));
+        assert_eq!(split_numbered("Wheel"), (String::from("Wheel"), None));
         assert_eq!(split_numbered("A.B"), (String::from("A.B"), None));
     }
 
@@ -1308,12 +1307,12 @@ mod tests {
     fn a_document_sheet_cell_reads_the_property() {
         let mut doc = Document::new();
         doc.properties
-            .push(ferrogram_model::Property::new("PreviewQuality", "1"));
+            .push(ferrogram_model::Property::new("DocScale", "1"));
         let mut resolver = DocumentResolver::new(&mut doc);
         let reference = CellRef {
             sheets: vec![String::from("TheDoc")],
             section: None,
-            names: vec![String::from("previewquality")],
+            names: vec![String::from("docscale")],
         };
         let resolved = resolver.resolve(sheet(), &reference).expect("resolves");
         assert_eq!(resolved.source, ValueSource::Local);

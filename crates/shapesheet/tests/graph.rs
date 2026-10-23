@@ -127,9 +127,8 @@ fn a_bare_row_cell_reference_builds_its_edge() {
     let mut doc = Document::new();
     let mut shape = Shape::new(ShapeId { index: 0 }, 1);
     {
-        let mut section = ferrogram_model::Section::new(ferrogram_model::SectionName::from_static(
-            "Geometry",
-        ));
+        let mut section =
+            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Geometry"));
         let mut row = ferrogram_model::Row::new();
         row.ix = Some(0);
         row.cells = vec![cell("X", Some("1"))];

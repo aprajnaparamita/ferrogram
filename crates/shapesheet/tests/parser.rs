@@ -70,19 +70,19 @@ fn every_reference_form_of_the_table_parses_and_prints_back() {
     // where a call names the sheet or the cell.
     for source in [
         "Width",
-        "Star!Angle",
-        "Executive.2!Height",
-        "Char.Font[3]",
-        "Scratch.A5",
+        "Wheel!Angle",
+        "Frame.2!Height",
+        "Char.Size[3]",
+        "Scratch.B3",
         "Prop.Cost",
         "Geometry1.X2",
-        "Sheet.8!FillForegnd",
-        "Masters[Gear]!Shaft!Geometry1.X1",
-        "ThePage!User.Vanishing_Point",
-        "Pages[Page-3]!Sheet.4!BeginX",
-        "Styles!Manager!LineColor",
-        "TheDoc!PreviewQuality",
-        "'1-D'!LineColor",
+        "Sheet.12!FillForegnd",
+        "Masters[Bearing]!Hub!Geometry1.X1",
+        "ThePage!User.Anchor_Point",
+        "Pages[Sheet-3]!Sheet.4!BeginX",
+        "Styles!Ledger!LineColor",
+        "TheDoc!DocScale",
+        "'2-C'!LineColor",
         "LISTSHEETREF()!User.Direction",
         "Sheet.30!SheetRef()",
     ] {
@@ -94,24 +94,24 @@ fn every_reference_form_of_the_table_parses_and_prints_back() {
 
 #[test]
 fn a_reference_keeps_every_part_as_written() {
-    let expr = tree("Masters[Gear]!Shaft!Geometry1.X1");
+    let expr = tree("Masters[Bearing]!Hub!Geometry1.X1");
     let ExprKind::Ref(r) = expr.kind else {
         panic!("expected a reference");
     };
     assert_eq!(
         r.sheets,
-        vec![String::from("Masters[Gear]"), String::from("Shaft")]
+        vec![String::from("Masters[Bearing]"), String::from("Hub")]
     );
     assert_eq!(r.section.as_deref(), Some("Geometry1"));
     assert_eq!(r.names, vec![String::from("X1")]);
     assert_eq!(r.name().as_deref(), Some("X1"));
     // The parser does not decide what a part *means* (ADR 0054).
-    let expr = tree("Scratch.A5");
+    let expr = tree("Scratch.B3");
     let ExprKind::Ref(r) = expr.kind else {
         panic!("expected a reference");
     };
     assert_eq!(r.section.as_deref(), Some("Scratch"));
-    assert_eq!(r.names, vec![String::from("A5")]);
+    assert_eq!(r.names, vec![String::from("B3")]);
 }
 
 #[test]
@@ -320,8 +320,8 @@ fn arb_bare_name() -> impl proptest::strategy::Strategy<Value = String> {
         Just(String::from("Font[3]")),
         Just(String::from("A5")),
         Just(String::from("Cost")),
-        Just(String::from("Vanishing_Point")),
-        Just(String::from("'1-D'")),
+        Just(String::from("Anchor_Point")),
+        Just(String::from("'2-C'")),
     ]
 }
 

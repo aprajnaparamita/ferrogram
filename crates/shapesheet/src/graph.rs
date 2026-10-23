@@ -747,7 +747,7 @@ pub(crate) fn rung_address(
 }
 
 /// The sheet part of a cross-sheet reference: `ThePage`, `Sheet.8`
-/// (a shape's Visio `ID`) or a shape's name (`Star`, `Executive.2`).
+/// (a shape's Visio `ID`) or a shape's name (`Wheel`, `Frame.2`).
 fn sheet_part(document: &Document, sheet: SheetRef, part: &str) -> Option<SheetRef> {
     if part.eq_ignore_ascii_case("ThePage") {
         return match sheet {
@@ -907,7 +907,7 @@ fn formula_cells(sheet: SheetRef, data: &Sheet) -> Vec<(CellAddress, &Cell)> {
     out
 }
 
-/// The name and Visio `ID` of a sheet part (`Executive.2` is `Executive`
+/// The name and Visio `ID` of a sheet part (`Frame.2` is `Frame`
 /// with `ID` 2).
 fn split_visio_id(part: &str) -> (&str, Option<i32>) {
     if let Some(dot) = part.rfind('.')
@@ -1219,9 +1219,9 @@ mod tests {
             &doc,
             sheet,
             &CellRef {
-                sheets: vec![String::from("Masters[Gear]")],
+                sheets: vec![String::from("Masters[Bearing]")],
                 section: None,
-                names: vec![String::from("Shaft")],
+                names: vec![String::from("Hub")],
             },
         );
         assert_eq!(unknown_sheet, None);
