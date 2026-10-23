@@ -25,6 +25,7 @@ use ferrogram_model::{
 
 use crate::Error;
 use crate::formula::{CellRef, Formula};
+use crate::names;
 use crate::recalc::FormulaEngine;
 
 /// The formula the corpus writes on a cell whose value is inherited
@@ -573,6 +574,9 @@ pub(crate) fn normalize_address(document: &Document, address: &CellAddress) -> C
 /// The cell `reference` names on `sheet`, with the model's spellings
 /// (ADR 0054's reference forms).
 ///
+/// A **read** may come from a master rung behind the target sheet (the
+/// resolver's rungs of ADR 0013), so the search walks the target sheet
+/// and then its rungs, preferring the rung whose cell defines the value.
 /// Best effort: a reference whose form needs the full resolver (a
 /// master's named sub-shape, a page path) resolves to no address and so
 /// adds no graph edge. `None` is not an error.
@@ -581,64 +585,143 @@ pub(crate) fn resolve_ref_address(
     sheet: SheetRef,
     reference: &CellRef,
 ) -> Option<CellAddress> {
+    resolve_address(document, sheet, reference, true)
+}
+
+/// The cell a `SETF` write lands on (ADR 0056): the target sheet's own
+/// cell, never a master rung's — a write is the local override.
+pub(crate) fn resolve_write_address(
+    document: &Document,
+    sheet: SheetRef,
+    reference: &CellRef,
+) -> Option<CellAddress> {
+    resolve_address(document, sheet, reference, false)
+}
+
+/// The addressing behind [`resolve_ref_address`] and
+/// [`resolve_write_address`]: `walk_rungs` extends the search to the
+/// master rungs behind the target sheet (reads inherit, writes do not).
+/// The name's meaning is the one rule of [`crate::names`] on both paths.
+fn resolve_address(
+    document: &Document,
+    sheet: SheetRef,
+    reference: &CellRef,
+    walk_rungs: bool,
+) -> Option<CellAddress> {
     let target = match reference.sheets.as_slice() {
         [] => sheet,
         [one] => sheet_part(document, sheet, one)?,
         _ => return None,
     };
-    let names = &reference.names;
-    match (&reference.section, names.len()) {
-        (None, 1) => {
-            let name = names.first()?;
-            let found = bare_address(document, target, name);
-            Some(found.unwrap_or_else(|| CellAddress::new(target, CellName::new(name.clone()))))
+    let (section, written) = crate::resolve::split_names(reference);
+    let name = written.first()?;
+    let explicit = written.get(1).map(String::as_str);
+    let mut fallback = None;
+    for (candidate, data) in candidate_sheets(document, target, walk_rungs) {
+        let found = match section {
+            Some(section) => section_address(data, candidate, section, name, explicit),
+            None => bare_address(data, candidate, name),
+        };
+        let Some(address) = found else {
+            continue;
+        };
+        // The rung whose cell defines the value is the one a read takes
+        // (ADR 0054); a rung that merely carries the cell is the
+        // fallback.
+        if local_cell(document, &address).is_some_and(crate::resolve::defines) {
+            return Some(address);
         }
-        (Some(section), 1) => {
-            let section = spell_section(document, target, section)?;
-            let part = names.first()?;
-            if is_column(document, target, &section, base_name(part)) {
-                let (base, row) = split_row_suffix(part);
-                let row = canonical_row(document, target, &section, row)?;
-                let probe = CellAddress::in_row(target, section.clone(), row, CellName::new(base));
-                Some(CellAddress::in_row(
-                    target,
-                    section,
-                    row,
-                    spell_cell(document, &probe),
-                ))
-            } else {
-                let row = named_row(document, target, &section, part)?;
-                let probe = CellAddress::in_row(
-                    target,
-                    section.clone(),
-                    row,
-                    CellName::from_static("Value"),
-                );
-                Some(CellAddress::in_row(
-                    target,
-                    section,
-                    row,
-                    spell_cell(document, &probe),
-                ))
+        fallback = fallback.or(Some(address));
+    }
+    fallback.or_else(|| {
+        // A bare name no sheet holds still names a cell (the node of a
+        // table default), on the target sheet.
+        section
+            .is_none()
+            .then(|| CellAddress::new(target, names::spelled_cell(name)))
+    })
+}
+
+/// The sheets a reference may name, in rung order (ADR 0013): the target
+/// sheet first, then the master rungs behind it when `walk_rungs`.
+fn candidate_sheets<'d>(
+    document: &'d Document,
+    target: SheetRef,
+    walk_rungs: bool,
+) -> Vec<(SheetRef, &'d Sheet)> {
+    let mut out = Vec::new();
+    if let Some(data) = sheet_of(document, target) {
+        out.push((target, data));
+    }
+    if walk_rungs && let SheetRef::Shape(shape) = target {
+        for (_, rung) in crate::resolve::master_rungs(document, shape) {
+            if let Some(data) = sheet_of(document, SheetRef::Shape(rung)) {
+                out.push((SheetRef::Shape(rung), data));
             }
         }
-        (Some(section), 2) => {
-            let section = spell_section(document, target, section)?;
-            let row_part = names.first()?;
-            let cell = names.get(1)?;
-            let row = named_row(document, target, &section, row_part).or_else(|| {
-                canonical_row(document, target, &section, split_row_suffix(row_part).1)
-            })?;
-            let probe =
-                CellAddress::in_row(target, section.clone(), row, CellName::new(cell.clone()));
+    }
+    out
+}
+
+/// The address of the cell a section-form name names on one sheet
+/// (`Char.Size`, `Prop.Cost`, `Geometry1.X2`): the section's row shape
+/// decides the name's meaning (the one rule of [`crate::names`]), and a
+/// section-level cell is addressed as one.
+fn section_address(
+    data: &Sheet,
+    sheet: SheetRef,
+    section: &str,
+    name: &str,
+    explicit: Option<&str>,
+) -> Option<CellAddress> {
+    let (base, instance) = names::split_section_name(section);
+    let canon = names::canonical_section(base.as_str());
+    let found = names::match_section(data, canon.as_str(), instance)?;
+    let kind = names::row_kind(canon.as_str(), Some(found), name);
+    let slot = names::section_slot(data, canon.as_str(), instance, &kind, explicit)?;
+    slot_address(data, sheet, slot)
+}
+
+/// The address of the cell `name` names on one sheet without a section:
+/// a direct cell first, then a section cell, then a row cell (the
+/// model's own name search order).
+fn bare_address(data: &Sheet, sheet: SheetRef, name: &str) -> Option<CellAddress> {
+    let (_, slot) = names::find_entry(data, name)?;
+    slot_address(data, sheet, slot)
+}
+
+/// The address of the cell at `slot`, with the model's spellings (names
+/// match case-insensitively, ADR 0054).
+fn slot_address(data: &Sheet, sheet: SheetRef, slot: names::Slot) -> Option<CellAddress> {
+    match slot {
+        names::Slot::Direct(index) => data
+            .cells
+            .get(index)
+            .map(|cell| CellAddress::new(sheet, cell.name.clone())),
+        names::Slot::SectionLevel(section, cell) => {
+            let section = data.sections.get(section)?;
+            let cell = section.cells.get(cell)?;
+            Some(CellAddress {
+                sheet,
+                section: Some(section.name.clone()),
+                row: None,
+                cell: cell.name.clone(),
+            })
+        }
+        names::Slot::Row(section, position, cell) => {
+            let section = data.sections.get(section)?;
+            let row = section.rows.get(position)?;
+            let cell = row.cells.get(cell)?;
             Some(CellAddress::in_row(
-                target,
-                section,
-                row,
-                spell_cell(document, &probe),
+                sheet,
+                section.name.clone(),
+                RowTarget {
+                    position: Some(position),
+                    ix: row.ix,
+                },
+                cell.name.clone(),
             ))
         }
-        _ => None,
     }
 }
 
@@ -714,122 +797,6 @@ fn find_shape_by_name(
         queue.extend(shape.children.iter().copied());
     }
     None
-}
-
-/// The section name of `written` in the model's spelling, with the
-/// formula's section number (`Geometry1` is the first `Geometry`
-/// section) folded in.
-fn spell_section(document: &Document, sheet: SheetRef, written: &str) -> Option<SectionName> {
-    let data = sheet_of(document, sheet)?;
-    if let Some(found) = find_section(data, &SectionName::new(written.to_owned())) {
-        return Some(found.name.clone());
-    }
-    let (base, number) = split_section_number(written);
-    let matching: Vec<&Section> = data
-        .sections
-        .iter()
-        .filter(|section| section.name.as_str().eq_ignore_ascii_case(&base))
-        .collect();
-    let index = number.saturating_sub(1);
-    let picked = matching.get(index).or_else(|| matching.first())?;
-    Some(picked.name.clone())
-}
-
-/// The cell name of `probe` in the model's spelling, falling back to the
-/// name as written (names match case-insensitively, ADR 0054).
-fn spell_cell(document: &Document, probe: &CellAddress) -> CellName {
-    if let Some(cell) = local_cell(document, probe) {
-        return cell.name.clone();
-    }
-    probe.cell.clone()
-}
-
-/// The address of the cell `name` names on `sheet` without a section:
-/// a direct cell first, then a section cell, then a row cell (the
-/// model's own name search order).
-fn bare_address(document: &Document, sheet: SheetRef, name: &str) -> Option<CellAddress> {
-    let data = sheet_of(document, sheet)?;
-    let wanted = CellName::new(name.to_owned());
-    if let Some(cell) = find_cell(&data.cells, &wanted) {
-        return Some(CellAddress::new(sheet, cell.name.clone()));
-    }
-    for section in &data.sections {
-        if let Some(cell) = find_cell(&section.cells, &wanted) {
-            let mut address = CellAddress::new(sheet, cell.name.clone());
-            address.section = Some(section.name.clone());
-            return Some(address);
-        }
-        for (position, row) in section.rows.iter().enumerate() {
-            if let Some(cell) = find_cell(&row.cells, &wanted) {
-                return Some(CellAddress::in_row(
-                    sheet,
-                    section.name.clone(),
-                    RowTarget {
-                        position: Some(position),
-                        ix: row.ix,
-                    },
-                    cell.name.clone(),
-                ));
-            }
-        }
-    }
-    None
-}
-
-/// Whether `name` is a column of `section`'s row shape (ADR 0054: a name
-/// matches a column first and a named row second).
-fn is_column(document: &Document, sheet: SheetRef, section: &SectionName, name: &str) -> bool {
-    let Some(data) = sheet_of(document, sheet) else {
-        return false;
-    };
-    let Some(section) = find_section(data, section) else {
-        return false;
-    };
-    section.rows.iter().any(|row| {
-        row.cells
-            .iter()
-            .any(|cell| cell.name.as_str().eq_ignore_ascii_case(name))
-    })
-}
-
-/// The row `name` names in `section` (a named row, `Prop.Cost`).
-fn named_row(
-    document: &Document,
-    sheet: SheetRef,
-    section: &SectionName,
-    name: &str,
-) -> Option<RowTarget> {
-    let data = sheet_of(document, sheet)?;
-    let section = find_section(data, section)?;
-    section
-        .rows
-        .iter()
-        .enumerate()
-        .find(|(_, row)| {
-            row.name
-                .as_deref()
-                .is_some_and(|row| row.eq_ignore_ascii_case(name))
-        })
-        .map(|(position, row)| RowTarget {
-            position: Some(position),
-            ix: row.ix,
-        })
-}
-
-/// The row target of `row` filled in against `section`: a target by `IX`
-/// finds its position and the other way round.
-fn canonical_row(
-    document: &Document,
-    sheet: SheetRef,
-    section: &SectionName,
-    row: RowTarget,
-) -> Option<RowTarget> {
-    let data = sheet_of(document, sheet)?;
-    let section = find_section(data, section)?;
-    find_row_with_position(section, row).map(|(position, ix)| RowTarget {
-        position: Some(position),
-        ix,
-    })
 }
 
 /// The row at `row` in `section` with its position and `IX`.
@@ -938,53 +905,6 @@ fn formula_cells(sheet: SheetRef, data: &Sheet) -> Vec<(CellAddress, &Cell)> {
         }
     }
     out
-}
-
-/// The name before a row suffix (`X2` is column `X`, `Font[3]` is
-/// column `Font`).
-fn base_name(part: &str) -> &str {
-    if let Some(open) = part.find('[')
-        && part.ends_with(']')
-        && open > 0
-    {
-        return part.get(..open).unwrap_or(part);
-    }
-    let trimmed = part.trim_end_matches(|c: char| c.is_ascii_digit());
-    if trimmed.is_empty() { part } else { trimmed }
-}
-
-/// Splits `X2` into its column (`X`) and its row target. The digits are
-/// matched by `IX` first and by position second (the two conventions the
-/// corpus uses); a name with no row suffix is row 0 (ADR 0054).
-fn split_row_suffix(part: &str) -> (String, RowTarget) {
-    let base = base_name(part);
-    let digits = part.get(base.len()..).unwrap_or_default();
-    let digits = digits.trim_start_matches('[').trim_end_matches(']');
-    let target = digits.parse::<usize>().ok().map_or(
-        RowTarget {
-            position: Some(0),
-            ix: Some(0),
-        },
-        |index| {
-            let ix = i32::try_from(index).unwrap_or(i32::MAX);
-            RowTarget {
-                position: Some(index),
-                ix: Some(ix),
-            }
-        },
-    );
-    (base.to_owned(), target)
-}
-
-/// The name and section number of a written section (`Geometry1` is the
-/// first `Geometry` section; a name with no number is the first).
-fn split_section_number(written: &str) -> (String, usize) {
-    let base = base_name(written);
-    let digits = written.get(base.len()..).unwrap_or_default();
-    (
-        base.to_owned(),
-        digits.parse::<usize>().ok().unwrap_or(1).max(1),
-    )
 }
 
 /// The name and Visio `ID` of a sheet part (`Executive.2` is `Executive`

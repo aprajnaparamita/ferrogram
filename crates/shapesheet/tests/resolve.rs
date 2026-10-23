@@ -829,7 +829,7 @@ fn a_missing_cell_row_or_sheet_is_ref_with_one_warning() {
     assert_eq!(warnings.len(), 4);
     for warning in warnings {
         assert!(matches!(
-            warning.kind,
+            warning.warning.kind,
             EvalWarningKind::UnsupportedReference(_)
         ));
     }
@@ -908,7 +908,9 @@ fn names_match_case_insensitively() {
 }
 
 #[test]
-fn a_setf_write_lands_on_the_local_cell_or_is_refused() {
+fn a_setf_write_is_recorded_and_a_missing_target_is_refused() {
+    // ADR 0056 (P6-12 review F1): the resolver records the write and
+    // the recalc pass applies it, so nothing writes the document here.
     let mut fixture = Fixture::new();
     fixture
         .doc
@@ -925,27 +927,27 @@ fn a_setf_write_lands_on_the_local_cell_or_is_refused() {
     ));
 
     // A missing target is refused (the evaluator turns the refusal into
-    // `#REF!`).
+    // `#REF!`), and nothing is recorded for it.
     let missing = resolver.set_cell(sheet, &CellRef::new("NoSuchCell"), value.clone());
     assert!(missing.is_err());
+    assert!(resolver.writes().is_empty());
 
-    // A write goes through once the value mapping (P6-03) does; before
-    // that the mapping itself is the error.
-    let write = resolver.set_cell(sheet, &CellRef::new("PinX"), value.clone());
-    match value.to_cached() {
-        Ok(cached) => {
-            write.expect("writes");
-            let cell = resolver
-                .document()
-                .shape(fixture.target)
-                .expect("target")
-                .sheet
-                .cells
-                .first()
-                .expect("cell");
-            assert_eq!(cell.value, Some(cached.value));
-            assert_eq!(cell.formula, None);
-        }
-        Err(_) => assert!(write.is_err()),
-    }
+    // A write the target check accepts is recorded, not applied.
+    resolver
+        .set_cell(sheet, &CellRef::new("PinX"), value.clone())
+        .expect("records");
+    assert_eq!(resolver.writes().len(), 1);
+    assert_eq!(resolver.writes()[0].sheet, sheet);
+    assert_eq!(resolver.writes()[0].target, CellRef::new("PinX"));
+    assert_eq!(resolver.writes()[0].value, value);
+    let cell = resolver
+        .document()
+        .shape(fixture.target)
+        .expect("target")
+        .sheet
+        .cells
+        .first()
+        .expect("cell");
+    assert_eq!(cell.value, Some(CellValue::Number(1.0)), "untouched");
+    assert_eq!(cell.formula, None);
 }

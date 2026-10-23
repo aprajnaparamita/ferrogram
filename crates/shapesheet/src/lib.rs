@@ -34,6 +34,7 @@ mod formula;
 mod functions;
 mod graph;
 mod lexer;
+mod names;
 mod parser;
 mod printer;
 mod recalc;
@@ -55,6 +56,6 @@ pub use recalc::{
     CellUpdate, CellWriteOp, DocumentEngine, Evaluation, FormulaEngine, RecalcOptions,
     RecalcOutcome, RecalcWarning, RecalcWarningKind, recalc, recalc_with,
 };
-pub use resolve::{DocumentResolver, ResolvedCell};
+pub use resolve::{DocumentResolver, RecordedWrite, ResolvedCell, TracedWarning};
 pub use units::{Unit, UnitFamily, parse_unit};
 pub use value::{CachedValue, ErrorCode, Number, Value};

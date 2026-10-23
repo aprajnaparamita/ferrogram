@@ -23,13 +23,14 @@
 
 use ferrogram_geom::Unit;
 use ferrogram_model::{
-    Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, PageId, Row, Section, Shape,
+    Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, PageId, Shape,
     ShapeId, Sheet, SheetRef, StyleId, ValueSource,
 };
 
 use crate::Error;
 use crate::eval::{EvalContext, EvalWarning, EvalWarningKind};
 use crate::formula::{CellRef, Formula};
+use crate::names::{self, RowKind};
 use crate::value::{ErrorCode, Value};
 
 /// The formula `.vsdx` writes on a cell whose value is inherited. It
@@ -40,9 +41,6 @@ const INHERIT_FORMULA: &str = "Inh";
 /// (ADR 0051 bounds nesting inside one formula; this bounds the chain
 /// across formulas). Recursion never runs away.
 const MAX_EVAL_DEPTH: u32 = 32;
-
-/// The default cell of a named row (`Prop.Cost` reads `Cost`'s `Value`).
-const DEFAULT_ROW_CELL: &str = "Value";
 
 /// One resolved cell: the formula that defines it and the value to use
 /// (ADR 0054).
@@ -58,15 +56,48 @@ pub struct ResolvedCell {
     pub source: ValueSource,
 }
 
+/// One `SETF` write a formula performed, recorded but **not** applied
+/// (ADR 0056, P6-12 review F1): the recalc pass applies every write
+/// through the model's mutation API, so one write path owns the
+/// document and a write is inside the pass's `CellUpdate` list, its
+/// dirty set and the undo snapshot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordedWrite {
+    /// The sheet the formula was evaluated on (the write's context).
+    pub sheet: SheetRef,
+    /// The target as written.
+    pub target: CellRef,
+    /// The value to write.
+    pub value: Value,
+}
+
+/// One warning with the cell whose formula was under evaluation when it
+/// fired (P6-12 review F16): a warning raised inside a referenced cell's
+/// formula names that cell, not the outer one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TracedWarning {
+    /// The referenced cell whose formula was being evaluated, or `None`
+    /// for the formula the caller asked for.
+    pub origin: Option<CellRef>,
+    /// The warning itself.
+    pub warning: EvalWarning,
+}
+
 /// Resolves references against a [`Document`] (ADR 0054).
 ///
 /// The resolver is the [`EvalContext`] the evaluator runs against: it
-/// reads cells with inheritance, applies basic `SETF` writes and collects
-/// the structured warnings of ADR 0053.
+/// reads cells with inheritance, records basic `SETF` writes (the recalc
+/// pass applies them, ADR 0056) and collects the structured warnings of
+/// ADR 0053.
 pub struct DocumentResolver<'d> {
     document: &'d mut Document,
-    warnings: Vec<EvalWarning>,
+    warnings: Vec<TracedWarning>,
+    writes: Vec<RecordedWrite>,
+    /// The nested cell whose formula is under evaluation (the innermost
+    /// first), for the attribution rule of [`TracedWarning`].
+    origins: Vec<CellRef>,
     depth: u32,
+    evaluations: u32,
 }
 
 impl<'d> DocumentResolver<'d> {
@@ -75,7 +106,10 @@ impl<'d> DocumentResolver<'d> {
         Self {
             document,
             warnings: Vec::new(),
+            writes: Vec::new(),
+            origins: Vec::new(),
             depth: 0,
+            evaluations: 0,
         }
     }
 
@@ -84,14 +118,37 @@ impl<'d> DocumentResolver<'d> {
         self.document
     }
 
-    /// The warnings collected so far.
-    pub fn warnings(&self) -> &[EvalWarning] {
+    /// The warnings collected so far, each with the cell whose formula
+    /// was being evaluated when it fired.
+    pub fn warnings(&self) -> &[TracedWarning] {
         &self.warnings
     }
 
-    /// The collected warnings, taking them out of the resolver.
-    pub fn into_warnings(self) -> Vec<EvalWarning> {
-        self.warnings
+    /// The `SETF` writes collected so far (recorded, never applied).
+    pub fn writes(&self) -> &[RecordedWrite] {
+        &self.writes
+    }
+
+    /// How many **nested** formula evaluations the resolver ran: reads
+    /// of a cell that caches nothing re-evaluate its formula inline
+    /// (ADR 0057). The recalc budget counts these too (ADR 0055).
+    pub fn evaluations(&self) -> u32 {
+        self.evaluations
+    }
+
+    /// The collected warnings and writes, taking them out of the
+    /// resolver.
+    pub fn into_parts(self) -> (Vec<TracedWarning>, Vec<RecordedWrite>) {
+        (self.warnings, self.writes)
+    }
+
+    /// Records one warning against the nested cell being evaluated, if
+    /// any (P6-12 review F16).
+    fn record(&mut self, warning: EvalWarning) {
+        self.warnings.push(TracedWarning {
+            origin: self.origins.last().cloned(),
+            warning,
+        });
     }
 
     /// Resolves one referenced cell (ADR 0054).
@@ -111,7 +168,7 @@ impl<'d> DocumentResolver<'d> {
     /// The `#REF!` answer for a name that resolves to nothing, with
     /// exactly one warning (ADR 0054, "About Error Values").
     fn missing(&mut self, sheet: SheetRef, reference: &CellRef) -> ResolvedCell {
-        self.warnings.push(EvalWarning {
+        self.record(EvalWarning {
             sheet,
             kind: EvalWarningKind::UnsupportedReference(describe(reference)),
         });
@@ -143,7 +200,7 @@ impl<'d> DocumentResolver<'d> {
         while let Some(part) = parts.get(index) {
             let part = unquote_part(part);
             index += 1;
-            if eq_ci(&part, "Styles") {
+            if names::eq_ci(&part, "Styles") {
                 // `Styles!Manager`: the stylesheet row named next.
                 let name = unquote_part(parts.get(index)?);
                 index += 1;
@@ -157,10 +214,10 @@ impl<'d> DocumentResolver<'d> {
 
     /// One sheet part of a reference, applied to `current`.
     fn step(&self, current: Target, part: &str) -> Option<Target> {
-        if eq_ci(part, "ThePage") {
+        if names::eq_ci(part, "ThePage") {
             return Some(Target::Sheet(SheetRef::Page(self.page_context(current)?)));
         }
-        if eq_ci(part, "TheDoc") {
+        if names::eq_ci(part, "TheDoc") {
             return Some(Target::Document);
         }
         if let Some(name) = bracketed(part, "Masters") {
@@ -250,7 +307,7 @@ impl<'d> DocumentResolver<'d> {
             .stylesheet
             .styles
             .iter()
-            .find(|style| eq_ci(&style.name, name) || eq_ci(&style.name_u, name))
+            .find(|style| names::eq_ci(&style.name, name) || names::eq_ci(&style.name_u, name))
             .map(|style| style.id)
     }
 
@@ -260,7 +317,7 @@ impl<'d> DocumentResolver<'d> {
             .masters
             .iter()
             .enumerate()
-            .find(|(_, master)| eq_ci(&master.name, name) || eq_ci(&master.name_u, name))
+            .find(|(_, master)| names::eq_ci(&master.name, name) || names::eq_ci(&master.name_u, name))
             .map(|(index, _)| MasterId {
                 index: u32::try_from(index).unwrap_or(u32::MAX),
             })
@@ -271,7 +328,7 @@ impl<'d> DocumentResolver<'d> {
         self.document
             .pages
             .iter()
-            .find(|page| eq_ci(&page.name, name) || eq_ci(&page.name_u, name))
+            .find(|page| names::eq_ci(&page.name, name) || names::eq_ci(&page.name_u, name))
             .map(|page| page.id)
     }
 
@@ -304,7 +361,7 @@ impl<'d> DocumentResolver<'d> {
             .document
             .properties
             .iter()
-            .find(|property| eq_ci(&property.name, name));
+            .find(|property| names::eq_ci(&property.name, name));
         if let Some(property) = property {
             return Some(Found {
                 formula: None,
@@ -323,7 +380,7 @@ impl<'d> DocumentResolver<'d> {
     /// sheet): the sheet's own entry, then the table default.
     fn find_bare_in(&self, sheet: &Sheet, names: &[String]) -> Option<Found> {
         let name = names.first()?;
-        if let Some((cell, _)) = find_entry(sheet, name) {
+        if let Some((cell, _)) = names::find_entry(sheet, name) {
             let value = cell.value.clone().map(|value| (value, cell.unit));
             if defines(cell) {
                 return Some(Found {
@@ -368,10 +425,10 @@ impl<'d> DocumentResolver<'d> {
     fn find_bare_cell(&self, target: SheetRef, names: &[String]) -> Option<Found> {
         let name = names.first()?;
         let sheet = self.sheet_of(target)?;
-        let own = find_entry(sheet, name);
+        let own = names::find_entry(sheet, name);
         let spelling = own
             .map(|(cell, _)| cell.name.as_str().to_owned())
-            .or_else(|| table_spelling(name))
+            .or_else(|| names::table_spelling(name))
             .unwrap_or_else(|| name.clone());
         let cell_name = CellName::new(spelling);
         let resolved = match target {
@@ -404,7 +461,7 @@ impl<'d> DocumentResolver<'d> {
         let Some(sheet) = self.sheet_of(target) else {
             return Unit::Unitsless;
         };
-        if let Some((found, _)) = find_entry(sheet, cell.as_str())
+        if let Some((found, _)) = names::find_entry(sheet, cell.as_str())
             && defines(found)
         {
             return found.unit;
@@ -414,7 +471,7 @@ impl<'d> DocumentResolver<'d> {
                 let Some(rung_sheet) = self.document.shape(rung).map(|shape| &shape.sheet) else {
                     continue;
                 };
-                if let Some((found, _)) = find_entry(rung_sheet, cell.as_str())
+                if let Some((found, _)) = names::find_entry(rung_sheet, cell.as_str())
                     && defines(found)
                 {
                     return found.unit;
@@ -453,23 +510,15 @@ impl<'d> DocumentResolver<'d> {
     ) -> Option<Found> {
         let name = names.first()?;
         let explicit = names.get(1).map(String::as_str);
-        let (base, instance) = split_section_name(section);
-        let canon = canonical_section(base.as_str());
-        let parts = split_row_name(name);
+        let (base, instance) = names::split_section_name(section);
+        let canon = names::canonical_section(base.as_str());
 
         // The row shape: a column of the section's rows (the ShapeSheet
         // table, or the cells the file itself writes in those rows), else
-        // a named row of a named-row section.
-        let local_section = match_section(sheet, canon.as_str(), instance);
-        let column = column_known(canon.as_str(), local_section, parts.base.as_str());
-        let kind = if column {
-            RowKind::Column {
-                column: parts.base.clone(),
-                index: parts.index,
-            }
-        } else {
-            RowKind::Named(parts.full.clone())
-        };
+        // a named row of a named-row section — the one rule of
+        // `crate::names`, shared with the dependency graph.
+        let local_section = names::match_section(sheet, canon.as_str(), instance);
+        let kind = names::row_kind(canon.as_str(), local_section, name);
 
         let mut snapshot = None;
         let mut saw_row = false;
@@ -477,10 +526,10 @@ impl<'d> DocumentResolver<'d> {
 
         // 1. Local rung.
         if let Some(section) = local_section {
-            if row_known(section, &kind) {
+            if names::row_known(section, &kind) {
                 saw_row = true;
             }
-            if let Some(cell) = section_cell(section, &kind, explicit) {
+            if let Some(cell) = names::section_cell(section, &kind, explicit) {
                 saw_cell = true;
                 if cell.value.is_some() {
                     snapshot = cell.value.clone().map(|value| (value, cell.unit));
@@ -501,13 +550,13 @@ impl<'d> DocumentResolver<'d> {
             let Some(rung_sheet) = self.document.shape(*rung).map(|shape| &shape.sheet) else {
                 continue;
             };
-            let Some(section) = match_section(rung_sheet, canon.as_str(), instance) else {
+            let Some(section) = names::match_section(rung_sheet, canon.as_str(), instance) else {
                 continue;
             };
-            if row_known(section, &kind) {
+            if names::row_known(section, &kind) {
                 saw_row = true;
             }
-            if let Some(cell) = section_cell(section, &kind, explicit) {
+            if let Some(cell) = names::section_cell(section, &kind, explicit) {
                 saw_cell = true;
                 if defines(cell) {
                     let value =
@@ -532,7 +581,7 @@ impl<'d> DocumentResolver<'d> {
         if !row_ok {
             return None;
         }
-        let known = saw_cell || table_column(canon.as_str(), kind.cell_name());
+        let known = saw_cell || names::table_column(canon.as_str(), kind.cell_name());
         if !known {
             return None;
         }
@@ -553,7 +602,7 @@ impl<'d> DocumentResolver<'d> {
 
     /// The hard default of a table cell, as a cached value.
     fn table_default(&self, section: Option<&str>, name: &str) -> Option<(CellValue, Unit)> {
-        let kind = column_kind(section, name)?;
+        let kind = names::column_kind(section, name)?;
         hard_default(kind)
     }
 
@@ -573,13 +622,66 @@ impl<'d> DocumentResolver<'d> {
         }
         if let Some(source) = resolved.formula.as_deref() {
             let formula = Formula::new(source);
-            if let Ok(value) = crate::eval::eval_formula(&formula, sheet, self) {
+            // The warnings and the recorded `SETF` writes of this nested
+            // evaluation belong to the referenced cell (P6-12 reviews
+            // F16 and F1), and the evaluation counts against the pass's
+            // budget (F7).
+            self.origins.push(reference.clone());
+            self.evaluations = self.evaluations.saturating_add(1);
+            let outcome = crate::eval::eval_formula(&formula, sheet, self);
+            self.origins.pop();
+            if let Ok(value) = outcome {
                 return Ok(value);
             }
             // A stored formula that does not parse, on a cell that
             // caches nothing: there is no value to answer with.
         }
         Ok(Value::Err(ErrorCode::Ref))
+    }
+
+    /// The sheet and slot a `SETF` write would land in (ADR 0056): the
+    /// reference must name a writable sheet cell that exists, checked
+    /// with the same [`crate::names`] lookup the pass addresses the
+    /// write with. [`Error::SetfRefused`] names the refusal (the
+    /// evaluator turns it into `#REF!` with one warning).
+    fn write_target(
+        &self,
+        sheet: SheetRef,
+        reference: &CellRef,
+    ) -> Result<(SheetRef, names::Slot), Error> {
+        let target = self
+            .target(sheet, &reference.sheets)
+            .ok_or(Error::SetfRefused("target does not exist"))?;
+        let target = match target {
+            Target::Sheet(target) => target,
+            Target::Style(_) | Target::Document => {
+                return Err(Error::SetfRefused("target is not writable"));
+            }
+        };
+        let (section, parts) = split_names(reference);
+        let found_sheet = self
+            .sheet_of(target)
+            .ok_or(Error::SetfRefused("target does not exist"))?;
+        let name = parts
+            .first()
+            .ok_or(Error::SetfRefused("target does not exist"))?;
+        let slot = match section {
+            Some(section) => {
+                let explicit = parts.get(1).map(String::as_str);
+                let (base, instance) = names::split_section_name(section);
+                let canon = names::canonical_section(base.as_str());
+                let local_section = names::match_section(found_sheet, canon.as_str(), instance);
+                let kind = names::row_kind(canon.as_str(), local_section, name);
+                names::section_slot(found_sheet, canon.as_str(), instance, &kind, explicit)
+                    .ok_or(Error::SetfRefused("target does not exist"))?
+            }
+            None => {
+                let (_, slot) = names::find_entry(found_sheet, name)
+                    .ok_or(Error::SetfRefused("target does not exist"))?;
+                slot
+            }
+        };
+        Ok((target, slot))
     }
 }
 
@@ -602,59 +704,26 @@ impl EvalContext for DocumentResolver<'_> {
         reference: &CellRef,
         value: Value,
     ) -> Result<(), Error> {
-        let cached = value.to_cached()?;
-        let target = self
-            .target(sheet, &reference.sheets)
-            .ok_or(Error::SetfRefused("target does not exist"))?;
-        let target = match target {
-            Target::Sheet(target) => target,
-            Target::Style(_) | Target::Document => {
-                return Err(Error::SetfRefused("target is not writable"));
-            }
-        };
-        let (section, names) = split_names(reference);
-        let slot = {
-            let found_sheet = self
-                .sheet_of(target)
-                .ok_or(Error::SetfRefused("target does not exist"))?;
-            match section {
-                Some(section) => {
-                    let name = names
-                        .first()
-                        .ok_or(Error::SetfRefused("target does not exist"))?;
-                    let explicit = names.get(1).map(String::as_str);
-                    let (base, instance) = split_section_name(section);
-                    let canon = canonical_section(base.as_str());
-                    let parts = split_row_name(name);
-                    let column = column_known(canon.as_str(), None, parts.base.as_str());
-                    let kind = if column {
-                        RowKind::Column {
-                            column: parts.base.clone(),
-                            index: parts.index,
-                        }
-                    } else {
-                        RowKind::Named(parts.full.clone())
-                    };
-                    section_slot(found_sheet, canon.as_str(), instance, &kind, explicit)
-                        .ok_or(Error::SetfRefused("target does not exist"))?
-                }
-                None => {
-                    let name = names
-                        .first()
-                        .ok_or(Error::SetfRefused("target does not exist"))?;
-                    let (_, slot) = find_entry(found_sheet, name)
-                        .ok_or(Error::SetfRefused("target does not exist"))?;
-                    slot
-                }
-            }
-        };
-        let found_sheet =
-            sheet_mut(self.document, target).ok_or(Error::SetfRefused("target does not exist"))?;
-        write_slot(found_sheet, &slot, cached).ok_or(Error::SetfRefused("target does not exist"))
+        // The value must be storable before anything is recorded.
+        let _cached = value.to_cached()?;
+        // The write is **recorded, not applied** (ADR 0056, P6-12
+        // review F1): the recalc pass applies it through the model's
+        // mutation API, so one write path owns the document and a write
+        // (a nested `SETF` included) gets a `CellUpdate`, dirties its
+        // dependents and sits inside the undo snapshot. The check below
+        // is the same lookup the pass addresses the write with, so a
+        // target this refuses is `#REF!` and no write is lost.
+        self.write_target(sheet, reference)?;
+        self.writes.push(RecordedWrite {
+            sheet,
+            target: reference.clone(),
+            value,
+        });
+        Ok(())
     }
 
     fn warn(&mut self, warning: EvalWarning) {
-        self.warnings.push(warning);
+        self.record(warning);
     }
 }
 
@@ -679,139 +748,6 @@ enum Target {
     Style(StyleId),
     /// The document sheet.
     Document,
-}
-
-/// Where a section-form name points (ADR 0054): a column of the section's
-/// row shape at a row index, or a named row.
-#[derive(Debug, Clone, PartialEq)]
-enum RowKind {
-    /// A column of the row shape at a row index (`X2`, `Font[3]`, `Size`).
-    Column { column: String, index: usize },
-    /// A named row (`Cost`).
-    Named(String),
-}
-
-impl RowKind {
-    /// The cell name this kind reads: the column, or a named row's default
-    /// cell (`Value`).
-    fn cell_name(&self) -> &str {
-        match self {
-            RowKind::Column { column, .. } => column.as_str(),
-            RowKind::Named(_) => DEFAULT_ROW_CELL,
-        }
-    }
-}
-
-/// The parts of one dotted name after the section (`A5`, `Font[3]`,
-/// `Cost`): the leading name and the row index its trailing digits or
-/// `[n]` carry (ADR 0054).
-#[derive(Debug, Clone, PartialEq)]
-struct NameParts {
-    /// The name without the row index.
-    base: String,
-    /// The row index (default 0).
-    index: usize,
-    /// The name as written.
-    full: String,
-}
-
-/// Where one cell sits on one sheet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Slot {
-    /// A direct cell of the sheet, at this index.
-    Direct(usize),
-    /// A section-level cell: section index, cell index.
-    SectionLevel(usize, usize),
-    /// A row cell: section index, row index, cell index.
-    Row(usize, usize, usize),
-}
-
-/// Splits a written name into its row-shape base and row index.
-fn split_row_name(part: &str) -> NameParts {
-    let full = part.to_owned();
-    if part.ends_with(']')
-        && let Some(open) = part.rfind('[')
-        && let Some(inside) = part.get(open + 1..part.len().saturating_sub(1))
-        && let Ok(index) = inside.parse::<usize>()
-        && open > 0
-    {
-        return NameParts {
-            base: part.get(..open).unwrap_or("").to_owned(),
-            index,
-            full,
-        };
-    }
-    let digits = part
-        .chars()
-        .rev()
-        .take_while(|character| character.is_ascii_digit())
-        .count();
-    if digits > 0 && digits < part.len() {
-        let (base, tail) = part.split_at(part.len() - digits);
-        if let Ok(index) = tail.parse::<usize>() {
-            return NameParts {
-                base: base.to_owned(),
-                index,
-                full,
-            };
-        }
-    }
-    NameParts {
-        base: full.clone(),
-        index: 0,
-        full,
-    }
-}
-
-/// Splits a written section name into its base and its instance index
-/// (`Geometry1` is the first `Geometry` section; a name with no number
-/// is the first, [`section_instance_position`] turns both into the same
-/// slot).
-fn split_section_name(part: &str) -> (String, usize) {
-    let digits = part
-        .chars()
-        .rev()
-        .take_while(|character| character.is_ascii_digit())
-        .count();
-    if digits > 0 && digits < part.len() {
-        let (base, tail) = part.split_at(part.len() - digits);
-        if let Ok(index) = tail.parse::<usize>() {
-            return (base.to_owned(), index);
-        }
-    }
-    (part.to_owned(), 0)
-}
-
-/// The 0-based slot of the section a written instance number names:
-/// `Geometry` and `Geometry1` both name the first `Geometry` section and
-/// `Geometry2` the second (ADR 0054's `Geometry1.X2` row, and the
-/// `graph::split_section_number` rule the dependency graph uses).
-fn section_instance_position(instance: usize) -> usize {
-    instance.saturating_sub(1)
-}
-
-/// The section a written section name names: the file spelling and the
-/// ShapeSheet-table spelling match, and the short formula spellings
-/// (`Char`, `Prop`) map to their sections.
-fn canonical_section(name: &str) -> String {
-    let lowered = name.to_lowercase();
-    let mapped: &str = match lowered.as_str() {
-        "char" | "character" => "Character",
-        "prop" | "property" | "shape data" => "Shape Data",
-        "user" | "user-defined cells" => "User-defined Cells",
-        other => other,
-    };
-    if mapped == lowered {
-        // A file spelling with its own alias (`Property` -> `Shape Data`).
-        return ferrogram_model::aliases::table_name(name).to_owned();
-    }
-    mapped.to_owned()
-}
-
-/// Whether two written names are the same name (ADR 0054: names match
-/// case-insensitively).
-fn eq_ci(left: &str, right: &str) -> bool {
-    left.to_lowercase() == right.to_lowercase()
 }
 
 /// Removes the quoting of a nonstandard name (`'1-D'`, with `''` as the
@@ -868,7 +804,7 @@ fn describe(reference: &CellRef) -> String {
 
 /// Splits a reference's written names into the section part and the name
 /// parts (`Prop.Cost.Value` is section `Prop`, names `Cost`, `Value`).
-fn split_names(reference: &CellRef) -> (Option<&str>, &[String]) {
+pub(crate) fn split_names(reference: &CellRef) -> (Option<&str>, &[String]) {
     if let Some(section) = reference.section.as_deref() {
         return (Some(section), &reference.names[..]);
     }
@@ -885,197 +821,11 @@ fn split_names(reference: &CellRef) -> (Option<&str>, &[String]) {
 }
 
 /// Whether a cell defines its source (ADR 0013): `Inh` defines nothing.
-fn defines(cell: &Cell) -> bool {
+pub(crate) fn defines(cell: &Cell) -> bool {
     if cell.formula.as_deref() == Some(INHERIT_FORMULA) {
         return false;
     }
     cell.value.is_some() || cell.formula.is_some()
-}
-
-/// The cell of `sheet` named `name` and where it sits: the sheet's own
-/// cells first, then each section's level cells and row cells, in file
-/// order (the lookup's local rung, matched case-insensitively).
-fn find_entry<'a>(sheet: &'a Sheet, name: &str) -> Option<(&'a Cell, Slot)> {
-    if let Some(index) = sheet
-        .cells
-        .iter()
-        .position(|cell| eq_ci(cell.name.as_str(), name))
-    {
-        return sheet
-            .cells
-            .get(index)
-            .map(|cell| (cell, Slot::Direct(index)));
-    }
-    for (section_index, section) in sheet.sections.iter().enumerate() {
-        if let Some(cell_index) = section
-            .cells
-            .iter()
-            .position(|cell| eq_ci(cell.name.as_str(), name))
-        {
-            return section
-                .cells
-                .get(cell_index)
-                .map(|cell| (cell, Slot::SectionLevel(section_index, cell_index)));
-        }
-        for (row_index, row) in section.rows.iter().enumerate() {
-            if let Some(cell_index) = row
-                .cells
-                .iter()
-                .position(|cell| eq_ci(cell.name.as_str(), name))
-            {
-                return row
-                    .cells
-                    .get(cell_index)
-                    .map(|cell| (cell, Slot::Row(section_index, row_index, cell_index)));
-            }
-        }
-    }
-    None
-}
-
-/// The sections of `sheet` the written section name names, in file order.
-fn sections_named<'a>(sheet: &'a Sheet, canon: &str) -> impl Iterator<Item = &'a Section> {
-    sheet
-        .sections
-        .iter()
-        .filter(move |section| eq_ci(canonical_section(section.name.as_str()).as_str(), canon))
-}
-
-/// The section instance a section-form name names (`Geometry1` is the
-/// first `Geometry` section).
-fn match_section<'a>(sheet: &'a Sheet, canon: &str, instance: usize) -> Option<&'a Section> {
-    sections_named(sheet, canon).nth(section_instance_position(instance))
-}
-
-/// The row index a [`RowKind`] names in one section (ADR 0054): a row
-/// index is the row carrying that `IX` (the corpus writes `X1` for the
-/// row with `IX` 1, and `graph::find_row_with_position` links the same
-/// row), then the row at that position; a named row is the row with
-/// that `N`.
-fn row_index_of(section: &Section, kind: &RowKind) -> Option<usize> {
-    match kind {
-        RowKind::Column { index, .. } => {
-            let ix = i32::try_from(*index).unwrap_or(i32::MAX);
-            if let Some(found) = section.rows.iter().position(|row| row.ix == Some(ix)) {
-                return Some(found);
-            }
-            section.rows.get(*index).map(|_| *index)
-        }
-        RowKind::Named(name) => section
-            .rows
-            .iter()
-            .position(|row| row.name.as_deref().is_some_and(|row| eq_ci(row, name))),
-    }
-}
-
-/// The row a [`RowKind`] names in one section.
-fn match_row<'a>(section: &'a Section, kind: &RowKind) -> Option<&'a Row> {
-    let index = row_index_of(section, kind)?;
-    section.rows.get(index)
-}
-
-/// Whether the section carries the row the kind names.
-fn row_known(section: &Section, kind: &RowKind) -> bool {
-    match_row(section, kind).is_some()
-}
-
-/// The cell a section-form name names on one section: the section's own
-/// cells first (ADR 0013 amendment), then the row's cells.
-fn section_cell<'a>(
-    section: &'a Section,
-    kind: &RowKind,
-    explicit: Option<&str>,
-) -> Option<&'a Cell> {
-    let name = explicit.unwrap_or_else(|| kind.cell_name());
-    if let Some(found) = section
-        .cells
-        .iter()
-        .find(|cell| eq_ci(cell.name.as_str(), name))
-    {
-        return Some(found);
-    }
-    let row = match_row(section, kind)?;
-    row.cells
-        .iter()
-        .find(|cell| eq_ci(cell.name.as_str(), name))
-}
-
-/// The slot a section-form name writes to: the section and row of the
-/// sheet, and the cell [`section_cell`] would find there.
-fn section_slot(
-    sheet: &Sheet,
-    canon: &str,
-    instance: usize,
-    kind: &RowKind,
-    explicit: Option<&str>,
-) -> Option<Slot> {
-    let name = explicit.unwrap_or_else(|| kind.cell_name());
-    let (section_index, section) = sections_named(sheet, canon)
-        .enumerate()
-        .nth(section_instance_position(instance))?;
-    if let Some(cell) = section
-        .cells
-        .iter()
-        .position(|cell| eq_ci(cell.name.as_str(), name))
-    {
-        return Some(Slot::SectionLevel(section_index, cell));
-    }
-    let row_index = row_index_of(section, kind)?;
-    let row = section.rows.get(row_index)?;
-    let cell = row
-        .cells
-        .iter()
-        .position(|cell| eq_ci(cell.name.as_str(), name))?;
-    Some(Slot::Row(section_index, row_index, cell))
-}
-
-/// Whether the name is a column of the section's row shape: the ShapeSheet
-/// table, or a cell the file itself writes in those rows (the table has
-/// gaps; ADR 0060's deferred items).
-fn column_known(canon: &str, section: Option<&Section>, name: &str) -> bool {
-    table_column(canon, name)
-        || section.is_some_and(|section| {
-            section
-                .cells
-                .iter()
-                .any(|cell| eq_ci(cell.name.as_str(), name))
-                || section
-                    .rows
-                    .iter()
-                    .any(|row| row.cells.iter().any(|cell| eq_ci(cell.name.as_str(), name)))
-        })
-}
-
-/// Whether the ShapeSheet table lists `name` as a cell of `canon`.
-fn table_column(canon: &str, name: &str) -> bool {
-    column_kind(Some(canon), name).is_some()
-}
-
-/// The cell type the ShapeSheet table records for `name`, when it knows
-/// the cell.
-fn column_kind(section: Option<&str>, name: &str) -> Option<&'static str> {
-    let mut fallback = None;
-    for def in ferrogram_model::generated::CELLS {
-        if !eq_ci(def.name, name) {
-            continue;
-        }
-        match section {
-            Some(section) if eq_ci(def.section, section) => return Some(def.kind),
-            Some(_) => {}
-            None if fallback.is_none() => fallback = Some(def.kind),
-            None => {}
-        }
-    }
-    fallback
-}
-
-/// The spelling the ShapeSheet table uses for a cell name, when it knows
-/// one (the model's table lookup matches spelling exactly).
-fn table_spelling(name: &str) -> Option<String> {
-    ferrogram_model::generated::CELLS
-        .iter()
-        .find(|def| eq_ci(def.name, name))
-        .map(|def| def.name.to_owned())
 }
 
 /// The hard default of one cell type (ADR 0013: 0, empty string, false,
@@ -1097,7 +847,7 @@ fn hard_default(kind: &str) -> Option<(CellValue, Unit)> {
 /// rung, with the position rule for masters with several top-level
 /// shapes. A cyclic master chain is cut at the first repeat and the walk
 /// is bounded.
-fn master_rungs(doc: &Document, shape: ShapeId) -> Vec<(MasterId, ShapeId)> {
+pub(crate) fn master_rungs(doc: &Document, shape: ShapeId) -> Vec<(MasterId, ShapeId)> {
     const MAX_RUNGS: usize = 16;
     let mut rungs = Vec::new();
     let Some((first, root, mut path)) = instance_chain_start(doc, shape) else {
@@ -1214,12 +964,12 @@ fn master_content(doc: &Document, master: MasterId) -> Option<ShapeId> {
 /// whose name matches `name` case-insensitively.
 fn first_named(doc: &Document, roots: &[ShapeId], name: &str) -> Option<ShapeId> {
     walk_shapes(doc, roots, |shape| {
-        eq_ci(&shape.name, name)
-            || eq_ci(&shape.name_u, name)
+        names::eq_ci(&shape.name, name)
+            || names::eq_ci(&shape.name_u, name)
             || shape
                 .name_u
                 .rsplit_once('.')
-                .is_some_and(|(base, _)| eq_ci(base, name))
+                .is_some_and(|(base, _)| names::eq_ci(base, name))
     })
 }
 
@@ -1231,11 +981,11 @@ fn shape_by_visio_id(doc: &Document, page: PageId, visio_id: i32, name: &str) ->
     let named = |shape: &Shape| {
         by_id(shape)
             && (name == "Sheet"
-                || eq_ci(&shape.name, name)
+                || names::eq_ci(&shape.name, name)
                 || shape
                     .name_u
                     .rsplit_once('.')
-                    .is_some_and(|(base, _)| eq_ci(base, name)))
+                    .is_some_and(|(base, _)| names::eq_ci(base, name)))
     };
     walk_shapes(doc, &roots, named).or_else(|| walk_shapes(doc, &roots, by_id))
 }
@@ -1271,43 +1021,12 @@ where
     None
 }
 
-/// The mutable sheet of a shape or page target.
-fn sheet_mut(doc: &mut Document, target: SheetRef) -> Option<&mut Sheet> {
-    match target {
-        SheetRef::Shape(shape) => doc.shape_mut(shape).map(|shape| &mut shape.sheet),
-        SheetRef::Page(page) => doc
-            .pages
-            .iter_mut()
-            .find(|entry| entry.id == page)
-            .map(|page| &mut page.sheet),
-    }
-}
-
-/// Writes one cached value into the cell at `slot` (basic `SETF`, ADR
-/// 0056): the cell keeps the value as a literal.
-fn write_slot(sheet: &mut Sheet, slot: &Slot, cached: crate::value::CachedValue) -> Option<()> {
-    let cell = match slot {
-        Slot::Direct(index) => sheet.cells.get_mut(*index),
-        Slot::SectionLevel(section, cell) => sheet.sections.get_mut(*section)?.cells.get_mut(*cell),
-        Slot::Row(section, row, cell) => sheet
-            .sections
-            .get_mut(*section)?
-            .rows
-            .get_mut(*row)?
-            .cells
-            .get_mut(*cell),
-    }?;
-    cell.formula = None;
-    cell.value = Some(cached.value);
-    cell.unit = cached.unit;
-    Some(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::names::NameParts;
     use crate::eval::EvalWarningKind;
-    use ferrogram_model::{Page, PageId, Section, SectionName, Shape, Sheet};
+    use ferrogram_model::{Page, PageId, Row, Section, SectionName, Shape, Sheet};
 
     fn sheet() -> SheetRef {
         SheetRef::Page(PageId { index: 0 })
@@ -1329,7 +1048,10 @@ mod tests {
             kind: EvalWarningKind::Cycle,
         });
         assert_eq!(resolver.warnings().len(), 1);
-        assert_eq!(resolver.into_warnings().len(), 1);
+        assert_eq!(resolver.warnings()[0].origin, None);
+        let (warnings, writes) = resolver.into_parts();
+        assert_eq!(warnings.len(), 1);
+        assert!(writes.is_empty());
     }
 
     #[test]
@@ -1352,7 +1074,7 @@ mod tests {
     #[test]
     fn row_names_split_the_column_and_the_row_index() {
         assert_eq!(
-            split_row_name("X2"),
+            names::split_row_name("X2"),
             NameParts {
                 base: String::from("X"),
                 index: 2,
@@ -1360,38 +1082,38 @@ mod tests {
             }
         );
         assert_eq!(
-            split_row_name("Font[3]"),
+            names::split_row_name("Font[3]"),
             NameParts {
                 base: String::from("Font"),
                 index: 3,
                 full: String::from("Font[3]"),
             }
         );
-        assert_eq!(split_row_name("Size").index, 0);
+        assert_eq!(names::split_row_name("Size").index, 0);
         // A name whose base is not a column keeps its digits as part of
         // the row name (`Cost5` is the row `Cost5`).
-        assert_eq!(split_row_name("Cost5").full, "Cost5");
-        assert_eq!(split_row_name("A[").full, "A[");
+        assert_eq!(names::split_row_name("Cost5").full, "Cost5");
+        assert_eq!(names::split_row_name("A[").full, "A[");
     }
 
     #[test]
     fn section_names_split_the_instance_index() {
         assert_eq!(
-            split_section_name("Geometry1"),
+            names::split_section_name("Geometry1"),
             (String::from("Geometry"), 1)
         );
-        assert_eq!(split_section_name("Char"), (String::from("Char"), 0));
+        assert_eq!(names::split_section_name("Char"), (String::from("Char"), 0));
     }
 
     #[test]
     fn section_names_come_in_short_and_long_spellings() {
-        assert_eq!(canonical_section("Char"), "Character");
-        assert_eq!(canonical_section("CHAR"), "Character");
-        assert_eq!(canonical_section("Prop"), "Shape Data");
-        assert_eq!(canonical_section("Property"), "Shape Data");
-        assert_eq!(canonical_section("User"), "User-defined Cells");
-        assert_eq!(canonical_section("Scratch"), "Scratch");
-        assert_eq!(canonical_section("Geometry"), "Geometry");
+        assert_eq!(names::canonical_section("Char"), "Character");
+        assert_eq!(names::canonical_section("CHAR"), "Character");
+        assert_eq!(names::canonical_section("Prop"), "Shape Data");
+        assert_eq!(names::canonical_section("Property"), "Shape Data");
+        assert_eq!(names::canonical_section("User"), "User-defined Cells");
+        assert_eq!(names::canonical_section("Scratch"), "Scratch");
+        assert_eq!(names::canonical_section("Geometry"), "Geometry");
     }
 
     #[test]
@@ -1439,9 +1161,14 @@ mod tests {
         assert_eq!(resolved.value, Some(Value::Err(ErrorCode::Ref)));
         assert_eq!(
             resolver.warnings(),
-            [EvalWarning {
-                sheet: sheet(),
-                kind: EvalWarningKind::UnsupportedReference(String::from("Sheet.9!Geometry1.X2")),
+            [TracedWarning {
+                origin: None,
+                warning: EvalWarning {
+                    sheet: sheet(),
+                    kind: EvalWarningKind::UnsupportedReference(String::from(
+                        "Sheet.9!Geometry1.X2"
+                    )),
+                },
             }]
         );
     }
@@ -1465,11 +1192,11 @@ mod tests {
 
     #[test]
     fn the_table_knows_columns_and_spelling() {
-        assert!(table_column("Character", "Size"));
-        assert!(table_column("Shape Data", "Value"));
-        assert!(!table_column("Shape Data", "Cost"));
-        assert_eq!(table_spelling("size"), Some(String::from("Size")));
-        assert_eq!(table_spelling("nosuch"), None);
+        assert!(names::table_column("Character", "Size"));
+        assert!(names::table_column("Shape Data", "Value"));
+        assert!(!names::table_column("Shape Data", "Cost"));
+        assert_eq!(names::table_spelling("size"), Some(String::from("Size")));
+        assert_eq!(names::table_spelling("nosuch"), None);
     }
 
     #[test]
@@ -1483,7 +1210,7 @@ mod tests {
             column: String::from("NoFill"),
             index: 0,
         };
-        let cell = section_cell(&section, &kind, None).expect("cell");
+        let cell = names::section_cell(&section, &kind, None).expect("cell");
         assert_eq!(cell.name.as_str(), "NoFill");
         // The row's own column cell comes second.
         let kind = RowKind::Column {
@@ -1491,7 +1218,7 @@ mod tests {
             index: 0,
         };
         assert_eq!(
-            section_cell(&section, &kind, None).map(|c| c.name.as_str()),
+            names::section_cell(&section, &kind, None).map(|c| c.name.as_str()),
             Some("X")
         );
     }
@@ -1505,11 +1232,11 @@ mod tests {
         section.rows.push(row);
         let kind = RowKind::Named(String::from("cost"));
         assert_eq!(
-            section_cell(&section, &kind, None).map(|cell| cell.value.clone()),
+            names::section_cell(&section, &kind, None).map(|cell| cell.value.clone()),
             Some(Some(CellValue::Number(3.0)))
         );
         assert_eq!(
-            section_cell(&section, &RowKind::Named(String::from("Nope")), None),
+            names::section_cell(&section, &RowKind::Named(String::from("Nope")), None),
             None
         );
     }
@@ -1530,7 +1257,7 @@ mod tests {
                 index,
             };
             assert_eq!(
-                section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
+                names::section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
                 Some(CellValue::Number(expected)),
                 "index {index}"
             );
@@ -1541,7 +1268,7 @@ mod tests {
             index: 1,
         };
         assert_eq!(
-            section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
+            names::section_cell(&section, &kind, None).and_then(|cell| cell.value.clone()),
             Some(CellValue::Number(1.0))
         );
         // Out of range is no row at all.
@@ -1549,7 +1276,7 @@ mod tests {
             column: String::from("X"),
             index: 9,
         };
-        assert_eq!(section_cell(&section, &kind, None), None);
+        assert_eq!(names::section_cell(&section, &kind, None), None);
     }
 
     #[test]
@@ -1566,7 +1293,7 @@ mod tests {
         // `Geometry` and `Geometry1` are the first section, `Geometry2`
         // the second (ADR 0054's `Geometry1.X2`).
         for (instance, wanted) in [(0usize, 0usize), (1, 0), (2, 1)] {
-            let found = match_section(&sheet, "Geometry", instance).expect("section");
+            let found = names::match_section(&sheet, "Geometry", instance).expect("section");
             let position = sheet
                 .sections
                 .iter()
@@ -1574,7 +1301,7 @@ mod tests {
                 .expect("in the sheet");
             assert_eq!(position, wanted, "instance {instance}");
         }
-        assert!(match_section(&sheet, "Geometry", 3).is_none());
+        assert!(names::match_section(&sheet, "Geometry", 3).is_none());
     }
 
     #[test]
