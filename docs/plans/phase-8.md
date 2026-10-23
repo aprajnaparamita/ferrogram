@@ -106,14 +106,14 @@ boundary (Phase 7 alone: R1, P7-00, R4, R5)
 after the boundary, two tracks at once:
   Phase 7: wave 1 (8 workers), then P7-08, P7-09 … P7-14
   Phase 8:
-    wave A (5 parallel, disjoint modules):
+    wave A (6 parallel, disjoint files):
       P8-02 container and streams ‖ P8-03 chunks and pointers ‖
-      P8-04 shapes and geometry ‖ P8-05 text ‖ P8-06 styles
+      P8-04 shapes and geometry ‖ P8-05 text ‖ P8-06 styles ‖
+      P8-08 oracle harness and corpus census
     wave B (the integration point):
       P8-07 pages, masters and the pipeline (after wave A)
-    wave C (2 parallel):
-      P8-08 oracle harness and corpus census ‖
-      P8-09 open path (also after P7-09 merges)
+    wave C:
+      P8-09 open path (after P8-07 and P7-09 merge)
     wave D:
       P8-10 tests, fuzz target and golden images
     wave E (3 parallel):
@@ -136,6 +136,10 @@ Notes:
   P7-09 merges; it is not parallel-safe with it.
 - **The three audits** follow the Phase 6 pattern: review, coverage and
   clean-room reports under `docs/reviews/`, then one fix task.
+
+The master moved P8-08 into wave A at merge (2026-10-23): its harness
+is tested with hand-built dumps and `Import` values, so it does not need
+a working `import`. P8-10 runs the first real parity report.
 
 ## 5. Machine load
 

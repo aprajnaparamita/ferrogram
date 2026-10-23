@@ -36,13 +36,26 @@ Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard.
 
 Tasks start as soon as their own dependencies merge (no whole-group waits); run at most twelve workers at once across Phase 7 and Phase 8.
 
-## Phase 8 task board (plan: written by P8-01)
+## Phase 8 task board (plan: [plans/phase-8.md](plans/phase-8.md))
 
 Phase 8: binary `.vsd`, `.vss` and `.vst` import, read-only, in `crates/vsd-binary`. It runs beside Phase 7 after the boundary. P8-01 plans it now, beside P6-17 and P6-18, and must merge before the boundary.
 
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
-| [P8-01](tasks/P8-01.md) | architect | none | 0 | ready (plan, ADRs, `vsd-binary` skeleton, task files) | — |
+| [P8-01](tasks/P8-01.md) | architect | none | 0 | merged (plan, ADRs 0068–0072, `vsd-binary` skeleton, task files) | 735eee6 |
+| [P8-02](tasks/P8-02.md) | implementer | P8-01, boundary | A | waiting (container and streams) | — |
+| [P8-03](tasks/P8-03.md) | implementer | P8-01, boundary | A | waiting (chunks and pointers) | — |
+| [P8-04](tasks/P8-04.md) | implementer | P8-01, boundary | A | waiting (shapes and geometry) | — |
+| [P8-05](tasks/P8-05.md) | implementer | P8-01, boundary | A | waiting (text and code pages) | — |
+| [P8-06](tasks/P8-06.md) | implementer | P8-01, boundary | A | waiting (styles and colours) | — |
+| [P8-08](tasks/P8-08.md) | implementer | P8-01, boundary | A | waiting (oracle harness, census) | — |
+| [P8-07](tasks/P8-07.md) | implementer | P8-02..P8-06 | B | waiting (pages, masters, pipeline) | — |
+| [P8-09](tasks/P8-09.md) | implementer | P8-07, P7-09 | C | waiting (open path) | — |
+| [P8-10](tasks/P8-10.md) | test-engineer | P8-07, P8-08 | D | waiting (tests, fuzz, goldens, first parity report) | — |
+| [P8-11](tasks/P8-11.md) | reviewer | P8-10 | E | waiting | — |
+| [P8-12](tasks/P8-12.md) | coverage-auditor | P8-10 | E | waiting | — |
+| [P8-13](tasks/P8-13.md) | cleanroom-auditor | P8-10 | E | waiting | — |
+| [P8-14](tasks/P8-14.md) | implementer | P8-11..P8-13 | F | waiting (fixes, phase report) | — |
 
 ## Phase 6 task board
 
