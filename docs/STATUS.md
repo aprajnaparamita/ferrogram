@@ -54,6 +54,8 @@ Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard.
 | [P6-12](tasks/P6-12.md) | reviewer | P6-11 | E | merged | 210d939 |
 | [P6-13](tasks/P6-13.md) | coverage-auditor | P6-11 | E | merged | 1c9a24b |
 | [P6-14](tasks/P6-14.md) | cleanroom-auditor | P6-11 | E | merged | 1e42ddd |
+| [P6-17](tasks/P6-17.md) | implementer | P6-12, P6-13, P6-14 | F | ready | — |
+| [P6-18](tasks/P6-18.md) | implementer | P6-12, P6-13, P6-14 | F | ready | — |
 
 Group A runs in parallel, one `crates/shapesheet` module set per task; `crates/shapesheet/src/lib.rs` belongs to no task and `error.rs` to P6-02. The `ferrogram-shapesheet` ratchet was reset from 100.0 (all stubs) to 85.0 when the plan was merged.
 
