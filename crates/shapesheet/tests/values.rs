@@ -513,3 +513,13 @@ fn every_error_value_round_trips_its_cached_text() {
         );
     }
 }
+
+/// The coercion edge the coverage audit found dark: `FALSE` to a string
+/// is `"FALSE"` (the `TRUE` twin is the round trip's).
+#[test]
+fn false_to_a_string_is_the_false_spelling() {
+    assert_eq!(
+        ferrogram_shapesheet::as_str(&Value::Bool(false)).expect("a boolean spells"),
+        "FALSE"
+    );
+}

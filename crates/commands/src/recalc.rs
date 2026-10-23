@@ -1121,6 +1121,80 @@ mod tests {
         assert_eq!(number(doc, shape, "Top"), Some(0.0));
     }
 
+    /// The write-then-restore round trip for a section-level and a row
+    /// `SETF` target (the coverage audit's remaining half of that
+    /// cluster): the per-sheet snapshot covers sections and rows.
+    #[test]
+    fn a_setf_into_a_section_and_a_row_restores_with_the_snapshot() {
+        let (mut ctx, id, shape) = fixture();
+        {
+            let doc = &mut ctx
+                .documents
+                .iter_mut()
+                .find(|slot| slot.id == id)
+                .expect("session")
+                .document;
+            let sheet = &mut doc.shape_mut(shape).expect("shape").sheet;
+            let geometry = sheet.sections.first_mut().expect("geometry");
+            geometry.cells.push(cell("NoFill", None, Some(0.0)));
+            let mut row = Row::new();
+            row.ix = Some(1);
+            row.cells = vec![cell("X", None, Some(0.0))];
+            geometry.rows.push(row);
+            sheet
+                .cells
+                .push(cell("S", Some("SETF(Geometry1.NoFill, 3)"), None));
+            sheet
+                .cells
+                .push(cell("R", Some("SETF(Geometry1.X1, 4)"), None));
+        }
+        let dirty = vec![
+            CellAddress::new(SheetRef::Shape(shape), CellName::new("S")),
+            CellAddress::new(SheetRef::Shape(shape), CellName::new("R")),
+        ];
+        let mut wrapped = RecalcEdit::wrap(&mut ctx, id, Box::new(StubEdit(dirty))).expect("wrap");
+        {
+            let doc = &ctx.active_document().expect("doc").document;
+            let geometry = doc
+                .shape(shape)
+                .expect("shape")
+                .sheet
+                .sections
+                .first()
+                .expect("geometry");
+            assert_eq!(
+                geometry.cells.first().expect("NoFill").value,
+                Some(CellValue::Number(3.0)),
+                "the section-level write landed"
+            );
+            assert_eq!(
+                geometry.rows.get(1).expect("row 1").cells[0].value,
+                Some(CellValue::Number(4.0)),
+                "the row write landed"
+            );
+        }
+
+        wrapped.revert(&mut ctx).expect("revert");
+        let doc = &ctx.active_document().expect("doc").document;
+        let geometry = doc
+            .shape(shape)
+            .expect("shape")
+            .sheet
+            .sections
+            .first()
+            .expect("geometry");
+        assert_eq!(
+            geometry.cells.first().expect("NoFill").value,
+            Some(CellValue::Number(0.0)),
+            "the section-level snapshot comes back"
+        );
+        assert_eq!(
+            geometry.rows.get(1).expect("row 1").cells[0].value,
+            Some(CellValue::Number(0.0)),
+            "the row snapshot comes back"
+        );
+    }
+
     /// An engine that computes one evaluation and then fails (the
     /// failure seam the product engine cannot reach).
     struct FailAfterOne {
