@@ -755,6 +755,7 @@ An `out-of-scope` row stays out of scope even when a handler resolves: the same 
 | connector.reroute_all | Reroute All | implemented |
 | connector.style | Connector Style | implemented |
 | connector.unglue | Unglue | implemented |
+| data.set.property | Value | implemented |
 | edit.copy | Copy | implemented |
 | edit.cut | Cut | implemented |
 | edit.delete | Delete | implemented |

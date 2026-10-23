@@ -124,12 +124,28 @@ fn built() -> Document {
         &CellWrite::new("2", CellValue::Number(2.0)),
     )
     .expect("height");
-    doc.scale_geometry(
-        rect,
-        ferrogram_geom::Size::new(2.0, 1.0),
-        ferrogram_geom::Size::new(4.0, 2.0),
-    )
-    .expect("scale");
+    // The geometry rows scale with the resize: the editor's own job
+    // since the model's `scale_geometry` retired (task P6-18).
+    if let Some(shape) = doc.shape_mut(rect) {
+        for section in shape
+            .sheet
+            .sections
+            .iter_mut()
+            .filter(|section| section.name.as_str() == "Geometry")
+        {
+            for row in &mut section.rows {
+                for cell in &mut row.cells {
+                    if matches!(cell.name.as_str(), "X" | "Y")
+                        && let Some(CellValue::Number(value)) = cell.value
+                    {
+                        let fresh = value * 2.0;
+                        cell.value = Some(CellValue::Number(fresh));
+                        cell.formula = Some(fresh.to_string());
+                    }
+                }
+            }
+        }
+    }
     doc
 }
 

@@ -32,7 +32,11 @@
 //!    (ADR 0053); the engine keeps the cached value.
 //! 4. `missing-reference` — a reference resolves to no cell with a
 //!    value (ADR 0054).
-//! 5. `no-cached-value` / `cached-error` — the file caches nothing, or
+//! 5. `default-only` — the references resolve, but only to the
+//!    ShapeSheet table's hard default (rule 3's "a value the document
+//!    holds" reading, the ADR 0059 amendment): no cell of the document
+//!    holds the value, so there is nothing to agree with.
+//! 6. `no-cached-value` / `cached-error` — the file caches nothing, or
 //!    caches an error value (nothing to agree with).
 //!
 //! Every other cell is **counted**: the formula is evaluated through the
@@ -345,6 +349,9 @@ enum SkipReason {
     UnknownFunction,
     /// A reference to no cell with a value (ADR 0054).
     MissingReference,
+    /// Every reference resolves, but only to the ShapeSheet table's
+    /// hard default (ADR 0059 rule 3's "a value the document holds").
+    DefaultOnly,
     /// The file caches nothing.
     NoCachedValue,
     /// The file caches an error value.
@@ -355,11 +362,12 @@ enum SkipReason {
 
 impl SkipReason {
     /// Every reason, in report order.
-    const ALL: [SkipReason; 7] = [
+    const ALL: [SkipReason; 8] = [
         SkipReason::NoFormula,
         SkipReason::DoesNotParse,
         SkipReason::UnknownFunction,
         SkipReason::MissingReference,
+        SkipReason::DefaultOnly,
         SkipReason::NoCachedValue,
         SkipReason::CachedError,
         SkipReason::DocumentedExclusion,
@@ -372,6 +380,7 @@ impl SkipReason {
             SkipReason::DoesNotParse => "does-not-parse",
             SkipReason::UnknownFunction => "unknown-function",
             SkipReason::MissingReference => "missing-reference",
+            SkipReason::DefaultOnly => "default-only",
             SkipReason::NoCachedValue => "no-cached-value",
             SkipReason::CachedError => "cached-error",
             SkipReason::DocumentedExclusion => "documented-exclusion",
@@ -559,32 +568,35 @@ fn classify(document: &mut Document, file: &str, candidate: &Candidate) -> Class
     }
     let mut resolver = DocumentResolver::new(document);
     let mut missing = false;
+    let mut default_only = false;
     for reference in &refs {
         let resolved = match resolver.resolve(candidate_sheet(candidate), reference) {
             Ok(resolved) => resolved,
             Err(_) => {
                 missing = true;
-                break;
+                continue;
             }
         };
-        // ADR 0059 rule 3: the reference must resolve to a cell that
-        // has a value. A name only the ShapeSheet table knows resolves
-        // to its hard default (`DropOnPageScale`, `LockTextEdit`): no
-        // cell of the document holds it, so there is nothing to agree
-        // with (ADR 0054 names the rungs; the hard default is the
-        // "nothing defines it" fallback).
-        let unusable = match resolved.value {
-            None => true,
-            Some(Value::Err(ErrorCode::Ref)) => true,
-            Some(_) => resolved.source == ferrogram_model::ValueSource::HardDefault,
-        };
-        if unusable {
-            missing = true;
-            break;
+        // ADR 0059 rule 3 (the amendment): the reference must resolve
+        // to **a value the document holds**. A name only the ShapeSheet
+        // table knows resolves to its hard default (`DropOnPageScale`,
+        // `LockTextEdit`): no cell of the document holds it, so there
+        // is nothing to agree with. Such a *resolved* reference is its
+        // own skip reason (`default-only`), never a `missing-reference`
+        // (task P6-18 F6).
+        match resolved.value {
+            None | Some(Value::Err(ErrorCode::Ref)) => missing = true,
+            Some(_) if resolved.source == ferrogram_model::ValueSource::HardDefault => {
+                default_only = true;
+            }
+            Some(_) => {}
         }
     }
     if missing {
         return Class::Skip(SkipReason::MissingReference);
+    }
+    if default_only {
+        return Class::Skip(SkipReason::DefaultOnly);
     }
     let Some(cached) = candidate.cached.clone() else {
         return Class::Skip(SkipReason::NoCachedValue);

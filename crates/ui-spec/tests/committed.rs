@@ -81,8 +81,10 @@ const PIN_365: LayoutCounts = LayoutCounts {
 // adds 11 rows (P4-15 adds `view.units`) and two Fluent-only rows merge
 // into them. P5-04 adds the 31 Phase 5 editing ids the mechanical
 // derivation does not produce (task P5-04, forced companion update to
-// the regenerated `commands.yaml`). P5-16 adds `edit.select`.
-const COMMANDS: usize = 977;
+// the regenerated `commands.yaml`). P5-16 adds `edit.select`. P6-18
+// adds `data.set.property` (the Shape Data panel's edit, ADR 0035
+// amendment).
+const COMMANDS: usize = 978;
 const SHORTCUTS: usize = 90;
 
 #[test]

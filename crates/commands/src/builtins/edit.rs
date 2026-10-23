@@ -220,13 +220,76 @@ pub(crate) fn resolve_page(doc: &Document, key: &PageKey, fallback: PageId) -> P
     }
 }
 
+/// The write target of one [`CellEdit`] (task P6-18): a sheet's direct
+/// cell (`PinX`) or the `Value` cell of a Shape Data row, spelled
+/// `Prop.<row>.Value` like the ShapeSheet does (the row's key is its `N`
+/// name, or `Row_<n>` for the row at 1-based position `n`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CellTarget {
+    /// A direct cell of the sheet.
+    Direct(CellName),
+    /// The `Value` cell of the `Property` row keyed `row`.
+    Property(String),
+}
+
+/// The [`CellTarget`] of one cell spelling: the three-segment
+/// `Prop.<row>.Value` form (also `Property.<row>.Value`) names a Shape
+/// Data value cell, anything else a direct cell (no ShapeSheet cell name
+/// carries a dot).
+fn parse_target(cell: &str) -> CellTarget {
+    let segments: Vec<&str> = cell.split('.').collect();
+    if segments.len() == 3
+        && (segments[0].eq_ignore_ascii_case("prop")
+            || segments[0].eq_ignore_ascii_case("property"))
+        && segments[2].eq_ignore_ascii_case("value")
+    {
+        return CellTarget::Property(segments[1].to_owned());
+    }
+    CellTarget::Direct(CellName::new(cell))
+}
+
+/// The shape a `Prop.<row>.Value` target lives on: a page sheet has no
+/// Shape Data rows (task P6-18).
+fn property_shape(sheet: SheetRef) -> Result<ShapeId, CommandError> {
+    match sheet {
+        SheetRef::Shape(id) => Ok(id),
+        SheetRef::Page(_) => Err(CommandError::failed(
+            "a Shape Data row lives on a shape, not on a page",
+        )),
+    }
+}
+
+/// The exact prior state of one [`CellEdit`] target (undo, ADR 0040
+/// rule 4).
+#[derive(Debug)]
+enum Prior {
+    /// The prior entries of the touched direct cells.
+    Direct(Vec<(CellName, Option<Cell>)>),
+    /// The Shape Data row's prior state (task P6-18): the shape the row
+    /// lives on, whether its sheet had a `Property` section at all, and
+    /// the row's position and full content when the shape had the row
+    /// locally.
+    Property {
+        /// The shape the row lives on (a page has no Shape Data).
+        shape: ShapeId,
+        /// The row's key.
+        key: String,
+        /// The sheet had a `Property` section before the write.
+        had_section: bool,
+        /// The local row's position and content, when there was one.
+        row: Option<(usize, Row)>,
+    },
+}
+
 /// One undoable sheet-cell write (ADR 0038, ADR 0056): the exact prior
-/// entries of every cell the write touches, and the write to replay.
+/// state of every cell the write touches, and the write to replay.
 ///
 /// `apply` goes through [`Document::write_cell`] (the mutation API, ADR
-/// 0039), which also refreshes the derived cells; `revert` restores the
-/// captured entries exactly, so `revert(apply(x)) == x` holds for the
-/// model, not just for the lookups.
+/// 0039), which also refreshes the derived cells, or through
+/// [`Document::write_property_value`] for a `Prop.<row>.Value` target
+/// (task P6-18). `revert` restores the captured state exactly, so
+/// `revert(apply(x)) == x` holds for the model, not just for the
+/// lookups.
 ///
 /// A write is **indirect** (a move, a resize, a style apply: a
 /// programmatic write) unless it comes from a direct user edit of the
@@ -238,9 +301,10 @@ pub(crate) struct CellEdit {
     session: SessionId,
     label: String,
     sheet: SheetRef,
-    cell: CellName,
-    /// The prior entries of the target cell and its derived cells.
-    old: Vec<(CellName, Option<Cell>)>,
+    /// The written cell (`Width`, or `Prop.<row>.Value`).
+    target: CellTarget,
+    /// The exact prior state of the target.
+    old: Prior,
     /// The write to replay.
     new: CellWrite,
     /// Whether the user edited this cell directly (ADR 0056's `GUARD`
@@ -252,8 +316,8 @@ pub(crate) struct CellEdit {
 
 impl CellEdit {
     /// Stages one indirect write of `cell` on `sheet`, capturing the
-    /// exact prior entries it will overwrite (the target and the cells
-    /// the documented-defaults table derives from it).
+    /// exact prior state it will overwrite (the target and the cells the
+    /// documented-defaults table derives from it).
     pub(crate) fn new(
         doc: &Document,
         session: SessionId,
@@ -266,9 +330,9 @@ impl CellEdit {
     }
 
     /// Stages a **direct** user edit of `cell`: the one write that
-    /// replaces a `GUARD`-ed formula (ADR 0056). Task P6-09's panel
-    /// edits are the first non-test callers.
-    #[allow(dead_code)]
+    /// replaces a `GUARD`-ed formula (ADR 0056). The `data.set.property`
+    /// command (task P6-18) writes Shape Data values this way, with the
+    /// cell spelled `Prop.<row>.Value`.
     pub(crate) fn direct(
         doc: &Document,
         session: SessionId,
@@ -291,27 +355,52 @@ impl CellEdit {
         new: CellWrite,
         direct: bool,
     ) -> Result<Self, CommandError> {
-        let touched = touched_cells(cell);
-        let cells = sheet_cells(doc, sheet)?;
-        let old = touched
-            .iter()
-            .map(|name| {
-                let existing = cells
+        let target = parse_target(cell);
+        let (old, dirty) = match &target {
+            CellTarget::Direct(name) => {
+                let touched = touched_cells(name.as_str());
+                let cells = sheet_cells(doc, sheet)?;
+                let old = touched
                     .iter()
-                    .find(|entry| entry.name.as_str() == name.as_str())
-                    .cloned();
-                (name.clone(), existing)
-            })
-            .collect();
-        let dirty = touched
-            .into_iter()
-            .map(|name| CellAddress::new(sheet, name))
-            .collect();
+                    .map(|name| {
+                        let existing = cells
+                            .iter()
+                            .find(|entry| entry.name.as_str() == name.as_str())
+                            .cloned();
+                        (name.clone(), existing)
+                    })
+                    .collect();
+                let dirty = touched
+                    .into_iter()
+                    .map(|name| CellAddress::new(sheet, name))
+                    .collect();
+                (Prior::Direct(old), dirty)
+            }
+            CellTarget::Property(key) => {
+                let shape = property_shape(sheet)?;
+                let prior = property_prior(doc, shape, key)?;
+                let dirty = vec![CellAddress::in_row(
+                    sheet,
+                    ferrogram_model::SectionName::from_static("Property"),
+                    prior.target,
+                    CellName::from_static("Value"),
+                )];
+                (
+                    Prior::Property {
+                        shape,
+                        key: key.clone(),
+                        had_section: prior.had_section,
+                        row: prior.row,
+                    },
+                    dirty,
+                )
+            }
+        };
         Ok(Self {
             session,
             label: label.into(),
             sheet,
-            cell: CellName::new(cell),
+            target,
             old,
             new,
             direct,
@@ -319,16 +408,38 @@ impl CellEdit {
         })
     }
 
-    /// Whether the cell's current formula is `GUARD`-ed (ADR 0056).
-    fn guarded(&self, doc: &Document) -> bool {
-        let Ok(cells) = sheet_cells(doc, self.sheet) else {
-            return false;
+    /// Whether the cell's captured formula is `GUARD`-ed (ADR 0056).
+    ///
+    /// The check reads the capture `stage` took (nothing writes the cell
+    /// between staging and applying, and a revert restores the captured
+    /// entries before the next apply), so no second sheet lookup can
+    /// disagree with it.
+    fn guarded(&self) -> bool {
+        let formula = match &self.old {
+            Prior::Direct(old) => {
+                let CellTarget::Direct(name) = &self.target else {
+                    return false;
+                };
+                old.iter()
+                    .find(|(entry, _)| entry == name)
+                    .and_then(|(_, cell)| cell.as_ref())
+                    .and_then(|cell| cell.formula.clone())
+            }
+            Prior::Property { row, .. } => row
+                .as_ref()
+                .and_then(|(_, row)| row.cells.iter().find(|cell| cell.name.as_str() == "Value"))
+                .and_then(|cell| cell.formula.clone()),
         };
-        cells
-            .iter()
-            .find(|entry| entry.name.as_str() == self.cell.as_str())
-            .and_then(|entry| entry.formula.as_deref())
-            .is_some_and(formula_is_guarded)
+        formula.as_deref().is_some_and(formula_is_guarded)
+    }
+
+    /// The warning spelling of the target cell (`Prop.<row>.Value` for a
+    /// Shape Data value).
+    fn spelling(&self) -> String {
+        match &self.target {
+            CellTarget::Direct(name) => name.as_str().to_owned(),
+            CellTarget::Property(key) => format!("Prop.{key}.Value"),
+        }
     }
 }
 
@@ -343,22 +454,32 @@ impl Edit for CellEdit {
 
     fn apply(&mut self, ctx: &mut AppCtx) -> Result<(), CommandError> {
         let session = self.session;
-        if !self.direct {
-            let guarded = {
-                let doc = document_mut(ctx, session)?;
-                self.guarded(doc)
-            };
-            if guarded {
-                ctx.record_warning(format!(
-                    "Guarded: {} keeps its formula; the write was skipped",
-                    self.cell.as_str()
-                ));
-                return Ok(());
-            }
+        if !self.direct && self.guarded() {
+            ctx.record_warning(format!(
+                "Guarded: {} keeps its formula; the write was skipped",
+                self.spelling()
+            ));
+            return Ok(());
         }
         let doc = document_mut(ctx, session)?;
-        doc.write_cell(self.sheet, &self.cell, &self.new)
-            .map_err(model_error)?;
+        match &self.target {
+            CellTarget::Direct(name) => {
+                doc.write_cell(self.sheet, name, &self.new)
+                    .map_err(model_error)?;
+            }
+            CellTarget::Property(key) => {
+                let shape = property_shape(self.sheet)?;
+                let written = doc
+                    .write_property_value(shape, key, &self.new)
+                    .map_err(model_error)?;
+                self.dirty = vec![CellAddress::in_row(
+                    self.sheet,
+                    ferrogram_model::SectionName::from_static("Property"),
+                    written,
+                    CellName::from_static("Value"),
+                )];
+            }
+        }
         ctx.touch_session(session);
         Ok(())
     }
@@ -367,12 +488,140 @@ impl Edit for CellEdit {
         let session = self.session;
         {
             let doc = document_mut(ctx, session)?;
-            let cells = sheet_cells_mut(doc, self.sheet)?;
-            restore_cells(cells, &self.old);
+            match &self.old {
+                Prior::Direct(old) => {
+                    let cells = sheet_cells_mut(doc, self.sheet)?;
+                    restore_cells(cells, old);
+                }
+                Prior::Property {
+                    shape,
+                    key,
+                    had_section,
+                    row,
+                } => restore_property(doc, *shape, key, *had_section, row)?,
+            }
         }
         ctx.touch_session(session);
         Ok(())
     }
+}
+
+/// The prior state of a `Prop.<row>.Value` write (task P6-18) and the
+/// [`RowTarget`] it lands on (the dirty address names the cell through
+/// it).
+#[derive(Debug)]
+struct PropertyPrior {
+    /// The sheet had a `Property` section before the write.
+    had_section: bool,
+    /// The local row's position and content, when the shape had one.
+    row: Option<(usize, Row)>,
+    /// Where the write lands.
+    target: RowTarget,
+}
+
+/// The [`PropertyPrior`] of one Shape Data row write.
+fn property_prior(
+    doc: &Document,
+    shape: ShapeId,
+    key: &str,
+) -> Result<PropertyPrior, CommandError> {
+    let data = doc
+        .shape(shape)
+        .map(|entity| &entity.sheet)
+        .ok_or_else(|| CommandError::failed(format!("unknown shape id {}", shape.index)))?;
+    let section = data
+        .sections
+        .iter()
+        .find(|entry| entry.name.as_str() == "Property");
+    let had_section = section.is_some();
+    let rows_in_section = section.map(|entry| entry.rows.len()).unwrap_or(0);
+    let own = doc
+        .property_rows(shape)
+        .into_iter()
+        .find(|entry| !entry.inherited && entry.key.eq_ignore_ascii_case(key))
+        .map(|entry| (entry.position, entry.row));
+    let predicted = match &own {
+        Some((position, row)) => RowTarget {
+            position: Some(*position),
+            ix: row.ix,
+        },
+        None => {
+            let inherited = doc
+                .property_rows(shape)
+                .into_iter()
+                .find(|entry| entry.inherited && entry.key.eq_ignore_ascii_case(key));
+            RowTarget {
+                position: Some(rows_in_section),
+                ix: inherited.and_then(|entry| entry.row.ix),
+            }
+        }
+    };
+    Ok(PropertyPrior {
+        had_section,
+        row: own,
+        target: predicted,
+    })
+}
+
+/// Puts the exact prior state of one Shape Data row back (task P6-18):
+/// the row's own content at its current position, the row removal when
+/// the edit materialised it locally, and the section removal when the
+/// edit created the section. The row is found through the model's own
+/// key rule ([`Document::property_rows`]), never by a second spelling.
+fn restore_property(
+    doc: &mut Document,
+    shape: ShapeId,
+    key: &str,
+    had_section: bool,
+    prior: &Option<(usize, Row)>,
+) -> Result<(), CommandError> {
+    if !had_section {
+        // The write created the section: it goes again.
+        if let Some(entity) = doc.shape_mut(shape) {
+            entity
+                .sheet
+                .sections
+                .retain(|section| section.name.as_str() != "Property");
+        }
+        return Ok(());
+    }
+    let position = doc
+        .property_rows(shape)
+        .into_iter()
+        .find(|entry| !entry.inherited && entry.key.eq_ignore_ascii_case(key))
+        .map(|entry| entry.position);
+    let Some(entity) = doc.shape_mut(shape) else {
+        return Err(CommandError::failed(format!(
+            "unknown shape id {}",
+            shape.index
+        )));
+    };
+    let Some(section) = entity
+        .sheet
+        .sections
+        .iter_mut()
+        .find(|entry| entry.name.as_str() == "Property")
+    else {
+        return Ok(());
+    };
+    match (position, prior) {
+        (Some(at), Some((_, row))) => {
+            if let Some(slot) = section.rows.get_mut(at) {
+                *slot = row.clone();
+            }
+        }
+        (Some(at), None) => {
+            if at < section.rows.len() {
+                section.rows.remove(at);
+            }
+        }
+        (None, Some((at, row))) => {
+            let at = (*at).min(section.rows.len());
+            section.rows.insert(at, row.clone());
+        }
+        (None, None) => {}
+    }
+    Ok(())
 }
 
 /// Which direction one [`StructuralEdit`] runs.
@@ -515,9 +764,9 @@ impl Edit for StructuralEdit {
 /// materialised onto the instance). The rows nothing computes — a bare
 /// literal formula or a cached value with no formula — are constant
 /// geometry, and this step scales them with the box. The two writers
-/// never touch the same cell (the split of ADR 0056's connector rule),
-/// and this step never calls [`Document::scale_geometry`]: the model
-/// function is untouched (task P6-07 criterion 3).
+/// never touch the same cell (the split of ADR 0056's connector rule).
+/// The model's own rescale (`Document::scale_geometry`) is gone (task
+/// P6-18): this step owns the constant rows.
 ///
 /// `revert` restores the exact prior geometry sections.
 #[derive(Debug)]
@@ -586,8 +835,9 @@ impl GeometryEdit {
     }
 }
 
-/// The size checks `Document::scale_geometry` applies (the model error
-/// texts are kept, so the command errors read the same).
+/// The size checks of a rescale (the model error texts of the retired
+/// `Document::scale_geometry` are kept, so the command errors read the
+/// same).
 fn check_sizes(from: Size, to: Size) -> Result<(), CommandError> {
     if !from.width.is_finite()
         || !from.height.is_finite()
@@ -724,8 +974,8 @@ fn scale_row(row: &mut Row, sx: f64, sy: f64, touched: &mut bool) {
 /// sections keep their place (and their preserved content and section
 /// cells), trailing ones the new list does not cover are dropped and
 /// extra new sections land at the end. (The model's private
-/// `replace_geometry_sections` rule, mirrored here: `Document::
-/// scale_geometry` is not called any more.)
+/// `replace_geometry_sections` rule, mirrored here: the command layer
+/// writes no model internals.)
 fn replace_geometry_sections(sections: &mut Vec<Section>, fresh: Vec<Section>) {
     let positions: Vec<usize> = sections
         .iter()
@@ -944,12 +1194,8 @@ pub(super) fn run_delete(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
     {
         let doc = document_mut(ctx, session)?;
         for &root in &targets {
-            edit.push(Box::new(StructuralEdit::removal(
-                doc,
-                session,
-                "Delete shape",
-                root,
-            )?));
+            let step = StructuralEdit::removal(doc, session, "Delete shape", root);
+            edit.push(Box::new(step?));
         }
     }
     edit.apply(ctx)?;
@@ -2089,5 +2335,371 @@ mod tests {
         );
         assert!(ctx.warnings.is_empty(), "nothing was recalculated");
         assert!(ctx.active_document().expect("doc").undo.is_empty());
+    }
+
+    /// A `Property` row with a `Value` cell carrying `value` and
+    /// `formula`.
+    fn prop_row(name: &str, value: Option<CellValue>, formula: Option<&str>) -> Row {
+        let mut row = Row::new();
+        row.name = Some(name.to_owned());
+        row.ix = Some(0);
+        let mut cell = Cell::new(CellName::from_static("Value"));
+        cell.value = value;
+        cell.formula = formula.map(str::to_owned);
+        row.cells.push(cell);
+        row
+    }
+
+    /// Adds one `Property` section with `rows` to `shape`.
+    fn add_props(ctx: &mut AppCtx, session: SessionId, shape: ShapeId, rows: Vec<Row>) {
+        let doc = document_mut(ctx, session).expect("doc");
+        if let Some(entity) = doc.shape_mut(shape) {
+            let mut section = Section::new(SectionName::from_static("Property"));
+            section.rows = rows;
+            entity.sheet.sections.push(section);
+        }
+    }
+
+    /// The cached `Value` of `shape`'s own row `row`.
+    fn own_value(ctx: &AppCtx, shape: ShapeId, row: &str) -> Option<CellValue> {
+        let session = ctx.active_document().expect("doc");
+        session
+            .document
+            .property_rows(shape)
+            .into_iter()
+            .find(|entry| !entry.inherited && entry.key == row)
+            .and_then(|entry| {
+                entry
+                    .row
+                    .cells
+                    .into_iter()
+                    .find(|cell| cell.name.as_str() == "Value")
+                    .and_then(|cell| cell.value)
+            })
+    }
+
+    /// Task P6-18: `parse_target` splits the `Prop.<row>.Value`
+    /// spelling (also `Property.<row>.Value`, case-insensitively) and
+    /// keeps every other spelling a direct cell.
+    #[test]
+    fn parse_target_splits_the_property_spelling() {
+        for spelling in ["Prop.Cost.Value", "Property.Cost.Value"] {
+            assert_eq!(
+                parse_target(spelling),
+                CellTarget::Property(String::from("Cost")),
+                "{spelling}"
+            );
+        }
+        // The spelling is case-insensitive; the key keeps its text (the
+        // row lookup matches names case-insensitively, ADR 0054).
+        assert_eq!(
+            parse_target("prop.cost.value"),
+            CellTarget::Property(String::from("cost"))
+        );
+        for spelling in ["Width", "Prop.Cost.Other", "Prop.Cost", "Geometry1.X2"] {
+            assert_eq!(
+                parse_target(spelling),
+                CellTarget::Direct(CellName::new(spelling)),
+                "{spelling}"
+            );
+        }
+    }
+
+    /// Task P6-18: a `Prop.<row>.Value` target on a page sheet is one
+    /// refusal (a page has no Shape Data rows), never a panic.
+    #[test]
+    fn a_property_target_on_a_page_sheet_is_refused() {
+        let (mut ctx, session, page, _shapes) = fixture(1);
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        let error = CellEdit::direct(
+            doc,
+            session,
+            "Set Cost",
+            SheetRef::Page(page),
+            "Prop.Cost.Value",
+            CellWrite::new("1", CellValue::Number(1.0)),
+        )
+        .expect_err("a page has no Shape Data");
+        assert!(error.to_string().contains("lives on a shape"), "{error}");
+        assert!(
+            property_shape(SheetRef::Page(page)).is_err(),
+            "the helper refuses a page too"
+        );
+    }
+
+    /// Task P6-18: an indirect write of a `Prop.<row>.Value` cell is
+    /// skipped for a `GUARD`-ed formula (ADR 0056) and names the cell
+    /// in its `Prop.<row>.Value` spelling; a direct edit replaces it.
+    #[test]
+    fn a_guarded_property_value_survives_an_indirect_write() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let shape = shapes[0];
+        add_props(
+            &mut ctx,
+            session,
+            shape,
+            vec![prop_row(
+                "Cost",
+                Some(CellValue::Number(2.0)),
+                Some("GUARD(2)"),
+            )],
+        );
+        let before = ctx.active_document().expect("doc").document.clone();
+        let mut indirect = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::new(
+                doc,
+                session,
+                "Set Cost",
+                SheetRef::Shape(shape),
+                "Prop.Cost.Value",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        indirect.apply(&mut ctx).expect("apply");
+        assert_eq!(
+            ctx.active_document().expect("doc").document,
+            before,
+            "the indirect write is skipped entirely"
+        );
+        assert_eq!(ctx.warnings.len(), 1, "{:?}", ctx.warnings);
+        assert!(
+            ctx.warnings[0].contains("Prop.Cost.Value keeps its formula"),
+            "{:?}",
+            ctx.warnings
+        );
+        assert_eq!(
+            indirect.spelling(),
+            "Prop.Cost.Value",
+            "the warning names the cell"
+        );
+        indirect.revert(&mut ctx).expect("revert");
+
+        let mut direct = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::direct(
+                doc,
+                session,
+                "Set Cost",
+                SheetRef::Shape(shape),
+                "Prop.Cost.Value",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        direct.apply(&mut ctx).expect("apply");
+        assert_eq!(own_value(&ctx, shape, "Cost"), Some(CellValue::Number(4.0)));
+        direct.revert(&mut ctx).expect("revert");
+        assert_eq!(own_value(&ctx, shape, "Cost"), Some(CellValue::Number(2.0)));
+    }
+
+    /// Task P6-18: `revert` puts the exact row back — including the
+    /// corner the materialised row leaves behind: a row the edit added
+    /// goes, a row that vanished meanwhile comes back, and a section
+    /// the edit created goes with it.
+    #[test]
+    fn reverting_a_property_write_restores_the_row_exactly() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let shape = shapes[0];
+        add_props(
+            &mut ctx,
+            session,
+            shape,
+            vec![prop_row("Cost", Some(CellValue::Number(2.0)), None)],
+        );
+        // A staged edit whose row vanishes before `revert`: the row is
+        // re-inserted at its recorded position.
+        let mut edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::direct(
+                doc,
+                session,
+                "Set Cost",
+                SheetRef::Shape(shape),
+                "Prop.Cost.Value",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            if let Some(entity) = doc.shape_mut(shape) {
+                for section in entity
+                    .sheet
+                    .sections
+                    .iter_mut()
+                    .filter(|entry| entry.name.as_str() == "Property")
+                {
+                    section.rows.clear();
+                }
+            }
+        }
+        edit.revert(&mut ctx).expect("revert");
+        assert_eq!(own_value(&ctx, shape, "Cost"), Some(CellValue::Number(2.0)));
+
+        // A staged edit whose row never existed and never appears:
+        // `revert` is a no-op, never a panic.
+        let mut edit = {
+            let doc = document_mut(&mut ctx, session).expect("doc");
+            CellEdit::direct(
+                doc,
+                session,
+                "Set Nope",
+                SheetRef::Shape(shape),
+                "Prop.Nope.Value",
+                CellWrite::new("1", CellValue::Number(1.0)),
+            )
+            .expect("capture")
+        };
+        edit.revert(&mut ctx).expect("revert");
+        assert_eq!(own_value(&ctx, shape, "Nope"), None);
+
+        // The section the edit created goes again on `revert`.
+        let (mut ctx2, session2, _page, shapes2) = fixture(1);
+        let shape2 = shapes2[0];
+        add_props(
+            &mut ctx2,
+            session2,
+            shape2,
+            vec![prop_row("Cost", Some(CellValue::Number(2.0)), None)],
+        );
+        let mut edit = {
+            let doc = document_mut(&mut ctx2, session2).expect("doc");
+            CellEdit::direct(
+                doc,
+                session2,
+                "Set Cost",
+                SheetRef::Shape(shape2),
+                "Prop.Cost.Value",
+                CellWrite::new("4", CellValue::Number(4.0)),
+            )
+            .expect("capture")
+        };
+        {
+            let doc = document_mut(&mut ctx2, session2).expect("doc");
+            if let Some(entity) = doc.shape_mut(shape2) {
+                entity
+                    .sheet
+                    .sections
+                    .retain(|entry| entry.name.as_str() != "Property");
+            }
+        }
+        edit.revert(&mut ctx2).expect("revert");
+        assert!(
+            own_value(&ctx2, shape2, "Cost").is_none(),
+            "the row is gone"
+        );
+    }
+
+    /// Task P6-18: `property_prior` records the row's prior state and
+    /// the write target, and refuses a stale shape id.
+    #[test]
+    fn property_prior_records_the_row_and_the_target() {
+        let (mut ctx, session, _page, shapes) = fixture(1);
+        let shape = shapes[0];
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        let empty = property_prior(doc, shape, "Cost").expect("prior");
+        assert!(!empty.had_section);
+        assert!(empty.row.is_none());
+        assert_eq!(empty.target.position, Some(0));
+        assert_eq!(empty.target.ix, None);
+
+        add_props(
+            &mut ctx,
+            session,
+            shape,
+            vec![prop_row("Cost", Some(CellValue::Number(2.0)), None)],
+        );
+        let doc = document_mut(&mut ctx, session).expect("doc");
+        let prior = property_prior(doc, shape, "Cost").expect("prior");
+        assert!(prior.had_section);
+        assert_eq!(prior.row.as_ref().map(|(at, _)| *at), Some(0));
+        assert_eq!(
+            prior.row.as_ref().and_then(|(_, row)| row.ix),
+            Some(0),
+            "the target names the row's IX"
+        );
+        assert_eq!(prior.target.position, Some(0));
+        assert_eq!(prior.target.ix, Some(0));
+
+        let error =
+            property_prior(doc, ShapeId { index: 999 }, "Cost").expect_err("a stale shape id");
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+    }
+
+    /// Task P6-18 (the coverage report's `geometry_source` walk): a
+    /// shape with no own geometry rows takes its master chain's rows,
+    /// and a master rung that carries none walks on (the P6-06 rung
+    /// rule) to the nested master.
+    #[test]
+    fn geometry_source_walks_the_master_chain() {
+        let (mut ctx, session, _page, _shapes) = fixture(1);
+        let doc = document_mut(&mut ctx, session).expect("doc");
+
+        // The deep master: one shape carrying the geometry rows.
+        let mut deep = Shape::new(ShapeId { index: 0 }, 10);
+        let mut rows = Section::new(SectionName::from_static("Geometry"));
+        rows.rows.push({
+            let mut row = Row::new();
+            row.row_type = Some(String::from("MoveTo"));
+            row.ix = Some(0);
+            row.cells = vec![number_cell("X", 0.0), number_cell("Y", 0.0)];
+            row
+        });
+        deep.sheet.sections.push(rows);
+        let deep = doc.add_shape(deep);
+        let mut master2 = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 20);
+        master2.shapes = vec![deep];
+        doc.masters.push(master2);
+
+        // The near master: two rungs, the first without rows and the
+        // second an instance of the deep master.
+        let plain = doc.add_shape(Shape::new(ShapeId { index: 0 }, 11));
+        let chained = doc.add_shape(Shape::new(ShapeId { index: 0 }, 12));
+        if let Some(entity) = doc.shape_mut(chained) {
+            entity.master = Some(ferrogram_model::MasterId { index: 0 });
+        }
+        let mut master1 = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 1 }, 21);
+        master1.shapes = vec![plain, chained];
+        doc.masters.push(master1);
+
+        // The instance: no own geometry rows, an instance of the near
+        // master.
+        let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 13));
+        if let Some(entity) = doc.shape_mut(instance) {
+            entity.master = Some(ferrogram_model::MasterId { index: 1 });
+        }
+
+        let rows = geometry_source(doc, instance);
+        assert_eq!(rows.len(), 1, "the deep master's rows are the source");
+        assert_eq!(rows[0].rows.len(), 1);
+
+        // The rescale walks the same source (and scales it).
+        let mut edit = GeometryEdit::new(
+            doc,
+            session,
+            "Resize shape",
+            instance,
+            Size::new(1.0, 1.0),
+            Size::new(2.0, 1.0),
+        )
+        .expect("the edit stages");
+        edit.apply(&mut ctx).expect("the rescale applies");
+    }
+
+    /// Task P6-18 (the `restore_property` corner): a stale shape id is
+    /// one error when there is a row to restore and a no-op when the
+    /// edit only has a section to remove (never a panic).
+    #[test]
+    fn restore_property_reports_a_stale_shape_id() {
+        let mut doc = Document::new();
+        let error = restore_property(&mut doc, ShapeId { index: 999 }, "Cost", true, &None)
+            .expect_err("a stale shape id");
+        assert!(error.to_string().contains("unknown shape id"), "{error}");
+        // With no row to restore there is nothing to look up: the
+        // section-removal path reports nothing for a stale id.
+        restore_property(&mut doc, ShapeId { index: 999 }, "Cost", false, &None)
+            .expect("nothing to restore");
     }
 }

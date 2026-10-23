@@ -149,3 +149,42 @@ tolerance above.
   nothing.
 - **Include cells with unknown functions by evaluating them as cached.**
   Rejected: that would trivially "agree" and inflate the rate.
+
+## Amendment 2026-10-23 (task P6-18): rule 3, the boolean bridge and the `default-only` skip
+
+The P6-12 review (F6) found two comparison rules the harness applied
+without a text here. Both behaviours stand (the master's ruling); this
+amendment writes them down and gives the hard-default skip its own
+reason.
+
+**Rule 3 reads as "a value the document holds".** The rule was "every
+reference it makes resolves to a cell that has a value", which read as
+excluding hard defaults and reported a *resolved* reference as
+`missing-reference`. The conservative reading stands: a ShapeSheet
+table default (`DropOnPageScale`, `LockTextEdit`) is not a cell of the
+document to agree with anything, and our defaults are not all verified.
+So rule 3 is: *every reference it makes resolves to a value the
+document holds*. A reference that resolves only to the table's hard
+default is skipped as **`default-only`**, never as `missing-reference`;
+a reference that resolves to nothing (or to `#REF!`) stays
+`missing-reference`. The skip reasons are now the full set the harness
+reports: `no-formula`, `does-not-parse`, `unknown-function`,
+`missing-reference`, `default-only`, `no-cached-value`, `cached-error`
+and `documented-exclusion`.
+
+**The boolean spelling bridge is a row of the comparison table.** The
+file spells a `BOOL` cell's cached value as the number `0`/`1` (the
+`V=` of a cell without `U="BOOL"`), so the table compares a boolean
+across that spelling:
+
+| Kind | Rule |
+|---|---|
+| Bool ↔ Number | an evaluated `Bool` agrees with a cached `Number(0)`/`Number(1)` and the other way round (the file's `0`/`1` spelling of a `BOOL` cell without `U="BOOL"`) |
+
+The P6-18 run over the 15 corpus files, with the reason split: 9 242
+non-`Inh` formulas, **5 184 counted, 5 184 agree, 0 disagree (100.0 %)**
+and 4 058 skipped — `no-formula` 2 589, `does-not-parse` 27,
+`unknown-function` 629, `missing-reference` 750, `default-only` 31,
+`no-cached-value` 0, `cached-error` 0, `documented-exclusion` 32. The
+32 documented exclusions are the same cells as before; 31 cells moved
+from `missing-reference` to `default-only`.

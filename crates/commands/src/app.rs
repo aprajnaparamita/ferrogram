@@ -761,6 +761,16 @@ mod tests {
     /// ADR 0040 rule 2: `push_edit` is the only push path and finds the
     /// session by identity, never by index.
     #[test]
+    fn push_edit_reports_a_stale_session() {
+        let mut ctx = AppCtx::new(Settings::default());
+        let stale = SessionId(u64::MAX);
+        let error = ctx
+            .push_edit(stale, Box::new(LabelEdit("lost")))
+            .expect_err("no session");
+        assert!(error.to_string().contains("no document session"), "{error}");
+    }
+
+    #[test]
     fn push_edit_lands_on_the_named_session() {
         let mut ctx = AppCtx::new(Settings::default());
         let first = ctx.open_document(DocumentSession::new(Document::new(), None));

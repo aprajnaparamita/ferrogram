@@ -103,8 +103,11 @@ fn anchor_shape(ctx: &AppCtx) -> Option<ShapeId> {
         .or_else(|| ctx.selection.shapes.last().copied())
 }
 
-/// The session and the anchor shape of a `shape.set.*` run.
-fn anchor_target(ctx: &AppCtx) -> Result<(SessionId, ShapeId, Vec<String>), CommandError> {
+/// The session and the anchor shape of a `shape.set.*` /
+/// `data.set.property` run.
+pub(super) fn anchor_target(
+    ctx: &AppCtx,
+) -> Result<(SessionId, ShapeId, Vec<String>), CommandError> {
     let shape = anchor_shape(ctx).ok_or_else(|| CommandError::failed("no selection"))?;
     let session = ctx.active_document().ok_or_else(no_document)?;
     if session.document.page_of(shape).is_none() {
@@ -183,22 +186,10 @@ pub(super) fn run_move(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, Co
             warnings.extend(read);
             let (y, read) = read_cell_number(doc, shape, "PinY")?;
             warnings.extend(read);
-            edit.push(cell_edit(
-                doc,
-                session,
-                "Move shape",
-                shape,
-                "PinX",
-                x + dx,
-            )?);
-            edit.push(cell_edit(
-                doc,
-                session,
-                "Move shape",
-                shape,
-                "PinY",
-                y + dy,
-            )?);
+            let step = cell_edit(doc, session, "Move shape", shape, "PinX", x + dx);
+            edit.push(step?);
+            let step = cell_edit(doc, session, "Move shape", shape, "PinY", y + dy);
+            edit.push(step?);
         }
     }
     edit.apply(ctx)?;
@@ -235,22 +226,10 @@ pub(super) fn run_resize(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
             )? {
                 edit.push(step);
             }
-            edit.push(cell_edit(
-                doc,
-                session,
-                "Resize shape",
-                shape,
-                "Width",
-                width,
-            )?);
-            edit.push(cell_edit(
-                doc,
-                session,
-                "Resize shape",
-                shape,
-                "Height",
-                height,
-            )?);
+            let step = cell_edit(doc, session, "Resize shape", shape, "Width", width);
+            edit.push(step?);
+            let step = cell_edit(doc, session, "Resize shape", shape, "Height", height);
+            edit.push(step?);
         }
     }
     edit.apply(ctx)?;
@@ -273,14 +252,8 @@ pub(super) fn run_rotate(ctx: &mut AppCtx, inv: &Invocation) -> Result<Outcome, 
         for &shape in &targets {
             let (angle, read) = read_cell_number(doc, shape, "Angle")?;
             warnings.extend(read);
-            edit.push(cell_edit(
-                doc,
-                session,
-                "Rotate shape",
-                shape,
-                "Angle",
-                angle + delta,
-            )?);
+            let step = cell_edit(doc, session, "Rotate shape", shape, "Angle", angle + delta);
+            edit.push(step?);
         }
     }
     edit.apply(ctx)?;

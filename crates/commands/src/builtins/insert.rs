@@ -122,31 +122,15 @@ pub(super) fn run_insert_shape(
     // The drop is one undo step (ADR 0040): the insertion and the size
     // rescale of the constant geometry share it. The rows whose formulas
     // compute come from the recalc pass at `push_edit` (ADR 0056).
-    let mut edit = CompositeEdit::new(label.clone());
-    {
-        let doc = document_mut(ctx, session)?;
-        edit.push(Box::new(StructuralEdit::insertion(
-            doc,
-            session,
-            label.clone(),
-            shape,
-        )?));
-    }
-    if let Some(size) = scaled {
-        let mut step = {
-            let doc = document_mut(ctx, session)?;
-            GeometryEdit::new(
-                doc,
-                session,
-                "Resize shape",
-                shape,
-                Size::new(definition.width, definition.height),
-                size,
-            )?
-        };
-        step.apply(ctx)?;
-        edit.push(Box::new(step));
-    }
+    let staged = stage_drop(
+        ctx,
+        session,
+        &label,
+        shape,
+        Size::new(definition.width, definition.height),
+        scaled,
+    );
+    let edit = staged?;
     if glue_to.is_some() {
         // Glue-on-drop: "any glued connector endpoints on the page
         // re-route" (ADR 0046).
@@ -155,6 +139,53 @@ pub(super) fn run_insert_shape(
     select_new(ctx, session, page, shape)?;
     ctx.touch_session(session);
     Ok(edit_outcome(label, Vec::new(), Box::new(edit)))
+}
+
+/// The undo step of a finished drop (task P6-18 F14): the insertion
+/// and, for a sized drop, the constant-geometry rescale (ADR 0056).
+///
+/// The drop is one command, so **any** failure after
+/// `instantiate_master` rolls the shape back out of the document (the
+/// glue path's rule): a staging failure or a [`GeometryEdit`] that
+/// cannot apply leaves nothing behind and no undo entry.
+///
+/// `from` is the master's own size and `to` the requested one (`None`:
+/// no rescale step). [`GeometryEdit`] checks the two sizes when it
+/// applies (a degenerate `from` is its failure, which the test forces).
+pub(super) fn stage_drop(
+    ctx: &mut AppCtx,
+    session: SessionId,
+    label: &str,
+    shape: ShapeId,
+    from: Size,
+    to: Option<Size>,
+) -> Result<CompositeEdit, CommandError> {
+    let staged = (|| -> Result<CompositeEdit, CommandError> {
+        let mut edit = CompositeEdit::new(label.to_owned());
+        {
+            let doc = document_mut(ctx, session)?;
+            let step = StructuralEdit::insertion(doc, session, label.to_owned(), shape);
+            edit.push(Box::new(step?));
+        }
+        if let Some(size) = to {
+            let mut step = {
+                let doc = document_mut(ctx, session)?;
+                GeometryEdit::new(doc, session, "Resize shape", shape, from, size)?
+            };
+            step.apply(ctx)?;
+            edit.push(Box::new(step));
+        }
+        Ok(edit)
+    })();
+    match staged {
+        Ok(edit) => Ok(edit),
+        Err(error) => {
+            if let Ok(doc) = document_mut(ctx, session) {
+                let _ = doc.detach_shape(shape);
+            }
+            Err(error)
+        }
+    }
 }
 
 /// `insert.drawing.rectangle`: one rectangle.
@@ -679,5 +710,95 @@ fn optional_row(args: &crate::Args, name: &str) -> Result<Option<usize>, Command
         Some(_) => Err(CommandError::invalid_args(format!(
             "{name} must be a non-negative row index"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{DocumentSession, Settings};
+
+    /// A session with one page and one 2x1 rectangle on it.
+    fn fixture() -> (AppCtx, SessionId, ferrogram_model::PageId, ShapeId) {
+        let mut ctx = AppCtx::new(Settings::default());
+        let mut doc = Document::new();
+        let page = doc.add_page("Page-1").expect("page");
+        let shape = doc
+            .insert_shape(
+                page,
+                drawing_shape(Drawing::Rectangle, 0.0, 0.0, 2.0, 1.0),
+                None,
+            )
+            .expect("shape");
+        let session = DocumentSession::new(doc, None);
+        let id = session.id;
+        ctx.open_document(session);
+        (ctx, id, page, shape)
+    }
+
+    /// Task P6-18 F14: a `GeometryEdit` that fails after
+    /// `instantiate_master` rolls the whole drop back (the glue path's
+    /// rule), leaving no shape on the page and no undo entry. The
+    /// failure is forced with a degenerate source size, which the
+    /// rescale refuses when it applies.
+    #[test]
+    fn a_failed_geometry_rescale_rolls_the_drop_back() {
+        let (mut ctx, session, page, shape) = fixture();
+        let staged = stage_drop(
+            &mut ctx,
+            session,
+            "Insert Rectangle",
+            shape,
+            Size::new(0.0, 1.0),
+            Some(Size::new(4.0, 4.0)),
+        );
+        assert!(staged.is_err(), "the rescale fails");
+        let Err(error) = staged else {
+            return;
+        };
+        assert!(
+            error.to_string().contains("source size"),
+            "the size check's error: {error}"
+        );
+        let doc = &ctx.active_document().expect("session").document;
+        assert_eq!(doc.page_of(shape), None, "the shape is rolled back");
+        let entry = doc.page(page).expect("page");
+        assert!(entry.shapes.is_empty(), "{:?}", entry.shapes);
+    }
+
+    /// The happy path of `stage_drop`: the insertion and the rescale
+    /// share one undo step, and the shape stays.
+    #[test]
+    fn a_sized_drop_stages_the_insertion_and_the_rescale() {
+        let (mut ctx, session, page, shape) = fixture();
+        let edit = stage_drop(
+            &mut ctx,
+            session,
+            "Insert Rectangle",
+            shape,
+            Size::new(2.0, 1.0),
+            Some(Size::new(4.0, 2.0)),
+        )
+        .expect("stage");
+        assert_eq!(edit.label(), "Insert Rectangle");
+        assert_eq!(edit.len(), 2, "the insertion and the rescale");
+        let doc = &ctx.active_document().expect("session").document;
+        assert_eq!(doc.page_of(shape), Some(page), "the shape stays");
+    }
+
+    /// An unsized drop stages the insertion alone (no rescale step).
+    #[test]
+    fn an_unsized_drop_stages_the_insertion_alone() {
+        let (mut ctx, session, _page, shape) = fixture();
+        let edit = stage_drop(
+            &mut ctx,
+            session,
+            "Insert Rectangle",
+            shape,
+            Size::new(2.0, 1.0),
+            None,
+        )
+        .expect("stage");
+        assert_eq!(edit.len(), 1);
     }
 }

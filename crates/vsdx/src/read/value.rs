@@ -28,6 +28,15 @@
 //! |---|---|
 //! | none or unknown | classified by the value: a number literal is `Number`, a `#RGB`/`#RRGGBB` literal is `Color`, anything else is `Str` |
 //! | numeric codes (`IN`, `MM`, `DEG`, `DL`, ...) | `Number`; a value that does not parse is `Error::InvalidPackage` naming the part and the cell |
+//!
+//! One rule covers both number paths (task P6-18 F9): **a numeric
+//! literal must be finite**. `1e999999`, `inf` and `nan` parse to the
+//! IEEE infinity or NaN and are rejected like a literal that does not
+//! parse (`Error::InvalidPackage` naming the part and the cell, never
+//! the value): the writer refuses to write a non-finite number
+//! (`mutate::checked_number`), the evaluator maps one to `#NUM!`, so a
+//! file holding one is malformed for us either way (P6-11's hardening,
+//! the two `value_malformed` tests it pins changed deliberately).
 //! | `BOOL` | `Bool`, from `0`/`1` (also `true`/`FALSE`); anything else is `Error::InvalidPackage` |
 //! | `COLOR` | `Color` for a `#RGB`/`#RRGGBB` literal, `Str` otherwise (a themed or indexed color is kept as written) |
 //! | `STR`, `DATE`, `GUID`, `PNT` | `Str` |
@@ -146,7 +155,7 @@ pub(crate) fn value(
     }
     match kind(unit_code) {
         Kind::Number => match v.trim().parse::<f64>() {
-            Ok(number) => Ok(CellValue::Number(number)),
+            Ok(number) => finite_number(number, part, cell),
             Err(_) => Err(bad_value(part, cell, "numeric value does not parse")),
         },
         Kind::Bool => match v.trim() {
@@ -160,11 +169,23 @@ pub(crate) fn value(
         }),
         Kind::Str => Ok(CellValue::Str(v.to_owned())),
         Kind::List => Ok(CellValue::List(v.to_owned())),
-        Kind::Unknown => Ok(match shape(v) {
-            Shaped::Number(number) => CellValue::Number(number),
-            Shaped::Color(color) => CellValue::Color(color),
-            Shaped::Str(text) => CellValue::Str(text),
-        }),
+        Kind::Unknown => match shape(v) {
+            Shaped::Number(number) => finite_number(number, part, cell),
+            Shaped::Color(color) => Ok(CellValue::Color(color)),
+            Shaped::Str(text) => Ok(CellValue::Str(text)),
+        },
+    }
+}
+
+/// A finite number literal, or the [`Error::InvalidPackage`] of one
+/// that is not (task P6-18 F9: `1e999999`, `inf` and `nan` parse to the
+/// IEEE infinity or NaN and are rejected like a literal that does not
+/// parse).
+fn finite_number(number: f64, part: &str, cell: &str) -> Result<CellValue, Error> {
+    if number.is_finite() {
+        Ok(CellValue::Number(number))
+    } else {
+        Err(bad_value(part, cell, "numeric value is not finite"))
     }
 }
 

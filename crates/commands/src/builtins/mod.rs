@@ -14,6 +14,7 @@
 mod arrange;
 mod clipboard;
 mod connector;
+mod data;
 mod edit;
 mod file;
 mod insert;
@@ -56,6 +57,7 @@ pub(crate) const STUB_TABLES: &[CommandTable] = &[
     arrange::TABLE,
     clipboard::TABLE,
     connector::TABLE,
+    data::TABLE,
     edit::TABLE,
     insert::TABLE,
     page::TABLE,

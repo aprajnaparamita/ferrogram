@@ -43,6 +43,20 @@
 //! such a formula (P6-07's classification) and stays editable.
 //! Editing formulas is the formula editor of a later phase.
 //!
+//! # Editing a Shape Data value (task P6-18)
+//!
+//! The value column of a `Prop` row takes the value's own spelling in
+//! the kind the row caches (ADR 0058's "the cached value wins"): a
+//! number literal of the grammar, `TRUE`/`FALSE`, a `#RGB`/`#RRGGBB`
+//! colour, or the text of a string. One commit dispatches
+//! `data.set.property` with the row's key and the typed text; the
+//! command parses the text again (one rule, one grammar). A boolean is
+//! a check box whose click dispatches the toggled value. The rows are
+//! the union of the shape's own `Property` rows and the ones it inherits
+//! from its master chain (the P6-09 note): an edit of an inherited row
+//! writes a local row on the instance. A list or error value has no
+//! literal spelling to type back and stays read-only.
+//!
 //! # Missing values
 //!
 //! A missing, non-finite or empty value renders `"—"` and records one
@@ -163,6 +177,39 @@ enum Field {
     Shown(Option<bool>),
     /// A typed field in this unit, dispatched on commit.
     Typed(EntryUnit),
+    /// A typed Shape Data value field of this kind (task P6-18),
+    /// dispatched as `data.set.property` on commit.
+    Value(PropKind),
+    /// An editable boolean check box (task P6-18): a click dispatches
+    /// `data.set.property` with the toggled value.
+    Flag,
+}
+
+/// The kind of one Shape Data value (ADR 0058: "the cached value
+/// wins"): what the pane shows and what a typed entry may be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PropKind {
+    /// A number (in the cell's own unit).
+    Number,
+    /// A boolean (a check box).
+    Bool,
+    /// A colour (`#RRGGBB`).
+    Color,
+    /// A string (as written).
+    Str,
+}
+
+/// The editable kind of a cached value, or `None`: a list or error
+/// value has no literal spelling to type back and stays read-only
+/// (task P6-18).
+fn prop_kind(value: &CellValue) -> Option<PropKind> {
+    match value {
+        CellValue::Number(_) => Some(PropKind::Number),
+        CellValue::Bool(_) => Some(PropKind::Bool),
+        CellValue::Color(_) => Some(PropKind::Color),
+        CellValue::Str(_) => Some(PropKind::Str),
+        _ => None,
+    }
 }
 
 /// One panel row and what its value column does (ADR 0058).
@@ -540,59 +587,66 @@ struct PropRow {
     label: String,
     /// Hover note (the row name), when the label does not show it.
     note: Option<String>,
+    /// The row's key (`Prop.<row>.Value`), for the edit command.
+    key: String,
     /// The `Value` cell's cached value and unit, when it has one.
     value: Option<(CellValue, ferrogram_geom::Unit)>,
     /// Whether the `Value` cell carries a formula (ADR 0058).
     formula: bool,
 }
 
-/// Reads the `Prop` rows of one shape: the row name, the `Label` text
+/// Reads the `Prop` rows of one shape: the row key, the `Label` text
 /// and the cached `Value` (what the file holds, ADR 0058).
+///
+/// The rows are the union of the shape's own `Property` rows and the
+/// ones it inherits from its master chain (task P6-18, the P6-09 note):
+/// the shape's own row wins on a key clash and the inherited rows fill
+/// in behind it.
 fn prop_rows(session: &DocumentSession, shape: ShapeId) -> Vec<PropRow> {
-    let Some(shape) = session.document.shape(shape) else {
-        return Vec::new();
-    };
     let mut rows = Vec::new();
-    for section in &shape.sheet.sections {
-        if section.name.as_str() != "Property" {
-            continue;
-        }
-        for (position, row) in section.rows.iter().enumerate() {
-            if row.is_deleted() {
-                continue;
-            }
-            let name = row.name.clone();
-            let label = row
-                .cells
-                .iter()
-                .find(|cell| cell.name.as_str() == "Label")
-                .and_then(|cell| cell.value.as_ref())
-                .and_then(|value| match value {
-                    CellValue::Str(text) if !text.is_empty() => Some(text.clone()),
-                    _ => None,
-                })
-                .or_else(|| name.clone())
-                .unwrap_or_else(|| format!("Row {}", position + 1));
-            let note = match &name {
-                Some(name) if *name != label => Some(name.clone()),
+    for entry in session.document.property_rows(shape) {
+        let row = &entry.row;
+        let name = row.name.clone();
+        let label = row
+            .cells
+            .iter()
+            .find(|cell| cell.name.as_str() == "Label")
+            .and_then(|cell| cell.value.as_ref())
+            .and_then(|value| match value {
+                CellValue::Str(text) if !text.is_empty() => Some(text.clone()),
                 _ => None,
-            };
-            let value_cell = row.cells.iter().find(|cell| cell.name.as_str() == "Value");
-            rows.push(PropRow {
-                label,
-                note,
-                value: value_cell
-                    .and_then(|cell| cell.value.clone().map(|value| (value, cell.unit))),
-                formula: value_cell
-                    .and_then(|cell| cell.formula.as_deref())
-                    .is_some_and(formula_computes),
-            });
-        }
+            })
+            .or_else(|| name.clone())
+            .unwrap_or_else(|| format!("Row {}", entry.position + 1));
+        // The row name is the hover note when the label does not show
+        // it; an inherited row says where it comes from (the P6-09 note).
+        let note = match (&name, entry.inherited) {
+            (Some(name), false) if *name != label => Some(name.clone()),
+            (Some(name), true) => Some(format!("{name} (from the master)")),
+            (None, true) => Some(String::from("from the master")),
+            _ => None,
+        };
+        let value_cell = row.cells.iter().find(|cell| cell.name.as_str() == "Value");
+        rows.push(PropRow {
+            label,
+            note,
+            key: entry.key,
+            value: value_cell.and_then(|cell| cell.value.clone().map(|value| (value, cell.unit))),
+            formula: value_cell
+                .and_then(|cell| cell.formula.as_deref())
+                .is_some_and(formula_computes),
+        });
     }
     rows
 }
 
 /// Builds the entry of one `Prop` row (ADR 0058): the value typed.
+///
+/// The value is editable through `data.set.property` (task P6-18) when
+/// the row caches a number, boolean, colour or string: a text field, or
+/// a check box for a boolean. A formula value is read-only (ADR 0058)
+/// and so is a value with no literal spelling to type back (a list or
+/// an error).
 fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
     let Some((value, unit)) = &prop.value else {
         return missing_entry(app, &prop.label, "no value");
@@ -600,11 +654,56 @@ fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
     let Some((text, check)) = typed_value(value, *unit, units) else {
         return missing_entry(app, &prop.label, "unsupported cached value");
     };
+    let Some(kind) = prop_kind(value) else {
+        // A list or error value has no literal spelling to type back.
+        return Entry {
+            row: PanelRow::read_only(&prop.label, text),
+            field: Field::Shown(check),
+            formula: prop.formula,
+            note: prop.note.clone(),
+        };
+    };
+    if prop.formula {
+        // A formula value keeps its typed field and refuses the edit
+        // with one status line (ADR 0058, as in the other panes). A
+        // boolean is a shown check box: it takes no click at all.
+        return Entry {
+            row: PanelRow::read_only(&prop.label, text),
+            field: if kind == PropKind::Bool {
+                Field::Shown(check)
+            } else {
+                Field::Value(kind)
+            },
+            formula: true,
+            note: prop.note.clone(),
+        };
+    }
+    let row = value_row(&prop.label, text, &prop.key);
     Entry {
-        row: PanelRow::read_only(&prop.label, text),
-        field: Field::Shown(check),
+        row,
+        field: if kind == PropKind::Bool {
+            Field::Flag
+        } else {
+            Field::Value(kind)
+        },
         formula: prop.formula,
         note: prop.note.clone(),
+    }
+}
+
+/// The editable value row of one `Prop` entry: the `data.set.property`
+/// command with the row's key (the commit adds the `value` argument).
+fn value_row(label: &str, text: String, key: &str) -> PanelRow {
+    let args = Args::new().with("row", ArgValue::Text(key.to_owned()));
+    match PanelRow::editable(label, text, 0.0, "data.set.property", args) {
+        Ok(mut row) => {
+            row.numeric = None;
+            row
+        }
+        // A `CommandId` parse failure is a build bug of this crate (the
+        // id is a constant): the row degrades to read-only, never a
+        // panic (AGENTS.md section 6).
+        Err(_) => PanelRow::read_only(label, MISSING_VALUE),
     }
 }
 
@@ -812,10 +911,10 @@ fn show_panel(ui: &mut Ui, app: &mut AppCtx, title: &str, entries: &[Entry]) -> 
             }
             drop(label);
             ui.horizontal(|ui| {
-                if let Field::Typed(unit) = entry.field {
-                    intents.append(&mut edit_field(ui, app, title, entry, unit));
+                if matches!(entry.field, Field::Typed(_) | Field::Value(_)) {
+                    intents.append(&mut edit_field(ui, app, title, entry));
                 } else {
-                    show_value(ui, entry);
+                    intents.append(&mut show_value(ui, entry));
                 }
                 if entry.formula {
                     ui.label(RichText::new(FORMULA_MARKER).weak())
@@ -828,20 +927,36 @@ fn show_panel(ui: &mut Ui, app: &mut AppCtx, title: &str, entries: &[Entry]) -> 
     intents
 }
 
-/// Draws one read-only value: a check box for a boolean (ADR 0058's
-/// "checkbox-like value"), a label for everything else.
-fn show_value(ui: &mut Ui, entry: &Entry) {
-    if let Some(flag) = match entry.field {
-        Field::Shown(flag) => flag,
-        Field::Typed(_) => None,
-    } {
-        let mut checked = flag;
-        ui.add_enabled(
-            false,
-            egui::Checkbox::new(&mut checked, entry.row.value.as_str()),
-        );
-    } else {
-        ui.label(entry.row.value.as_str());
+/// Draws one value column: a disabled check box for a shown boolean
+/// (ADR 0058's "checkbox-like value"), an editable check box for an
+/// editable one (task P6-18: a click dispatches `data.set.property`),
+/// and a label for everything else. The editable check box returns the
+/// intent of its click.
+fn show_value(ui: &mut Ui, entry: &Entry) -> Vec<Intent> {
+    match entry.field {
+        Field::Shown(Some(flag)) => {
+            let mut checked = flag;
+            ui.add_enabled(
+                false,
+                egui::Checkbox::new(&mut checked, entry.row.value.as_str()),
+            );
+            Vec::new()
+        }
+        Field::Flag => {
+            let mut checked = entry.row.value.as_str() == "TRUE";
+            let response = ui.add(egui::Checkbox::new(&mut checked, entry.row.value.as_str()));
+            if response.changed()
+                && let Some((command, mut args)) = entry.row.edit.clone()
+            {
+                args.set("value", ArgValue::Text(flag_text(checked)));
+                return vec![Intent::new(command, Invocation::new(args, Source::Ui))];
+            }
+            Vec::new()
+        }
+        _ => {
+            ui.label(entry.row.value.as_str());
+            Vec::new()
+        }
     }
 }
 
@@ -851,13 +966,7 @@ fn show_value(ui: &mut Ui, entry: &Entry) {
 /// A formula cell refuses the edit with one status line and a bad entry
 /// is refused the same way; both change nothing (no intent, no model
 /// write).
-fn edit_field(
-    ui: &mut Ui,
-    app: &mut AppCtx,
-    title: &str,
-    entry: &Entry,
-    unit: EntryUnit,
-) -> Vec<Intent> {
+fn edit_field(ui: &mut Ui, app: &mut AppCtx, title: &str, entry: &Entry) -> Vec<Intent> {
     let id = egui::Id::unique(("panel-field", title, entry.row.label.as_str()));
     let mut state = ui.data_mut(|data| {
         data.get_temp::<FieldState>(id)
@@ -883,7 +992,7 @@ fn edit_field(
     let enter = ui.input(|input| input.key_pressed(egui::Key::Enter));
     if state.editing && (response.lost_focus() || (enter && response.has_focus())) {
         state.editing = false;
-        intents = commit_entry(app, entry, unit, &state.text);
+        intents = commit_entry(app, entry, &state.text);
         state.text = entry.row.value.clone();
     }
     ui.data_mut(|data| data.insert_temp(id, state));
@@ -894,7 +1003,12 @@ fn edit_field(
 /// or one status line and nothing else — a formula cell refuses the
 /// edit and a bad entry is refused the same way. The panel itself
 /// never touches the model.
-fn commit_entry(app: &mut AppCtx, entry: &Entry, unit: EntryUnit, text: &str) -> Vec<Intent> {
+///
+/// A Size & Position field carries its number in the command's own
+/// unit; a Shape Data value field carries the typed text as the
+/// `value` argument of `data.set.property` (task P6-18), which parses
+/// it again in the row's kind (one rule, one grammar).
+fn commit_entry(app: &mut AppCtx, entry: &Entry, text: &str) -> Vec<Intent> {
     if entry.formula {
         record_line(app, format!("{} {FORMULA_REFUSAL}", entry.row.label));
         return Vec::new();
@@ -902,15 +1016,60 @@ fn commit_entry(app: &mut AppCtx, entry: &Entry, unit: EntryUnit, text: &str) ->
     let Some((command, mut args)) = entry.row.edit.clone() else {
         return Vec::new();
     };
-    match typed_entry(text, unit) {
-        Ok(value) => {
-            set_edited_argument(&entry.row.label, &mut args, value);
-            vec![Intent::new(command, Invocation::new(args, Source::Ui))]
+    match entry.field {
+        Field::Value(kind) => match value_entry(kind, text) {
+            Ok(()) => {
+                args.set("value", ArgValue::Text(text.to_owned()));
+                vec![Intent::new(command, Invocation::new(args, Source::Ui))]
+            }
+            Err(reason) => {
+                record_line(app, format!("{}: {}", entry.row.label, reason));
+                Vec::new()
+            }
+        },
+        Field::Typed(unit) => match typed_entry(text, unit) {
+            Ok(value) => {
+                set_edited_argument(&entry.row.label, &mut args, value);
+                vec![Intent::new(command, Invocation::new(args, Source::Ui))]
+            }
+            Err(reason) => {
+                record_line(app, format!("{}: {}", entry.row.label, reason));
+                Vec::new()
+            }
+        },
+        // A check box commits through [`show_value`], a shown value has
+        // no edit.
+        _ => Vec::new(),
+    }
+}
+
+/// The panel's instant feedback on one typed Shape Data value (task
+/// P6-18): the text must be a value of the row's kind. The command
+/// parses the text again (one rule, one grammar); this check only
+/// decides whether an intent leaves the panel.
+fn value_entry(kind: PropKind, text: &str) -> Result<(), String> {
+    match kind {
+        PropKind::Number => typed_entry(text, EntryUnit::Length).map(|_| ()),
+        PropKind::Bool => {
+            let upper = text.trim().to_ascii_uppercase();
+            if matches!(upper.as_str(), "TRUE" | "FALSE" | "1" | "0") {
+                Ok(())
+            } else {
+                Err(format!("{text:?} is not TRUE or FALSE"))
+            }
         }
-        Err(reason) => {
-            record_line(app, format!("{}: {}", entry.row.label, reason));
-            Vec::new()
+        PropKind::Color => {
+            // The `#RGB`/`#RRGGBB` spelling the value shows (the file's
+            // own text): the formula grammar has no colour literal.
+            let digits = text.trim().strip_prefix('#').unwrap_or_default();
+            let hex = digits.bytes().all(|byte| byte.is_ascii_hexdigit());
+            if (digits.len() == 3 || digits.len() == 6) && hex {
+                Ok(())
+            } else {
+                Err(format!("{text:?} is not a #RRGGBB colour"))
+            }
         }
+        PropKind::Str => Ok(()),
     }
 }
 
@@ -1679,8 +1838,15 @@ mod tests {
             .find(|entry| entry.row.label == "Row_2")
             .expect("the unnamed row");
         assert_eq!(fallback.row.value, "FALSE");
-        assert_eq!(fallback.field, Field::Shown(Some(false)));
+        // Task P6-18: a boolean value is editable (a check box that
+        // dispatches `data.set.property` with the row's key).
+        assert_eq!(fallback.field, Field::Flag);
         assert_eq!(fallback.note, None);
+        let (_, args) = fallback.row.edit.as_ref().expect("editable");
+        assert_eq!(
+            args.text("row").map(str::to_owned),
+            Some(String::from("Row_2"))
+        );
 
         let missing = entries
             .iter()
@@ -1788,6 +1954,15 @@ mod tests {
     }
 
     #[test]
+    fn a_non_finite_conversion_is_refused() {
+        // The literal parses and the unit converts to infinity: the
+        // entry is refused as "not a finite number", never a panic.
+        let error =
+            typed_entry("1e308 ft", EntryUnit::Length).expect_err("a non-finite conversion");
+        assert!(error.contains("not a finite number"), "{error}");
+    }
+
+    #[test]
     fn a_coerced_entry_is_refused() {
         // `"x"%` is a literal under unary `%`, so it parses; the
         // evaluation coerces the string and warns, which refuses it.
@@ -1843,12 +2018,7 @@ mod tests {
         }
         let before = app.active_document().expect("session").document.clone();
         let entries = size_position_entries(&mut app).expect("entries");
-        let intents = commit_entry(
-            &mut app,
-            entry_of(&entries, "Width"),
-            EntryUnit::Length,
-            "5 in",
-        );
+        let intents = commit_entry(&mut app, entry_of(&entries, "Width"), "5 in");
         assert!(intents.is_empty(), "the refusal dispatches nothing");
         assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
         assert!(
@@ -1868,12 +2038,7 @@ mod tests {
         let (mut app, _id) = selected_document();
         let before = app.active_document().expect("session").document.clone();
         let entries = size_position_entries(&mut app).expect("entries");
-        let intents = commit_entry(
-            &mut app,
-            entry_of(&entries, "Width"),
-            EntryUnit::Length,
-            "2.5 cm",
-        );
+        let intents = commit_entry(&mut app, entry_of(&entries, "Width"), "2.5 cm");
         assert_eq!(intents.len(), 1, "{intents:?}");
         assert_eq!(intents[0].command.as_str(), "shape.set.width");
         let width = intents[0].invocation.args.number("width").expect("width");
@@ -1895,12 +2060,7 @@ mod tests {
         let (mut app, _id) = selected_document();
         let before = app.active_document().expect("session").document.clone();
         let entries = size_position_entries(&mut app).expect("entries");
-        let intents = commit_entry(
-            &mut app,
-            entry_of(&entries, "Height"),
-            EntryUnit::Length,
-            "abc",
-        );
+        let intents = commit_entry(&mut app, entry_of(&entries, "Height"), "abc");
         assert!(intents.is_empty(), "{intents:?}");
         assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
         assert!(app.warnings[0].contains("Height: "), "{:?}", app.warnings);
@@ -1915,12 +2075,7 @@ mod tests {
     fn a_read_only_row_commits_nothing() {
         let (mut app, _id) = selected_document();
         let entries = size_position_entries(&mut app).expect("entries");
-        let intents = commit_entry(
-            &mut app,
-            entry_of(&entries, "Loc Pin X"),
-            EntryUnit::Length,
-            "5 in",
-        );
+        let intents = commit_entry(&mut app, entry_of(&entries, "Loc Pin X"), "5 in");
         assert!(intents.is_empty());
         assert!(app.warnings.is_empty(), "{:?}", app.warnings);
     }
@@ -1929,12 +2084,7 @@ mod tests {
     fn a_committed_angle_entry_takes_degrees() {
         let (mut app, _id) = selected_document();
         let entries = size_position_entries(&mut app).expect("entries");
-        let intents = commit_entry(
-            &mut app,
-            entry_of(&entries, "Angle"),
-            EntryUnit::Angle,
-            "45 deg",
-        );
+        let intents = commit_entry(&mut app, entry_of(&entries, "Angle"), "45 deg");
         assert_eq!(intents.len(), 1, "{intents:?}");
         let angle = intents[0].invocation.args.number("angle").expect("angle");
         assert!(
@@ -1956,11 +2106,31 @@ mod tests {
         with_ui(|ui| {
             for entry in &entries {
                 show_value(ui, entry);
-                if entry.formula {
-                    ui.label(RichText::new(FORMULA_MARKER).weak())
-                        .on_hover_text(FORMULA_HINT);
+            }
+        });
+    }
+
+    /// Task P6-18 (the coverage report's "formula read-only marker"):
+    /// the `(formula)` marker and its hover hint render beside a
+    /// formula cell's value in a real frame, through [`show_panel`].
+    #[test]
+    fn a_formula_cell_renders_the_formula_marker() {
+        let (mut app, id) = selected_document();
+        {
+            let session = app.active_document_mut().expect("session");
+            if let Some(shape) = session.document.shape_mut(id) {
+                for cell in &mut shape.sheet.cells {
+                    if cell.name.as_str() == "Width" {
+                        cell.set_formula(Some(String::from("GUARD(2 in)")));
+                    }
                 }
             }
+        }
+        let entries = size_position_entries(&mut app).expect("entries");
+        assert!(entry_of(&entries, "Width").formula);
+        with_ui(|ui| {
+            let intents = show_panel(ui, &mut app, "Size & Position", &entries);
+            assert!(intents.is_empty(), "a read-only row dispatches nothing");
         });
     }
 
@@ -1988,6 +2158,17 @@ mod tests {
         push_text(&mut app, &mut rows, "Other", "");
         assert_eq!(rows[0].row.value, "Page-1");
         assert_eq!(rows[1].row.value, MISSING_VALUE);
+    }
+
+    #[test]
+    fn cell_has_formula_is_false_for_a_stale_shape_id() {
+        // The lookup error (a stale id) is "no formula", never a panic.
+        let session = DocumentSession::new(Document::new(), None);
+        assert!(!cell_has_formula(
+            &session,
+            SheetRef::Shape(ShapeId { index: 9 }),
+            "Width"
+        ));
     }
 
     #[test]
@@ -2043,5 +2224,241 @@ mod tests {
         let id = doc.add_shape(shape);
         let session = DocumentSession::new(doc, None);
         assert!(prop_rows(&session, id).is_empty());
+    }
+
+    /// Adds one `Property` section with `rows` to the selected shape.
+    fn add_props(app: &mut AppCtx, id: ShapeId, rows: Vec<Row>) {
+        let session = app.active_document_mut().expect("session");
+        if let Some(shape) = session.document.shape_mut(id) {
+            let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+            section.rows = rows;
+            shape.sheet.sections.push(section);
+        }
+    }
+
+    /// Task P6-18: the value field of a Shape Data row dispatches
+    /// `data.set.property` with the row's key and the typed text.
+    #[test]
+    fn a_value_entry_dispatches_data_set_property() {
+        let (mut app, id) = selected_document();
+        add_props(
+            &mut app,
+            id,
+            vec![prop_row(
+                "Cost",
+                Some("Unit cost"),
+                Some(value_cell(CellValue::Number(2.0), GeomUnit::Inches)),
+            )],
+        );
+        let entries = shape_data_entries(&mut app).expect("entries");
+        let cost = entry_of(&entries, "Unit cost");
+        assert_eq!(cost.field, Field::Value(PropKind::Number));
+        assert!(
+            cost.row.numeric.is_none(),
+            "a value row has no field number"
+        );
+
+        let intents = commit_entry(&mut app, cost, "2.5 cm");
+        assert_eq!(intents.len(), 1, "{intents:?}");
+        assert_eq!(intents[0].command.as_str(), "data.set.property");
+        let args = &intents[0].invocation.args;
+        assert_eq!(
+            args.text("row").map(str::to_owned),
+            Some(String::from("Cost"))
+        );
+        assert_eq!(
+            args.text("value").map(str::to_owned),
+            Some(String::from("2.5 cm"))
+        );
+    }
+
+    /// A boolean value row is a check box whose click dispatches the
+    /// toggled value (task P6-18).
+    #[test]
+    fn a_value_check_box_dispatches_the_toggled_value() {
+        let (mut app, id) = selected_document();
+        add_props(
+            &mut app,
+            id,
+            vec![prop_row(
+                "Rounded",
+                None,
+                Some(value_cell(CellValue::Bool(false), GeomUnit::Unitsless)),
+            )],
+        );
+        let entries = shape_data_entries(&mut app).expect("entries");
+        let rounded = entry_of(&entries, "Rounded");
+        assert_eq!(rounded.field, Field::Flag);
+        let (_, args) = rounded.row.edit.as_ref().expect("editable");
+        assert_eq!(
+            args.text("row").map(str::to_owned),
+            Some(String::from("Rounded"))
+        );
+
+        // The value column draws a check box (a click dispatches; the
+        // harness test in `tests/panels_typed.rs` drives the click).
+        let seen = with_ui(|ui| show_value(ui, rounded));
+        assert!(seen.is_empty(), "no click, no intent");
+    }
+
+    /// Task P6-18: a bad value entry is refused with one status line
+    /// and dispatches nothing; a formula value refuses the edit the way
+    /// the other panes do (ADR 0058).
+    #[test]
+    fn a_bad_or_formula_value_entry_is_refused_with_one_status_line() {
+        let (mut app, id) = selected_document();
+        let mut cost = prop_row(
+            "Cost",
+            Some("Unit cost"),
+            Some(value_cell(CellValue::Number(2.0), GeomUnit::Inches)),
+        );
+        cost.cells
+            .last_mut()
+            .expect("a value cell")
+            .set_formula(Some(String::from("Width*2")));
+        let mut plain = prop_row(
+            "Plain",
+            Some("Plain"),
+            Some(value_cell(CellValue::Number(2.0), GeomUnit::Inches)),
+        );
+        plain
+            .cells
+            .last_mut()
+            .expect("a value cell")
+            .set_formula(Some(String::from("2 in")));
+        add_props(&mut app, id, vec![cost, plain]);
+        let before = app.active_document().expect("session").document.clone();
+
+        let entries = shape_data_entries(&mut app).expect("entries");
+        let intents = commit_entry(&mut app, entry_of(&entries, "Unit cost"), "5 in");
+        assert!(intents.is_empty(), "{intents:?}");
+        assert_eq!(app.warnings.len(), 1, "{:?}", app.warnings);
+        assert!(
+            app.warnings[0].contains("is a formula cell"),
+            "{:?}",
+            app.warnings
+        );
+
+        let entries = shape_data_entries(&mut app).expect("entries");
+        let intents = commit_entry(&mut app, entry_of(&entries, "Plain"), "abc");
+        assert!(intents.is_empty(), "{intents:?}");
+        assert_eq!(app.warnings.len(), 2, "{:?}", app.warnings);
+        assert!(app.warnings[1].contains("Plain"), "{:?}", app.warnings);
+        assert_eq!(
+            app.active_document().expect("session").document,
+            before,
+            "a refused entry changes nothing"
+        );
+
+        // A constant literal is not a refused formula (P6-07's rule).
+        let entries = shape_data_entries(&mut app).expect("entries");
+        let intents = commit_entry(&mut app, entry_of(&entries, "Plain"), "5 in");
+        assert_eq!(intents.len(), 1, "{intents:?}");
+    }
+
+    /// Task P6-18 (the P6-09 note): the pane lists the union of the
+    /// shape's own `Property` rows and the master chain's, the own row
+    /// winning a key clash, and an inherited row says where it is from.
+    #[test]
+    fn shape_data_rows_list_the_master_chain_rows_too() {
+        let mut doc = Document::new();
+        let mut rung = Shape::new(ShapeId { index: 0 }, 1);
+        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        section.rows.push(prop_row(
+            "Cost",
+            Some("Master cost"),
+            Some(value_cell(CellValue::Number(9.0), GeomUnit::Inches)),
+        ));
+        section.rows.push(prop_row(
+            "Mastered",
+            None,
+            Some(value_cell(CellValue::Number(3.0), GeomUnit::Inches)),
+        ));
+        rung.sheet.sections.push(section);
+        let rung = doc.add_shape(rung);
+        let mut master_row =
+            ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+        master_row.shapes.push(rung);
+        let master_row = doc.add_master(master_row).expect("the master adds");
+
+        let mut shape = Shape::new(ShapeId { index: 1 }, 7);
+        shape.name = "Box".to_owned();
+        shape.master = Some(master_row);
+        let mut own = Section::new(ferrogram_model::SectionName::new("Property"));
+        own.rows.push(prop_row(
+            "Cost",
+            Some("Unit cost"),
+            Some(value_cell(CellValue::Number(2.0), GeomUnit::Inches)),
+        ));
+        shape.sheet.sections.push(own);
+        let id = doc.add_shape(shape);
+        let mut page = page("Page-1");
+        page.shapes.push(id);
+        doc.pages.push(page);
+        let mut app = app_with(doc, DisplayUnits::Inches);
+        app.selection.shapes = vec![id];
+        app.selection.anchor = Some(id);
+
+        let entries = shape_data_entries(&mut app).expect("entries");
+        // The shape's own `Cost` wins the clash ...
+        let cost = entry_of(&entries, "Unit cost");
+        assert_eq!(cost.row.value, "2 in");
+        assert_eq!(cost.note.as_deref(), Some("Cost"));
+        // ... and the master's rows fill in behind it.
+        let inherited = entry_of(&entries, "Mastered");
+        assert_eq!(inherited.row.value, "3 in");
+        assert_eq!(
+            inherited.note.as_deref(),
+            Some("Mastered (from the master)"),
+            "an inherited row says where it is from"
+        );
+        assert!(
+            inherited.row.edit.is_some(),
+            "an inherited row is editable (the edit writes a local row)"
+        );
+        let master_cost = entries
+            .iter()
+            .filter(|entry| entry.note.as_deref() == Some("Cost (from the master)"))
+            .count();
+        assert_eq!(master_cost, 0, "the master's clashing row is not listed");
+    }
+
+    /// Task P6-18: the value entry is validated in the row's kind (the
+    /// command parses the text again; this is the panel's feedback).
+    #[test]
+    fn value_entries_validate_in_the_rows_kind() {
+        assert!(value_entry(PropKind::Number, "2.5 cm").is_ok());
+        assert!(value_entry(PropKind::Number, "5 1/2").is_ok());
+        assert!(value_entry(PropKind::Number, "abc").is_err());
+        assert!(value_entry(PropKind::Number, "Width*2").is_err());
+        assert!(value_entry(PropKind::Bool, "TRUE").is_ok());
+        assert!(value_entry(PropKind::Bool, "false").is_ok());
+        assert!(value_entry(PropKind::Bool, "1").is_ok());
+        assert!(value_entry(PropKind::Bool, "maybe").is_err());
+        assert!(value_entry(PropKind::Color, "#FF8000").is_ok());
+        assert!(value_entry(PropKind::Color, "#abc").is_ok());
+        assert!(value_entry(PropKind::Color, "red").is_err());
+        assert!(value_entry(PropKind::Color, "#12345").is_err());
+        assert!(value_entry(PropKind::Str, "").is_ok());
+        assert!(value_entry(PropKind::Str, "anything at all").is_ok());
+    }
+
+    /// Task P6-18: `prop_kind` types what the cached value holds (the
+    /// cached kind wins, ADR 0058) and a list or error has no editable
+    /// kind.
+    #[test]
+    fn prop_kind_follows_the_cached_value() {
+        assert_eq!(prop_kind(&CellValue::Number(1.0)), Some(PropKind::Number));
+        assert_eq!(prop_kind(&CellValue::Bool(true)), Some(PropKind::Bool));
+        assert_eq!(
+            prop_kind(&CellValue::Color(Color::new(0, 0, 0))),
+            Some(PropKind::Color)
+        );
+        assert_eq!(
+            prop_kind(&CellValue::Str(String::new())),
+            Some(PropKind::Str)
+        );
+        assert_eq!(prop_kind(&CellValue::List(String::from("a;b"))), None);
+        assert_eq!(prop_kind(&CellValue::Error(String::from("#VALUE!"))), None);
     }
 }

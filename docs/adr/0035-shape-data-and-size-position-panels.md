@@ -66,3 +66,41 @@ depends on them.
 - **Panels read cells directly from the model with their own defaults.**
   Rejected: the ADR 0021 `CellReader` is the one place defaults and
   warnings are defined.
+
+## Amendment 2026-10-23 (task P6-18): `data.set.property` lands
+
+The reserved id `data.set.property` is implemented (the P6-09 note and
+the P6-12 review F11): the Shape Data pane's value column is editable
+through it, exactly like the Size & Position fields edit through
+`shape.set.*` (one registry command per edit, one undo step, no dialogs
+from programmatic calls).
+
+- **Arguments** (the command contract, ADR 0028): `row` is the Shape
+  Data row's key — its `N` name, or `Row_<n>` for the row at 1-based
+  position `n` when it has no name (a row name wins the key on a
+  clash) — and `value` is the value's own spelling.
+- **What `value` means** follows the kind the row's `Value` cell
+  caches (ADR 0058: "the cached value wins"): a **number** is one
+  literal of the formula grammar (`2.5`, `2.5 in`, `37%`, `45 deg`,
+  `5 1/2`) converted through the engine's unit table, where a literal
+  without a unit is a number of the cell's own unit; a **boolean** is
+  `TRUE`/`FALSE` (or `1`/`0`); a **colour** is the `#RGB`/`#RRGGBB`
+  spelling the pane shows (the file's own text; the formula grammar has
+  no colour literal); a **string** is the text as written. A list or
+  error value, and a row with no cached value, are not editable (one
+  `InvalidArgs`, nothing written).
+- **The write** goes through `CellEdit::direct` (a direct user edit,
+  ADR 0056: it replaces a `GUARD`-ed formula) with the cell spelled
+  `Prop.<row>.Value`, and gets the same undo step and recalc pass as
+  every other cell edit (`AppCtx::push_edit`). The `Value` cell keeps
+  the unit it records (own or inherited).
+- **The pane lists the union** of the shape's own `Property` rows and
+  the rows it inherits from its master chain (the P6-09 note): the
+  shape's own row wins on a key clash, a deleted own row hides the
+  inherited row, and an inherited row says so in its hover note. An
+  edit of an inherited row writes a **local row** on the instance (the
+  master's row is untouched); undoing the edit removes the local row
+  again.
+- **Formula values stay refused** (ADR 0058): the row keeps its typed
+  field and refuses the edit with one status line, as in the other
+  panes.
