@@ -50,10 +50,10 @@ Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard.
 | [P6-16](tasks/P6-16.md) | implementer | P6-08 | B | merged (reader drops the P5-10 artefacts; writer recovers the contents relationship id) | — |
 | [P6-09](tasks/P6-09.md) | implementer | P6-03, P6-07 | B2 | merged (typed Shape Data and Size & Position panels) | — |
 | [P6-10](tasks/P6-10.md) | implementer | P6-07, P6-08 | C | merged (100.0% agreement on 5 184 counted cells; exit resize test) | — |
-| [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | waiting | — |
-| [P6-12](tasks/P6-12.md) | reviewer | P6-11 | E | waiting | — |
-| [P6-13](tasks/P6-13.md) | coverage-auditor | P6-11 | E | waiting | — |
-| [P6-14](tasks/P6-14.md) | cleanroom-auditor | P6-11 | E | waiting | — |
+| [P6-11](tasks/P6-11.md) | test-engineer | P6-10 | D | merged | d2bc3e7 |
+| [P6-12](tasks/P6-12.md) | reviewer | P6-11 | E | ready | — |
+| [P6-13](tasks/P6-13.md) | coverage-auditor | P6-11 | E | ready | — |
+| [P6-14](tasks/P6-14.md) | cleanroom-auditor | P6-11 | E | ready | — |
 
 Group A runs in parallel, one `crates/shapesheet` module set per task; `crates/shapesheet/src/lib.rs` belongs to no task and `error.rs` to P6-02. The `ferrogram-shapesheet` ratchet was reset from 100.0 (all stubs) to 85.0 when the plan was merged.
 
@@ -276,3 +276,4 @@ Open master items: none (the codegen task is part of the P2-01 plan).
 - P6-09 (open): `crates/ui` now depends on `ferrogram-shapesheet` (runtime). Shape Data values are display-only: no command writes a `Prop.Value` cell (`data.set.property`, reserved in ADR 0035, would write through `CellEdit::direct`, which is `pub(crate)`); panel edits dispatch `shape.set.*` and refuse formula cells first. The Shape Data pane lists the shape's own `Property` rows, not the union with the master chain. An unknown error spelling such as `#NAME?` shows a dash. Open design question: whether Size & Position lists the `LocPin`/`Flip` cells and whether formula fields become editable through a formula bar.
 - P6-10 (open): cross-check over 15 corpus files: 5 184 counted cells agree (100.0%); 4 058 skipped (2 589 no formula, 27 do not parse, 629 unknown function, 781 missing reference, 32 documented exclusions in ADR 0059, six causes). The resize exit test runs on `testfile5.vsdx` (22 evaluations against the 100 000 default budget). Fixed in `resolve.rs`: reads prefer cached values; `Geometry1` is the first Geometry section; a row index is the row's `IX`; an `Inh` snapshot on a style sheet is local. The document sheet and the master sheet are not modelled (most of the 781 missing references); style rows are not addressable by `SheetRef`. ADR 0059 needs the boolean bridge and the hard-default reading (P6-12 rules).
 - P6-15 (open): an instance with no style link of its own uses the first link of that kind on its master chain; a dangling link of its own still wins. `tab-short-prefix` and `recursion-cycle` stay marked as having nothing to draw by construction. `Resolved::via` does not name the master that supplied the style link. P6-08 open issues 1 and 6 closed; ADRs 0013 and 0057 amended.
+- P6-11 (open): four product fixes with regression tests: section-level cells are evaluated and written (new `Document::write_section_cell` in model), a formula that does not parse keeps its cached value with a `Syntax` warning, the four dropped warning kinds reach `RecalcOutcome`, and a master rung without the section no longer stops the chain. `commands::recalc::warning_line` prints the four new kinds through its fallback text (fix task). `vsdx` reads non-finite numeric literals that the writer rejects (pinned; hardening in the fix task). The master removed 541 libFuzzer-generated inputs committed beside the 14 seeds (`7244bce`). Report: `docs/reviews/phase-6-tests.md`.
