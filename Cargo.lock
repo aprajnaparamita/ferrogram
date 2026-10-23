@@ -1487,6 +1487,9 @@ dependencies = [
 [[package]]
 name = "ferrogram-vsd-binary"
 version = "0.0.1"
+dependencies = [
+ "ferrogram-model",
+]
 
 [[package]]
 name = "ferrogram-vsdx"
