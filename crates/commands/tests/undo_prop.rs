@@ -108,6 +108,15 @@ fn box_shape(x: f64, y: f64) -> Shape {
         geometry.rows.push(row);
     }
     shape.sheet.sections.push(geometry);
+    // One Shape Data row (`Prop.Cost.Value`), so `data.set.property`
+    // has a subject (task P6-18).
+    let mut property = Section::new(SectionName::from_static("Property"));
+    let mut cost = Row::new();
+    cost.name = Some(String::from("Cost"));
+    cost.ix = Some(0);
+    cost.cells = vec![cell("Value", 1.0)];
+    property.rows.push(cost);
+    shape.sheet.sections.push(property);
     let mut connection = Section::new(SectionName::from_static("Connection"));
     for (ix, (px, py)) in [(1.0, 1.0), (1.0, 0.0)].into_iter().enumerate() {
         let mut row = Row::new();
@@ -635,6 +644,16 @@ fn run_set_angle(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: 
     try_dispatch(ctx, registry, id, numbers(&[("angle", jitter(pick, 7))]));
 }
 
+/// `data.set.property`: the anchor shape's `Cost` row, a new number
+/// value of the row's own kind (task P6-18).
+fn run_set_property(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) {
+    select_tops(ctx, 1);
+    let mut args = Args::new();
+    args.set("row", ArgValue::Text("Cost".to_owned()));
+    args.set("value", ArgValue::Text(size(pick, 7).to_string()));
+    try_dispatch(ctx, registry, id, args);
+}
+
 /// `shape.set.text` and `text.commit` (with its `text` argument).
 fn run_text(ctx: &mut AppCtx, registry: &Registry, id: &'static str, pick: u32) {
     select_tops(ctx, 1);
@@ -1023,6 +1042,10 @@ const CASES: &[Case] = &[
     Case {
         id: "shape.set.angle",
         run: run_set_angle,
+    },
+    Case {
+        id: "data.set.property",
+        run: run_set_property,
     },
     Case {
         id: "shape.set.text",

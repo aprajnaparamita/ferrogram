@@ -22,11 +22,10 @@ pub struct CompositeEdit {
     pub label: String,
     /// The steps, in apply order (undo runs them backwards).
     ///
-    /// Push through [`CompositeEdit::push`]: it keeps the dirty-cell
-    /// union the recalc pass needs (ADR 0056). A step pushed straight
-    /// into this list keeps its own [`Edit::dirty_cells`], but the
-    /// composite does not see it.
-    pub edits: Vec<Box<dyn Edit>>,
+    /// Private (task P6-18 F12): [`CompositeEdit::push`] is the only way
+    /// in, so the dirty-cell union the recalc pass needs (ADR 0056)
+    /// cannot drift from the steps.
+    edits: Vec<Box<dyn Edit>>,
     /// The union of the steps' dirty cells, in push order.
     dirty: Vec<CellAddress>,
 }
