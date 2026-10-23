@@ -191,6 +191,12 @@ pub const HAND_MAINTAINED: &[&str] = &[
     "ui-spec/schema.json",
     "ui-spec/out-of-scope.txt",
     "ui-spec/README.md",
+    // Project-compiled Phase 7 data (P7-01, ADRs 0061-0064).
+    // `commands-phase7.yaml` is merged into `commands.yaml` and deleted
+    // by P7-02.
+    "ui-spec/commands-phase7.yaml",
+    "ui-spec/contexts.yaml",
+    "ui-spec/icons.yaml",
 ];
 
 /// True when `rel` is a hand-maintained file (one of
