@@ -165,60 +165,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "larrygram-geom"
-version = "0.0.1"
-
-[[package]]
-name = "larrygram-model"
-version = "0.0.1"
-dependencies = [
- "larrygram-geom",
-]
-
-[[package]]
-name = "larrygram-render"
-version = "0.0.1"
-dependencies = [
- "larrygram-geom",
- "larrygram-model",
- "larrygram-text",
- "serde",
- "serde-saphyr",
- "tiny-skia",
-]
-
-[[package]]
-name = "larrygram-render-fuzz"
-version = "0.0.0"
-dependencies = [
- "larrygram-model",
- "larrygram-render",
- "larrygram-vsdx",
- "libfuzzer-sys",
-]
-
-[[package]]
-name = "larrygram-text"
-version = "0.0.1"
-dependencies = [
- "larrygram-geom",
- "harfrust",
- "skrifa",
- "unicode-linebreak",
-]
-
-[[package]]
-name = "larrygram-vsdx"
-version = "0.0.1"
-dependencies = [
- "larrygram-geom",
- "larrygram-model",
- "flate2",
- "quick-xml",
- "zip",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -301,6 +247,60 @@ checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
 dependencies = [
  "getrandom",
  "libc",
+]
+
+[[package]]
+name = "larrygram-geom"
+version = "1.0.0-alpha.1"
+
+[[package]]
+name = "larrygram-model"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "larrygram-geom",
+]
+
+[[package]]
+name = "larrygram-render"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "larrygram-geom",
+ "larrygram-model",
+ "larrygram-text",
+ "serde",
+ "serde-saphyr",
+ "tiny-skia",
+]
+
+[[package]]
+name = "larrygram-render-fuzz"
+version = "0.0.0"
+dependencies = [
+ "larrygram-model",
+ "larrygram-render",
+ "larrygram-vsdx",
+ "libfuzzer-sys",
+]
+
+[[package]]
+name = "larrygram-text"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "harfrust",
+ "larrygram-geom",
+ "skrifa",
+ "unicode-linebreak",
+]
+
+[[package]]
+name = "larrygram-vsdx"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "flate2",
+ "larrygram-geom",
+ "larrygram-model",
+ "quick-xml",
+ "zip",
 ]
 
 [[package]]

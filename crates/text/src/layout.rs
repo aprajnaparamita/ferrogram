@@ -1370,6 +1370,21 @@ mod layout_tests {
     }
 
     #[test]
+    fn a_tab_is_its_own_item_and_advances_to_a_tab_stop() {
+        let fonts = default_fonts();
+        let l = layout(&boxed(vec![para("a\tb")]), &fonts).unwrap();
+        assert_eq!(l.lines.len(), 1);
+        let line = &l.lines[0];
+        assert_eq!(line.glyphs.len(), 2, "the tab itself is not a glyph");
+        // 12 pt 'a' ends well before the 0.5 in default tab stop, so
+        // the tab moves the 'b' there (ADR 0024 tab rule).
+        approx(line.glyphs[0].x, 0.0);
+        approx(line.glyphs[1].x, 0.5);
+        assert!(line.width >= 0.5, "{:?}", line.width);
+        assert!(l.warnings.is_empty());
+    }
+
+    #[test]
     fn hard_breaks_split_lines() {
         let fonts = default_fonts();
         let l = layout(&boxed(vec![para("a\nb")]), &fonts).unwrap();

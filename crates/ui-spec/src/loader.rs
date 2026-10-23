@@ -910,6 +910,22 @@ mod tests {
     }
 
     #[test]
+    fn documents_hold_nothing_for_the_curated_layout_kinds() {
+        // The same refusal one level down: `Documents` has no layout
+        // and no set for a curated kind (task P7-00).
+        let docs = || Documents {
+            panel_2016: Layout::default(),
+            panel_365: Layout::default(),
+            commands: Commands::default(),
+            shortcuts: Shortcuts::default(),
+        };
+        for kind in [LayoutKind::PanelModern, LayoutKind::PanelClassic] {
+            assert!(docs().layout(kind).is_none());
+            assert!(docs().into_set(kind).is_none());
+        }
+    }
+
+    #[test]
     fn load_refuses_the_curated_layout_kinds() {
         // Panel Modern and Panel Classic have no v1 data file: the
         // loader says so instead of guessing (task P7-00).
