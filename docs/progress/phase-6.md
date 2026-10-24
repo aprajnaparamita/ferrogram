@@ -40,7 +40,7 @@ Phase 6 makes formulas live. `crates/shapesheet` parses, prints and evaluates Sh
 ## Gate results
 
 ```
-cargo xtask gate (full, 2026-10-24, main after the P6-18 merge, 152fae3)
+cargo xtask gate (full, 2026-10-24, main after the P6-18 merge, cd993df)
   PASS  codegen
   PASS  parity
   PASS  fmt
@@ -90,10 +90,10 @@ The new ratchet is each crate's exact value (covered over total lines) rounded d
 
 ## Fixes made on main by the master
 
-- Refused `SETF` targets return the new `Error::SetfRefused` instead of a conversion error (`fff98f9`).
-- 541 libFuzzer-generated inputs committed beside the 14 `eval_source` seeds were removed (`7244bce`).
+- Refused `SETF` targets return the new `Error::SetfRefused` instead of a conversion error (`b134a18`).
+- 541 libFuzzer-generated inputs committed beside the 14 `eval_source` seeds were removed (`509fcec`).
 - The P6-05 task file's reference examples were renamed to our own names, matching P6-17.
-- The gate's `test` step runs only the doc tests when coverage also runs, because `cargo llvm-cov` runs every other test (`6f44208`); this cut 6 to 13 minutes from each full gate.
+- The gate's `test` step runs only the doc tests when coverage also runs, because `cargo llvm-cov` runs every other test (`e32a0cd`); this cut 6 to 13 minutes from each full gate.
 - AGENTS.md section 7: workers run the full hand-off gate once, at the end.
 - `cargo xtask extract --check` lists the three project-compiled Phase 7 data files as hand-maintained.
 

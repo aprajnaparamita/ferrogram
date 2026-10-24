@@ -1,7 +1,7 @@
 # Phase 6 clean-room and licence audit
 
 - Task: P6-14, role `cleanroom-auditor`
-- Diff audited: `git diff phase-5..main` (`f368b02..4112a26`), the Phase 6
+- Diff audited: `git diff phase-5..main` (`812d307..cea619f`), the Phase 6
   part = 133 files, +29,305/-547; the interleaved P7-01 import (317
   files: brand assets, Tabler icons, `ui-spec` layouts) is named where it
   touches a shared file and is otherwise left to P7-13
@@ -49,8 +49,8 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 | F1 | minor | `crates/shapesheet/src/value.rs:54`, `:56` | AGENTS.md 4: write our own descriptions | Two `ErrorCode` glosses are verbatim table-cell text of `about-error-values.md` ("an argument or operand of the wrong type", "a reference to a cell that does not exist"). The other four glosses are already reworded. Reword these two, e.g. "a wrongly typed operand or argument" and "names a cell that is gone". |
 | F2 | minor | `crates/shapesheet/fuzz/corpus/parse/reference-forms:1`, `crates/shapesheet/fuzz/corpus/eval_source/reference-forms:1`; also `crates/shapesheet/tests/parser.rs:96-112`, `crates/shapesheet/src/printer.rs:462-532`, `crates/shapesheet/src/parser.rs:872-892`, `docs/adr/0051-formula-grammar-ast-and-printer.md:65`, `docs/adr/0054-reference-resolution-and-inheritance.md:78-86`, `docs/tasks/P6-05.md:94-100` | AGENTS.md 4: commit derived facts, not quoted source; `ATTRIBUTION.md` must state the true source | The whole example column of `about-cell-references.md` (`Star!Angle`, `Executive.2!Height`, `Char.Font[3]`, `Scratch.A5`, `Sheet.8!FillForegnd`, `Masters[Gear]!Shaft!Geometry1.X1`, `ThePage!User.Vanishing_Point`, `Pages[Page-3]!Sheet.4!BeginX`, `Styles!Manager!LineColor`, `TheDoc!PreviewQuality`, `'1-D'!LineColor`) is committed verbatim as test fixtures, doc examples and fuzz seeds, while the seeds' `ATTRIBUTION.md` row says "Our own bytes, no third-party source". These are short syntax examples, not prose, and the reference forms themselves are recorded as facts (source 19), so nothing here is long-form text; but the bytes are the source's, not ours. Either rename the examples to our own (`Masters[Bearing]!Hub!...`, `Pages[Sheet-3]!...`) or keep them and correct the row: "example strings assembled from `about-cell-references.md` (source 19)". |
 | F3 | minor | `crates/vsdx/src/read/value.rs:4`, `:19-20`, `:76`; `crates/vsdx/src/write/mod.rs:405-414`; `docs/sources.md` row 3 | AGENTS.md 4: every new fact from a Microsoft source has a `docs/sources.md` row | P6-08 and P6-16 commit new [MS-VSDX]-derived facts (a `U` spelling for every value kind, from the `U attribute value` table 2.2.5.3.3.1 and the Cell `V`/`U`/`E` rule 2.2.11.2.2.2; the contents-`Rel` id recovery rule), but source 3's committed-derived-data cell still says only "Schema element/type name tables, per-cell ShapeSheet reference, OPC ↔ Visio XML relationship". Extend source 3's cell (or add a row) to name those tables and the contents-`Rel` rule. The `LIST` spelling is correctly marked as our own in the code. |
-| F5 | minor | `ATTRIBUTION.md`, the `crates/*/tests/*.proptest-regressions` row | AGENTS.md 4: every committed asset has a row, with the source named | The row's glob covers the two new Phase 6 files (`crates/shapesheet/tests/parser.proptest-regressions`, commit `178013c`; `crates/vsdx/tests/properties.proptest-regressions`, commit `749c4aa`) but its note names only P3-11, P4-10 and P5-11, and neither commit touches `ATTRIBUTION.md`. Add the P6 task ids to the note (same fix as P5-14's F2). |
-| F6 | minor | `docs/sources.md:27` (outside the Phase 6 diff: P7-01, commit `00b7aba`) | AGENTS.md 4 / P5-14 F1 precedent | A blank line splits the sources table after row 20, so rows 21-23 (Tabler, the brand artwork, the photograph) fall out of the table in every renderer. Delete the blank line. For P7-13 or a master fix. |
+| F5 | minor | `ATTRIBUTION.md`, the `crates/*/tests/*.proptest-regressions` row | AGENTS.md 4: every committed asset has a row, with the source named | The row's glob covers the two new Phase 6 files (`crates/shapesheet/tests/parser.proptest-regressions`, commit `1875328`; `crates/vsdx/tests/properties.proptest-regressions`, commit `43ed80e`) but its note names only P3-11, P4-10 and P5-11, and neither commit touches `ATTRIBUTION.md`. Add the P6 task ids to the note (same fix as P5-14's F2). |
+| F6 | minor | `docs/sources.md:27` (outside the Phase 6 diff: P7-01, commit `2d93e85`) | AGENTS.md 4 / P5-14 F1 precedent | A blank line splits the sources table after row 20, so rows 21-23 (Tabler, the brand artwork, the photograph) fall out of the table in every renderer. Delete the blank line. For P7-13 or a master fix. |
 
 ## Checklist
 
@@ -86,7 +86,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    `docs/sources.md` row; raw downloads stayed in `reference/`.** Pass,
    with F3. Rows 19 (the ShapeSheet reference's formula pages and
    function pages) and 20 (the corpus formula census) were added in the
-   same commit as the ADRs that use them (`4990003`) and cover the phase's
+   same commit as the ADRs that use them (`5c3ebab`) and cover the phase's
    main transcriptions: operator set and precedence, reference forms,
    unit spellings, error values, function names and arities, the census
    counts. `git ls-files reference` is empty and no diff path touches
@@ -115,12 +115,12 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 5. **Every new committed asset has an `ATTRIBUTION.md` row in the same
    commit (expected: none in Phase 6).** Pass, with F5. Phase 6 adds no
    new asset *type*: the two new fuzz seed directories get their rows in
-   the same commits that add the seeds (`cf0d16e` for
-   `crates/shapesheet/fuzz/corpus/parse/*`, `461e170` for
+   the same commits that add the seeds (`85acaf9` for
+   `crates/shapesheet/fuzz/corpus/parse/*`, `33085ec` for
    `crates/shapesheet/fuzz/corpus/eval_source/*`), and the row wording is
    accurate for every seed except the two `reference-forms` seeds (F2).
-   The master's `7244bce` removed the 541 libFuzzer-generated inputs that
-   `461e170` had brought in beside the named seeds; only the named,
+   The master's `509fcec` removed the 541 libFuzzer-generated inputs that
+   `33085ec` had brought in beside the named seeds; only the named,
    hand-written seeds are committed now. No `corpus/` file was added, so
    `corpus/PROVENANCE.md` needed no row. The two `proptest-regressions`
    files sit under the existing class row but its note does not name them

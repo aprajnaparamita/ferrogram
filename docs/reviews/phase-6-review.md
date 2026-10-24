@@ -1,7 +1,7 @@
 # Phase 6 code review (P6-12)
 
 Task P6-12, reviewer, 2026-10-23, branch `agent/P6-12`. Review of the
-Phase 6 diff (`git diff 3695806..4112a26`, the phase-5 end to the branch
+Phase 6 diff (`git diff c6bd729..cea619f`, the phase-5 end to the branch
 tip; the interleaved P7-01 docs, layout data and stubs are out of scope)
 against AGENTS.md section 6, the layering (ADR 0002) and ADRs 0051-0060
 plus the ADR 0013 and 0057 amendments. The reviewer role is read-only:

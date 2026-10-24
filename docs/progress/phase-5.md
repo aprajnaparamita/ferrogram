@@ -30,7 +30,7 @@ The comparison renumbers `ShapeId`s into document order, because writing and rea
 ## Gate results
 
 ```
-cargo xtask gate (full, 2026-10-21, main after the P5-20 merge, 688cb8b)
+cargo xtask gate (full, 2026-10-21, main after the P5-20 merge, c89c86f)
   PASS  codegen
   PASS  parity
   PASS  fmt
@@ -78,7 +78,7 @@ The new ratchet is each crate's exact value rounded down to one decimal place. `
 
 ## Fixes made on main by the master
 
-- The draw and stencil drags kept their state in address-keyed thread-locals; they moved into `ToolMachine` fields (`882e7b1`).
+- The draw and stencil drags kept their state in address-keyed thread-locals; they moved into `ToolMachine` fields (`11817bb`).
 - `reroute_after_edit` re-routed a page by position in whichever document was active; it now acts on the active document only, with a test.
 - The P5-07 text-tool test registered a fake insert that collided with the real `insert.drawing.text_box`; it uses the real command.
 - Merge conflicts between unrebased P5-07 and P5-08 branches in `tools/mod.rs` were resolved by hand.

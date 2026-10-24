@@ -83,7 +83,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 5. **Every new committed asset has an `ATTRIBUTION.md` row in the same
    commit; expected none in Phase 5.** Pass, with F2. No new asset type
    appeared: the moved fuzz seeds are renames of already-attributed files,
-   and commit `579452f` updates both `ATTRIBUTION.md` and
+   and commit `5de3786` updates both `ATTRIBUTION.md` and
    `corpus/PROVENANCE.md` in the same commit as the moves (rows now name
    `crates/vsdx/fuzz/corpus/read_package/` and
    `crates/render/fuzz/corpus/render_document/`). Every moved file still has
@@ -92,7 +92,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    `render_document/` files are four byte-identical fixture copies plus the
    three named junk files, exactly as `corpus/PROVENANCE.md` describes. The
    one new asset file, `crates/commands/tests/undo_prop.proptest-regressions`
-   (P5-11, commit `ce85c76`), is covered by the pre-existing glob row but its
+   (P5-11, commit `f2dfc70`), is covered by the pre-existing glob row but its
    note names no Phase 5 task: F2.
 
 Master notes answered: the whole phase was reviewed as `git diff
@@ -107,7 +107,7 @@ stencil.
 | id | severity | file:line | rule | suggested fix |
 |---|---|---|---|---|
 | F1 | minor | `docs/sources.md:25` | AGENTS.md section 4: record every source in `docs/sources.md` (a row that leaves the table is not recorded visibly) | Delete the blank line between row 17 and the new row 18 so the row stays inside the Markdown table. The same defect sits at line 21 (before row 15, pre-existing, not Phase 5); fix both while there. |
-| F2 | minor | `ATTRIBUTION.md:11` | AGENTS.md section 4: every committed asset file has a row in `ATTRIBUTION.md` (P4-13 F3 class) | The row `crates/*/tests/*.proptest-regressions` covers the path of `crates/commands/tests/undo_prop.proptest-regressions` (P5-11, `ce85c76`), but its note lists only tasks P3-11 and P4-10. Add P5-11 to the note so the row stays traceable per file. |
+| F2 | minor | `ATTRIBUTION.md:11` | AGENTS.md section 4: every committed asset file has a row in `ATTRIBUTION.md` (P4-13 F3 class) | The row `crates/*/tests/*.proptest-regressions` covers the path of `crates/commands/tests/undo_prop.proptest-regressions` (P5-11, `f2dfc70`), but its note lists only tasks P3-11 and P4-10. Add P5-11 to the note so the row stays traceable per file. |
 
 Counts: **blocker 0, major 0, minor 2**.
 

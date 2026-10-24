@@ -6,7 +6,7 @@ A clean-room, open-source diagramming app in pure Rust that aims to read and wri
 
 ## Build status
 
-Last full gate on `main`: **green, 2026-10-24** (Phase 6 closed, commit `152fae3`, 3110 tests). There is no public CI yet; the gate runs locally.
+Last full gate on `main`: **green, 2026-10-24** (Phase 6 closed, commit `cd993df`, 3110 tests). There is no public CI yet; the gate runs locally.
 
 | Step | Result |
 |---|---|

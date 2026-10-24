@@ -170,7 +170,7 @@ left to this review.
    top), and put a black-box check of Visio's group z-order on the
    screenshot-pass list.
 
-7. **Scene doc drift after the relative-transform fix (the `d17f9d4`
+7. **Scene doc drift after the relative-transform fix (the `e3d616f`
    check).** The builder and both backends are correct: node transforms
    are parent-relative (`build.rs:492–525`), the absolute transform is
    composed only for the `InfiniteLine` page clip, PNG composes

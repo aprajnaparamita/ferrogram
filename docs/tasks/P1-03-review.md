@@ -59,7 +59,7 @@ error. Do not edit `crates/ui-spec`.
   your Result.
 - **m3.** The Result says "the schema's `oneOf` allows the transition
   from `null`". The schema root is now `anyOf` and `command` is
-  `anyOf [commandId, null]` (`ddf98e7`). Correct the wording.
+  `anyOf [commandId, null]` (`735f38e`). Correct the wording.
 
 ## Master does at merge
 

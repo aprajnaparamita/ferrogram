@@ -1,14 +1,14 @@
 # Phase 2 clean-room audit
 
 - Task: P2-13, role `cleanroom-auditor`
-- Diff audited: `git diff 37a6b3f..main` (Phase 2, 123 files, +30,367)
+- Diff audited: `git diff 83169c9..main` (Phase 2, 123 files, +30,367)
 - Date: 2026-10-14
 
 Method: `cargo deny check` in the worktree; `git ls-files` scanned for
 binary and Microsoft-owned file types across the whole tree and the whole
 Phase 2 history; every committed string of eight words or more in the
 Phase 2 `.rs`, `.md`, `.toml` and `.yaml` files (and every deleted line in
-`git log -p 37a6b3f..main`, to catch committed-then-removed text) compared
+`git log -p 83169c9..main`, to catch committed-then-removed text) compared
 as 12-word shingles against a text corpus built from `reference/` (all
 Markdown, HTML, XML and XSD downloads plus the text of the Open
 Specifications PDFs via `pdftotext`); the fixture bytes compared against
@@ -42,7 +42,7 @@ rows that landed one commit after their assets.
    third-party file is committed; the fetched corpus rows in
    `corpus/PROVENANCE.md` carry their MPL-2.0 licence and pinned commit.
 3. **Assets and provenance.** Every Phase 2 asset has a `corpus/PROVENANCE.md`
-   row added in the same commit (`27ee078` fixtures, `c1e6d22` fuzz
+   row added in the same commit (`f0724cb` fixtures, `6991de6` fuzz
    corpus), and an `ATTRIBUTION.md` row (see F2 for the timing).
 4. **No copied long-form text.** No sentence of eight words or more in the
    Phase 2 sources matches any `reference/` source (the only shingle
@@ -92,9 +92,9 @@ finding; no history rewrite is warranted for XML markup.
 ### F2 (minor) — ATTRIBUTION.md rows landed one commit after their assets
 
 AGENTS.md section 4 requires the attribution row in the same commit as the
-asset. The fixture files went in at `27ee078` and their `ATTRIBUTION.md`
-row at `3cf234e`; the fuzz corpus copies went in at `c1e6d22` and the row
-was widened to cover them at `03789b4`. The rows are complete and correct
+asset. The fixture files went in at `f0724cb` and their `ATTRIBUTION.md`
+row at `d8dbd92`; the fuzz corpus copies went in at `6991de6` and the row
+was widened to cover them at `1c822e5`. The rows are complete and correct
 at `main`, so this is process only. The `corpus/PROVENANCE.md` rows did
 land in the same commit as their assets, which is the row the clean-room
 risk actually turns on.

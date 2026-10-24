@@ -1,7 +1,7 @@
 # Phase 2 coverage audit
 
 - Task: P2-12 (coverage-auditor), 2026-10-14
-- Scope: `main` at `fe6e328` (after P2-10), crates with Phase 2 code:
+- Scope: `main` at `766dbab` (after P2-10), crates with Phase 2 code:
   `geom`, `model`, `shapesheet`, `vsdx`, `ui-spec`, plus the apps and `xtask`.
 - Verdict: **PASS** — every crate with instrumented lines is above its
   threshold and above its ratchet. Findings: 0 blocker, 3 major, 11 minor.

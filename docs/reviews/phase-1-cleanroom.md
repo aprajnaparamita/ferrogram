@@ -20,20 +20,20 @@ committed-then-removed text.
 
 ### F1 (major) — git history still holds 151 verbatim support-page action descriptions
 
-`docs/tasks/P1-04.md` at commit `7097013` listed 151 action descriptions
+`docs/tasks/P1-04.md` at commit `f338256` listed 151 action descriptions
 quoted from the keyboard-shortcuts support page. The master removed them
-at merge (`6b75137`), but `7097013` is reachable from `main`, so the text
+at merge (`1044d46`), but `f338256` is reachable from `main`, so the text
 is in the branch history. 108 of the deleted strings match the archived
 support page verbatim (the rest differ only in case or punctuation).
 Other deleted lines that match sources are just OPC MIME types in
 `docs/vsdx-inventory.md` (derived facts, fine) — the P1-04 list is the
 only committed-then-removed source text in the Phase 1 history.
 
-`path: docs/tasks/P1-04.md @ 7097013` (removed at `6b75137`)
+`path: docs/tasks/P1-04.md @ f338256` (removed at `1044d46`)
 
 Verdict requested by the task: **history must be rewritten before the
 first push.** No remote exists yet, so the fix is cheap now: run
-`git filter-repo` (or an equivalent rebase) to replace the `7097013`
+`git filter-repo` (or an equivalent rebase) to replace the `f338256`
 blob of `docs/tasks/P1-04.md` with the merged version. After the first
 push the text is public forever. The current file is clean; it even
 records why the list was dropped (`docs/tasks/P1-04.md:460`).

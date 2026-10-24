@@ -1,7 +1,7 @@
 # Phase 3 coverage audit
 
 - Task: P3-13 (coverage-auditor), 2026-10-15
-- Scope: `main` at `255d730` (after P3-11), with the Phase 3 code in
+- Scope: `main` at `c777619` (after P3-11), with the Phase 3 code in
   `geom`, `model`, `render`, `text`, `vsdx` and `larrygram-cli`.
 - Verdict: **PASS** — every crate with instrumented lines is above its
   threshold and above its ratchet. Findings: 0 blocker, 5 major, 10 minor.
@@ -226,7 +226,7 @@ they are not worth chasing.
 ## Follow-up (P3-17)
 
 - Task: P3-17 (test-engineer), 2026-10-15, branch `agent/P3-17` on top of
-  `main` (`305626d`). Tests only: 56 new tests, and the only additions to
+  `main` (`ba03fce`). Tests only: 56 new tests, and the only additions to
   non-test code are two `#[cfg(test)]` helpers
   (`larrygram_text::font::unparsable_for_test`,
   `larrygram_render::styles::parse_for_test`). No product behaviour
