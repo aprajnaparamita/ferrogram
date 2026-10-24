@@ -2,7 +2,7 @@
 
 Task board. Only the master agent edits this file, on `main`.
 
-- Current phase: **6/7 boundary** (Phase 6 closed; next: R1, P7-00 rename, R4 after the user's "go", R5; then Phase 7 and Phase 8 side by side)
+- Current phase: **6/7 boundary** (Phase 6 closed; R1, P7-00 and R4 done on 2026-10-24; next: R5, then Phase 7 and Phase 8 side by side)
 - Phase 6 goal: ShapeSheet engine, core subset (KICKOFF.md). Exit: resizing master-based shapes from the corpus recomputes geometry correctly for supported functions; the phase report gives the agreement rate with cached values.
 - Phase 5 goal: editing core (KICKOFF.md). Exit: a user can build a 10-shape flowchart with connected shapes across two pages, save it, reopen it and keep editing.
 - Phase 6 complete (2026-10-24, report: [progress/phase-6.md](progress/phase-6.md), tag `phase-6`).
