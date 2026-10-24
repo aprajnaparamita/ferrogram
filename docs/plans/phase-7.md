@@ -90,8 +90,7 @@ every layout.
 2. **The button label "Watch Larry's story"** and the short
    description in 2.1: confirmed by the user on 2026-10-23.
 3. **The 2016 and 365 layouts from Phase 4** (decided). They are renamed
-   **Panel (2016 data)** and **Panel (365 data)**: the files
-   `ui-spec/panel-2016.yaml` and `panel-365.yaml` become
+   **Panel (2016 data)** and **Panel (365 data)**: the files become
    `ui-spec/panel-2016.yaml` and `panel-365.yaml`, and the layout ids,
    CLI values, settings values and labels follow (P7-00). The old names
    are culled from the git history in R4 as well.
@@ -211,7 +210,7 @@ Nothing else runs during the boundary, because every file changes.
   - Write a backup bundle.
   - Run `git filter-repo` to drop the earlier layout records from every
     commit and commit message, and to cull the old layout file names
-    (`panel-2016.yaml`, `panel-365.yaml`) from history: their paths are
+    from history: their paths are
     renamed to `panel-2016.yaml` and `panel-365.yaml` in every commit.
   - Re-tag `phase-0` to `phase-6`.
   - Move `/Users/dara/ferrogram` to `/Users/dara/larrygram` and

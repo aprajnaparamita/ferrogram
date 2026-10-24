@@ -92,7 +92,7 @@ fn parse_args(args: &[String]) -> Result<Options, AppError> {
 
 /// The `--ui-layout` value: `panel-2016` or `panel-365` (ADR 0032).
 ///
-/// The pre-rename values (`panel-2016`, `panel-365`, `2016`, `365`)
+/// The pre-rename values (`2016`, `365`)
 /// are rejected like any unknown value, with a message naming the
 /// current ones.
 fn parse_layout(value: &str) -> Result<LayoutKind, AppError> {
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn the_old_layout_values_are_rejected_naming_the_new_ones() {
-        for old in ["panel-2016", "panel-365"] {
+        for old in ["2016", "365"] {
             let error = parse_args(&strings(&["--ui-layout", old])).expect_err("old value");
             let shown = error.to_string();
             assert!(shown.contains(old), "{shown}");
