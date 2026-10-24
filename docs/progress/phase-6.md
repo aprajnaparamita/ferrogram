@@ -66,18 +66,18 @@ cargo xtask extract --check: OK
 | larrygram-vsd-binary | 281 | 100.0% | 85 | — | 100.0 |
 | larrygram-model | 10786 | 99.7% | 85 | 99.7 | 99.7 |
 | larrygram-ui-spec | 2043 | 99.4% | 85 | 99.3 | 99.4 |
-| larrygram-text | 1768 | 98.9% | 75 | 98.8 | 98.9 |
+| larrygram-text | 1768 | 98.9% | 75 | 98.8 | 98.8 |
 | larrygram-render | 7221 | 98.5% | 75 | 98.5 | 98.5 |
 | larrygram-commands | 10563 | 98.4% | 85 | 98.3 | 98.4 |
 | larrygram-vsdx | 7727 | 98.2% | 85 | 98.1 | 98.2 |
-| larrygram-shapesheet | 6744 | 97.0% | 85 | 85.0 (reset) | 97.0 |
+| larrygram-shapesheet | 6744 | 97.0% | 85 | 85.0 (reset) | 96.9 |
 | larrygram-ui | 11896 | 97.0% | 50 | 96.8 | 97.0 |
-| larrygram-cli | 1266 | 96.8% | 50 | 96.7 | 96.8 |
+| larrygram-cli | 1266 | 96.8% | 50 | 96.7 | 96.7 |
 | xtask | 10457 | 93.4% | — | 93.4 | 93.4 |
 | larrygram | 250 | 80.0% | 50 | 80.0 | 80.0 |
-| larrygram-web | 140 | 77.9% | — | 77.8 | 77.9 |
+| larrygram-web | 140 | 77.9% | — | 77.8 | 77.8 |
 
-The new ratchet is each crate's value rounded down to one decimal place. The `shapesheet` ratchet was reset to 85.0 at the start of the phase, because its stubs were replaced by about 6 700 lines of real code. `vsd-binary` holds the Phase 8 skeleton (P8-01), all stubs with contract tests. `larrygram-control` is still empty.
+The new ratchet is each crate's exact value (covered over total lines) rounded down to one decimal place; the coverage column shows it rounded to nearest. The `shapesheet` ratchet was reset to 85.0 at the start of the phase, because its stubs were replaced by about 6 700 lines of real code. `vsd-binary` holds the Phase 8 skeleton (P8-01), all stubs with contract tests. `larrygram-control` is still empty.
 
 ## Reviewer findings and resolution
 

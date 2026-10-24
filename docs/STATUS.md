@@ -18,7 +18,7 @@ Phase 7: Panel and Classic layouts, the Larrygram rename and the welcome wizard.
 | Task | Role | Depends on | Group | State | Branch |
 |---|---|---|---|---|---|
 | [P7-01](tasks/P7-01.md) | architect | none | 0 | merged (ADRs 0061–0067, data, brand assets, stubs, task files; master recovered six misplaced files) | — |
-| [P7-00](tasks/P7-00.md) | implementer | P7-01, `phase-6` tag | boundary | ready (the Larrygram rename; runs alone; R1 merged `21eb293`) | — |
+| [P7-00](tasks/P7-00.md) | implementer | P7-01, `phase-6` tag | boundary | merged (the Larrygram rename) | ced1670 |
 | [P7-02](tasks/P7-02.md) | implementer | boundary | 1 | waiting (commands and the Fluent join fixes) | — |
 | [P7-03](tasks/P7-03.md) | implementer | boundary | 1 | waiting (v2 loader, cross-checks, adapter) | — |
 | [P7-04](tasks/P7-04.md) | implementer | boundary | 1 | waiting (icon pipeline; R5 adds the image loaders) | — |
