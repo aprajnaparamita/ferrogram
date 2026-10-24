@@ -172,6 +172,7 @@ async fn run() -> Result<(), AppError> {
             canvas,
             web_options,
             Box::new(move |cc| {
+                larrygram_ui::install_image_loaders(&cc.egui_ctx);
                 let shell = app::build_shell(cc.storage, registry, layouts)?;
                 Ok(Box::new(app::WebApp::new(shell)))
             }),

@@ -127,6 +127,7 @@ fn run_with(args: &[String]) -> Result<(), AppError> {
         APP_NAME,
         native_options,
         Box::new(move |cc| {
+            larrygram_ui::install_image_loaders(&cc.egui_ctx);
             let shell = build_shell(cc.storage, registry, layouts, cli_layout)?;
             Ok(Box::new(LarrygramApp::new(shell)))
         }),

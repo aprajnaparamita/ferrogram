@@ -30,6 +30,12 @@ serde_json = "1"
 # `serde` derives for the settings seams (`WelcomeSettings`, task
 # P7-01). MIT OR Apache-2.0 (already in the tree).
 serde = { version = "1", features = ["derive"] }
+# The image loaders for the brand art and the icon set (ADR 0067):
+# `svg` draws SVGs through resvg, `image` decodes raster images through
+# the `image` crate, here PNG only. No file or HTTP loader: every image
+# is embedded. MIT OR Apache-2.0 / Zlib / BSD (checked by cargo deny).
+egui_extras = { version = "0.37", default-features = false, features = ["image", "svg"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # The wasm picker bridge (ADR 0036): `wasm-bindgen-futures` completes
 # rfd's async upload dialog on the browser event loop and `web-sys`

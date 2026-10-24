@@ -37,6 +37,15 @@ use std::fmt;
 use larrygram_commands::{CommandError, CommandId, Invocation};
 use larrygram_ui_spec::LoadError;
 
+/// Installs the SVG and PNG image loaders on `ctx` (ADR 0067).
+///
+/// Both apps call it once at start-up, before the first frame; UI tests
+/// that draw images call it on their harness context. Installing twice
+/// is harmless: a loader that is already present is skipped.
+pub fn install_image_loaders(ctx: &egui::Context) {
+    egui_extras::install_image_loaders(ctx);
+}
+
 /// A dispatch request produced by a widget (ADR 0028).
 ///
 /// Widgets never execute commands themselves; they return intents and
@@ -163,6 +172,55 @@ mod tests {
         };
         assert_eq!(render.to_string(), "render error: too large");
         assert_eq!(UiError::NotImplemented.to_string(), "not implemented yet");
+    }
+
+    /// Polls `uri` until a loader decodes it (the PNG loader may decode
+    /// on a worker thread) and returns its pixel size.
+    fn load_size(ctx: &egui::Context, uri: &'static str, bytes: &'static [u8]) -> [usize; 2] {
+        ctx.include_bytes(uri, bytes);
+        for _ in 0..500 {
+            match ctx.try_load_image(uri, egui::SizeHint::default()) {
+                Ok(egui::load::ImagePoll::Ready { image }) => return image.size,
+                Ok(egui::load::ImagePoll::Pending { .. }) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => panic!("{uri} did not load: {error}"),
+            }
+        }
+        panic!("{uri} did not finish loading");
+    }
+
+    #[test]
+    fn image_loaders_decode_the_brand_svg_and_png() {
+        let ctx = egui::Context::default();
+        install_image_loaders(&ctx);
+        // A second install keeps one loader of each kind.
+        install_image_loaders(&ctx);
+        let svg = load_size(
+            &ctx,
+            "bytes://icon.svg",
+            include_bytes!("../assets/brand/icon.svg"),
+        );
+        assert!(svg[0] > 0 && svg[1] > 0);
+        let png = load_size(
+            &ctx,
+            "bytes://larry.png",
+            include_bytes!("../assets/brand/larry.png"),
+        );
+        assert_eq!(png, [360, 360]);
+    }
+
+    #[test]
+    fn without_loaders_an_image_does_not_load() {
+        let ctx = egui::Context::default();
+        ctx.include_bytes(
+            "bytes://icon.svg",
+            include_bytes!("../assets/brand/icon.svg"),
+        );
+        assert!(
+            ctx.try_load_image("bytes://icon.svg", egui::SizeHint::default())
+                .is_err()
+        );
     }
 
     #[test]

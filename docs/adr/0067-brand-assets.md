@@ -64,9 +64,12 @@ over the closure in a scratch workspace):
 
 The closure passes the repository's `deny.toml` licence allow-list
 with no MPL crate, so the "only `larrygram-vsd-binary` is MPL" rule
-(ADR 0003) holds. Task P7-04 owns `crates/ui/Cargo.toml` and adds the
-dependency; the repository `cargo deny` step then checks the real
-closure. If `egui_extras` proves too heavy for wasm, the fallback is
+(ADR 0003) holds. The master added the dependency at the boundary
+(step R5): `egui_extras` with the `image` and `svg` features and no
+default features (no file or HTTP loader), and `image` with only the
+`png` decoder. `larrygram_ui::install_image_loaders` installs them, and
+both apps call it before the first frame. The repository `cargo deny`
+step checks the real closure. If `egui_extras` proves too heavy for wasm, the fallback is
 our own thin SVG reader over `tiny-skia` (already in the tree through
 `larrygram-render`); that is an implementation change, not a licence
 one.
