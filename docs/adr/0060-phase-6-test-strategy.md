@@ -80,9 +80,9 @@ gains one, with no undo entry), the `Inh` snapshot rendering test (a
 resized corpus instance draws at its own size), and round-trip tests for
 the writer's kind spelling (P2-14, the P5-10 artefacts).
 
-### Panels (`P6-09`)
+### Panes (`P6-09`)
 
-`egui_kittest` frames for the Shape Data and Size & Position panels:
+`egui_kittest` frames for the Shape Data and Size & Position panes:
 typed display, unit conversion on entry, and the read-only rule for
 formula cells (ADR 0058).
 
@@ -99,7 +99,7 @@ formula cells (ADR 0058).
 
 ### Coverage
 
-`ferrogram-shapesheet` joins the 85 % group with real code (it is already
+`larrygram-shapesheet` joins the 85 % group with real code (it is already
 listed in `coverage.toml`). One request for the master: the crate's
 ratchet is 100.0 from Phase 5 (an all-stub crate); Phase 6 gives it real
 code, so the ratchet should be reset to the 85 % threshold before the
@@ -144,6 +144,6 @@ land (the P6-01 stubs are at 100 %).
 - **One big integration test per crate instead of the split above.**
   Rejected: Phase 5 showed that a shared test file makes parallel tasks
   collide.
-- **UI snapshot tests of the panels.** Rejected for this phase: the
-  panels' contract is typed display and edit dispatch, which egui_kittest
-  asserts directly (the existing snapshot files belong to the ribbon).
+- **UI snapshot tests of the panes.** Rejected for this phase: the
+  panes' contract is typed display and edit dispatch, which egui_kittest
+  asserts directly (the existing snapshot files belong to the command bar).

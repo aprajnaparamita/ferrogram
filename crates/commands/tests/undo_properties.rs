@@ -28,8 +28,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{CommandError, Edit, UndoStack};
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{CommandError, Edit, UndoStack};
 use proptest::prelude::*;
 
 /// Shared state the counter edits apply to.

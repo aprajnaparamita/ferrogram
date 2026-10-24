@@ -1,7 +1,7 @@
 //! The command registry (ADR 0028): one dispatch table for every user
 //! action (AGENTS.md section 6).
 //!
-//! Menus, the ribbon, keyboard shortcuts, the CLI, the JSON control
+//! Menus, the command bar, keyboard shortcuts, the CLI, the JSON control
 //! channel and MCP dispatch by [`CommandId`] through [`Registry`].
 //! A command has an id, a label, an enabled-state predicate over
 //! [`AppCtx`] and an execution step with undo support ([`Edit`]).
@@ -66,7 +66,7 @@ const SCOPES: &[&str] = &[
 /// Maximum number of ids [`CommandId::intern`] will leak (ADR 0028).
 const INTERN_CAP: usize = 4096;
 
-/// A Ferrogram command id (ADR 0006).
+/// A Larrygram command id (ADR 0006).
 ///
 /// The grammar is `scope '.' verb ['.' qualifier]*` with lowercase ASCII
 /// letters, digits and underscore in the parts, and one of the fixed
@@ -115,16 +115,16 @@ impl std::fmt::Display for CommandId {
     }
 }
 
-impl From<CommandId> for ferrogram_ui_spec::CommandId {
+impl From<CommandId> for larrygram_ui_spec::CommandId {
     fn from(id: CommandId) -> Self {
-        ferrogram_ui_spec::CommandId::new(id.0)
+        larrygram_ui_spec::CommandId::new(id.0)
     }
 }
 
-impl TryFrom<&ferrogram_ui_spec::CommandId> for CommandId {
+impl TryFrom<&larrygram_ui_spec::CommandId> for CommandId {
     type Error = CommandIdError;
 
-    fn try_from(id: &ferrogram_ui_spec::CommandId) -> Result<CommandId, CommandIdError> {
+    fn try_from(id: &larrygram_ui_spec::CommandId) -> Result<CommandId, CommandIdError> {
         CommandId::intern(id.as_str())
     }
 }
@@ -319,8 +319,8 @@ impl Args {
 pub enum Source {
     /// A widget click in the app.
     Ui,
-    /// The ribbon.
-    Ribbon,
+    /// The command bar.
+    CommandBar,
     /// A menu or context menu.
     Menu,
     /// A keyboard shortcut (ADR 0036).
@@ -341,7 +341,7 @@ impl Source {
     pub fn is_interactive(self) -> bool {
         matches!(
             self,
-            Source::Ui | Source::Ribbon | Source::Menu | Source::Shortcut
+            Source::Ui | Source::CommandBar | Source::Menu | Source::Shortcut
         )
     }
 }
@@ -514,10 +514,10 @@ mod tests {
     fn parse_accepts_the_grammar() {
         assert_eq!(CommandId::parse("file.save").unwrap().as_str(), "file.save");
         assert_eq!(
-            CommandId::parse("view.ui_layout.visio_2016")
+            CommandId::parse("view.ui_layout.panel_2016")
                 .unwrap()
                 .as_str(),
-            "view.ui_layout.visio_2016"
+            "view.ui_layout.panel_2016"
         );
     }
 
@@ -600,7 +600,7 @@ mod tests {
     fn command_id_displays_and_converts() {
         let id = CommandId::parse("file.open").unwrap();
         assert_eq!(id.to_string(), "file.open");
-        let ui_id: ferrogram_ui_spec::CommandId = id.into();
+        let ui_id: larrygram_ui_spec::CommandId = id.into();
         assert_eq!(ui_id.as_str(), "file.open");
         let back = CommandId::try_from(&ui_id).unwrap();
         assert_eq!(back, id);

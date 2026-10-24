@@ -10,7 +10,7 @@
 //!   [`crate::to_model`] (ADR 0012) and the writer Phase 4 edits go through.
 //! - [`from_model`] **generates** the parts from the model alone, for new
 //!   documents: mapped content first, each entity's
-//!   [`Preserved`](ferrogram_model::Preserved) content after it. It is not
+//!   [`Preserved`](larrygram_model::Preserved) content after it. It is not
 //!   lossless for a loaded document (preserved fragments do not record which
 //!   source element they came from, P2-06 open issue 7).
 //!
@@ -27,7 +27,7 @@ mod patch;
 // which codes it must preserve (task P6-16).
 pub(crate) mod value;
 
-use ferrogram_model::{Document, DocumentKind, Master, Page, Preserved, XmlNode};
+use larrygram_model::{Document, DocumentKind, Master, Page, Preserved, XmlNode};
 
 use crate::Error;
 use crate::package::discovery::{
@@ -417,7 +417,7 @@ fn source_rel_id(package: &Package, index: &PartName, visio_id: i32) -> Option<S
     };
     root.children.iter().find_map(|child| {
         let element = match child {
-            ferrogram_model::XmlChild::Element(element) => element,
+            larrygram_model::XmlChild::Element(element) => element,
             _ => return None,
         };
         if !matches!(element.name.local.as_str(), "Page" | "Master") {
@@ -435,7 +435,7 @@ fn source_rel_id(package: &Package, index: &PartName, visio_id: i32) -> Option<S
             .children
             .iter()
             .filter_map(|child| match child {
-                ferrogram_model::XmlChild::Element(element) => Some(element),
+                larrygram_model::XmlChild::Element(element) => Some(element),
                 _ => None,
             })
             .find(|element| element.name.local == "Rel")
@@ -734,7 +734,7 @@ fn generated_rel_ids<E: ListEntity>(list: &[E]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{CellName, Preserved, Shape, ShapeId, XmlAttribute};
+    use larrygram_model::{CellName, Preserved, Shape, ShapeId, XmlAttribute};
 
     use super::*;
 
@@ -742,11 +742,11 @@ mod tests {
     fn sample() -> Document {
         let mut document = Document::new();
         let shape = document.add_shape(Shape::new(ShapeId { index: 0 }, 1));
-        let mut page = Page::new(ferrogram_model::PageId { index: 0 }, 1);
+        let mut page = Page::new(larrygram_model::PageId { index: 0 }, 1);
         page.name = "Page-1".to_owned();
         page.shapes.push(shape);
         document.pages.push(page);
-        let mut master = Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+        let mut master = Master::new(larrygram_model::MasterId { index: 0 }, 1);
         master.name_u = "Master.1".to_owned();
         document.masters.push(master);
         document
@@ -1027,9 +1027,9 @@ mod tests {
     fn preserved_rel_ids_and_fresh_ids_do_not_collide() {
         let mut preserved = Preserved::new();
         preserved.children.push(XmlNode {
-            name: ferrogram_model::QName::local("Rel"),
+            name: larrygram_model::QName::local("Rel"),
             attributes: vec![XmlAttribute {
-                name: ferrogram_model::QName::local("id"),
+                name: larrygram_model::QName::local("id"),
                 value: "rId7".to_owned(),
             }],
             children: Vec::new(),
@@ -1045,12 +1045,12 @@ mod tests {
 
     #[test]
     fn generated_rel_ids_reuse_the_preserved_rel() {
-        let mut page = Page::new(ferrogram_model::PageId { index: 0 }, 1);
+        let mut page = Page::new(larrygram_model::PageId { index: 0 }, 1);
         let mut preserved = Preserved::new();
         preserved.children.push(XmlNode {
-            name: ferrogram_model::QName::local("Rel"),
+            name: larrygram_model::QName::local("Rel"),
             attributes: vec![XmlAttribute {
-                name: ferrogram_model::QName::local("id"),
+                name: larrygram_model::QName::local("id"),
                 value: "rId3".to_owned(),
             }],
             children: Vec::new(),
@@ -1064,10 +1064,10 @@ mod tests {
     #[test]
     fn cells_round_trip_through_a_generated_shape() {
         let mut document = sample();
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("PinX"));
+        let mut cell = larrygram_model::Cell::new(CellName::from_static("PinX"));
         cell.formula = Some("2".to_owned());
-        cell.value = Some(ferrogram_model::CellValue::Number(2.0));
-        cell.unit = ferrogram_geom::Unit::Inches;
+        cell.value = Some(larrygram_model::CellValue::Number(2.0));
+        cell.unit = larrygram_geom::Unit::Inches;
         if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
             shape.sheet.cells.push(cell);
         }
@@ -1079,9 +1079,9 @@ mod tests {
         assert_eq!(shape.sheet.cells[0].name.as_str(), "PinX");
         assert_eq!(
             shape.sheet.cells[0].value,
-            Some(ferrogram_model::CellValue::Number(2.0))
+            Some(larrygram_model::CellValue::Number(2.0))
         );
-        assert_eq!(shape.sheet.cells[0].unit, ferrogram_geom::Unit::Inches);
+        assert_eq!(shape.sheet.cells[0].unit, larrygram_geom::Unit::Inches);
     }
 
     #[test]
@@ -1090,12 +1090,12 @@ mod tests {
         // or number-like `Str` used to read back as `Number` because the
         // writer emitted no `U` for it.
         let mut document = sample();
-        let mut flag = ferrogram_model::Cell::new(CellName::from_static("Flag"));
-        flag.value = Some(ferrogram_model::CellValue::Bool(true));
-        let mut label = ferrogram_model::Cell::new(CellName::from_static("Label"));
-        label.value = Some(ferrogram_model::CellValue::Str("2".to_owned()));
-        let mut plain = ferrogram_model::Cell::new(CellName::from_static("Plain"));
-        plain.value = Some(ferrogram_model::CellValue::Str("Themed".to_owned()));
+        let mut flag = larrygram_model::Cell::new(CellName::from_static("Flag"));
+        flag.value = Some(larrygram_model::CellValue::Bool(true));
+        let mut label = larrygram_model::Cell::new(CellName::from_static("Label"));
+        label.value = Some(larrygram_model::CellValue::Str("2".to_owned()));
+        let mut plain = larrygram_model::Cell::new(CellName::from_static("Plain"));
+        plain.value = Some(larrygram_model::CellValue::Str("Themed".to_owned()));
         if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
             shape.sheet.cells.push(flag);
             shape.sheet.cells.push(label);
@@ -1107,15 +1107,15 @@ mod tests {
         let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
         assert_eq!(
             shape.sheet.cells[0].value,
-            Some(ferrogram_model::CellValue::Bool(true))
+            Some(larrygram_model::CellValue::Bool(true))
         );
         assert_eq!(
             shape.sheet.cells[1].value,
-            Some(ferrogram_model::CellValue::Str("2".to_owned()))
+            Some(larrygram_model::CellValue::Str("2".to_owned()))
         );
         assert_eq!(
             shape.sheet.cells[2].value,
-            Some(ferrogram_model::CellValue::Str("Themed".to_owned()))
+            Some(larrygram_model::CellValue::Str("Themed".to_owned()))
         );
     }
 
@@ -1127,9 +1127,9 @@ mod tests {
         let mut document = sample();
         document
             .properties
-            .push(ferrogram_model::Property::new("title", "line1\nline2"));
-        let mut cell = ferrogram_model::Cell::new(CellName::from_static("Note"));
-        cell.value = Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()));
+            .push(larrygram_model::Property::new("title", "line1\nline2"));
+        let mut cell = larrygram_model::Cell::new(CellName::from_static("Note"));
+        cell.value = Some(larrygram_model::CellValue::Str("a\nb\rc".to_owned()));
         if let Some(shape) = document.shape_mut(ShapeId { index: 0 }) {
             shape.sheet.cells.push(cell);
         }
@@ -1140,7 +1140,7 @@ mod tests {
         let shape = reread.shape(ShapeId { index: 0 }).expect("shape");
         assert_eq!(
             shape.sheet.cells[0].value,
-            Some(ferrogram_model::CellValue::Str("a\nb\rc".to_owned()))
+            Some(larrygram_model::CellValue::Str("a\nb\rc".to_owned()))
         );
     }
 

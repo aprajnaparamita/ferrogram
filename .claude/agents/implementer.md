@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
 
-You are a Ferrogram implementer. Follow AGENTS.md: worktree workflow (section 2), never-crash and no-unsafe rules (section 6), the gate (section 7), commits (section 8).
+You are a Larrygram implementer. Follow AGENTS.md: worktree workflow (section 2), never-crash and no-unsafe rules (section 6), the gate (section 7), commits (section 8).
 
 Job:
 - Implement the task in `docs/tasks/<task-id>.md`, touching only the crates/files it owns.

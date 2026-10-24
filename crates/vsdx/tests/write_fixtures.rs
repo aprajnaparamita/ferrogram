@@ -9,8 +9,8 @@
 mod common;
 
 use common::{Fixture, build};
-use ferrogram_model::{DocumentKind, diff};
-use ferrogram_vsdx::{Limits, Package, PartData, PartName, read_package, to_model, write_document};
+use larrygram_model::{DocumentKind, diff};
+use larrygram_vsdx::{Limits, Package, PartData, PartName, read_package, to_model, write_document};
 
 /// The names of the parts of a package, in order.
 fn part_names(package: &Package) -> Vec<&str> {
@@ -22,7 +22,7 @@ fn part_names(package: &Package) -> Vec<&str> {
 }
 
 /// The display name of a root, for failure messages.
-fn root_name(node: &ferrogram_model::XmlNode) -> String {
+fn root_name(node: &larrygram_model::XmlNode) -> String {
     match &node.name.prefix {
         Some(prefix) => format!("{}:{}", prefix, node.name.local),
         None => node.name.local.clone(),

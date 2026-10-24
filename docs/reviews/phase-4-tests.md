@@ -71,12 +71,12 @@ entries over 8 command ids, modifier-duplicate chords).
 `crates/ui/tests/phase4/flows.rs` (4 tests).** egui_kittest clicks
 through the real `Shell`: the View tab's `ShowGrid` checkbox toggles
 `view.toggle_grid` twice; the View/Options dialog switches to the 365
-ribbon with no restart (same `Shell`, same `AppCtx`, the 365-only tab
+command bar with no restart (same `Shell`, same `AppCtx`, the 365-only tab
 appears); the Help menu opens the About window; the close-confirmation
-dialog closes a dirty document on "Close without saving"; the ribbon
+dialog closes a dirty document on "Close without saving"; the command bar
 File button opens the backstage with its committed placements (each
 "File" button gets its own rig: the menu-bar button's popup covers the
-ribbon one); the QAT `FileNewDefault` button opens a document; a page
+command bar one); the QAT `FileNewDefault` button opens a document; a page
 tab click switches the active page. Flows: an asynchronous pick (the
 wasm upload shape) completes `file.open` across frames through
 `finish_pick`, a cancelled async pick clears the pending command, the
@@ -84,7 +84,7 @@ window commands are `Unsupported` for programmatic callers through
 `dispatch_one` while `Shell::dispatch` runs them (P4-03 deviation 4),
 and `app.quit` resets its flag when the close goes to the viewport.
 `ShellRig` gained `large()` (12000x4000, the P4-04 note about the
-ribbon width) and `click`/`try_click`/`try_click_nth` helpers.
+command bar width) and `click`/`try_click`/`try_click_nth` helpers.
 
 **`crates/vsdx/tests/zip_entry_names.rs` (4 tests).** The zip 9
 entry-name path: an entry name with invalid UTF-8 bytes (leading 0xFF,
@@ -95,7 +95,7 @@ the name is tamed the same way; the entry-count cap applies whatever
 the names decode to.
 
 **Not touched (as instructed):** `SKIP_RASTER` / `KNOWN_BLANK` in
-`apps/ferrogram/tests/open_corpus.rs`; the corpus-open coverage of the
+`apps/larrygram/tests/open_corpus.rs`; the corpus-open coverage of the
 exit criterion stays P4-09's test.
 
 ## Fuzz targets
@@ -179,17 +179,17 @@ exercise previously-uncovered source lines.
 
 | crate | before | after | threshold / ratchet |
 |---|---|---|---|
-| ferrogram | 80.0 | 80.0 | 50 / 66.6 |
-| ferrogram-cli | 96.8 | 96.8 | 50 / 96.8 |
-| ferrogram-commands | 97.2 | 97.2 | 85 |
-| ferrogram-render | 98.5 | 98.5 | 75 / 98.4 |
-| ferrogram-text | 98.9 | 98.8 | 75 / 98.8 |
-| ferrogram-ui | 92.3 | **94.8** | 50 |
-| ferrogram-ui-spec | 99.4 | 99.4 | 85 / 99.3 |
-| ferrogram-vsdx | 98.0 | 98.0 | 85 / 98.0 |
+| larrygram | 80.0 | 80.0 | 50 / 66.6 |
+| larrygram-cli | 96.8 | 96.8 | 50 / 96.8 |
+| larrygram-commands | 97.2 | 97.2 | 85 |
+| larrygram-render | 98.5 | 98.5 | 75 / 98.4 |
+| larrygram-text | 98.9 | 98.8 | 75 / 98.8 |
+| larrygram-ui | 92.3 | **94.8** | 50 |
+| larrygram-ui-spec | 99.4 | 99.4 | 85 / 99.3 |
+| larrygram-vsdx | 98.0 | 98.0 | 85 / 98.0 |
 | others (geom, model, shapesheet, web, xtask) | — | unchanged | at/above |
 
-`ferrogram-ui` gains 2.5 points from the newly covered settings,
+`larrygram-ui` gains 2.5 points from the newly covered settings,
 shortcut and shell error paths. No threshold or ratchet change is
 proposed (the master owns `coverage.toml`).
 

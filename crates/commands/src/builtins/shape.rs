@@ -1,5 +1,5 @@
 //! `shape.*` commands (P5-04): move, resize, rotate and the Size &
-//! Position panel edits (ADR 0035), plus the group enter/exit commands.
+//! Position pane edits (ADR 0035), plus the group enter/exit commands.
 //!
 //! Argument names are the command contract (task P5-04):
 //!
@@ -13,8 +13,8 @@
 //! - `shape.set.angle` takes `angle` (radians, absolute).
 //!
 //! `shape.move`, `shape.resize` and `shape.rotate` work on every
-//! selected shape; the `shape.set.*` panel fields edit the anchor
-//! shape (the panels' subject, ADR 0041). Every command returns one
+//! selected shape; the `shape.set.*` pane fields edit the anchor
+//! shape (the panes' subject, ADR 0041). Every command returns one
 //! [`CompositeEdit`] (one undo step, ADR 0040) and each step bumps
 //! `DocumentSession::changes` (ADR 0040 rule 3).
 //!
@@ -26,8 +26,8 @@
 //! pass compute the geometry rows whose formulas compute (ADR 0056);
 //! [`GeometryEdit`] scales the constant rows beside it.
 
-use ferrogram_geom::Size;
-use ferrogram_model::{CellValue, CellWrite, ShapeId, SheetRef};
+use larrygram_geom::Size;
+use larrygram_model::{CellValue, CellWrite, ShapeId, SheetRef};
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
@@ -83,19 +83,19 @@ fn in_group(ctx: &AppCtx) -> crate::Enabled {
 }
 
 /// The active page, when one exists (the re-route hook's argument).
-fn active_page(ctx: &AppCtx) -> Option<ferrogram_model::PageId> {
+fn active_page(ctx: &AppCtx) -> Option<larrygram_model::PageId> {
     ctx.active_document()
         .and_then(|session| session.active_page)
 }
 
 /// Re-routes the page's glued connectors after an editing command.
-fn reroute(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
+fn reroute(ctx: &mut AppCtx, page: Option<larrygram_model::PageId>) {
     if let Some(page) = page {
         reroute_quietly_on(ctx, page);
     }
 }
 
-/// The panels' subject: the anchor, or the last selected shape when
+/// The panes' subject: the anchor, or the last selected shape when
 /// there is no anchor.
 fn anchor_shape(ctx: &AppCtx) -> Option<ShapeId> {
     ctx.selection
@@ -122,7 +122,7 @@ pub(super) fn anchor_target(
 /// One number cell write of `shape` (the shared tail of the geometry
 /// commands).
 fn cell_edit(
-    doc: &ferrogram_model::Document,
+    doc: &larrygram_model::Document,
     session: SessionId,
     label: &str,
     shape: ShapeId,
@@ -148,7 +148,7 @@ fn cell_edit(
 /// the current size can be scaled (a scale factor needs a positive
 /// source box).
 fn scale_edit(
-    doc: &ferrogram_model::Document,
+    doc: &larrygram_model::Document,
     session: SessionId,
     shape: ShapeId,
     from: (f64, f64),
@@ -409,23 +409,23 @@ mod tests {
     use super::*;
     use crate::Source;
     use crate::app::{DocumentSession, Settings};
-    use ferrogram_model::{Cell, CellName, CellValue, Document, Preserved};
+    use larrygram_model::{Cell, CellName, CellValue, Document, Preserved};
 
     fn number_cell(name: &str, value: f64) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: Some(number_literal(value)),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }
 
     /// A state with one 2x1 shape on one page.
-    fn fixture() -> (AppCtx, SessionId, ferrogram_model::PageId, ShapeId) {
+    fn fixture() -> (AppCtx, SessionId, larrygram_model::PageId, ShapeId) {
         let mut doc = Document::new();
         let page = doc.add_page("Page-1").expect("page");
-        let mut shape = ferrogram_model::Shape::new(ShapeId { index: 0 }, 1);
+        let mut shape = larrygram_model::Shape::new(ShapeId { index: 0 }, 1);
         shape.sheet.cells.push(number_cell("PinX", 1.0));
         shape.sheet.cells.push(number_cell("PinY", 2.0));
         let shape = doc.insert_shape(page, shape, None).expect("insert");
@@ -449,7 +449,7 @@ mod tests {
     }
 
     /// A selection entry that is no longer on a page is refused by the
-    /// panel commands (`shape.set.*`) with a named shape.
+    /// pane commands (`shape.set.*`) with a named shape.
     #[test]
     fn a_detached_anchor_is_refused() {
         let (mut ctx, _session, _page, shape) = fixture();

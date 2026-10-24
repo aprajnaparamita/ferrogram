@@ -12,7 +12,7 @@
 //! Names match case-insensitively; the file's own spelling is what later
 //! gets written back.
 
-use ferrogram_model::{Cell, CellName, Row, Section, Sheet};
+use larrygram_model::{Cell, CellName, Row, Section, Sheet};
 
 /// The default cell of a named row (`Prop.Cost` reads `Cost`'s `Value`).
 pub(crate) const DEFAULT_ROW_CELL: &str = "Value";
@@ -112,7 +112,7 @@ pub(crate) fn canonical_section(name: &str) -> String {
     };
     if mapped == lowered {
         // A file spelling with its own alias (`Property` -> `Shape Data`).
-        return ferrogram_model::aliases::table_name(name).to_owned();
+        return larrygram_model::aliases::table_name(name).to_owned();
     }
     mapped.to_owned()
 }
@@ -184,7 +184,7 @@ pub(crate) fn table_column(canon: &str, name: &str) -> bool {
 /// the cell.
 pub(crate) fn column_kind(section: Option<&str>, name: &str) -> Option<&'static str> {
     let mut fallback = None;
-    for def in ferrogram_model::generated::CELLS {
+    for def in larrygram_model::generated::CELLS {
         if !eq_ci(def.name, name) {
             continue;
         }
@@ -201,7 +201,7 @@ pub(crate) fn column_kind(section: Option<&str>, name: &str) -> Option<&'static 
 /// The spelling the ShapeSheet table uses for a cell name, when it knows
 /// one (the model's table lookup matches spelling exactly).
 pub(crate) fn table_spelling(name: &str) -> Option<String> {
-    ferrogram_model::generated::CELLS
+    larrygram_model::generated::CELLS
         .iter()
         .find(|def| eq_ci(def.name, name))
         .map(|def| def.name.to_owned())
@@ -371,20 +371,20 @@ pub(crate) fn spelled_cell(name: &str) -> CellName {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{CellName, Preserved};
+    use larrygram_model::{CellName, Preserved};
 
     fn cell(name: &str) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: None,
             value: None,
-            unit: ferrogram_geom::Unit::Unitsless,
+            unit: larrygram_geom::Unit::Unitsless,
             preserved: Preserved::new(),
         }
     }
 
     fn section_with(name: &str, rows: Vec<Vec<&str>>) -> Section {
-        let mut section = Section::new(ferrogram_model::SectionName::new(name.to_owned()));
+        let mut section = Section::new(larrygram_model::SectionName::new(name.to_owned()));
         for (index, cells) in rows.into_iter().enumerate() {
             let mut row = Row::new();
             row.ix = Some(i32::try_from(index).unwrap_or(i32::MAX));

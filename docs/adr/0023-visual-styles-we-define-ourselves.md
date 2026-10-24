@@ -113,7 +113,7 @@ Nothing here is copied from Visio output; a screenshot may be *observed*
   fidelity is explicitly not a goal of this run; observation-driven
   refinement belongs to the screenshot pass.
 - **Keep patterns in `ui-spec/`.** Rejected: that directory is UI layout
-  data (menus, ribbon, shortcuts); these are rendering definitions used by
+  data (menus, command bar, shortcuts); these are rendering definitions used by
   the engine and the CLI with no UI involved.
 - **Skip patterns in Phase 3 (solid lines only).** Rejected: KICKOFF lists
   line patterns and fill patterns in the Phase 3 rendering list.

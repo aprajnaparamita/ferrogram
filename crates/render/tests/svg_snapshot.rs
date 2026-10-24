@@ -9,7 +9,7 @@
 
 mod common;
 
-use ferrogram_render::{SvgOptions, render_svg};
+use larrygram_render::{SvgOptions, render_svg};
 
 /// The fixtures snapshotted as SVG text.
 const SNAPSHOTS: &[&str] = &["render-geometry-absolute", "render-fills", "render-lines"];

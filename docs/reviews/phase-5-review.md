@@ -10,7 +10,7 @@ Scope covered: `crates/model` (`mutate`, `connection`, `lookup`,
 (`hit`, `overlay`), `crates/vsdx` (`package/edit`, `write/patch`,
 `write/mod`), `crates/commands` (`undo`, `edit`, `clipboard`, `app`,
 `builtins/*`), `crates/ui` (`tools/*`, `snap`, `handles`, `text_edit`,
-`canvas`, `shell`, `panels`), the ADRs 0038-0049 and the task files.
+`canvas`, `shell`, `panes`), the ADRs 0038-0049 and the task files.
 The P5-11 product fixes were checked one by one (see "Checks that
 passed").
 
@@ -113,7 +113,7 @@ must re-implement it.
 |----|----------|-----------|---------|---------------|
 | F1 | major | crates/commands/src/builtins/edit.rs:607-619 | `edit.delete` of a shape and its own group applies half the steps, then errors with no undo step | filter nested targets (or roll the applied steps back on error) |
 | F2 | major | crates/model/src/mutate.rs:1410-1470 | `group_shapes` writes non-finite cells and leaves a half-built group when a write fails | validate `width`/`height`/`centre` before mutating; make the failure atomic |
-| F3 | major | crates/ui/src/shell.rs:1166 | the `Outcome::edit` dispatcher lives in L6 and is re-implemented by every programmatic caller | move `dispatch_one` into `ferrogram_commands` |
+| F3 | major | crates/ui/src/shell.rs:1166 | the `Outcome::edit` dispatcher lives in L6 and is re-implemented by every programmatic caller | move `dispatch_one` into `larrygram_commands` |
 | F4 | minor | crates/commands/src/builtins/page.rs:395 | dead `document_pages` helper kept alive by `#[allow(dead_code)]` | delete it and its test line |
 | F5 | minor | crates/commands/src/builtins/edit.rs:303,352 | stale `#[allow(dead_code)]` on `Polarity::Insert`/`StructuralEdit::insertion`, which now have callers | drop the attributes |
 | F6 | minor | crates/commands/src/builtins/edit.rs:60 | `number_literal` duplicates `model::mutate`'s `literal` formula spelling | one exported spelling helper, or a pinned mirror test |
@@ -184,7 +184,7 @@ must re-implement it.
    control-channel or CLI editing command that calls
    `Registry::execute` directly will silently drop its undo step (or
    worse, push against the wrong session if it copies the wrong half).
-   **Fix:** move the helper into `ferrogram_commands` (e.g.
+   **Fix:** move the helper into `larrygram_commands` (e.g.
    `commands::dispatch(registry, ctx, command, invocation)` returning
    `Result<Outcome, CommandError>` with the push inside), have
    `shell::dispatch_one` wrap it, and let the test helpers call it.

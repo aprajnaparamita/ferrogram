@@ -19,7 +19,7 @@ every change goes through `AppCtx::push_edit` (ADR 0040).
 
 ### Where the graph lives
 
-`ferrogram-shapesheet::graph::DepGraph`, over `model` addresses. One node
+`larrygram-shapesheet::graph::DepGraph`, over `model` addresses. One node
 is one cell ([`CellAddress`]: `SheetRef` + `SectionName` + `RowTarget` +
 `CellName`, all model types). Nothing below L2 changes; `vsdx`, `render`
 and `model` never see the graph.

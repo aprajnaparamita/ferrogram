@@ -6,7 +6,7 @@
 //! with the geometry-row work, because Phase 3 rendering is their first
 //! consumer.
 //!
-//! Part of Ferrogram. Alpha.
+//! Part of Larrygram. Alpha.
 
 #![forbid(unsafe_code)]
 

@@ -5,9 +5,9 @@
 //! the geometry row counts must survive. The data is our own work
 //! (AGENTS.md section 4): no Microsoft stencil is involved.
 
-use ferrogram_model::stencils;
-use ferrogram_model::{Document, DocumentKind};
-use ferrogram_vsdx::{Limits, Package, read_document, write_document};
+use larrygram_model::stencils;
+use larrygram_model::{Document, DocumentKind};
+use larrygram_vsdx::{Limits, Package, read_document, write_document};
 
 /// The `stencil_document()` written to `.vssx` bytes and read back.
 #[allow(clippy::expect_used)] // test helper
@@ -19,7 +19,7 @@ fn round_trip() -> Document {
 
 /// The read-back master with this `NameU` and its typed geometry rows.
 #[allow(clippy::expect_used, clippy::panic)] // test helper
-fn geometry_of(document: &Document, name_u: &str) -> Vec<ferrogram_model::GeometryRow> {
+fn geometry_of(document: &Document, name_u: &str) -> Vec<larrygram_model::GeometryRow> {
     let master = document
         .masters
         .iter()

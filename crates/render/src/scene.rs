@@ -17,8 +17,8 @@
 //! 1. take the em-unit outline of `glyph.glyph` from `fonts[glyph.font]`
 //!    (y up, [`Font::outline`]);
 //! 2. scale it by `glyph.size / 72` (points to inches,
-//!    [`GlyphPos::size`](ferrogram_text::GlyphPos));
-//! 3. rotate it by minus [`Layout::rotation`](ferrogram_text::Layout) in
+//!    [`GlyphPos::size`](larrygram_text::GlyphPos));
+//! 3. rotate it by minus [`Layout::rotation`](larrygram_text::Layout) in
 //!    the y-up sense (a positive layout rotation is a clockwise turn on
 //!    screen) and mirror nothing: the flip between the y-down layout
 //!    space and the y-up shape space is already in step 4;
@@ -33,9 +33,9 @@
 //! draws nothing; the skip is intentional, `text::Layout` reports missing
 //! fonts and glyphs as its own warnings.
 
-use ferrogram_geom::{Path, Point, Size, Transform};
-use ferrogram_model::CellWarning;
-use ferrogram_text::{Font, Layout};
+use larrygram_geom::{Path, Point, Size, Transform};
+use larrygram_model::CellWarning;
+use larrygram_text::{Font, Layout};
 
 /// A colour with alpha.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -238,7 +238,7 @@ pub struct Shape {
     /// through it. The builder records the id at the shape construction
     /// site in `build.rs`; a node the builder synthesises (a shadow body)
     /// has `None`.
-    pub shape_id: Option<ferrogram_model::ShapeId>,
+    pub shape_id: Option<larrygram_model::ShapeId>,
     /// The shape-local to parent transform (ADR 0020): relative to the
     /// enclosing [`Group`] node, or to the page for a top-level node.
     pub transform: Transform,
@@ -309,7 +309,7 @@ impl Scene {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_geom::Angle;
+    use larrygram_geom::Angle;
 
     use super::*;
 

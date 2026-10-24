@@ -13,7 +13,7 @@
 mod common;
 
 use common::{Fixture, Malformed, build};
-use ferrogram_vsdx::{Error, Limits, read_document};
+use larrygram_vsdx::{Error, Limits, read_document};
 
 /// The recorded outcome of one malformed fixture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

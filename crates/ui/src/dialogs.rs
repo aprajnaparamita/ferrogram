@@ -2,7 +2,7 @@
 //! and download on wasm.
 //!
 //! Only the shell calls a [`FilePicker`], and only to answer
-//! [`CommandError::NeedsInput`](ferrogram_commands::CommandError::NeedsInput) from an interactive source. A
+//! [`CommandError::NeedsInput`](larrygram_commands::CommandError::NeedsInput) from an interactive source. A
 //! programmatic call never opens a dialog (AGENTS.md section 6).
 //!
 //! [`NativeFilePicker`] is rfd (ADR 0030): a synchronous dialog on
@@ -375,7 +375,7 @@ mod tests {
 
         /// A scratch path under the process temp directory.
         fn scratch(name: &str) -> PathBuf {
-            std::env::temp_dir().join(format!("ferrogram-dialogs-{}-{name}", std::process::id()))
+            std::env::temp_dir().join(format!("larrygram-dialogs-{}-{name}", std::process::id()))
         }
 
         #[test]

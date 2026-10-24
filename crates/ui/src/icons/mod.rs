@@ -37,7 +37,7 @@ const MAX_SIZE: f32 = 64.0;
 ///
 /// ```
 /// # egui::__run_test_ui(|ui| {
-/// let response = ferrogram_ui::icons::placeholder(ui, "FileSave", 16.0).expect("a rect");
+/// let response = larrygram_ui::icons::placeholder(ui, "FileSave", 16.0).expect("a rect");
 /// assert_eq!(response.rect.size(), egui::Vec2::splat(16.0));
 /// # });
 /// ```
@@ -211,7 +211,7 @@ mod tests {
 pub fn icon_atom(
     _key: &str,
     _size: f32,
-    _theme: &ferrogram_ui_spec::v2::Theme,
+    _theme: &larrygram_ui_spec::v2::Theme,
     _enabled: bool,
 ) -> Result<Atom<'static>, UiError> {
     Err(UiError::NotImplemented)
@@ -226,7 +226,7 @@ pub fn draw(
     _rect: Rect,
     _key: &str,
     _size: f32,
-    _theme: &ferrogram_ui_spec::v2::Theme,
+    _theme: &larrygram_ui_spec::v2::Theme,
     _enabled: bool,
 ) -> Result<(), UiError> {
     Err(UiError::NotImplemented)
@@ -240,8 +240,8 @@ mod icon_set_tests {
     use crate::test_util::with_ui;
 
     /// A minimal theme for the contract tests.
-    fn theme() -> ferrogram_ui_spec::v2::Theme {
-        ferrogram_ui_spec::v2::Theme {
+    fn theme() -> larrygram_ui_spec::v2::Theme {
+        larrygram_ui_spec::v2::Theme {
             schema_version: 1,
             id: "panel-modern".to_owned(),
             name: "Panel Modern (white)".to_owned(),

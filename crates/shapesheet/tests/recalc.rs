@@ -5,11 +5,11 @@
 //! `SETF` and materialisation rules are pinned next to the code in
 //! `src/recalc.rs`, where the test engine lives.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellName, Document, Page, PageId, Preserved, Shape, ShapeId, SheetRef,
 };
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     CellAddress, CellUpdate, RecalcOptions, RecalcOutcome, RecalcWarning, RecalcWarningKind, recalc,
 };
 
@@ -66,7 +66,7 @@ fn a_pass_over_formulas_is_ok_or_reports_the_engine() {
     // `eval` is a stub the pass reports it and stops. Either way it
     // never panics and never fails the document.
     assert!(
-        outcome.is_ok() || matches!(outcome, Err(ferrogram_shapesheet::Error::NotImplemented(_)))
+        outcome.is_ok() || matches!(outcome, Err(larrygram_shapesheet::Error::NotImplemented(_)))
     );
 }
 

@@ -25,10 +25,10 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, Registry};
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, Registry};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, PageId, Preserved, Row, Section, SectionName, Shape,
     ShapeId,
 };
@@ -39,7 +39,7 @@ fn number_cell(name: &str, formula: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(formula.to_owned()),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }

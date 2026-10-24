@@ -1,4 +1,4 @@
-# 0031: Ribbon from ui-spec
+# 0031: The command bar from ui-spec
 
 - Status: accepted
 - Date: 2026-10-16
@@ -6,32 +6,32 @@
 
 ## Context
 
-KICKOFF Phase 4: "Ribbon: generated from `ui-spec`, covering tabs, groups
+KICKOFF Phase 4: "Command bar: generated from `ui-spec`, covering tabs, groups
 and controls. Galleries can start as basic dropdowns." Both layouts bind to
 the same command registry. The layout data (`ui-spec/panel-2016.yaml`,
 `panel-365.yaml`) is committed, schema-validated YAML keyed by Fluent id
-(ADR 0007), with `commands.yaml` mapping ids to Ferrogram command ids
+(ADR 0007), with `commands.yaml` mapping ids to Larrygram command ids
 (ADR 0006). The P1-14 note flagged repeated Fluent ids inside one container
-(`TabSave` x9 in one backstage tab) as something the ribbon builder must
+(`TabSave` x9 in one backstage tab) as something the command bar builder must
 rule on.
 
 ## Decision
 
 ### Load at runtime from the committed YAML, embedded at build time
 
-The ribbon is built from the **committed YAML at runtime**, not from
+The command bar is built from the **committed YAML at runtime**, not from
 build-time-generated Rust. The two layout files, `commands.yaml` and
 `shortcuts.yaml` are embedded with `include_str!` in `crates/ui-spec`
 (`ui_spec::embedded`, added by P4-04) and parsed by the same
 `Loader` code path the tests use on disk. Rationale:
 
 - One source of truth: the YAML is extractable, diffable and validated
-  (ADR 0007); codegen of a whole ribbon tree would duplicate it.
+  (ADR 0007); codegen of a whole command bar tree would duplicate it.
 - Wasm has no filesystem; embedding is the only way the web app loads the
   layouts. Parsing ~25,000 lines of YAML at startup costs milliseconds and
   happens once.
 - The later screenshot pass enriches the YAML (`bounds`, `icon_ref`, ...)
-  and the ribbon picks the data up without a rebuild of generated code.
+  and the command bar picks the data up without a rebuild of generated code.
 
 `Loader::load_all` on disk stays for tests, the extractors and the parity
 generator; `Loader::from_embedded` parses the embedded strings through the
@@ -44,8 +44,8 @@ One rule per control type; all are plain egui widgets in Phase 4:
 
 | ui-spec type | egui rendering |
 |---|---|
-| `tab` | a tab button in the ribbon tab strip; the active tab shows its groups |
-| `group` | a titled vertical panel with a bottom caption; controls flow in rows |
+| `tab` | a tab button in the command-bar tab strip; the active tab shows its groups |
+| `group` | a titled vertical box with a bottom caption; controls flow in rows |
 | `button` | `egui::Button` with the control's `label` |
 | `toggleButton` | `egui::Button` with `selected` styling |
 | `splitButton` | a button plus a small dropdown arrow button in one row |
@@ -84,7 +84,7 @@ AGENTS.md section 4). Tooltip text is ours.
 Adopting the P1-14 note as a rule (recorded as an ADR 0007 amendment): a
 Fluent id is **not unique within a layout**. A placement is identified by
 its path (`tab/TabHome/GroupClipboard/PasteGallery`, the parity matrix's
-`path` column). The ribbon renders every placement it finds, including
+`path` column). The command bar renders every placement it finds, including
 repeats inside one container (`TabSave` x9, `LineStylesDialog` twice in one
 group): each occurrence is a separate widget sharing one `CommandId`.
 Command ids stay unique (enforced by the registry). Extractor artefacts
@@ -100,17 +100,17 @@ a placement; no customization (that is out of scope for this run).
 
 ## Consequences
 
-- The ribbon is data-driven: no ribbon widget code changes when the
+- The command bar is data-driven: no command-bar widget code changes when the
   screenshot pass enriches the YAML.
 - Both layouts share all widget code; switching is a data swap (ADR 0032).
-- Embedded YAML grows the `ferrogram-ui-spec` binary by ~700 KB of text;
+- Embedded YAML grows the `larrygram-ui-spec` binary by ~700 KB of text;
   acceptable, and it is the same data the CLI and tests use.
 - Deduplication is display-only; the parity matrix still lists every
   placement.
 
 ## Alternatives considered
 
-- **Build-time codegen of Rust ribbon tables.** Rejected: a second
+- **Build-time codegen of Rust command-bar tables.** Rejected: a second
   representation of the layout to keep in sync; the screenshot pass would
   regenerate code every time; wasm needs the data embedded anyway.
 - **Runtime load from files on disk.** Rejected: no filesystem on wasm;
@@ -120,6 +120,6 @@ a placement; no customization (that is out of scope for this run).
   dedup only where id + label + order match exactly in one container.
 - **Map controls to widgets by Fluent id.** Rejected: ids are names, not
   types; the `type` field is the stable discriminator (ADR 0007).
-- **Our own ribbon layout YAML parallel to the Fluent data.** Rejected:
+- **Our own Panel layout YAML parallel to the Fluent data.** Rejected:
   KICKOFF requires the structure to come from Microsoft's
   control-identifier data.

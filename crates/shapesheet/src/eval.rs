@@ -54,7 +54,7 @@
 //!   **records** the write; the recalc pass applies it through one write
 //!   path, and an evaluation that stands back drops what it recorded.
 
-use ferrogram_model::{Color, SheetRef};
+use larrygram_model::{Color, SheetRef};
 
 use crate::Error;
 use crate::ast::{BinaryOp, Expr, ExprKind, Literal, NumberLiteral, UnaryOp};
@@ -1033,7 +1033,7 @@ mod tests {
     use crate::ast::ExprKind;
 
     fn sheet() -> SheetRef {
-        SheetRef::Page(ferrogram_model::PageId { index: 0 })
+        SheetRef::Page(larrygram_model::PageId { index: 0 })
     }
 
     struct NullContext;

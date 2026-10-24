@@ -9,7 +9,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use ferrogram_ui_spec::{CommandId, CommandLookup, Control, FluentId, Layout, LayoutKind, Loader};
+use larrygram_ui_spec::{CommandId, CommandLookup, Control, FluentId, Layout, LayoutKind, Loader};
 
 /// The repository root: `crates/ui-spec/../..`.
 fn workspace_root() -> PathBuf {
@@ -43,7 +43,7 @@ fn all_controls(layout: &Layout) -> Vec<&Control> {
 /// The counts pinned by this file, for one layout.
 #[derive(Debug, PartialEq, Eq)]
 struct LayoutCounts {
-    /// Ribbon tabs.
+    /// Command bar tabs.
     tabs: usize,
     /// Backstage tabs.
     backstage_tabs: usize,
@@ -82,7 +82,7 @@ const PIN_365: LayoutCounts = LayoutCounts {
 // into them. P5-04 adds the 31 Phase 5 editing ids the mechanical
 // derivation does not produce (task P5-04, forced companion update to
 // the regenerated `commands.yaml`). P5-16 adds `edit.select`. P6-18
-// adds `data.set.property` (the Shape Data panel's edit, ADR 0035
+// adds `data.set.property` (the Shape Data pane's edit, ADR 0035
 // amendment).
 const COMMANDS: usize = 978;
 const SHORTCUTS: usize = 90;
@@ -91,21 +91,21 @@ const SHORTCUTS: usize = 90;
 fn committed_data_loads_and_counts_are_pinned() {
     let loader = Loader::new(workspace_root()).expect("the embedded schema compiles");
     let sets = loader.load_all().expect("the committed ui-spec loads");
-    assert_eq!(counts(&sets.visio_2016.layout), PIN_2016, "panel-2016");
-    assert_eq!(counts(&sets.visio_365.layout), PIN_365, "panel-365");
-    assert_eq!(sets.visio_2016.commands.entries.len(), COMMANDS, "commands");
+    assert_eq!(counts(&sets.panel_2016.layout), PIN_2016, "panel-2016");
+    assert_eq!(counts(&sets.panel_365.layout), PIN_365, "panel-365");
+    assert_eq!(sets.panel_2016.commands.entries.len(), COMMANDS, "commands");
     assert_eq!(
-        sets.visio_365.commands.entries.len(),
+        sets.panel_365.commands.entries.len(),
         COMMANDS,
         "commands (365)"
     );
     assert_eq!(
-        sets.visio_2016.shortcuts.entries.len(),
+        sets.panel_2016.shortcuts.entries.len(),
         SHORTCUTS,
         "shortcuts"
     );
     assert_eq!(
-        sets.visio_365.shortcuts.entries.len(),
+        sets.panel_365.shortcuts.entries.len(),
         SHORTCUTS,
         "shortcuts (365)"
     );
@@ -121,7 +121,7 @@ fn command_lookup_invariants_hold_on_both_layouts() {
     let loader = Loader::new(workspace_root()).expect("the embedded schema compiles");
     let sets = loader.load_all().expect("the committed ui-spec loads");
     let known: BTreeSet<&CommandId> = sets
-        .visio_2016
+        .panel_2016
         .commands
         .entries
         .iter()
@@ -129,8 +129,8 @@ fn command_lookup_invariants_hold_on_both_layouts() {
         .collect();
 
     for (name, layout) in [
-        ("panel-2016", &sets.visio_2016),
-        ("panel-365", &sets.visio_365),
+        ("panel-2016", &sets.panel_2016),
+        ("panel-365", &sets.panel_365),
     ] {
         let lookup: CommandLookup = layout.command_lookup();
 
@@ -176,7 +176,7 @@ fn command_lookup_invariants_hold_on_both_layouts() {
 /// Both `LayoutKind`s pick their own set from the same load.
 #[test]
 fn layout_kind_file_names_match_the_committed_files() {
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
         let path = workspace_root().join("ui-spec").join(kind.file_name());
         assert!(path.is_file(), "{} must exist", path.display());
     }
@@ -190,8 +190,8 @@ fn model_types_round_trip_over_the_committed_data() {
     let loader = Loader::new(workspace_root()).expect("the embedded schema compiles");
     let sets = loader.load_all().expect("the committed ui-spec loads");
     for (name, set) in [
-        ("panel-2016", &sets.visio_2016),
-        ("panel-365", &sets.visio_365),
+        ("panel-2016", &sets.panel_2016),
+        ("panel-365", &sets.panel_365),
     ] {
         round_trip(&set.layout, name);
         round_trip(&set.commands, name);

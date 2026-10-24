@@ -8,7 +8,7 @@
 
 Phase 4 needs shared application state: open documents, the active page,
 the selection (empty until Phase 5), view state (pan, zoom) and settings
-(the ribbon layout kind, grid and rulers toggles, display units). The
+(the Panel layout kind, grid and rulers toggles, display units). The
 layering (ADR 0002) and AGENTS.md section 6 require that headless callers
 (the CLI today, the JSON control channel and MCP in Phase 8) can run the
 same commands over the same state, so the state cannot live inside the
@@ -29,7 +29,7 @@ pub struct AppCtx {
 }
 
 pub struct DocumentSession {
-    pub document: ferrogram_model::Document,
+    pub document: larrygram_model::Document,
     pub path: Option<PathBuf>,             // None for never-saved documents
     pub dirty: bool,
     pub active_page: Option<PageId>,       // the page shown on the canvas
@@ -64,7 +64,7 @@ pub enum DisplayUnits { Inches, Millimeters, Centimeters, Meters, Feet }
 
 Units rule (AGENTS.md section 6): `Document` values stay in inches.
 `ViewState::pan` is in inches. `DisplayUnits` affects only presentation:
-the Size & Position panel and the status bar format numbers, the ruler
+the Size & Position pane and the status bar format numbers, the ruler
 labels convert at the edge.
 
 `Selection` is an opaque empty type in Phase 4 (it exists so Phase 5 can
@@ -86,8 +86,8 @@ pub trait SettingsStore: Send {
 
 ### In `crates/ui` (L6): everything egui
 
-Widget-local state stays in `crates/ui`: the ribbon's active tab and
-backstage flag, the canvas texture cache, panel collapse flags, the
+Widget-local state stays in `crates/ui`: the command bar's active tab and
+backstage flag, the canvas texture cache, pane collapse flags, the
 shortcut chord-in-progress buffer, and the egui `Context` itself. UI code
 translates between egui input and `Intent` values (ADR 0028) and never
 mutates `AppCtx` directly; the shell calls `Registry::execute`.

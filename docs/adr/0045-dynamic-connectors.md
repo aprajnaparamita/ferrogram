@@ -45,7 +45,7 @@ replaces the old (ADR 0039 invariant 5). Ungluing removes the record.
 
 ### 2. Routing is ours: straight or one elbow
 
-`ferrogram_geom::routing::route(start, end, RouteOptions)` (L0):
+`larrygram_geom::routing::route(start, end, RouteOptions)` (L0):
 
 - `Straight`: one segment.
 - `RightAngle`: axis-aligned segments with a single elbow. The elbow

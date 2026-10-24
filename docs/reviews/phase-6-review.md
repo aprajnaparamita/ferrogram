@@ -13,7 +13,7 @@ Scope covered: `crates/shapesheet` (`lexer`, `parser`, `ast`, `printer`,
 `values`, `geometry`, `mutate`), `crates/commands` (`recalc`, `app`,
 `edit`, `undo`, `builtins/{edit,file,insert,shape,arrange,connector}`),
 `crates/vsdx` (`read/{mod,sheet,value}`, `write/{mod,value,patch}`),
-`crates/ui/src/panels.rs`, the ADRs 0051-0060, `about-operators.md`
+`crates/ui/src/panes.rs`, the ADRs 0051-0060, `about-operators.md`
 against the grammar, and the P6-11 product fixes one by one (see
 "Checks that passed").
 
@@ -131,7 +131,7 @@ the resolver uses, leaving stale values after an edit).
 | F8 | minor | crates/commands/src/recalc.rs:279-306 | `warning_line` prints the P6-11 kinds (`WrongArgumentCount`, `SetfRefused`, `Coercion`, `NonFinite`, `Syntax`) through the fallback `"recalc: warning of X"` | **confirmed, keep rank** (queued for the fix task): add one line per kind; status-bar text only |
 | F9 | minor | crates/vsdx/src/read/value.rs:164 | a non-finite numeric literal (`1e999999`, `inf`) reads as `CellValue::Number(inf)` while `Document::write_cell` refuses non-finite writes and `Value::from_cached` maps it to `#NUM!` | **confirmed, keep rank** (queued hardening): reject or normalise at read with a documented rule. No crash path today: `render/src/png.rs:659 fits_device` skips non-finite device bounds and `to_cached` guards |
 | F10 | minor | crates/commands/src/builtins/file.rs:226-276 | `fill_in_values`/`missing_value_cells` re-implement the fill-in pass `commands::recalc::fill_missing` already provides (its own doc names it "the future home"), and `sheet_refs` is a third sheet walker beside `graph::sheet_refs` and `commands::recalc::document_addresses` | **confirmed, keep rank** (queued for the fix task): call `fill_missing` (or `fill_missing_with`) from the open path and delete the copies |
-| F11 | minor | crates/commands/src/builtins/edit.rs:272 | `CellEdit::direct` is `#[allow(dead_code)]` with the comment "Task P6-09's panel edits are the first non-test callers", but P6-09's panels dispatch `shape.set.*` and never call it (P6-09's own open issues say so) — a stub seam that outlived its task | give it its caller (`data.set.property`) or drop the `#[allow(dead_code)]` and the comment until then; same sweep for the retired `Document::scale_geometry` (model/mutate.rs:1118), still `pub` with no product caller |
+| F11 | minor | crates/commands/src/builtins/edit.rs:272 | `CellEdit::direct` is `#[allow(dead_code)]` with the comment "Task P6-09's pane edits are the first non-test callers", but P6-09's panes dispatch `shape.set.*` and never call it (P6-09's own open issues say so) — a stub seam that outlived its task | give it its caller (`data.set.property`) or drop the `#[allow(dead_code)]` and the comment until then; same sweep for the retired `Document::scale_geometry` (model/mutate.rs:1118), still `pub` with no product caller |
 | F12 | minor | crates/commands/src/edit.rs:29 | `CompositeEdit::edits` is `pub` while the dirty union is maintained by `push`; a step pushed straight into the list silently loses its dirty cells (the doc warns about it, the type does not prevent it) | make `edits` private, or compute `dirty_cells()` from `edits` on demand so the union cannot drift |
 | F13 | minor | crates/commands/src/recalc.rs:152-170 | when `run_pass` returns `Err` mid-pass (a broken engine), the writes the partial pass already made are dropped with the error: `wrap` records a warning and pushes the step with `before: Vec::new()`, so a later undo cannot remove them | return the collected snapshots alongside the error (or run the pass in two phases) so `wrap` can keep them; `Err` is near-unreachable today (`to_cached` cannot fail), so this is hardening |
 | F14 | minor | crates/commands/src/builtins/insert.rs:138-147 | if the `GeometryEdit` of a sized insert fails after `instantiate_master`, the shape stays in the document with no undo entry (the glue path rolls back with `detach_shape`, the resize path does not) — the shape of phase-5 review F1 | roll the insertion back on any later staging/apply failure, or stage the `GeometryEdit` before mutating |
@@ -228,5 +228,5 @@ approximation (`graph::rung_address`, harmless while masters have one
 top-level shape) and the unmeasured `DEFAULT_MAX_EVALUATIONS`; P6-07's
 "page add/delete recalculates nothing" and the un-materialisable
 instance (needs a row-insertion mutation); P6-09's display-only Shape
-Data values and the formula-field read-only rule (the panel refuses with
+Data values and the formula-field read-only rule (the pane refuses with
 one status line, as ADR 0058 says).

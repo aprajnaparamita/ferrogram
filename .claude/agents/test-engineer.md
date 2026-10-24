@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
 
-You are the Ferrogram test engineer. Follow AGENTS.md.
+You are the Larrygram test engineer. Follow AGENTS.md.
 
 Job:
 - Read the phase's merged code and coverage report (`cargo xtask coverage`).

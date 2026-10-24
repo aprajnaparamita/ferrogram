@@ -5,7 +5,7 @@
 
 use std::io::Write as _;
 
-use ferrogram_vsdx::{ContentTypeKind, Error, Limits, PartData, read_package};
+use larrygram_vsdx::{ContentTypeKind, Error, Limits, PartData, read_package};
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
 
@@ -157,7 +157,7 @@ fn dangling_relationship_is_recorded_not_an_error() {
     assert_eq!(package.relationships[0].target, "visio/missing.xml");
     assert_eq!(
         package.relationships[1].target_mode,
-        ferrogram_vsdx::TargetMode::External
+        larrygram_vsdx::TargetMode::External
     );
 }
 

@@ -7,7 +7,7 @@
 ## Context
 
 KICKOFF's Phase 3 adds CLI commands `inspect`, `render` and `export` to
-`apps/ferrogram-cli` (L7). The CLI is the first consumer of the reader and
+`apps/larrygram-cli` (L7). The CLI is the first consumer of the reader and
 the renderer and the test harness for the phase's exit criterion ("every
 corpus file renders without panics"). AGENTS.md section 6 requires that
 every user action is a command with an id in one registry
@@ -19,10 +19,10 @@ and must move onto the registry without churn.
 ### Commands
 
 ```
-ferrogram-cli inspect <file> [--json] [--page N]
-ferrogram-cli render  <file> --out <path> [--page N] [--format png|svg]
+larrygram-cli inspect <file> [--json] [--page N]
+larrygram-cli render  <file> --out <path> [--page N] [--format png|svg]
                       [--scale PPI] [--background #RRGGBB|none] [--strict]
-ferrogram-cli export  <file> --out <dir> [--format png|svg] [--scale PPI]
+larrygram-cli export  <file> --out <dir> [--format png|svg] [--scale PPI]
                       [--strict]
 ```
 
@@ -66,7 +66,7 @@ output.
 ### Programmatic shape and the Phase 4 move
 
 Parsing produces a `Command` value; `run` executes it through library calls
-(`ferrogram_vsdx::read_document`, `ferrogram_render::build_scene`,
+(`larrygram_vsdx::read_document`, `larrygram_render::build_scene`,
 `render_png`/`render_svg`). The `Command` enum is the seam: in Phase 4 each
 variant maps to a registry command id (`inspect` → `file.inspect`,
 `render` → `file.render`, `export` → `file.export`) with the same

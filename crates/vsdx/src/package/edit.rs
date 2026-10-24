@@ -76,7 +76,7 @@ fn normalize(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::Preserved;
+    use larrygram_model::Preserved;
 
     use super::*;
     use crate::package::{
@@ -97,8 +97,8 @@ mod tests {
             package.parts.push(Part {
                 name: PartName::new(name),
                 content_type: ContentType::new("application/xml"),
-                data: PartData::Xml(ferrogram_model::XmlNode {
-                    name: ferrogram_model::QName::local("Root"),
+                data: PartData::Xml(larrygram_model::XmlNode {
+                    name: larrygram_model::QName::local("Root"),
                     attributes: Vec::new(),
                     children: Vec::new(),
                     self_closing: true,

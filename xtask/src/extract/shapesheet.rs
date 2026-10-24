@@ -4,7 +4,7 @@
 //! `reference/ms-vsdx/office-developer-client-docs/docs/visio/` (the
 //! ShapeSheet reference; `docs/sources.md` source 4) and produces
 //! `ui-spec/shapesheet.toml`, the canonical catalogue of every
-//! ShapeSheet section, row and cell Ferrogram knows about (ADR 0008).
+//! ShapeSheet section, row and cell Larrygram knows about (ADR 0008).
 //!
 //! Page classes:
 //!

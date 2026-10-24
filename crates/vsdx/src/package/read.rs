@@ -2,7 +2,7 @@
 
 use std::io::{Cursor, Read};
 
-use ferrogram_model::{Preserved, XmlChild, XmlNode};
+use larrygram_model::{Preserved, XmlChild, XmlNode};
 use zip::ZipArchive;
 
 use super::xml::parse_xml;

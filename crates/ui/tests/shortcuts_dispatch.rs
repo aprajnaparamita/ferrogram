@@ -7,10 +7,10 @@
 //! never stolen.
 
 use egui::{Context, Event, Key, Modifiers, RawInput};
-use ferrogram_commands::{AppCtx, Settings};
-use ferrogram_ui::Intent;
-use ferrogram_ui::shortcuts::{SEQUENCE_TIMEOUT_SECONDS, ShortcutMap, dispatch, token_is_known};
-use ferrogram_ui_spec::{
+use larrygram_commands::{AppCtx, Settings};
+use larrygram_ui::Intent;
+use larrygram_ui::shortcuts::{SEQUENCE_TIMEOUT_SECONDS, ShortcutMap, dispatch, token_is_known};
+use larrygram_ui_spec::{
     CommandId as SpecCommandId, LayoutKind, Loader, Shortcut, ShortcutScope, Shortcuts,
 };
 
@@ -18,7 +18,10 @@ use ferrogram_ui_spec::{
 #[allow(clippy::expect_used)] // test helper: a failure here is the bug
 fn committed_shortcuts() -> Shortcuts {
     let sets = Loader::from_embedded().expect("the embedded ui-spec loads");
-    sets.get(LayoutKind::Visio2016).shortcuts.clone()
+    sets.get(LayoutKind::Panel2016)
+        .expect("the set")
+        .shortcuts
+        .clone()
 }
 
 #[allow(clippy::expect_used)] // test helper: a failure here is the bug
@@ -196,7 +199,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
             "view.zoom.fit",
             ShortcutScope::Page,
         ),
-        shortcut(&["Alt", "R"], "file.print", ShortcutScope::Ribbon),
+        shortcut(&["Alt", "R"], "file.print", ShortcutScope::CommandBar),
     ]);
     let app = AppCtx::new(Settings::default());
     let ctx = Context::default();
@@ -214,7 +217,7 @@ fn a_single_chord_shortcut_per_scope_resolves() {
     assert_eq!(intent.command.as_str(), "arrange.group");
     assert_eq!(
         intent.invocation.source,
-        ferrogram_commands::Source::Shortcut
+        larrygram_commands::Source::Shortcut
     );
     assert_eq!(global.events_left, 0, "the matched chord is consumed");
 
@@ -266,19 +269,19 @@ fn a_single_chord_shortcut_per_scope_resolves() {
     assert!(no_page.intents.is_empty());
     assert_eq!(no_page.events_left, 0);
 
-    let ribbon = frame(
+    let command_bar = frame(
         &ctx,
         &mut map,
         &app,
-        ShortcutScope::Ribbon,
+        ShortcutScope::CommandBar,
         vec![key_event(Key::R, alt())],
         0.4,
         false,
     );
     assert_eq!(
-        ribbon
+        command_bar
             .intent()
-            .expect("a Ribbon shortcut fires")
+            .expect("a CommandBar shortcut fires")
             .command
             .as_str(),
         "file.print"
@@ -347,7 +350,7 @@ fn a_selection_shortcut_never_fires_in_phase_4() {
     for focus in [
         ShortcutScope::Global,
         ShortcutScope::Page,
-        ShortcutScope::Ribbon,
+        ShortcutScope::CommandBar,
     ] {
         let outcome = frame(
             &ctx,

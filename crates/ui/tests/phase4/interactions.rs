@@ -8,7 +8,7 @@
 //!
 //! - a command-bar button/checkbox click dispatches its registry command
 //!   (the View tab's `ShowGrid` toggle);
-//! - the View/Options dialog switches the panel layout with no
+//! - the View/Options dialog switches the Panel layout with no
 //!   restart and toggling the grid there changes what the canvas
 //!   draws (P4-16: the dialog dispatches through the registry);
 //! - the Help menu opens the About window;
@@ -31,11 +31,11 @@ use std::collections::BTreeSet;
 
 use egui::accesskit::Role;
 use egui::{Color32, Context, RawInput, Rect, Shape};
-use ferrogram_commands::Source;
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_model::{Document, Page, PageId};
-use ferrogram_ui::canvas::{self, CanvasCache};
-use ferrogram_ui_spec::LayoutKind;
+use larrygram_commands::Source;
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_model::{Document, Page, PageId};
+use larrygram_ui::canvas::{self, CanvasCache};
+use larrygram_ui_spec::LayoutKind;
 
 use crate::{ShellRig, sets};
 
@@ -43,6 +43,7 @@ use crate::{ShellRig, sets};
 fn tab_labels(kind: LayoutKind) -> BTreeSet<String> {
     sets()
         .get(kind)
+        .expect("the committed set")
         .layout
         .tabs
         .iter()
@@ -107,7 +108,7 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
     let mut rig = ShellRig::large();
     let before = {
         let shell = rig.shell.borrow();
-        assert_eq!(shell.layout_kind(), LayoutKind::Visio2016);
+        assert_eq!(shell.layout_kind(), LayoutKind::Panel2016);
         // State that must survive the switch (the `layout_switch.rs`
         // rule): the same `Shell`, the same `AppCtx`.
         &shell.app as *const AppCtx as usize
@@ -120,7 +121,7 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
     assert!(
         matches!(
             outcome.ui_request,
-            Some(ferrogram_commands::UiRequest::ShowOptions)
+            Some(larrygram_commands::UiRequest::ShowOptions)
         ),
         "{outcome:?}"
     );
@@ -130,18 +131,18 @@ fn switching_layouts_from_the_options_dialog_needs_no_restart() {
     rig.click(Role::RadioButton, "Panel (365 data)");
     {
         let shell = rig.shell.borrow();
-        assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
+        assert_eq!(shell.layout_kind(), LayoutKind::Panel365);
         assert_eq!(&shell.app as *const AppCtx as usize, before);
         // The dialog writes nothing itself (P4-16, the ADR 0032
         // amendment): the switch happened because the radio's intent
-        // (`view.ui_layout.visio_365`) ran through the registry, and
+        // (`view.ui_layout.panel_365`) ran through the registry, and
         // its message is the status line.
-        assert_eq!(shell.status(), "Ribbon layout: Visio 365");
+        assert_eq!(shell.status(), "Panel layout: Panel (365 data)");
     }
 
-    // The next frame draws the 365 panel: no restart, same harness.
+    // The next frame draws the Panel (365 data) layout: no restart, same harness.
     rig.run();
-    let only_365 = unique_tab(LayoutKind::Visio365, LayoutKind::Visio2016)
+    let only_365 = unique_tab(LayoutKind::Panel365, LayoutKind::Panel2016)
         .expect("365 has a tab 2016 does not");
     assert!(
         rig.names().contains_key(&only_365),
@@ -157,12 +158,12 @@ fn the_help_menu_opens_the_about_dialog() {
     rig.click(Role::Button, "About");
     assert_eq!(
         rig.shell.borrow().status(),
-        "About Ferrogram",
+        "About Larrygram",
         "`help.about` ran through the registry"
     );
     // The modal window is drawn (its title and close button appear).
     assert!(
-        rig.names().contains_key("About Ferrogram"),
+        rig.names().contains_key("About Larrygram"),
         "the About window renders"
     );
     assert!(rig.names().contains_key("Close window"), "closable");
@@ -183,7 +184,7 @@ fn the_close_confirmation_dialog_closes_the_document_on_confirm() {
     assert!(
         matches!(
             outcome.ui_request,
-            Some(ferrogram_commands::UiRequest::ConfirmClose { .. })
+            Some(larrygram_commands::UiRequest::ConfirmClose { .. })
         ),
         "{outcome:?}"
     );
@@ -199,7 +200,8 @@ fn the_close_confirmation_dialog_closes_the_document_on_confirm() {
 #[test]
 fn the_file_button_opens_the_backstage_with_its_entries() {
     let entries: Vec<String> = sets()
-        .get(LayoutKind::Visio2016)
+        .get(LayoutKind::Panel2016)
+        .expect("the committed set")
         .layout
         .backstage
         .tabs
@@ -308,7 +310,7 @@ fn toggling_grid_in_options_changes_what_the_canvas_draws() {
     assert!(
         matches!(
             outcome.ui_request,
-            Some(ferrogram_commands::UiRequest::ShowOptions)
+            Some(larrygram_commands::UiRequest::ShowOptions)
         ),
         "{outcome:?}"
     );

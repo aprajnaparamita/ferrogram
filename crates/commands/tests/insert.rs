@@ -14,14 +14,14 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, CommandStatus, Registry, SessionId,
 };
-use ferrogram_model::mutate::VIS_CONNECTION_POINT;
-use ferrogram_model::stencils;
-use ferrogram_model::{
+use larrygram_model::mutate::VIS_CONNECTION_POINT;
+use larrygram_model::stencils;
+use larrygram_model::{
     Cell, CellName, CellValue, Document, PageId, Preserved, Row, Section, SectionName, Shape,
     ShapeId,
 };
@@ -61,7 +61,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -238,8 +238,8 @@ fn a_sized_drop_uses_the_drawn_size_and_scales_the_geometry() {
         .iter()
         .flat_map(|path| path.rows.iter())
         .filter_map(|row| match row {
-            ferrogram_model::GeometryRow::MoveTo { x, .. }
-            | ferrogram_model::GeometryRow::LineTo { x, .. } => Some(*x),
+            larrygram_model::GeometryRow::MoveTo { x, .. }
+            | larrygram_model::GeometryRow::LineTo { x, .. } => Some(*x),
             _ => None,
         })
         .fold(0.0_f64, f64::max);
@@ -436,7 +436,7 @@ fn a_master_without_connection_rows_cannot_glue_on_drop() {
             number_cell("PinY", 0.0),
         ];
         let content = doc.add_shape(content);
-        let mut master = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 0);
+        let mut master = larrygram_model::Master::new(larrygram_model::MasterId { index: 0 }, 0);
         master.name_u = name_u.to_owned();
         master.shapes = vec![content];
         doc.add_master(master).expect("master");

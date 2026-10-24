@@ -4,17 +4,17 @@
 
 use std::f64::consts::FRAC_PI_2;
 
-use ferrogram_geom::{Angle, Path, Point, Rect, Segment, Transform};
-use ferrogram_model::{
+use larrygram_geom::{Angle, Path, Point, Rect, Segment, Transform};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Row, Section, SectionName,
     Shape as ModelShape, ShapeId,
 };
-use ferrogram_render::hit::{
+use larrygram_render::hit::{
     HitKind, HitOptions, NodePath, hit_marquee, hit_test, node_bounds, scene_bounds,
 };
-use ferrogram_render::scene::{Node, Paint, Rgba, Scene, Shape, TextNode};
-use ferrogram_render::{BuildOptions, build_scene};
-use ferrogram_text::Layout;
+use larrygram_render::scene::{Node, Paint, Rgba, Scene, Shape, TextNode};
+use larrygram_render::{BuildOptions, build_scene};
+use larrygram_text::Layout;
 
 // --- scene helpers ---------------------------------------------------
 
@@ -75,7 +75,7 @@ fn text_block(origin: Point, width: f64, height: f64) -> TextNode {
 }
 
 /// The hit kinds and nodes of a hit list, for order assertions.
-fn shape(hits: &[ferrogram_render::hit::Hit]) -> Vec<(Vec<usize>, Option<ShapeId>, HitKind)> {
+fn shape(hits: &[larrygram_render::hit::Hit]) -> Vec<(Vec<usize>, Option<ShapeId>, HitKind)> {
     hits.iter()
         .map(|hit| (hit.node.0.clone(), hit.shape_id, hit.kind))
         .collect()
@@ -213,7 +213,7 @@ fn nested_groups_hit_through_their_members() {
     );
     scene
         .nodes
-        .push(Node::Group(ferrogram_render::scene::Group {
+        .push(Node::Group(larrygram_render::scene::Group {
             transform: Transform::translate(Point::new(2.0, 0.0)),
             clip: None,
             children: vec![member],
@@ -235,7 +235,7 @@ fn a_groups_own_shape_hits_like_any_shape() {
     let member = filled(Some(ShapeId { index: 9 }), Transform::identity(), 1.0, 1.0);
     scene
         .nodes
-        .push(Node::Group(ferrogram_render::scene::Group {
+        .push(Node::Group(larrygram_render::scene::Group {
             transform: Transform::translate(Point::new(5.0, 0.0)),
             clip: None,
             children: vec![own, member],
@@ -332,7 +332,7 @@ fn node_bounds_compose_the_ancestor_transforms() {
     let member = filled(None, Transform::translate(Point::new(0.0, 3.0)), 1.0, 1.0);
     scene
         .nodes
-        .push(Node::Group(ferrogram_render::scene::Group {
+        .push(Node::Group(larrygram_render::scene::Group {
             transform: Transform::translate(Point::new(2.0, 0.0)),
             clip: None,
             children: vec![member],
@@ -372,11 +372,11 @@ fn stale_node_paths_are_caller_errors() {
     let scene = Scene::new(8.5, 11.0);
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0)),
-        Err(ferrogram_render::Error::InvalidNode)
+        Err(larrygram_render::Error::InvalidNode)
     );
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0).child(2)),
-        Err(ferrogram_render::Error::InvalidNode)
+        Err(larrygram_render::Error::InvalidNode)
     );
 }
 
@@ -388,7 +388,7 @@ fn a_shape_node_has_no_children() {
         .push(filled(None, Transform::identity(), 1.0, 1.0));
     assert_eq!(
         node_bounds(&scene, &NodePath::new().child(0).child(1)),
-        Err(ferrogram_render::Error::InvalidNode)
+        Err(larrygram_render::Error::InvalidNode)
     );
 }
 
@@ -398,7 +398,7 @@ fn group_bounds_cover_the_members() {
     let member = filled(None, Transform::translate(Point::new(0.0, 3.0)), 1.0, 1.0);
     scene
         .nodes
-        .push(Node::Group(ferrogram_render::scene::Group {
+        .push(Node::Group(larrygram_render::scene::Group {
             transform: Transform::translate(Point::new(2.0, 0.0)),
             clip: None,
             children: vec![member],
@@ -471,7 +471,7 @@ fn the_scene_walk_depth_is_bounded() {
     let deep = |groups: usize| {
         let mut node = filled(None, Transform::identity(), 1.0, 1.0);
         for _ in 0..groups {
-            node = Node::Group(ferrogram_render::scene::Group {
+            node = Node::Group(larrygram_render::scene::Group {
                 transform: Transform::identity(),
                 clip: None,
                 children: vec![node],

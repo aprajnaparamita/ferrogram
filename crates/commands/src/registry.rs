@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrogram_ui_spec::{CommandMapping, FluentId, MappingConfidence};
+use larrygram_ui_spec::{CommandMapping, FluentId, MappingConfidence};
 
 use crate::app::AppCtx;
 use crate::error::{CommandError, RegistryError};
@@ -111,7 +111,7 @@ impl Command for StubCommand {
 
 /// The command registry (ADR 0028): `CommandId` to [`Command`].
 ///
-/// One dispatch table for the menus, the ribbon, shortcuts, the CLI, the
+/// One dispatch table for the menus, the command bar, shortcuts, the CLI, the
 /// JSON control channel and MCP (AGENTS.md section 6). Backed by a
 /// `BTreeMap`, as ADR 0028 specifies: lookups are O(log n) and the id
 /// iteration is sorted.
@@ -193,7 +193,7 @@ impl Registry {
     /// the table is [`RegistryError::Duplicate`]; a malformed id is
     /// [`RegistryError::BadId`].
     pub fn from_mappings(
-        mappings: &ferrogram_ui_spec::Commands,
+        mappings: &larrygram_ui_spec::Commands,
     ) -> Result<Registry, RegistryError> {
         let mut registry = Registry::new();
         for mapping in &mappings.entries {
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(meta.mapping_confidence, MappingConfidence::Unknown);
 
         let mapping = CommandMapping {
-            id: ferrogram_ui_spec::CommandId::new("file.save"),
+            id: larrygram_ui_spec::CommandId::new("file.save"),
             label: "Save".to_owned(),
             visuicmd: Some("visCmdFileSave".to_owned()),
             fluent_ids: vec![FluentId::new("FileSave")],
@@ -435,9 +435,9 @@ mod tests {
         assert_eq!(ids, vec!["app.quit", "file.save", "view.zoom.in"]);
     }
 
-    fn mapping(id: &str) -> ferrogram_ui_spec::CommandMapping {
-        ferrogram_ui_spec::CommandMapping {
-            id: ferrogram_ui_spec::CommandId::new(id),
+    fn mapping(id: &str) -> larrygram_ui_spec::CommandMapping {
+        larrygram_ui_spec::CommandMapping {
+            id: larrygram_ui_spec::CommandId::new(id),
             label: "Label".to_owned(),
             visuicmd: None,
             fluent_ids: Vec::new(),
@@ -446,7 +446,7 @@ mod tests {
     }
     #[test]
     fn from_mappings_builds_one_stub_per_entry() {
-        let mappings = ferrogram_ui_spec::Commands {
+        let mappings = larrygram_ui_spec::Commands {
             entries: vec![mapping("file.save"), mapping("file.open")],
         };
         let registry = Registry::from_mappings(&mappings).expect("stubs");
@@ -458,7 +458,7 @@ mod tests {
         assert_eq!(enabled.reason.as_deref(), Some("not yet implemented"));
 
         // A duplicated id in the table is a build bug.
-        let mappings = ferrogram_ui_spec::Commands {
+        let mappings = larrygram_ui_spec::Commands {
             entries: vec![mapping("file.save"), mapping("file.save")],
         };
         assert!(matches!(
@@ -467,7 +467,7 @@ mod tests {
         ));
 
         // A malformed id names the bad id.
-        let mappings = ferrogram_ui_spec::Commands {
+        let mappings = larrygram_ui_spec::Commands {
             entries: vec![mapping("file.")],
         };
         assert!(matches!(

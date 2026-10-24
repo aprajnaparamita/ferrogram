@@ -64,5 +64,5 @@ panic.
   grows beyond its budget, revisiting the crate with a fuzz campaign
   behind it is fine.
 - **libvisio's container handling (via librevenge).** Rejected: the
-  oracle is never linked into Ferrogram (ADR 0010), and the OLE layer
+  oracle is never linked into Larrygram (ADR 0010), and the OLE layer
   there is LibreOffice's, not Visio's format.

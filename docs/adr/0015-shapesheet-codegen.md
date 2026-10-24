@@ -99,7 +99,7 @@ fails the gate when the committed generated file is stale or missing.
 - **`build.rs` in `crates/model`.** Rejected by the P1-02 review (M1): build
   scripts must write only to `OUT_DIR`.
 - **Runtime TOML parsing / `include_str!`.** Rejected in ADR 0008.
-- **A separate `ferrogram-shapesheet-table` crate.** Keeps `model` cleaner,
+- **A separate `larrygram-shapesheet-table` crate.** Keeps `model` cleaner,
   but adds a crate for one generated file and one consumer. Rejected; the
   module path `crates/model/src/generated/` is enough.
 - **Emit enums (`CellKind::PinX`).** Rejected: 420 variants, upstream churn,

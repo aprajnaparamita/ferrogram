@@ -14,14 +14,14 @@
 //!
 //! The unparseable case cannot come from [`to_model`]: the reader
 //! rejects a mapped attribute it cannot parse
-//! ([`ferrogram_vsdx::Error::InvalidPackage`]), so its model is read
+//! ([`larrygram_vsdx::Error::InvalidPackage`]), so its model is read
 //! from a well-spelled twin package and only the source *tree* carries
 //! the foreign spelling. That is the patcher's real input: ADR 0018
 //! patches whatever a foreign writer left behind.
 
-use ferrogram_model::Document;
-use ferrogram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
-use ferrogram_vsdx::{
+use larrygram_model::Document;
+use larrygram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
+use larrygram_vsdx::{
     ContentType, ContentTypeDecl, ContentTypeKind, Limits, Package, Part, PartData, PartName,
     Relationship, RelationshipId, TargetMode, read_package, to_model, write_document,
 };

@@ -8,7 +8,7 @@
 //! active page is part of the snapshot and a page switch clears the
 //! selection (ADR 0041).
 
-use ferrogram_model::{Page, PageId};
+use larrygram_model::{Page, PageId};
 
 use crate::app::{AppCtx, SessionId};
 use crate::error::CommandError;
@@ -392,7 +392,7 @@ fn page_label(page: &Page, index: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::Document;
+    use larrygram_model::Document;
 
     #[test]
     fn page_label_falls_back_to_the_number() {

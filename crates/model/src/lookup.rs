@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use ferrogram_geom::Unit;
+use larrygram_geom::Unit;
 
 use crate::cell::{Cell, CellValue, Color};
 use crate::document::Document;
@@ -1045,7 +1045,7 @@ fn parse_color(text: &str) -> Option<CellValue> {
 
 /// Parses a numeric default: a number literal with an optional unit suffix,
 /// converted to the canonical unit of the cell's `default_unit` kind
-/// (`ferrogram_geom::Unit` and `UnitKind`). A suffix must measure the same
+/// (`larrygram_geom::Unit` and `UnitKind`). A suffix must measure the same
 /// kind as the cell's default unit.
 fn parse_number_default(text: &str, default_unit: &str) -> Option<CellValue> {
     let (value, suffix) = crate::raw::parse_number_value(text)?;

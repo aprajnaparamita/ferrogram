@@ -19,14 +19,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::{Harness, Node};
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::{
     Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled, Invocation, Outcome,
     Registry, builtins,
 };
-use ferrogram_model::{Document, PageId};
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::Loader;
+use larrygram_model::{Document, PageId};
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::Loader;
 
 /// A document with two named pages and nothing else.
 fn app_with_two_pages() -> AppCtx {

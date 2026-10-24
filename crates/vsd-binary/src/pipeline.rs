@@ -12,7 +12,7 @@
 //!    flatten the `VisioDocument` stream into records.
 //! 3. [`crate::style::collect`], [`crate::pages::collect`],
 //!    [`crate::shape::collect`] and [`crate::text::collect`] map the
-//!    records into one [`ferrogram_model::Document`].
+//!    records into one [`larrygram_model::Document`].
 //!
 //! Every step records degradations in [`crate::ImportWarning`] values;
 //! only a structural failure is an [`crate::Error`].

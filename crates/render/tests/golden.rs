@@ -12,7 +12,7 @@
 //! `blue-box.vsdx`, skipped when the corpus is absent). Regenerate with
 //!
 //! ```sh
-//! FERROGRAM_UPDATE_GOLDEN=1 cargo test -p ferrogram-render --test golden
+//! LARRYGRAM_UPDATE_GOLDEN=1 cargo test -p larrygram-render --test golden
 //! ```
 //!
 //! which rewrites the goldens and prints which files changed; review is an
@@ -22,7 +22,7 @@ mod common;
 
 use std::path::PathBuf;
 
-use ferrogram_render::{PngOptions, render_png};
+use larrygram_render::{PngOptions, render_png};
 use tiny_skia::{Color, Pixmap, PremultipliedColorU8};
 
 /// The largest per-channel difference, of 255 (ADR 0027).
@@ -152,7 +152,7 @@ fn golden_images_match_the_adr_0027_metric() {
             eprintln!("skipping golden {name}: corpus/vsdx is absent");
         }
     }
-    let update = std::env::var_os("FERROGRAM_UPDATE_GOLDEN").is_some_and(|v| v == "1");
+    let update = std::env::var_os("LARRYGRAM_UPDATE_GOLDEN").is_some_and(|v| v == "1");
     for name in &cases {
         let rendered = render_case(name).expect("renders");
         let path = golden_dir().join(format!("{name}.png"));
@@ -170,7 +170,7 @@ fn golden_images_match_the_adr_0027_metric() {
         let saved = std::fs::read(&path).unwrap_or_else(|_| {
             panic!(
                 "missing golden {name}.png; regenerate with \
-                 FERROGRAM_UPDATE_GOLDEN=1 cargo test -p ferrogram-render --test golden"
+                 LARRYGRAM_UPDATE_GOLDEN=1 cargo test -p larrygram-render --test golden"
             )
         });
         if let Err(diff) = compare_images(&saved, &rendered) {

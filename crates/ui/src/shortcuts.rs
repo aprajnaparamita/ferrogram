@@ -7,7 +7,7 @@
 //! scope, so one sequence may be bound in several scopes and each
 //! binding fires when its scope is active. When more than one bound
 //! scope is active, the most specific wins: `Text`, then `Selection`,
-//! `Page`, `Ribbon`, `Window`, `Global`. Two entries with the same
+//! `Page`, `CommandBar`, `Window`, `Global`. Two entries with the same
 //! sequence and scope: the first in file order wins and one warning is
 //! recorded, except when both name the same command (an exact repeat
 //! is dropped silently).
@@ -26,7 +26,7 @@
 //! [`ShortcutMap::resolve`] alone is timeless).
 //!
 //! Focus rules ([`dispatch`]): `Global` and `Window` always match,
-//! `Page` and `Ribbon` match when the shell reports that surface as
+//! `Page` and `CommandBar` match when the shell reports that surface as
 //! focused, `Text` matches only while an egui text edit has focus, and
 //! `Selection` matches only with a non-empty selection (never in
 //! Phase 4). While a text edit has focus, the chords without `Ctrl` or
@@ -40,8 +40,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use egui::{Context, Event, Key, Modifiers};
-use ferrogram_commands::{AppCtx, CommandId, Invocation, Source};
-use ferrogram_ui_spec::{LoadError, ShortcutScope, Shortcuts};
+use larrygram_commands::{AppCtx, CommandId, Invocation, Source};
+use larrygram_ui_spec::{LoadError, ShortcutScope, Shortcuts};
 
 use crate::{Intent, UiError};
 
@@ -134,7 +134,7 @@ pub struct ShortcutMap {
 /// The shortcut scopes active at one dispatch (ADR 0036).
 ///
 /// A binding fires when its scope is active: `Global` and `Window`
-/// always, `Page` and `Ribbon` when the shell reports that surface as
+/// always, `Page` and `CommandBar` when the shell reports that surface as
 /// focused, `Text` while an egui text edit has focus, `Selection` with
 /// a non-empty selection. When several bindings of one sequence are
 /// active, the most specific wins.
@@ -142,8 +142,8 @@ pub struct ShortcutMap {
 pub struct ActiveScopes {
     /// A drawing page (the canvas) has focus.
     pub page: bool,
-    /// The ribbon has focus.
-    pub ribbon: bool,
+    /// The command_bar has focus.
+    pub command_bar: bool,
     /// An egui text edit has focus.
     pub text: bool,
     /// Shapes are selected (Phase 5; false in Phase 4).
@@ -156,7 +156,7 @@ impl ActiveScopes {
     pub fn new(focus: ShortcutScope, text_edit: bool, selection: bool) -> Self {
         Self {
             page: focus == ShortcutScope::Page,
-            ribbon: focus == ShortcutScope::Ribbon,
+            command_bar: focus == ShortcutScope::CommandBar,
             text: text_edit,
             selection,
         }
@@ -167,7 +167,7 @@ impl ActiveScopes {
         match scope {
             ShortcutScope::Global | ShortcutScope::Window => true,
             ShortcutScope::Page => self.page,
-            ShortcutScope::Ribbon => self.ribbon,
+            ShortcutScope::CommandBar => self.command_bar,
             ShortcutScope::Text => self.text,
             ShortcutScope::Selection => self.selection,
         }
@@ -411,7 +411,7 @@ impl ShortcutMap {
 /// of the completed sequences for the given scope (ADR 0036).
 ///
 /// `scope` is the surface the shell reports as focused (`Global` when
-/// none of `Page` or `Ribbon` has focus). The bindings of the most
+/// none of `Page` or `CommandBar` has focus). The bindings of the most
 /// specific active scope fire ([`ActiveScopes`], ADR 0036 order). A
 /// matched chord is consumed before the widgets see it, even when no
 /// binding of its sequence is active; a chord that matches nothing is
@@ -494,13 +494,13 @@ fn pick_entry(entries: &[Entry], active: &ActiveScopes) -> Option<Entry> {
 }
 
 /// Scope specificity, lower wins: `Text`, `Selection`, `Page`,
-/// `Ribbon`, `Window`, `Global` (ADR 0036).
+/// `CommandBar`, `Window`, `Global` (ADR 0036).
 fn scope_rank(scope: ShortcutScope) -> u8 {
     match scope {
         ShortcutScope::Text => 0,
         ShortcutScope::Selection => 1,
         ShortcutScope::Page => 2,
-        ShortcutScope::Ribbon => 3,
+        ShortcutScope::CommandBar => 3,
         ShortcutScope::Window => 4,
         ShortcutScope::Global => 5,
     }
@@ -832,8 +832,8 @@ fn load_error(message: impl Into<String>) -> UiError {
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_commands::Settings;
-    use ferrogram_ui_spec::CommandId as SpecCommandId;
+    use larrygram_commands::Settings;
+    use larrygram_ui_spec::CommandId as SpecCommandId;
 
     use super::*;
 
@@ -841,8 +841,8 @@ mod tests {
         tokens: &[&str],
         command: &str,
         scope: ShortcutScope,
-    ) -> ferrogram_ui_spec::Shortcut {
-        ferrogram_ui_spec::Shortcut {
+    ) -> larrygram_ui_spec::Shortcut {
+        larrygram_ui_spec::Shortcut {
             sequence: vec![tokens.iter().map(|t| (*t).to_owned()).collect()],
             command: SpecCommandId::parse(command).expect("id"),
             scope,
@@ -854,8 +854,8 @@ mod tests {
         chords: &[&[&str]],
         command: &str,
         scope: ShortcutScope,
-    ) -> ferrogram_ui_spec::Shortcut {
-        ferrogram_ui_spec::Shortcut {
+    ) -> larrygram_ui_spec::Shortcut {
+        larrygram_ui_spec::Shortcut {
             sequence: chords
                 .iter()
                 .map(|chord| chord.iter().map(|t| (*t).to_owned()).collect())
@@ -866,7 +866,7 @@ mod tests {
         }
     }
 
-    fn shortcuts(entries: Vec<ferrogram_ui_spec::Shortcut>) -> Shortcuts {
+    fn shortcuts(entries: Vec<larrygram_ui_spec::Shortcut>) -> Shortcuts {
         Shortcuts { entries }
     }
 
@@ -1520,7 +1520,7 @@ mod tests {
 
     #[test]
     fn a_shortcut_without_a_chord_is_a_load_error() {
-        let empty = ferrogram_ui_spec::Shortcut {
+        let empty = larrygram_ui_spec::Shortcut {
             sequence: Vec::new(),
             command: SpecCommandId::parse("edit.undo").expect("id"),
             scope: ShortcutScope::Global,
@@ -1541,14 +1541,14 @@ mod tests {
     fn active_scopes_follow_the_focus() {
         let page = ActiveScopes::new(ShortcutScope::Page, false, false);
         assert!(page.page);
-        assert!(!page.ribbon);
+        assert!(!page.command_bar);
         assert!(!page.text);
         assert!(!page.selection);
-        let ribbon = ActiveScopes::new(ShortcutScope::Ribbon, true, true);
-        assert!(ribbon.ribbon);
-        assert!(ribbon.text);
-        assert!(ribbon.selection);
-        assert!(!ribbon.page);
+        let command_bar = ActiveScopes::new(ShortcutScope::CommandBar, true, true);
+        assert!(command_bar.command_bar);
+        assert!(command_bar.text);
+        assert!(command_bar.selection);
+        assert!(!command_bar.page);
     }
 
     #[test]
@@ -1557,7 +1557,7 @@ mod tests {
             for active in [
                 ActiveScopes::default(),
                 ActiveScopes::new(ShortcutScope::Page, false, false),
-                ActiveScopes::new(ShortcutScope::Ribbon, true, false),
+                ActiveScopes::new(ShortcutScope::CommandBar, true, false),
                 ActiveScopes::new(ShortcutScope::Global, false, true),
             ] {
                 assert!(active.contains(want));
@@ -1566,13 +1566,13 @@ mod tests {
     }
 
     #[test]
-    fn page_and_ribbon_need_their_surface() {
+    fn page_and_command_bar_need_their_surface() {
         let page = ActiveScopes::new(ShortcutScope::Page, false, false);
-        let ribbon = ActiveScopes::new(ShortcutScope::Ribbon, false, false);
+        let command_bar = ActiveScopes::new(ShortcutScope::CommandBar, false, false);
         assert!(page.contains(ShortcutScope::Page));
-        assert!(!page.contains(ShortcutScope::Ribbon));
-        assert!(ribbon.contains(ShortcutScope::Ribbon));
-        assert!(!ribbon.contains(ShortcutScope::Page));
+        assert!(!page.contains(ShortcutScope::CommandBar));
+        assert!(command_bar.contains(ShortcutScope::CommandBar));
+        assert!(!command_bar.contains(ShortcutScope::Page));
     }
 
     #[test]

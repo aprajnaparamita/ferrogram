@@ -25,7 +25,7 @@
 
 use std::io::Write as _;
 
-use ferrogram_vsdx::{Error, Limits, Package, read_package};
+use larrygram_vsdx::{Error, Limits, Package, read_package};
 use zip::CompressionMethod;
 use zip::write::{SimpleFileOptions, ZipWriter};
 

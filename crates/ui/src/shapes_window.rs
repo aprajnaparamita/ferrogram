@@ -11,10 +11,10 @@
 use std::collections::HashMap;
 
 use egui::{ColorImage, TextureHandle, TextureOptions, Ui};
-use ferrogram_commands::AppCtx;
-use ferrogram_model::stencils::{self, MasterDef};
-use ferrogram_model::{Cell, CellName, CellValue, Document};
-use ferrogram_render::{BuildOptions, RasterOptions, build_scene, render_raster};
+use larrygram_commands::AppCtx;
+use larrygram_model::stencils::{self, MasterDef};
+use larrygram_model::{Cell, CellName, CellValue, Document};
+use larrygram_render::{BuildOptions, RasterOptions, build_scene, render_raster};
 
 use crate::UiError;
 
@@ -200,7 +200,7 @@ fn preview_document(master: &MasterDef) -> Document {
 /// scene or the raster cannot be built.
 fn preview_image(master: &MasterDef) -> Option<ColorImage> {
     let document = preview_document(master);
-    let page = ferrogram_model::PageId { index: 0 };
+    let page = larrygram_model::PageId { index: 0 };
     let scale = f64::from(PREVIEW_PX) / master.width.max(master.height);
     let mut options = BuildOptions::new();
     options.scale = scale;
@@ -272,7 +272,7 @@ mod tests {
     fn the_window_lists_both_stencils_and_every_master() {
         let texts = painted_text(|ui| {
             let mut window = ShapesWindow::new();
-            let app = AppCtx::new(ferrogram_commands::Settings::default());
+            let app = AppCtx::new(larrygram_commands::Settings::default());
             let picks = window.show(ui, &app).expect("show");
             assert!(picks.is_empty(), "no clicks in a scratch frame");
         });
@@ -300,7 +300,7 @@ mod tests {
             master: "Rectangle",
         };
         with_ui(|ui| {
-            let app = AppCtx::new(ferrogram_commands::Settings::default());
+            let app = AppCtx::new(larrygram_commands::Settings::default());
             window.show(ui, &app).expect("show");
         });
         window.select(pick);
@@ -315,7 +315,7 @@ mod tests {
     fn every_master_gets_a_preview_slot() {
         let mut window = ShapesWindow::new();
         with_ui(|ui| {
-            let app = AppCtx::new(ferrogram_commands::Settings::default());
+            let app = AppCtx::new(larrygram_commands::Settings::default());
             window.show(ui, &app).expect("show");
             // A second frame reuses the cached slots (or the failed
             // placeholder) instead of rasterizing again.

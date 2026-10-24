@@ -65,9 +65,9 @@ pub(super) fn masters() -> Vec<MasterDef> {
             1.5,
             1.0,
             vec![GeometryRow::Ellipse {
-                center: ferrogram_geom::Point::new(0.75, 0.5),
-                a: ferrogram_geom::Point::new(0.75, 0.0),
-                b: ferrogram_geom::Point::new(0.0, 0.5),
+                center: larrygram_geom::Point::new(0.75, 0.5),
+                a: larrygram_geom::Point::new(0.75, 0.0),
+                b: larrygram_geom::Point::new(0.0, 0.5),
             }],
             filled,
             edge_midpoints(1.5, 1.0),

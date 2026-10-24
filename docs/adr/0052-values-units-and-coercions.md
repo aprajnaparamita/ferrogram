@@ -91,7 +91,7 @@ never panics.
 
 ### Mapping to and from the model (P2-14)
 
-`Value::to_cached` writes a `model::CellValue` plus the `ferrogram_geom::Unit`
+`Value::to_cached` writes a `model::CellValue` plus the `larrygram_geom::Unit`
 the cell records; `Value::from_cached` reads one. The rules:
 
 - A number converts to the family's canonical unit and stores the unit
@@ -113,18 +113,18 @@ the cell records; `Value::from_cached` reads one. The rules:
 - The evaluator can compute `1 in + 2 cm` and `DEG(PI())` without a
   separate unit layer, and the renderer keeps reading canonical numbers.
 - Non-finite values die at the one place values are produced, so no
-  caller downstream (render, write, panels) needs its own guard (the
+  caller downstream (render, write, panes) needs its own guard (the
   P3-16 `Ctx::finite` removal is now a rule, not a habit).
-- `Unit` duplicates a subset of `ferrogram_geom::Unit` (which has no
+- `Unit` duplicates a subset of `larrygram_geom::Unit` (which has no
   durations, didots or implicit units). The two are bridged by
   `Unit::to_geom`/`from_geom`; keeping `geom` unchanged avoids touching
   L0 in this phase (AGENTS.md "stay in your lane").
 - Dates and durations have values but no display in this phase: the
-  panels show their cached text (ADR 0058).
+  panes show their cached text (ADR 0058).
 
 ## Alternatives considered
 
-- **Use `ferrogram_geom::Unit` as the value unit.** Rejected: it has no
+- **Use `larrygram_geom::Unit` as the value unit.** Rejected: it has no
   didots, durations, implicit units or compound spellings, and adding
   them needs an L0 change this task does not own.
 - **Values without units (plain `f64`).** Rejected: unit arithmetic is

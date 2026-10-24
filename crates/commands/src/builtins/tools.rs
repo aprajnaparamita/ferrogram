@@ -13,14 +13,14 @@
 //!
 //! - `tools.pointer` — pointer tool;
 //! - `tools.rectangle` and `shape.rectangle` — rectangle tool (the
-//!   ribbon uses the first, `Ctrl+8` the second);
+//!   command bar uses the first, `Ctrl+8` the second);
 //! - `tools.ellipse` and `shape.ellipse` — ellipse tool;
 //! - `shape.line` — line tool (there is no `tools.line` row);
 //! - `tools.connector` — connector tool;
 //! - `tools.text` — text tool.
 //!
 //! The registry has no checked-state seam yet, so a command cannot
-//! report itself as checked; the shell derives the ribbon and menu
+//! report itself as checked; the shell derives the command bar and menu
 //! state from [`AppCtx::active_tool`] (Open issue in the P5-17 Result).
 
 use crate::app::ActiveTool;

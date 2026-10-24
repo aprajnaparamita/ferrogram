@@ -14,7 +14,7 @@
 //! rule 3), multiplied by 2 on a known local machine and by 5 in CI
 //! (the generous CI multiplier). The assertion runs only where we have
 //! a number: on a known CPU/OS pair or with an explicit
-//! `FERROGRAM_DRAG_BUDGET_MS`. On any other hardware the test still
+//! `LARRYGRAM_DRAG_BUDGET_MS`. On any other hardware the test still
 //! runs and prints the measurements, then skips the assertion with its
 //! reason — a timing failure on unknown hardware would be noise, not a
 //! finding (task P5-11).
@@ -26,8 +26,8 @@
 
 use std::time::{Duration, Instant};
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_model::{Document, Page, PageId};
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_model::{Document, Page, PageId};
 
 use crate::{CanvasRig, PAGE_HEIGHT, ZOOM, cell, screen, shape};
 
@@ -47,7 +47,7 @@ const CI_MULTIPLIER: f64 = 5.0;
 const LOCAL_MULTIPLIER: f64 = 2.0;
 
 /// The machine class the budget applies to (module docs): the
-/// assertion runs on a known pair or with `FERROGRAM_DRAG_BUDGET_MS`.
+/// assertion runs on a known pair or with `LARRYGRAM_DRAG_BUDGET_MS`.
 fn known_hardware() -> Option<String> {
     match (std::env::consts::ARCH, std::env::consts::OS) {
         ("aarch64" | "x86_64", "macos" | "linux") => Some(format!(
@@ -62,10 +62,10 @@ fn known_hardware() -> Option<String> {
 /// The budget to assert, in milliseconds, or `None` to skip (module
 /// docs).
 fn budget() -> Option<(f64, String)> {
-    if let Ok(explicit) = std::env::var("FERROGRAM_DRAG_BUDGET_MS")
+    if let Ok(explicit) = std::env::var("LARRYGRAM_DRAG_BUDGET_MS")
         && let Ok(value) = explicit.trim().parse::<f64>()
     {
-        return Some((value, format!("FERROGRAM_DRAG_BUDGET_MS={value}")));
+        return Some((value, format!("LARRYGRAM_DRAG_BUDGET_MS={value}")));
     }
     let hardware = known_hardware()?;
     let multiplier = if std::env::var_os("CI").is_some() {
@@ -145,7 +145,7 @@ fn a_drag_frame_stays_inside_the_adr_0042_budget() {
     let Some((budget_ms, reason)) = budget() else {
         eprintln!(
             "skipping the budget assertion: unknown hardware ({} {}); \
-             set FERROGRAM_DRAG_BUDGET_MS to assert",
+             set LARRYGRAM_DRAG_BUDGET_MS to assert",
             std::env::consts::ARCH,
             std::env::consts::OS
         );

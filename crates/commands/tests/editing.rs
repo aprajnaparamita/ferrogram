@@ -24,13 +24,13 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, CommandStatus, Invocation, NeededInput, Registry,
     SessionId, Source,
 };
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellName, CellValue, Document, PageId, Preserved, Row, Section, SectionName, Shape,
     ShapeId,
 };
@@ -72,10 +72,10 @@ const COVERED: &[(&str, &str)] = &[
     ("shape.move", "move_shifts_the_selection_with_one_undo_step"),
     ("shape.resize", "resize_scales_size_and_geometry"),
     ("shape.rotate", "rotate_turns_each_selected_shape"),
-    ("shape.set.width", "panel_fields_edit_the_anchor_shape"),
-    ("shape.set.height", "panel_fields_edit_the_anchor_shape"),
-    ("shape.set.pin", "panel_fields_edit_the_anchor_shape"),
-    ("shape.set.angle", "panel_fields_edit_the_anchor_shape"),
+    ("shape.set.width", "pane_fields_edit_the_anchor_shape"),
+    ("shape.set.height", "pane_fields_edit_the_anchor_shape"),
+    ("shape.set.pin", "pane_fields_edit_the_anchor_shape"),
+    ("shape.set.angle", "pane_fields_edit_the_anchor_shape"),
     ("shape.enter_group", "entering_and_exiting_a_group_reselect"),
     ("shape.exit_group", "entering_and_exiting_a_group_reselect"),
 ];
@@ -85,7 +85,7 @@ fn number_cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -309,7 +309,7 @@ fn rotate_turns_each_selected_shape() {
 }
 
 #[test]
-fn panel_fields_edit_the_anchor_shape() {
+fn pane_fields_edit_the_anchor_shape() {
     let (mut ctx, registry, _session, page, shapes) = fixture(3);
     // The anchor is the middle shape even though all three are selected.
     select(&mut ctx, page, &shapes);
@@ -357,7 +357,7 @@ fn panel_fields_edit_the_anchor_shape() {
     );
     assert_eq!(cell_value(&ctx, shapes[2], "PinX"), Some(2.0));
 
-    // Undo the four panel edits one by one back to the start.
+    // Undo the four pane edits one by one back to the start.
     for _ in 0..4 {
         dispatch(&mut ctx, &registry, "edit.undo", Args::new()).expect("undo");
     }
@@ -474,7 +474,7 @@ fn delete_warns_about_the_glue_it_drops_and_undo_restores_it() {
     {
         let doc = &mut ctx.active_document_mut().expect("document").document;
         for from_cell in ["BeginX", "EndX"] {
-            let mut connect = ferrogram_model::Connect::new();
+            let mut connect = larrygram_model::Connect::new();
             connect.from_sheet = connector_visio;
             connect.from_cell = from_cell.to_owned();
             connect.to_sheet = 1;
@@ -1294,7 +1294,7 @@ fn selecting_an_empty_list_clears_the_entered_group() {
 }
 
 #[test]
-fn panel_commands_need_a_document_and_a_live_anchor() {
+fn pane_commands_need_a_document_and_a_live_anchor() {
     // A selection without any open document reaches the handler.
     let mut ctx = AppCtx::new(Settings::default());
     ctx.selection.shapes = vec![ShapeId { index: 0 }];

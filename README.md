@@ -1,4 +1,4 @@
-# Ferrogram
+# Larrygram
 
 A clean-room, open-source diagramming app in pure Rust that aims to read and write Microsoft Visio files (.vsdx, with read-only .vsd import).
 
@@ -13,7 +13,7 @@ Last full gate on `main`: **green, 2026-10-24** (Phase 6 closed, commit `152fae3
 | codegen, parity, fmt, clippy, doc, deny, layers | pass |
 | test (`cargo test --workspace --all-features`) | pass |
 | coverage (per-crate thresholds and ratchet) | pass |
-| wasm (`ferrogram-web`) | pass |
+| wasm (`larrygram-web`) | pass |
 | fuzz (`cargo +nightly fuzz build`) | pass |
 
 Line coverage per crate (`cargo xtask coverage`):
@@ -23,9 +23,9 @@ Line coverage per crate (`cargo xtask coverage`):
 | geom | 100.0% | text | 98.9% |
 | shapesheet | 97.0% | commands | 98.4% |
 | model | 99.7% | vsdx | 98.2% |
-| ui-spec | 99.4% | ferrogram-cli | 96.8% |
+| ui-spec | 99.4% | larrygram-cli | 96.8% |
 | render | 98.5% | ui | 97.0% |
-| ferrogram (desktop) | 80.0% | ferrogram-web | 77.9% |
+| larrygram (desktop) | 80.0% | larrygram-web | 77.9% |
 
 `control` has no code yet (Phase 9). `vsd-binary` holds the Phase 8 skeleton, all stubs with tests (100%).
 
@@ -33,8 +33,8 @@ Line coverage per crate (`cargo xtask coverage`):
 
 - **UI and ShapeSheet definitions** (Phase 1), generated from Microsoft's published data by `cargo xtask extract`: the Panel (2016 data) and Panel (365 data) layouts, 977 command ids, the keyboard shortcut table and the ShapeSheet table.
 - **Document model and `.vsdx` I/O** (Phase 2): pages, masters, shapes, styles and ShapeSheet cells; lossless read and write, with content the model does not cover kept in place. Every corpus file round-trips.
-- **Rendering and CLI** (Phase 3): pages render from cached cell values to PNG (`tiny-skia`) and SVG, with text shaping and bundled open fonts (Carlito, Selawik). `ferrogram-cli inspect`, `render` and `export`.
-- **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a command bar generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the command bar, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panels; original stencils; file open, save and export.
+- **Rendering and CLI** (Phase 3): pages render from cached cell values to PNG (`tiny-skia`) and SVG, with text shaping and bundled open fonts (Carlito, Selawik). `larrygram-cli inspect`, `render` and `export`.
+- **App shell** (Phase 4): desktop (eframe) and web (wasm) apps with a command bar generated from the 2016 or 365 layout, switchable without a restart; one command registry behind the command bar, menus, shortcuts and CLI; canvas with zoom, pan, grid and rulers; panes; original stencils; file open, save and export.
 - **Editing core** (Phase 5):
   - select, marquee, move, resize and rotate with handles and snapping;
   - pointer, rectangle, ellipse, line, text and connector tools, chosen through registry commands;
@@ -44,7 +44,7 @@ Line coverage per crate (`cargo xtask coverage`):
   - cut, copy, paste, duplicate, group, align, distribute, z-order, and page add, delete, rename and reorder;
   - undo and redo for every edit.
 
-  The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/ferrogram/tests/flowchart.rs`). Phase report: [docs/progress/phase-5.md](docs/progress/phase-5.md).
+  The Phase 5 exit test builds a 10-shape flowchart with 5 glued connectors on two pages, saves it, reopens it and keeps editing (`apps/larrygram/tests/flowchart.rs`). Phase report: [docs/progress/phase-5.md](docs/progress/phase-5.md).
 - **ShapeSheet engine** (Phase 6), in `crates/shapesheet`:
   - a formula parser and printer: 976 of the 994 distinct formulas in the test corpus parse, and every one of them prints back unchanged;
   - values with units and Visio's type conversions;
@@ -73,7 +73,7 @@ Functions outside the core set (their cells keep the stored value), the document
 | 1 | Sources and UI/ShapeSheet definitions | done |
 | 2 | Document model and .vsdx I/O (lossless round-trip) | done |
 | 3 | Rendering (PNG/SVG) and CLI | done |
-| 4 | App shell, switchable 2016/365 panels | done |
+| 4 | App shell, switchable 2016/365 panes | done |
 | 5 | Editing core | done |
 | 6 | ShapeSheet engine (core subset) | done |
 | 7 | Panel Modern and Panel Classic layouts, the Larrygram rename, the welcome wizard | in progress |
@@ -84,9 +84,9 @@ Out of scope for the alpha: visual fidelity, data linking, containers/lists beyo
 
 ## Clean room
 
-Ferrogram is built only from public specifications ([MS-VSDX]), Microsoft Learn reference documentation, Microsoft's published Office Fluent UI control identifiers, public support articles, observed behavior, and libvisio (MPL-2.0, confined to `crates/vsd-binary`). No Microsoft code, binaries, icons, fonts, stencils or templates are used or shipped. See [AGENTS.md](AGENTS.md).
+Larrygram is built only from public specifications ([MS-VSDX]), Microsoft Learn reference documentation, Microsoft's published Office Fluent UI control identifiers, public support articles, observed behavior, and libvisio (MPL-2.0, confined to `crates/vsd-binary`). No Microsoft code, binaries, icons, fonts, stencils or templates are used or shipped. See [AGENTS.md](AGENTS.md).
 
-Visio and Microsoft 365 are trademarks of Microsoft Corporation. Ferrogram is not affiliated with or endorsed by Microsoft.
+Visio and Microsoft 365 are trademarks of Microsoft Corporation. Larrygram is not affiliated with or endorsed by Microsoft.
 
 ## Building
 

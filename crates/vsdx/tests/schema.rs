@@ -36,7 +36,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ferrogram_vsdx::{
+use larrygram_vsdx::{
     Limits, Package, PartData, read_document, read_package, write_document, write_package,
 };
 use zip::ZipArchive;
@@ -416,7 +416,7 @@ impl ScratchDir {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir =
-            std::env::temp_dir().join(format!("ferrogram-schema-{}-{unique}", std::process::id()));
+            std::env::temp_dir().join(format!("larrygram-schema-{}-{unique}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         ScratchDir(dir)
     }
@@ -436,7 +436,7 @@ impl Drop for ScratchDir {
 }
 
 /// The markdown file with the embedded XSD and `xmllint`, or the reason the
-/// test must skip. `FERROGRAM_REQUIRE_SCHEMA=1` turns a skip into a failure.
+/// test must skip. `LARRYGRAM_REQUIRE_SCHEMA=1` turns a skip into a failure.
 fn schema_tools() -> Result<(PathBuf, PathBuf), String> {
     let markdown = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -457,11 +457,11 @@ fn schema_tools() -> Result<(PathBuf, PathBuf), String> {
     Ok((markdown, xmllint))
 }
 
-/// Skips with a message, or fails when `FERROGRAM_REQUIRE_SCHEMA=1`.
+/// Skips with a message, or fails when `LARRYGRAM_REQUIRE_SCHEMA=1`.
 fn skip_or_fail(why: &str) {
     assert!(
-        std::env::var_os("FERROGRAM_REQUIRE_SCHEMA").is_none(),
-        "FERROGRAM_REQUIRE_SCHEMA=1 but the schema harness cannot run: {why}"
+        std::env::var_os("LARRYGRAM_REQUIRE_SCHEMA").is_none(),
+        "LARRYGRAM_REQUIRE_SCHEMA=1 but the schema harness cannot run: {why}"
     );
     eprintln!("skipping schema validation: {why}");
 }
@@ -517,8 +517,8 @@ fn source_parts_validate_against_the_embedded_xsd() {
     let files = corpus_files();
     if files.is_empty() {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
         return;
@@ -538,7 +538,7 @@ fn source_parts_validate_against_the_embedded_xsd() {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let bytes = std::fs::read(&path).expect("corpus file reads");
-        let package = read_package(&bytes, &ferrogram_vsdx::Limits::DEFAULT)
+        let package = read_package(&bytes, &larrygram_vsdx::Limits::DEFAULT)
             .unwrap_or_else(|why| panic!("{name}: package reads: {why}"));
         let expected = package
             .parts
@@ -607,8 +607,8 @@ fn written_parts_add_no_new_schema_errors() {
     let files = corpus_files();
     if files.is_empty() {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
         return;

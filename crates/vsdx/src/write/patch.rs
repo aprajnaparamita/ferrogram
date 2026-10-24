@@ -8,7 +8,7 @@
 //!   sections by `N` and `IX`; rows by `IX` or `N`; cells and properties by
 //!   name), never by position;
 //! - every unmapped element and attribute stays exactly where the source put
-//!   it (the model's [`Preserved`](ferrogram_model::Preserved) fragments are
+//!   it (the model's [`Preserved`](larrygram_model::Preserved) fragments are
 //!   not consulted: several source elements merge into one fragment, so the
 //!   tree is the authoritative record of their positions);
 //! - a source element whose entity is gone from the model is removed, unless
@@ -21,7 +21,7 @@
 //! and a matching spelling is kept (`2.0` stays `2.0`, `true` stays `true`),
 //! so an unedited write changes nothing and a second write is byte-identical.
 
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellValue, Connect, Document, Master, Page, Preserved, Property, Row, Section, Shape,
     Style, XmlChild, XmlNode,
 };
@@ -58,8 +58,8 @@ fn set(node: &mut XmlNode, local: &str, value: String) {
         .find(|attribute| attribute.name.local == local)
     {
         Some(attribute) => attribute.value = value,
-        None => node.attributes.push(ferrogram_model::XmlAttribute {
-            name: ferrogram_model::QName::local(local),
+        None => node.attributes.push(larrygram_model::XmlAttribute {
+            name: larrygram_model::QName::local(local),
             value,
         }),
     }
@@ -218,7 +218,7 @@ fn blank(text: &str) -> bool {
 /// Removes the children at these indices.
 ///
 /// When elements were dropped and nothing but whitespace text is left, that
-/// pretty-printing whitespace goes too: [`diff`](ferrogram_model::diff) would
+/// pretty-printing whitespace goes too: [`diff`](larrygram_model::diff) would
 /// otherwise read it as significant text (ADR 0012 whitespace rule). When
 /// nothing was dropped, blank text is the element's own significant content
 /// and stays.
@@ -623,7 +623,7 @@ fn patch_section(node: &mut XmlNode, style: &NameStyle, section: &Section) {
 fn patch_sheet(
     node: &mut XmlNode,
     style: &NameStyle,
-    sheet: &ferrogram_model::Sheet,
+    sheet: &larrygram_model::Sheet,
     preserved: &Preserved,
 ) {
     let cell_keys: Vec<Option<String>> = sheet
@@ -687,7 +687,7 @@ fn patch_sheet(
 ///
 /// `Shape::text` is a typed copy of the `Text` element; the shape's
 /// preserved fragment holds the element the model rebuilt after a
-/// [`set_shape_text`](ferrogram_model::Document::set_shape_text) edit.
+/// [`set_shape_text`](larrygram_model::Document::set_shape_text) edit.
 /// When it differs from the tree's element, the tree takes it (keeping
 /// the tree's spelling of the element name); when it is identical (an
 /// unedited shape), nothing happens and the write is a no-op.
@@ -763,7 +763,7 @@ pub(crate) fn patch_shape(node: &mut XmlNode, ctx: &Ctx, shape: &Shape, depth: u
 pub(crate) fn patch_shapes(
     ctx: &Ctx,
     wrapper: &mut XmlNode,
-    ids: &[ferrogram_model::ShapeId],
+    ids: &[larrygram_model::ShapeId],
     preserved: &Preserved,
     depth: u32,
 ) {
@@ -1228,7 +1228,7 @@ pub(crate) fn patch_master_contents(root: &mut XmlNode, ctx: &Ctx, master: &Mast
 fn patch_contents_root(
     root: &mut XmlNode,
     ctx: &Ctx,
-    ids: &[ferrogram_model::ShapeId],
+    ids: &[larrygram_model::ShapeId],
     connects: Option<&[Connect]>,
     preserved: &Preserved,
 ) {
@@ -1305,7 +1305,7 @@ pub(crate) fn patch_visio_document(root: &mut XmlNode, ctx: &Ctx, pool: &mut Pro
                 if let Some(property) = pool.properties.get(entity) {
                     let mut element = emit::property_element(&ctx.style, property);
                     if let Some(template) = &template {
-                        element.name = ferrogram_model::QName {
+                        element.name = larrygram_model::QName {
                             prefix: template.prefix.clone(),
                             uri: template.uri.clone(),
                             local: property.name.clone(),
@@ -1334,7 +1334,7 @@ pub(crate) fn patch_visio_document(root: &mut XmlNode, ctx: &Ctx, pool: &mut Pro
 
 /// The namespace spelling of the first property element of a property
 /// container, for a new property element.
-fn property_template(root: &XmlNode) -> Option<ferrogram_model::QName> {
+fn property_template(root: &XmlNode) -> Option<larrygram_model::QName> {
     for child in &root.children {
         let XmlChild::Element(container) = child else {
             continue;
@@ -1343,7 +1343,7 @@ fn property_template(root: &XmlNode) -> Option<ferrogram_model::QName> {
             if let XmlChild::Element(property) = property
                 && is_property(property)
             {
-                return Some(ferrogram_model::QName {
+                return Some(larrygram_model::QName {
                     prefix: property.name.prefix.clone(),
                     uri: property.name.uri.clone(),
                     local: String::new(),
@@ -1351,7 +1351,7 @@ fn property_template(root: &XmlNode) -> Option<ferrogram_model::QName> {
             }
         }
         if is_property(container) {
-            return Some(ferrogram_model::QName {
+            return Some(larrygram_model::QName {
                 prefix: container.name.prefix.clone(),
                 uri: container.name.uri.clone(),
                 local: String::new(),
@@ -1372,8 +1372,8 @@ pub(crate) fn patch_properties_root(
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{Cell, CellName, CellValue, Preserved, Row, XmlAttribute};
-    use ferrogram_model::{QName, XmlChild, XmlNode};
+    use larrygram_model::{Cell, CellName, CellValue, Preserved, Row, XmlAttribute};
+    use larrygram_model::{QName, XmlChild, XmlNode};
 
     use super::*;
 
@@ -1606,7 +1606,7 @@ mod tests {
         let mut model = Cell::new(CellName::from_static("PinX"));
         model.formula = Some("2*2".to_owned());
         model.value = Some(CellValue::Number(4.0));
-        model.unit = ferrogram_geom::Unit::Inches;
+        model.unit = larrygram_geom::Unit::Inches;
         let mut node = cell(&[("N", "PinX"), ("V", "4.5")]);
         patch_cell(&mut node, &model);
         assert_eq!(current(&node, "V"), Some("4"));
@@ -1652,7 +1652,7 @@ mod tests {
         row.ix = Some(2);
         row.row_type = Some("RelMoveTo".to_owned());
         let mut section =
-            ferrogram_model::Section::new(ferrogram_model::SectionName::from_static("Geometry"));
+            larrygram_model::Section::new(larrygram_model::SectionName::from_static("Geometry"));
         section.rows.push(row);
         let mut other = Row::new();
         other.name = Some("Row_1".to_owned());
@@ -1684,7 +1684,7 @@ mod tests {
         let mut preserved = Preserved::new();
         let kept = cell(&[("V", "no name")]);
         preserved.children.push(kept.clone());
-        let sheet = ferrogram_model::Sheet::new();
+        let sheet = larrygram_model::Sheet::new();
         let mut node = raw(
             "Shape",
             &[],

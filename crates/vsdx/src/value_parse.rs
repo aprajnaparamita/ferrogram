@@ -6,7 +6,7 @@
 //! says the same thing; both classify an undeclared value by its shape and
 //! parse color literals, so those rules live here once. No behavior change.
 
-use ferrogram_model::Color;
+use larrygram_model::Color;
 
 /// What a value of unknown declared kind looks like.
 pub(crate) enum Shaped {

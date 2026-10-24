@@ -34,7 +34,7 @@ confidence-threshold = 0.9
 # Allowances are listed up front for crates we expect (fonts, unicode, GUI stack).
 unused-allowed-license = "allow"
 # Permissive licenses only. MPL-2.0 is NOT in this list: it is allowed solely
-# for ferrogram-vsd-binary via the exception below (see ADR 0003).
+# for larrygram-vsd-binary via the exception below (see ADR 0003).
 allow = [
     "MIT",
     "MIT-0",
@@ -52,7 +52,7 @@ allow = [
 ]
 
 [[licenses.exceptions]]
-crate = "ferrogram-vsd-binary"
+crate = "larrygram-vsd-binary"
 allow = ["MPL-2.0"]
 
 # egui's dependency-supplied chrome fonts (ADR 0030): the epaint default

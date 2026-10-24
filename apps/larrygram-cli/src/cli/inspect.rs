@@ -1,20 +1,20 @@
 //! The `inspect` summary types (ADR 0026).
 //!
 //! The summary and its text and JSON forms moved to
-//! `ferrogram_commands::builtins` with the ADR 0026 seam (task P4-02),
+//! `larrygram_commands::builtins` with the ADR 0026 seam (task P4-02),
 //! so the CLI, the control channel (Phase 8) and MCP share one
 //! implementation. This module keeps the names in scope for the
 //! unchanged tests below, which build a `Summary` and pin its output.
 
 #[cfg(test)]
-use ferrogram_commands::builtins::{PageSummary, Summary, kind_text, shape_count};
+use larrygram_commands::builtins::{PageSummary, Summary, kind_text, shape_count};
 #[cfg(test)]
-use ferrogram_model::{Document, DocumentKind, Page};
+use larrygram_model::{Document, DocumentKind, Page};
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_model::{Master, PageId, Shape, ShapeId};
+    use larrygram_model::{Master, PageId, Shape, ShapeId};
 
     fn summary() -> Summary {
         Summary {
@@ -143,7 +143,7 @@ mod tests {
     fn summary_counts_what_the_document_holds() {
         let mut doc = Document::new();
         doc.masters
-            .push(Master::new(ferrogram_model::MasterId { index: 0 }, 1));
+            .push(Master::new(larrygram_model::MasterId { index: 0 }, 1));
         let summary = Summary {
             kind: kind_text(doc.kind),
             pages: Vec::new(),

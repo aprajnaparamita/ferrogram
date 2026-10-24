@@ -13,7 +13,7 @@
 use crate::app::AppCtx;
 use crate::error::CommandError;
 use crate::undo::{Edit, run_suspended};
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 /// Several edits as one undoable step (ADR 0040).
 #[derive(Default)]

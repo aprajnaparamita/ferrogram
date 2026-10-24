@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ferrogram_model::{CellName, CellValue, CellWrite, Connect, PageId, Shape, ShapeId};
+use larrygram_model::{CellName, CellValue, CellWrite, Connect, PageId, Shape, ShapeId};
 
 use crate::app::{AppCtx, SessionId};
 use crate::clipboard::{ClipboardContent, ClipboardKind};
@@ -252,7 +252,7 @@ fn content_from_selection(ctx: &AppCtx) -> Result<(ClipboardContent, Vec<String>
 /// Whether `shape` has a selected ancestor (walking up the parent chain,
 /// cycle-safe).
 fn ancestor_selected(
-    doc: &ferrogram_model::Document,
+    doc: &larrygram_model::Document,
     shape: ShapeId,
     selected: &BTreeSet<u32>,
 ) -> bool {
@@ -357,13 +357,13 @@ fn paste_content(
                     })?;
                 let next = (pin_x + delta.0, pin_y + delta.1);
                 doc.write_cell(
-                    ferrogram_model::SheetRef::Shape(*root),
+                    larrygram_model::SheetRef::Shape(*root),
                     &CellName::from_static("PinX"),
                     &CellWrite::new(number_literal(next.0), CellValue::Number(next.0)),
                 )
                 .map_err(super::model_error)?;
                 doc.write_cell(
-                    ferrogram_model::SheetRef::Shape(*root),
+                    larrygram_model::SheetRef::Shape(*root),
                     &CellName::from_static("PinY"),
                     &CellWrite::new(number_literal(next.1), CellValue::Number(next.1)),
                 )
@@ -411,7 +411,7 @@ fn prepared(shape: &Shape) -> Shape {
 /// Inserts one node's descendants and links the fresh ids.
 #[allow(clippy::too_many_arguments)]
 fn insert_descendants(
-    doc: &mut ferrogram_model::Document,
+    doc: &mut larrygram_model::Document,
     content: &ClipboardContent,
     by_id: &BTreeMap<u32, usize>,
     copied: &BTreeSet<u32>,
@@ -459,7 +459,7 @@ mod tests {
     use super::*;
     use crate::app::{AppCtx, DocumentSession, Settings};
     use crate::clipboard::{Clipboard, ClipboardContent, ClipboardKind};
-    use ferrogram_model::Document;
+    use larrygram_model::Document;
 
     fn content(shapes: Vec<Shape>, connects: Vec<Connect>) -> ClipboardContent {
         ClipboardContent {

@@ -63,12 +63,12 @@ over the closure in a scratch workspace):
 | `fontdb`, `svgtypes`, `kurbo` | MIT OR Apache-2.0 |
 
 The closure passes the repository's `deny.toml` licence allow-list
-with no MPL crate, so the "only `ferrogram-vsd-binary` is MPL" rule
+with no MPL crate, so the "only `larrygram-vsd-binary` is MPL" rule
 (ADR 0003) holds. Task P7-04 owns `crates/ui/Cargo.toml` and adds the
 dependency; the repository `cargo deny` step then checks the real
 closure. If `egui_extras` proves too heavy for wasm, the fallback is
 our own thin SVG reader over `tiny-skia` (already in the tree through
-`ferrogram-render`); that is an implementation change, not a licence
+`larrygram-render`); that is an implementation change, not a licence
 one.
 
 `currentColor` handling and the icon rasterisation of ADR 0062 cover

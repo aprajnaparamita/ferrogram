@@ -1,16 +1,16 @@
 //! The dynamic connector tool (ADR 0045).
 //!
-//! A drag previews the routed path (`ferrogram_geom::routing`), snaps and
+//! A drag previews the routed path (`larrygram_geom::routing`), snaps and
 //! glues both ends to connection points or shape outlines, and commits
 //! one `insert.shape` intent followed by the `connector.glue_*` intents
 //! (the new shape is the selection anchor, so those intents name no
 //! connector id). The tool is read-only over `AppCtx`: it emits intents
 //! and overlay marks, never a model mutation (ADR 0042).
 
-use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, Source};
-use ferrogram_geom::{Point, RouteOptions, RouteStyle, route};
-use ferrogram_model::stencils;
-use ferrogram_render::{Overlay, OverlayMark, node_bounds};
+use larrygram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, Source};
+use larrygram_geom::{Point, RouteOptions, RouteStyle, route};
+use larrygram_model::stencils;
+use larrygram_render::{Overlay, OverlayMark, node_bounds};
 
 use super::{Modifiers, ToolEffect, ToolEvent, ToolMachine};
 use crate::UiError;
@@ -320,8 +320,8 @@ fn intent(id: &'static str, args: Args) -> Result<crate::Intent, UiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{
         Cell, CellName, CellValue, Document, Page, PageId, Preserved, Row, Section, SectionName,
         Shape, ShapeId,
     };
@@ -331,7 +331,7 @@ mod tests {
             name: CellName::new(name),
             formula: Some(format!("{value}")),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }

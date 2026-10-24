@@ -24,21 +24,21 @@ cargo llvm-cov --workspace --all-features
 
 | Crate | Lines | Covered | Coverage | Threshold | Phase 4 | Phase 4 ratchet | Delta |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| ferrogram-geom | 2501 | 2501 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
-| ferrogram-shapesheet | 45 | 45 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
-| ferrogram-model | 10668 | 10627 | 99.6% | 85 | 99.7% | 99.6 | −0.1 |
-| ferrogram-ui-spec | 1884 | 1872 | 99.4% | 85 | 99.4% | 99.3 | ±0.0 |
-| ferrogram-text | 1768 | 1748 | 98.9% | 75 | 98.9% | 98.8 | ±0.0 |
-| ferrogram-render | 7221 | 7105 | 98.4% | 75 | 98.5% | 98.4 | −0.1 |
-| ferrogram-commands | 7875 | 7723 | 98.1% | 85 | 98.2% | 98.1 | −0.1 |
-| ferrogram-vsdx | 7498 | 7343 | 97.9% | 85 | 98.0% | 97.9 | −0.1 |
-| ferrogram-cli | 1266 | 1225 | 96.8% | 50 | 96.8% | 96.7 | ±0.0 |
-| ferrogram-ui | 10590 | 10228 | 96.6% | 50 | 96.5% | 96.4 | +0.1 |
+| larrygram-geom | 2501 | 2501 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
+| larrygram-shapesheet | 45 | 45 | 100.0% | 85 | 100.0% | 100.0 | ±0.0 |
+| larrygram-model | 10668 | 10627 | 99.6% | 85 | 99.7% | 99.6 | −0.1 |
+| larrygram-ui-spec | 1884 | 1872 | 99.4% | 85 | 99.4% | 99.3 | ±0.0 |
+| larrygram-text | 1768 | 1748 | 98.9% | 75 | 98.9% | 98.8 | ±0.0 |
+| larrygram-render | 7221 | 7105 | 98.4% | 75 | 98.5% | 98.4 | −0.1 |
+| larrygram-commands | 7875 | 7723 | 98.1% | 85 | 98.2% | 98.1 | −0.1 |
+| larrygram-vsdx | 7498 | 7343 | 97.9% | 85 | 98.0% | 97.9 | −0.1 |
+| larrygram-cli | 1266 | 1225 | 96.8% | 50 | 96.8% | 96.7 | ±0.0 |
+| larrygram-ui | 10590 | 10228 | 96.6% | 50 | 96.5% | 96.4 | +0.1 |
 | xtask | 10443 | 9757 | 93.4% | — | 93.3% | 93.3 | +0.1 |
-| ferrogram | 250 | 200 | 80.0% | 50 | 80.0% | 80.0 | ±0.0 |
-| ferrogram-web | 140 | 109 | 77.9% | — | 77.9% | 77.8 | ±0.0 |
-| ferrogram-control | 0 | 0 | n/a | 50 | — | — | placeholder |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85 | — | — | placeholder |
+| larrygram | 250 | 200 | 80.0% | 50 | 80.0% | 80.0 | ±0.0 |
+| larrygram-web | 140 | 109 | 77.9% | — | 77.9% | 77.8 | ±0.0 |
+| larrygram-control | 0 | 0 | n/a | 50 | — | — | placeholder |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85 | — | — | placeholder |
 
 Phase 4 numbers are the table in `docs/progress/phase-4.md`; the ratchet
 column is `[ratchet]` in `coverage.toml`. Deltas are against the Phase 4
@@ -48,19 +48,19 @@ recorded percentage, one decimal place.
 
 - **At threshold and at ratchet:** geom (100.0, 2501/2501), shapesheet
   (100.0), model (99.6), ui-spec (99.4), text (98.9), vsdx (97.9), cli
-  (96.8), ferrogram (80.0), web (77.9). All clear the threshold with a
+  (96.8), larrygram (80.0), web (77.9). All clear the threshold with a
   wide margin and sit on or above their ratchet.
 - **Above threshold and above ratchet:** ui (96.6 vs ratchet 96.4),
   xtask (93.4 vs 93.3). Both gained from the Phase 5 work.
 - **At threshold, below ratchet by less than the gate's 0.05 epsilon
   (flagged as a blocker under the strict rule of the role file):**
-  - `ferrogram-commands` 7723/7875 = **98.07%** against the 98.1
+  - `larrygram-commands` 7723/7875 = **98.07%** against the 98.1
     ratchet, 0.03 pp below it. `cargo xtask coverage` is green only
     because it tolerates 0.05 for float noise.
-  - `ferrogram-render` 7105/7221 = **98.39%** against the 98.4 ratchet,
+  - `larrygram-render` 7105/7221 = **98.39%** against the 98.4 ratchet,
     0.01 pp below it, same tolerance.
   Both crates have zero safety margin: one uncovered line in
-  `ferrogram-commands` (about 8 lines per 0.1 pp) turns the gate red.
+  `larrygram-commands` (about 8 lines per 0.1 pp) turns the gate red.
   The fix tasks that add the tests listed below should treat these two
   as their first target.
 - **Placeholders:** control and vsd-binary have zero instrumented lines
@@ -71,25 +71,25 @@ recorded percentage, one decimal place.
 
 `cargo xtask coverage --update-ratchet` floors to one decimal place.
 Applying that to this run gives exactly the current value for every
-crate except `ferrogram-ui` and `xtask`, and gives values *below* the
-current ratchet for `ferrogram-commands` (98.0) and `ferrogram-render`
+crate except `larrygram-ui` and `xtask`, and gives values *below* the
+current ratchet for `larrygram-commands` (98.0) and `larrygram-render`
 (98.3). Since a ratchet may never drop (AGENTS.md section 7), the
 proposal keeps the current numbers where the floor is lower:
 
 | Crate | Current | Proposed |
 |---|---:|---:|
-| ferrogram | 80.0 | 80.0 |
-| ferrogram-cli | 96.7 | 96.7 |
-| ferrogram-commands | 98.1 | 98.1 |
-| ferrogram-geom | 100.0 | 100.0 |
-| ferrogram-model | 99.6 | 99.6 |
-| ferrogram-render | 98.4 | 98.4 |
-| ferrogram-shapesheet | 100.0 | 100.0 |
-| ferrogram-text | 98.8 | 98.8 |
-| ferrogram-ui | 96.4 | **96.5** |
-| ferrogram-ui-spec | 99.3 | 99.3 |
-| ferrogram-vsdx | 97.9 | 97.9 |
-| ferrogram-web | 77.8 | 77.8 |
+| larrygram | 80.0 | 80.0 |
+| larrygram-cli | 96.7 | 96.7 |
+| larrygram-commands | 98.1 | 98.1 |
+| larrygram-geom | 100.0 | 100.0 |
+| larrygram-model | 99.6 | 99.6 |
+| larrygram-render | 98.4 | 98.4 |
+| larrygram-shapesheet | 100.0 | 100.0 |
+| larrygram-text | 98.8 | 98.8 |
+| larrygram-ui | 96.4 | **96.5** |
+| larrygram-ui-spec | 99.3 | 99.3 |
+| larrygram-vsdx | 97.9 | 97.9 |
+| larrygram-web | 77.8 | 77.8 |
 | xtask | 93.3 | **93.4** |
 
 Rationale for keeping commands at 98.1 and render at 98.4: their
@@ -294,7 +294,7 @@ the gaps are its failure arms and its **insert** direction.
   `275` — five `panic!` arms in the inline test module (assertions that
   never fail). Same class as the P5-15 test-module arms.
 
-### `ferrogram-commands` defensive arms (the P5-11 questions)
+### `larrygram-commands` defensive arms (the P5-11 questions)
 
 The task asks for a verdict on each arm `docs/reviews/phase-5-tests.md`
 judged unreachable:

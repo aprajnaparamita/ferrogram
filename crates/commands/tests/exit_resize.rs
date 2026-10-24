@@ -4,7 +4,7 @@
 //!
 //! The criterion in code: read a corpus file, resize its shape through
 //! the model mutation API (`shape.resize`, which writes `Width`/`Height`
-//! through [`CellEdit`](ferrogram_commands::builtins) and lets
+//! through [`CellEdit`](larrygram_commands::builtins) and lets
 //! `push_edit` recalculate the dirty cells with `materialise_inherited`,
 //! ADR 0056), run recalc, and assert the geometry rows equal
 //! **hand-computed** expectations — the master's formulas evaluated at
@@ -30,11 +30,11 @@ mod helpers;
 
 mod support;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, Registry, SessionId};
-use ferrogram_model::{Cell, CellValue, Document, ShapeId, Sheet, SheetRef};
-use ferrogram_shapesheet::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, Registry, SessionId};
+use larrygram_model::{Cell, CellValue, Document, ShapeId, Sheet, SheetRef};
+use larrygram_shapesheet::{
     CellAddress, CellRef, DepGraph, DocumentEngine, Error, Evaluation, Formula, FormulaEngine,
     RecalcOptions, RecalcOutcome, recalc_with,
 };
@@ -59,7 +59,7 @@ fn document(ctx: &AppCtx) -> Document {
 }
 
 /// Selects `shape` on `page` the way the shell does.
-fn select(ctx: &mut AppCtx, page: ferrogram_model::PageId, shapes: &[ShapeId]) {
+fn select(ctx: &mut AppCtx, page: larrygram_model::PageId, shapes: &[ShapeId]) {
     ctx.selection.shapes = shapes.to_vec();
     ctx.selection.anchor = shapes.last().copied();
     ctx.selection.page = Some(page);
@@ -73,7 +73,7 @@ fn open(
     AppCtx,
     Registry,
     SessionId,
-    ferrogram_model::PageId,
+    larrygram_model::PageId,
     ShapeId,
 ) {
     let document = read_corpus_file(&corpus_dir().join(name));
@@ -112,7 +112,7 @@ fn direct<'a>(doc: &'a Document, shape: ShapeId, name: &str) -> &'a Cell {
 
 /// The `Geometry` section of `sheet` with this 1-based ordinal (the
 /// report's `Geometry1` spelling, [`helpers`]).
-fn geometry_section(sheet: &Sheet, ordinal: usize) -> &ferrogram_model::Section {
+fn geometry_section(sheet: &Sheet, ordinal: usize) -> &larrygram_model::Section {
     let mut seen = 0usize;
     for section in &sheet.sections {
         if section.name.as_str().eq_ignore_ascii_case("Geometry") {
@@ -325,9 +325,9 @@ fn the_resize_case_runs_far_below_the_evaluation_budget() {
     // is replayed below with a counting engine.
     let outcome = registry
         .execute(
-            &ferrogram_commands::CommandId::intern("shape.resize").expect("id"),
+            &larrygram_commands::CommandId::intern("shape.resize").expect("id"),
             &mut ctx,
-            ferrogram_commands::Invocation::new(args, ferrogram_commands::Source::Test),
+            larrygram_commands::Invocation::new(args, larrygram_commands::Source::Test),
         )
         .expect("resize");
 

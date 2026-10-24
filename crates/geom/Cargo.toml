@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-geom"
+name = "larrygram-geom"
 description = "Geometry: paths, arcs, NURBS, splines, transforms, hit testing"
 version.workspace = true
 edition.workspace = true

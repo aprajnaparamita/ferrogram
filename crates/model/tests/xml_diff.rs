@@ -1,7 +1,7 @@
 //! Integration tests for the semantic XML equivalence relation
-//! ([`diff`], ADR 0012) through the public API of `ferrogram-model`.
+//! ([`diff`], ADR 0012) through the public API of `larrygram-model`.
 
-use ferrogram_model::{
+use larrygram_model::{
     DifferenceKind, QName, XmlAttribute, XmlChild, XmlDifference, XmlNode, diff,
 };
 

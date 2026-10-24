@@ -10,5 +10,5 @@
   scope: global
 - sequence: [[Alt, H], [F, O]]
   command: file.save
-  scope: ribbon
-  section: Ribbon keytips
+  scope: command_bar
+  section: Command bar keytips

@@ -3,7 +3,7 @@
 Date: 2026-10-17. Role: coverage-auditor (read-only). No code changed.
 
 Command: `cargo xtask coverage` (workspace, all features) on branch
-`agent/P4-12`, worktree at `/Volumes/Dara/ferrogram/worktrees/P4-12`.
+`agent/P4-12`, worktree at `/Volumes/Dara/larrygram/worktrees/P4-12`.
 Line detail from `cargo llvm-cov report --lcov`.
 
 Caveats (same as the [Phase 3 audit](phase-3-coverage.md)):
@@ -22,23 +22,23 @@ No blocker.
 
 | Crate | Lines | Covered | Coverage | Threshold | Ratchet (Phase 3) | Delta | Verdict |
 |---|---|---|---|---|---|---|---|
-| ferrogram (app) | 250 | 200 | 80.0% | 50 | 66.6 | +13.4 | pass |
-| ferrogram-cli | 1266 | 1225 | 96.8% | 50 | 96.8 | 0.0 | pass |
-| ferrogram-commands | 1873 | 1821 | 97.2% | 85 | — | — | pass |
-| ferrogram-control | 0 | 0 | n/a | 50 | — | — | pass (placeholder) |
-| ferrogram-geom | 1677 | 1677 | 100.0% | 85 | 100.0 | 0.0 | pass |
-| ferrogram-model | 7700 | 7676 | 99.7% | 85 | 99.7 | 0.0 | pass |
-| ferrogram-render | 6601 | 6501 | 98.5% | 75 | 98.4 | +0.1 | pass |
-| ferrogram-shapesheet | 45 | 45 | 100.0% | 85 | 100.0 | 0.0 | pass |
-| ferrogram-text | 1768 | 1748 | 98.9% | 75 | 98.8 | +0.1 | pass |
-| ferrogram-ui | 5434 | 5149 | 94.8% | 50 | — | — | pass |
-| ferrogram-ui-spec | 1884 | 1872 | 99.4% | 85 | 99.3 | +0.1 | pass |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85 | — | — | pass (placeholder) |
-| ferrogram-vsdx | 7233 | 7085 | 98.0% | 85 | 98.0 | 0.0 | pass |
-| ferrogram-web | 140 | 109 | 77.9% | — | 0.0 | +77.9 | pass |
+| larrygram (app) | 250 | 200 | 80.0% | 50 | 66.6 | +13.4 | pass |
+| larrygram-cli | 1266 | 1225 | 96.8% | 50 | 96.8 | 0.0 | pass |
+| larrygram-commands | 1873 | 1821 | 97.2% | 85 | — | — | pass |
+| larrygram-control | 0 | 0 | n/a | 50 | — | — | pass (placeholder) |
+| larrygram-geom | 1677 | 1677 | 100.0% | 85 | 100.0 | 0.0 | pass |
+| larrygram-model | 7700 | 7676 | 99.7% | 85 | 99.7 | 0.0 | pass |
+| larrygram-render | 6601 | 6501 | 98.5% | 75 | 98.4 | +0.1 | pass |
+| larrygram-shapesheet | 45 | 45 | 100.0% | 85 | 100.0 | 0.0 | pass |
+| larrygram-text | 1768 | 1748 | 98.9% | 75 | 98.8 | +0.1 | pass |
+| larrygram-ui | 5434 | 5149 | 94.8% | 50 | — | — | pass |
+| larrygram-ui-spec | 1884 | 1872 | 99.4% | 85 | 99.3 | +0.1 | pass |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85 | — | — | pass (placeholder) |
+| larrygram-vsdx | 7233 | 7085 | 98.0% | 85 | 98.0 | 0.0 | pass |
+| larrygram-web | 140 | 109 | 77.9% | — | 0.0 | +77.9 | pass |
 | xtask | 9744 | 8956 | 91.9% | — | 91.6 | +0.3 | pass |
 
-`ferrogram-control` and `ferrogram-vsd-binary` have zero instrumented lines
+`larrygram-control` and `larrygram-vsd-binary` have zero instrumented lines
 (an empty placeholder passes by the `coverage.toml` rule). Their thresholds
 become meaningful when their phases land (control: Phase 5+, vsd-binary:
 Phase 7).
@@ -83,8 +83,8 @@ Phase 7).
   disabled-reason arms.
 - `crates/ui/src/shell.rs:142-143` — `Shell::new` recording shortcut-load
   warnings.
-- `crates/ui/src/ribbon.rs:408-409, 428` — `show_with` and
-  `show_quick_access_with` error propagation; `ribbon.rs:451, 458, 461` —
+- `crates/ui/src/tab_bar.rs:408-409, 428` — `show_with` and
+  `show_quick_access_with` error propagation; `command bar.rs:451, 458, 461` —
   `show_backstage_with` with no backstage tabs and its fallback.
 - The switch itself (`Shell::set_layout_kind`) is covered; only these arms
   around it are not.
@@ -93,7 +93,7 @@ Phase 7).
 
 - `canvas.rs:708-710` — `rasterize`'s inconsistent-size guard (a corrupt
   raster from the renderer).
-- `canvas.rs:803-807` — `render_error`, the `ferrogram_render::Error` to
+- `canvas.rs:803-807` — `render_error`, the `larrygram_render::Error` to
   `UiError::Render` mapping, never fires.
 - `canvas.rs:265-270` — the middle-drag / space-drag pan branch of `show`.
 - `canvas.rs:622-623, 627` — `wheel_zoom_factor`: `MouseWheelUnit::Page`
@@ -161,7 +161,7 @@ Severity counts: **0 blocker, 6 major, 10 minor**.
 5. `UndoStack`: `undo`'s missing-entry guard (`crates/commands/src/undo.rs:132`)
    and the `Debug` impl (`undo.rs:41-47`).
 6. Layout radio menu arms (`crates/ui/src/shell.rs:515, 518, 542, 551`).
-7. Ribbon nesting arms (`crates/ui/src/ribbon.rs:592-593, 651-655,
+7. Command bar nesting arms (`crates/ui/src/tab_bar.rs:592-593, 651-655,
    673-677, 684, 713, 721`): the `MAX_DEPTH` label fallback, the closed
    dropdown (`None`) branch, gallery and caption arms.
 8. Canvas formatting fallbacks (`crates/ui/src/canvas.rs:503, 527-530,
@@ -176,26 +176,26 @@ Severity counts: **0 blocker, 6 major, 10 minor**.
 
 The master applies these with `cargo xtask coverage --update-ratchet` and
 commits `coverage.toml`. Values are the measured coverage at one decimal
-(the tool's own rounding). `ferrogram-control` and `ferrogram-vsd-binary`
+(the tool's own rounding). `larrygram-control` and `larrygram-vsd-binary`
 have no ratchet entry (zero instrumented lines).
 
 | Crate | Phase 4 ratchet (proposed) | Previous |
 |---|---|---|
-| ferrogram | 80.0 | 66.6 |
-| ferrogram-cli | 96.8 | 96.8 |
-| ferrogram-commands | 97.2 | — (new) |
-| ferrogram-geom | 100.0 | 100.0 |
-| ferrogram-model | 99.7 | 99.7 |
-| ferrogram-render | 98.5 | 98.4 |
-| ferrogram-shapesheet | 100.0 | 100.0 |
-| ferrogram-text | 98.9 | 98.8 |
-| ferrogram-ui | 94.8 | — (new) |
-| ferrogram-ui-spec | 99.4 | 99.3 |
-| ferrogram-vsdx | 98.0 | 98.0 |
-| ferrogram-web | 77.9 | 0.0 |
+| larrygram | 80.0 | 66.6 |
+| larrygram-cli | 96.8 | 96.8 |
+| larrygram-commands | 97.2 | — (new) |
+| larrygram-geom | 100.0 | 100.0 |
+| larrygram-model | 99.7 | 99.7 |
+| larrygram-render | 98.5 | 98.4 |
+| larrygram-shapesheet | 100.0 | 100.0 |
+| larrygram-text | 98.9 | 98.8 |
+| larrygram-ui | 94.8 | — (new) |
+| larrygram-ui-spec | 99.4 | 99.3 |
+| larrygram-vsdx | 98.0 | 98.0 |
+| larrygram-web | 77.9 | 0.0 |
 | xtask | 91.9 | 91.6 |
 
-Note: `ferrogram-vsdx` measures 97.954%, so a ratchet of 98.0 leaves only
+Note: `larrygram-vsdx` measures 97.954%, so a ratchet of 98.0 leaves only
 0.046 of margin against the 0.05 epsilon. If Phase 5 touches `vsdx`, write
 97.9 instead.
 

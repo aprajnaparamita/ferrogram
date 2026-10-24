@@ -8,9 +8,9 @@
 
 ## Launch
 
-Paste into a fresh session (any harness), from `/Users/dara/ferrogram`:
+Paste into a fresh session (any harness), from `/Users/dara/larrygram`:
 
-> You are working on Ferrogram. Read `AGENTS.md`, then `docs/tasks/<task-id>.md`, and do that task. Follow AGENTS.md section 2 for the worktree and branch. Stop when the Result section is filled and the hand-off gate is green.
+> You are working on Larrygram. Read `AGENTS.md`, then `docs/tasks/<task-id>.md`, and do that task. Follow AGENTS.md section 2 for the worktree and branch. Stop when the Result section is filled and the hand-off gate is green.
 
 ## Owns
 

@@ -7,7 +7,7 @@
 ## Context
 
 Phase 3 outputs PNG and SVG (KICKOFF). The backends live in
-`ferrogram-render` (L3) behind the scene graph (ADR 0020). Golden image
+`larrygram-render` (L3) behind the scene graph (ADR 0020). Golden image
 tests (ADR 0027) need defined output: a DPI/scale option, a background, and
 determinism (same input, same bytes) so a diff means a real change.
 
@@ -78,7 +78,7 @@ byte-stable.
 
 - `cargo deny` stays green: `tiny-skia` is BSD-3-Clause; no MPL crate outside
   `vsd-binary`.
-- The wasm build gains `tiny-skia` through `ferrogram-render`; the web app
+- The wasm build gains `tiny-skia` through `larrygram-render`; the web app
   can render PNGs in the browser in Phase 8.
 - Our own SVG writer is ~1 small module and exactly what the scene emits;
   nothing to trim.

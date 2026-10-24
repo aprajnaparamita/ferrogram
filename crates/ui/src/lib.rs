@@ -20,13 +20,13 @@ pub mod handles;
 pub mod icons;
 pub mod panel_classic;
 pub mod panel_modern;
-pub mod panels;
-pub mod ribbon;
+pub mod panes;
 pub mod settings;
 pub mod shapes_window;
 pub mod shell;
 pub mod shortcuts;
 pub mod snap;
+pub mod tab_bar;
 pub mod text_edit;
 pub mod theme;
 pub mod tools;
@@ -34,8 +34,8 @@ pub mod wizard;
 
 use std::fmt;
 
-use ferrogram_commands::{CommandError, CommandId, Invocation};
-use ferrogram_ui_spec::LoadError;
+use larrygram_commands::{CommandError, CommandId, Invocation};
+use larrygram_ui_spec::LoadError;
 
 /// A dispatch request produced by a widget (ADR 0028).
 ///
@@ -145,9 +145,9 @@ mod tests {
     #[test]
     fn intent_carries_command_and_invocation() {
         let id = CommandId::parse("file.save").expect("id");
-        let intent = Intent::new(id, Invocation::empty(ferrogram_commands::Source::Ui));
+        let intent = Intent::new(id, Invocation::empty(larrygram_commands::Source::Ui));
         assert_eq!(intent.command, id);
-        assert_eq!(intent.invocation.source, ferrogram_commands::Source::Ui);
+        assert_eq!(intent.invocation.source, larrygram_commands::Source::Ui);
     }
 
     #[test]

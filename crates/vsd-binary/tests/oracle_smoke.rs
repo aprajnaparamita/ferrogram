@@ -8,11 +8,11 @@
 //! which the gate does not require. After `cargo xtask oracle build`:
 //!
 //! ```sh
-//! FERROGRAM_LIBVISIO_ORACLE=/Volumes/Dara/ferrogram/build/libvisio-oracle/bin \
-//!   cargo test -p ferrogram-vsd-binary -- --ignored
+//! LARRYGRAM_LIBVISIO_ORACLE=/Volumes/Dara/larrygram/build/libvisio-oracle/bin \
+//!   cargo test -p larrygram-vsd-binary -- --ignored
 //! ```
 //!
-//! With `FERROGRAM_REQUIRE_ORACLE=1` (CI on Linux and macOS) a missing
+//! With `LARRYGRAM_REQUIRE_ORACLE=1` (CI on Linux and macOS) a missing
 //! oracle fails this test instead of skipping it. CI on Windows does
 //! not build the oracle and does not set the variable.
 

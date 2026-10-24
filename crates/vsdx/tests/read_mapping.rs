@@ -3,13 +3,13 @@
 //!
 //! The corpus is fetched, never committed (ADR 0005); these tests skip
 //! with a message when `corpus/vsdx/` is absent and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set. Every assertion below was read off
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set. Every assertion below was read off
 //! the corpus files themselves (the black-box evidence of the task).
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{CellLookup, CellValue, Color, Document, PageId, ShapeId, TextPart};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_model::{CellLookup, CellValue, Color, Document, PageId, ShapeId, TextPart};
+use larrygram_vsdx::{Limits, read_document};
 
 /// The corpus directory with the real `.vsdx` packages.
 fn corpus_dir() -> PathBuf {
@@ -22,7 +22,7 @@ fn corpus_dir() -> PathBuf {
 
 /// Reads one corpus file into the model: `None` when the file is absent
 /// (the run may skip), `Some(Err(_))` when it does not read.
-fn read_corpus_document(name: &str) -> Option<Result<Document, ferrogram_vsdx::Error>> {
+fn read_corpus_document(name: &str) -> Option<Result<Document, larrygram_vsdx::Error>> {
     let path = corpus_dir().join(name);
     let bytes = std::fs::read(&path).ok()?;
     Some(read_document(&bytes, &Limits::DEFAULT))
@@ -38,8 +38,8 @@ macro_rules! corpus_document {
             Some(Err(why)) => panic!("{}: {why}", $name),
             None => {
                 assert!(
-                    std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-                    "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+                    std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+                    "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
                 );
                 eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
                 return;
@@ -49,7 +49,7 @@ macro_rules! corpus_document {
 }
 
 /// The first shape whose text contains `needle`.
-fn shape_with_text<'a>(document: &'a Document, needle: &str) -> Option<&'a ferrogram_model::Shape> {
+fn shape_with_text<'a>(document: &'a Document, needle: &str) -> Option<&'a larrygram_model::Shape> {
     document.shapes.iter().find(|shape| {
         shape.text.as_ref().is_some_and(|text| {
             text.parts.iter().any(|part| match part {
@@ -239,7 +239,7 @@ fn sparse_geometry_rows_merge_with_the_master_rows() {
     assert_eq!(rows.len(), 5, "{:?}", rows);
     assert_eq!(
         rows[0],
-        ferrogram_model::GeometryRow::MoveTo { x: 0.0, y: 0.0 }
+        larrygram_model::GeometryRow::MoveTo { x: 0.0, y: 0.0 }
     );
     for (index, (x, y)) in [
         (1, (6.98818897637795, 0.0)),
@@ -249,7 +249,7 @@ fn sparse_geometry_rows_merge_with_the_master_rows() {
     ] {
         assert_eq!(
             rows[index],
-            ferrogram_model::GeometryRow::LineTo { x, y },
+            larrygram_model::GeometryRow::LineTo { x, y },
             "row {index}"
         );
     }
@@ -296,18 +296,18 @@ fn a_themed_fill_resolves_to_the_theme_variant_colour() {
             .expect("corpus shape");
         // The premise: the fill is the pure `Themed` marker.
         let resolved = doc
-            .resolve(shape, &ferrogram_model::CellName::new("FillForegnd"))
+            .resolve(shape, &larrygram_model::CellName::new("FillForegnd"))
             .expect("resolves");
         assert_eq!(
             resolved.value,
             Some(&CellValue::Str("Themed".to_owned())),
             "shape {visio_id} ({slot})"
         );
-        let mut reader = ferrogram_model::CellReader::new(&doc);
+        let mut reader = larrygram_model::CellReader::new(&doc);
         let fill = reader
             .color(
-                ferrogram_model::SheetRef::Shape(shape),
-                &ferrogram_model::CellName::new("FillForegnd"),
+                larrygram_model::SheetRef::Shape(shape),
+                &larrygram_model::CellName::new("FillForegnd"),
             )
             .expect("reads");
         assert_eq!(

@@ -9,12 +9,12 @@
 //!
 //! The `ui-spec` embedded loader needs no target here: it parses
 //! `include_str!` build-time text, which is not untrusted input; the
-//! hostile-YAML case is `ferrogram-ui-spec`'s `loader_fuzz`.
+//! hostile-YAML case is `larrygram-ui-spec`'s `loader_fuzz`.
 
 #![no_main]
 
-use ferrogram_commands::{Settings, SettingsStore};
-use ferrogram_ui::settings::{TextStore, load_settings, save_settings};
+use larrygram_commands::{Settings, SettingsStore};
+use larrygram_ui::settings::{TextStore, load_settings, save_settings};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

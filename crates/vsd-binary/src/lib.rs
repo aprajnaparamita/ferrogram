@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Read-only import of binary `.vsd`, `.vss` and `.vst` files into the
-//! Ferrogram model.
+//! Larrygram model.
 //!
 //! This crate is the only place where code ported or derived from
 //! libvisio may live. It is licensed MPL-2.0; see NOTICE at the
@@ -53,7 +53,7 @@ pub use error::Error;
 pub use limits::Limits;
 pub use warning::{ImportWarning, WarningKind};
 
-pub use ferrogram_model as model;
+pub use larrygram_model as model;
 
 /// The result of one import: the document and the warnings collected
 /// on the way (ADR 0071).

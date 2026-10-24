@@ -1,12 +1,12 @@
 ---
-source: crates/ui/src/ribbon.rs
+source: crates/ui/src/tab_bar.rs
 expression: report
 ---
 layout: panel-2016
-ribbon tabs: 16
-ribbon groups: 77
-ribbon controls: 262
-ribbon nested controls: 154
+command bar tabs: 16
+command bar groups: 77
+command bar controls: 262
+command bar nested controls: 154
 backstage tabs: 8
 backstage controls: 46
 backstage nested controls: 26
@@ -16,10 +16,10 @@ context menu nested controls: 0
 quick access controls: 9
 quick access nested controls: 0
 layout: panel-365
-ribbon tabs: 19
-ribbon groups: 91
-ribbon controls: 296
-ribbon nested controls: 160
+command bar tabs: 19
+command bar groups: 91
+command bar controls: 296
+command bar nested controls: 160
 backstage tabs: 10
 backstage controls: 109
 backstage nested controls: 96

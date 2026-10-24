@@ -6,16 +6,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, Edit, Invocation, NeededInput, PathPurpose, Source,
     UiRequest,
 };
-use ferrogram_model::{
+use larrygram_model::{
     Cell, CellName, CellValue, Document, Page, PageId, Shape, ShapeId, Stylesheet, Theme,
 };
-use ferrogram_vsdx::{from_model, read_package, to_model, write_package};
+use larrygram_vsdx::{from_model, read_package, to_model, write_package};
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -26,7 +26,7 @@ use ferrogram_vsdx::{from_model, read_package, to_model, write_package};
 fn temp_dir() -> PathBuf {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let name = format!(
-        "ferrogram-commands-{}-{}",
+        "larrygram-commands-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     );
@@ -99,7 +99,7 @@ fn run(
     ctx: &mut AppCtx,
     id: &str,
     args: Args,
-) -> Result<ferrogram_commands::Outcome, CommandError> {
+) -> Result<larrygram_commands::Outcome, CommandError> {
     run_from(ctx, id, args, Source::Test)
 }
 
@@ -110,7 +110,7 @@ fn run_from(
     id: &str,
     args: Args,
     source: Source,
-) -> Result<ferrogram_commands::Outcome, CommandError> {
+) -> Result<larrygram_commands::Outcome, CommandError> {
     let registry = registry().expect("registry");
     let id = CommandId::intern(id).expect("id");
     registry.execute(&id, ctx, Invocation::new(args, source))
@@ -232,13 +232,13 @@ fn every_command_in_the_table_executes_with_source_test() {
     run(&mut ctx, "view.toggle_grid", Args::new()).expect("view.toggle_grid");
     run(&mut ctx, "view.rulers", Args::new()).expect("view.rulers");
 
-    // view.ui_layout.visio_2016, view.ui_layout.visio_365
-    run(&mut ctx, "view.ui_layout.visio_365", Args::new()).expect("365");
+    // view.ui_layout.panel_2016, view.ui_layout.panel_365
+    run(&mut ctx, "view.ui_layout.panel_365", Args::new()).expect("365");
     assert_eq!(
         ctx.settings.ui_layout,
-        ferrogram_ui_spec::LayoutKind::Visio365
+        larrygram_ui_spec::LayoutKind::Panel365
     );
-    run(&mut ctx, "view.ui_layout.visio_2016", Args::new()).expect("2016");
+    run(&mut ctx, "view.ui_layout.panel_2016", Args::new()).expect("2016");
 
     // page.next, page.previous (wrapping)
     let outcome = run(&mut ctx, "page.next", Args::new()).expect("page.next");
@@ -442,7 +442,7 @@ fn save_as_writes_the_package_and_save_follows_the_session_path() {
 
     // The written bytes are a package holding the same document.
     let bytes = std::fs::read(&saved).expect("saved bytes");
-    let package = read_package(&bytes, &ferrogram_vsdx::Limits::DEFAULT).expect("package");
+    let package = read_package(&bytes, &larrygram_vsdx::Limits::DEFAULT).expect("package");
     let document = to_model(&package).expect("document");
     assert_eq!(document.pages.len(), 2);
 
@@ -825,20 +825,23 @@ fn view_toggles_and_the_layout_switch_mutate_the_state() {
     assert!(session.view.show_grid);
     assert!(!session.view.show_rulers);
 
-    let outcome = run(&mut ctx, "view.ui_layout.visio_365", Args::new()).expect("365");
-    assert_eq!(outcome.message.as_deref(), Some("Ribbon layout: Visio 365"));
-    assert_eq!(
-        ctx.settings.ui_layout,
-        ferrogram_ui_spec::LayoutKind::Visio365
-    );
-    let outcome = run(&mut ctx, "view.ui_layout.visio_2016", Args::new()).expect("2016");
+    let outcome = run(&mut ctx, "view.ui_layout.panel_365", Args::new()).expect("365");
     assert_eq!(
         outcome.message.as_deref(),
-        Some("Ribbon layout: Visio 2016")
+        Some("Panel layout: Panel (365 data)")
     );
     assert_eq!(
         ctx.settings.ui_layout,
-        ferrogram_ui_spec::LayoutKind::Visio2016
+        larrygram_ui_spec::LayoutKind::Panel365
+    );
+    let outcome = run(&mut ctx, "view.ui_layout.panel_2016", Args::new()).expect("2016");
+    assert_eq!(
+        outcome.message.as_deref(),
+        Some("Panel layout: Panel (2016 data)")
+    );
+    assert_eq!(
+        ctx.settings.ui_layout,
+        larrygram_ui_spec::LayoutKind::Panel2016
     );
 
     // Without a document the two toggles still flip the settings
@@ -952,7 +955,7 @@ fn help_about_only_requests_the_window() {
     let mut ctx = AppCtx::new(Settings::default());
     let outcome = run(&mut ctx, "help.about", Args::new()).expect("about");
     assert_eq!(outcome.ui_request, Some(UiRequest::ShowAbout));
-    assert_eq!(outcome.message.as_deref(), Some("About Ferrogram"));
+    assert_eq!(outcome.message.as_deref(), Some("About Larrygram"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1036,7 +1039,7 @@ fn saving_keeps_the_source_package() {
     )
     .expect("save_as");
     let saved = std::fs::read(&out).expect("saved");
-    let package = read_package(&saved, &ferrogram_vsdx::Limits::DEFAULT).expect("package");
+    let package = read_package(&saved, &larrygram_vsdx::Limits::DEFAULT).expect("package");
     assert!(package.parts.len() > 1, "the package keeps its parts");
 }
 
@@ -1066,7 +1069,7 @@ fn view_units_sets_the_display_units() {
         assert_eq!(outcome.message, Some(format!("Units: {expected}")));
         assert_eq!(
             ctx.settings.units,
-            ferrogram_commands::DisplayUnits::parse(expected).expect("name")
+            larrygram_commands::DisplayUnits::parse(expected).expect("name")
         );
     }
 
@@ -1082,13 +1085,13 @@ fn view_units_sets_the_display_units() {
             "expected InvalidArgs, got {error:?}"
         );
         let message = error.to_string();
-        for name in ferrogram_commands::DisplayUnits::NAMES {
+        for name in larrygram_commands::DisplayUnits::NAMES {
             assert!(message.contains(name), "{message} must name {name}");
         }
     }
     assert_eq!(
         ctx.settings.units,
-        ferrogram_commands::DisplayUnits::Inches,
+        larrygram_commands::DisplayUnits::Inches,
         "the failed runs changed nothing (the last good run set Inches)"
     );
 }
@@ -1212,7 +1215,7 @@ fn page_arguments_are_validated_with_the_callers_number() {
 
 /// P4-12 coverage minor 4: `view.zoom.fit` on a page whose sheet has
 /// no cached cells falls back to the renderer's 8.5 x 11 in page size
-/// (the same per-axis fallback `ferrogram_render::build` applies).
+/// (the same per-axis fallback `larrygram_render::build` applies).
 #[test]
 fn zoom_fit_falls_back_to_letter_for_a_page_without_sheet_cells() {
     let mut doc = Document::new();

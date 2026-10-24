@@ -9,12 +9,12 @@
 Phase 4 draws a page in the egui app: "Drawing canvas: pan, zoom, rulers
 and grid", "page tabs and status bar", and the exit criterion "opening
 corpus files shows them on the canvas". The scene graph (ADR 0020) already
-carries everything needed to draw a page, and `ferrogram-render` (L3) has
+carries everything needed to draw a page, and `larrygram-render` (L3) has
 PNG and SVG backends (ADR 0025). The options are: a third backend that
 turns the scene into egui shapes, a `tiny-skia` raster uploaded as an egui
 texture, or both. Phase 5 needs hit-testing and cheap redraw while dragging.
 
-Layering (ADR 0002) forbids `ferrogram-render` (L3) from seeing egui, so
+Layering (ADR 0002) forbids `larrygram-render` (L3) from seeing egui, so
 an "egui shapes" backend would live in `crates/ui` (L6) consuming the
 scene, or `render` would gain a plain-shape output the UI converts.
 
@@ -25,7 +25,7 @@ scene, or `render` would gain a plain-shape output the UI converts.
 The canvas renders the page with `tiny-skia` into raw RGBA and uploads it
 as one egui texture, drawn in a scrollable area with an egui transform.
 
-`ferrogram-render` gains one public entry point (new module `raster.rs`,
+`larrygram-render` gains one public entry point (new module `raster.rs`,
 P4-05):
 
 ```rust
@@ -91,7 +91,7 @@ the brief scaled blur between re-rasterizations is accepted in Phase 4.
 ### Phase 5 upgrade path (recorded, not built)
 
 Hit testing and drag redraw need point lookup in the scene. When Phase 5
-needs it, `ferrogram-render` gains `hit_test(scene, point) -> Option<Node>`
+needs it, `larrygram-render` gains `hit_test(scene, point) -> Option<Node>`
 and `crates/ui` may gain a vector backend (scene to `egui::Shape`), which
 is legal in L6. The raster stays the fidelity reference (same pixels as
 the PNG goldens); drags draw transient egui shapes over the cached raster.

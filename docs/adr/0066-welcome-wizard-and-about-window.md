@@ -88,7 +88,7 @@ Two fields, with serde defaults so an old store still loads:
 The persisted `Settings` type lives in `crates/commands` (ADR 0029),
 which Phase 6 owns during P7-01. The fields therefore start as
 `crates/ui/src/settings.rs::WelcomeSettings` (a stub type), and task
-P7-09 moves them onto `ferrogram_commands::Settings` and deletes the
+P7-09 moves them onto `larrygram_commands::Settings` and deletes the
 stub.
 
 ### Interfaces (stubs written by P7-01, implemented by P7-15/P7-16)

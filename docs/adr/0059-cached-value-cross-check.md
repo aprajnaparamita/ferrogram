@@ -18,8 +18,8 @@ family, and what a disagreement is logged as.
 ### The harness
 
 `crates/commands/tests/crosscheck.rs` runs over the 15 `corpus/vsdx`
-files (read through `ferrogram-vsdx` into a `Document`, like every other
-corpus test). With `FERROGRAM_REQUIRE_CORPUS=1` it is mandatory; without
+files (read through `larrygram-vsdx` into a `Document`, like every other
+corpus test). With `LARRYGRAM_REQUIRE_CORPUS=1` it is mandatory; without
 it, it skips when `corpus/vsdx` is absent. Determinism (ADR 0055) makes
 the run reproducible; a second run over the same files must report the
 same numbers.
@@ -126,7 +126,7 @@ tolerance above.
 ## Consequences
 
 - The phase report's number is reproducible from one command
-  (`cargo test -p ferrogram-shapesheet --test crosscheck -- --nocapture`).
+  (`cargo test -p larrygram-shapesheet --test crosscheck -- --nocapture`).
 - "Every counted cell agrees" is a hard assertion, so any evaluator change
   that moves a value fails the gate rather than drifting.
 - The skip breakdown is the honest picture of what the engine covers:

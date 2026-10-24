@@ -25,7 +25,7 @@ content, and a warning stream for degradations (ADR 0021).
   read).
 - `LimitExceeded`: a cap in `Limits` was hit; the message names the
   cap, the value and the maximum.
-- `Model`: a `ferrogram_model` operation rejected the mapping.
+- `Model`: a `larrygram_model` operation rejected the mapping.
 
 **Warnings** (`ImportWarning` in `warning.rs`) record every degradation:
 skipped records, dropped data, unresolved references and values that

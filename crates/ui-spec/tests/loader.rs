@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ferrogram_ui_spec::{CommandId, FluentId, LayoutKind, LayoutSet, LoadError, Loader};
+use larrygram_ui_spec::{CommandId, FluentId, LayoutKind, LayoutSet, LoadError, Loader};
 
 /// The fixture directory.
 fn fixtures() -> PathBuf {
@@ -21,7 +21,7 @@ fn fixtures() -> PathBuf {
 /// `ui-spec/` subdirectory created.
 #[allow(clippy::unwrap_used)] // test helper; tests may panic
 fn temp_workspace(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ferrogram-ui-spec-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("larrygram-ui-spec-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("ui-spec")).unwrap();
     dir
@@ -50,8 +50,8 @@ fn copy_good_layouts(dir: &Path) {
 #[test]
 fn loader_reads_both_layouts_from_the_good_fixture() {
     let loader = Loader::new(fixtures().join("good")).unwrap();
-    let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
-    let set_365 = loader.load(LayoutKind::Visio365).unwrap();
+    let set_2016 = loader.load(LayoutKind::Panel2016).unwrap();
+    let set_365 = loader.load(LayoutKind::Panel365).unwrap();
 
     // A LayoutSet has layout, commands and shortcuts all populated,
     // and layout ids are Fluent ids, not command ids.
@@ -69,7 +69,7 @@ fn loader_reads_both_layouts_from_the_good_fixture() {
 #[test]
 fn command_lookup_indexes_labels_commands_and_reverse() {
     let loader = Loader::new(fixtures().join("good")).unwrap();
-    let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
+    let set_2016 = loader.load(LayoutKind::Panel2016).unwrap();
     let lookup = set_2016.command_lookup();
 
     assert_eq!(
@@ -107,10 +107,10 @@ fn get_switches_between_the_two_layouts() {
     // LayoutSets::get is the one layout switch (P1-14: LayoutSet::select is gone).
     let loader = Loader::new(fixtures().join("good")).unwrap();
     let sets = loader.load_all().unwrap();
-    let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
-    let set_365 = loader.load(LayoutKind::Visio365).unwrap();
-    assert_eq!(sets.get(LayoutKind::Visio2016), &set_2016);
-    assert_eq!(sets.get(LayoutKind::Visio365), &set_365);
+    let set_2016 = loader.load(LayoutKind::Panel2016).unwrap();
+    let set_365 = loader.load(LayoutKind::Panel365).unwrap();
+    assert_eq!(sets.get(LayoutKind::Panel2016), Some(&set_2016));
+    assert_eq!(sets.get(LayoutKind::Panel365), Some(&set_365));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn bad_fixture_is_rejected_with_a_schema_error() {
     .unwrap();
 
     let loader = Loader::new(&dir).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
+    match loader.load(LayoutKind::Panel2016) {
         Err(LoadError::Schema { path, message }) => {
             assert!(path.ends_with("ui-spec/panel-2016.yaml"));
             assert!(
@@ -142,7 +142,7 @@ fn unknown_fluent_id_in_commands_is_rejected() {
     let loader = Loader::new(fixtures().join("xref-fluent")).unwrap();
     // Neither layout uses GhostControl, so the id is in no layout at
     // all and both LayoutKinds reject it.
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
         let err = loader.load(kind).expect_err("must fail");
         let message = err.to_string();
         assert!(
@@ -171,8 +171,8 @@ fn a_command_mapped_to_a_365_only_control_loads_for_both_kinds() {
     // runs against the union of both layouts (ADR 0007) and neither
     // kind fails.
     let loader = Loader::new(fixtures().join("good")).unwrap();
-    let set_2016 = loader.load(LayoutKind::Visio2016).unwrap();
-    let set_365 = loader.load(LayoutKind::Visio365).unwrap();
+    let set_2016 = loader.load(LayoutKind::Panel2016).unwrap();
+    let set_365 = loader.load(LayoutKind::Panel365).unwrap();
     for set in [&set_2016, &set_365] {
         let redo = set
             .commands
@@ -195,7 +195,7 @@ fn a_control_without_a_command_loads_and_is_labelled_only() {
     // FontSizeLabel has `command: null` in both layouts: it is a
     // labelled surface with no dispatch entry.
     let loader = Loader::new(fixtures().join("good")).unwrap();
-    for kind in [LayoutKind::Visio2016, LayoutKind::Visio365] {
+    for kind in [LayoutKind::Panel2016, LayoutKind::Panel365] {
         let set = loader.load(kind).unwrap();
         let lookup = set.command_lookup();
         assert_eq!(
@@ -217,16 +217,16 @@ fn load_all_matches_loading_each_kind() {
     let loader = Loader::new(fixtures().join("good")).unwrap();
     let sets = loader.load_all().unwrap();
     assert_eq!(
-        sets.get(LayoutKind::Visio2016),
-        &loader.load(LayoutKind::Visio2016).unwrap()
+        sets.get(LayoutKind::Panel2016),
+        Some(&loader.load(LayoutKind::Panel2016).unwrap())
     );
     assert_eq!(
-        sets.get(LayoutKind::Visio365),
-        &loader.load(LayoutKind::Visio365).unwrap()
+        sets.get(LayoutKind::Panel365),
+        Some(&loader.load(LayoutKind::Panel365).unwrap())
     );
     // The shared tables are identical in both sets.
-    assert_eq!(sets.visio_2016.commands, sets.visio_365.commands);
-    assert_eq!(sets.visio_2016.shortcuts, sets.visio_365.shortcuts);
+    assert_eq!(sets.panel_2016.commands, sets.panel_365.commands);
+    assert_eq!(sets.panel_2016.shortcuts, sets.panel_365.shortcuts);
 }
 
 #[test]
@@ -237,13 +237,13 @@ fn empty_shortcut_table_loads() {
     std::fs::write(dir.join("ui-spec/shortcuts.yaml"), "[]\n").unwrap();
 
     let loader = Loader::new(&dir).unwrap();
-    let set = loader.load(LayoutKind::Visio2016).unwrap();
+    let set = loader.load(LayoutKind::Panel2016).unwrap();
     assert!(set.shortcuts.entries.is_empty());
     assert!(!set.commands.entries.is_empty());
     // Empty is fine for both kinds and for load_all, too.
     assert!(
         loader
-            .load(LayoutKind::Visio365)
+            .load(LayoutKind::Panel365)
             .unwrap()
             .shortcuts
             .entries
@@ -253,7 +253,8 @@ fn empty_shortcut_table_loads() {
         loader
             .load_all()
             .unwrap()
-            .get(LayoutKind::Visio2016)
+            .get(LayoutKind::Panel2016)
+            .expect("the set")
             .shortcuts
             .entries
             .is_empty()
@@ -297,7 +298,7 @@ quick_access_toolbar:
     std::fs::write(dir.join("ui-spec/shortcuts.yaml"), "[]\n").unwrap();
 
     let loader = Loader::new(&dir).unwrap();
-    let set = loader.load(LayoutKind::Visio2016).unwrap();
+    let set = loader.load(LayoutKind::Panel2016).unwrap();
     assert!(set.commands.entries.is_empty());
     assert_eq!(
         set.command_lookup()
@@ -309,7 +310,8 @@ quick_access_toolbar:
         loader
             .load_all()
             .unwrap()
-            .get(LayoutKind::Visio365)
+            .get(LayoutKind::Panel365)
+            .expect("the set")
             .commands
             .entries
             .is_empty()
@@ -319,7 +321,7 @@ quick_access_toolbar:
 #[test]
 fn unknown_control_command_is_rejected() {
     let loader = Loader::new(fixtures().join("xref-control")).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
+    match loader.load(LayoutKind::Panel2016) {
         Err(LoadError::CrossReference {
             kind,
             id,
@@ -336,7 +338,7 @@ fn unknown_control_command_is_rejected() {
 #[test]
 fn unknown_shortcut_command_is_rejected() {
     let loader = Loader::new(fixtures().join("xref-shortcut")).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
+    match loader.load(LayoutKind::Panel2016) {
         Err(LoadError::CrossReference {
             kind,
             id,
@@ -392,20 +394,26 @@ fn json_data_files_load_too() {
     ] {
         assert!(!data.join(name).exists(), "{name} must not exist");
     }
-    let set = loader.load(LayoutKind::Visio2016).unwrap();
+    let set = loader.load(LayoutKind::Panel2016).unwrap();
     assert!(set.layout.tabs.is_empty());
     assert_eq!(set.commands.entries.len(), 1);
     assert_eq!(set.shortcuts.entries.len(), 1);
     let sets = loader.load_all().unwrap();
-    assert_eq!(sets.get(LayoutKind::Visio2016).commands, set.commands);
-    assert_eq!(sets.get(LayoutKind::Visio365).commands, set.commands);
+    assert_eq!(
+        sets.get(LayoutKind::Panel2016).map(|s| &s.commands),
+        Some(&set.commands)
+    );
+    assert_eq!(
+        sets.get(LayoutKind::Panel365).map(|s| &s.commands),
+        Some(&set.commands)
+    );
 }
 
 #[test]
 fn missing_data_files_report_an_io_error() {
     let dir = temp_workspace("missing");
     let loader = Loader::new(&dir).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
+    match loader.load(LayoutKind::Panel2016) {
         Err(LoadError::Io { path, source }) => {
             assert!(path.ends_with("ui-spec/panel-2016.yaml"));
             assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
@@ -443,7 +451,7 @@ fn wrong_document_kind_is_rejected() {
     .unwrap();
 
     let loader = Loader::new(&dir).unwrap();
-    match loader.load(LayoutKind::Visio2016) {
+    match loader.load(LayoutKind::Panel2016) {
         Err(LoadError::Unknown { path, message }) => {
             assert!(path.ends_with("ui-spec/commands.yaml"), "path: {path:?}");
             assert!(message.contains("commands"), "message: {message}");
@@ -457,7 +465,7 @@ fn duplicate_command_id_is_rejected() {
     // commands.yaml defines `file.save` twice (P1-14 goal 1).
     let loader = Loader::new(fixtures().join("duplicate-command")).unwrap();
     let results = [
-        loader.load(LayoutKind::Visio2016).map(|_| ()),
+        loader.load(LayoutKind::Panel2016).map(|_| ()),
         loader.load_all().map(|_| ()),
     ];
     for loader_result in results {
@@ -480,7 +488,7 @@ fn duplicate_fluent_id_currently_loads() {
     // does not reject layout-side duplicates yet. This test pins that
     // behaviour until the master decides the policy.
     let loader = Loader::new(fixtures().join("duplicate-fluent")).unwrap();
-    let set = loader.load(LayoutKind::Visio2016).expect("loads today");
+    let set = loader.load(LayoutKind::Panel2016).expect("loads today");
     assert!(
         set.command_lookup()
             .labels
@@ -509,6 +517,6 @@ fn controls_per_layout_are_stable() {
         }
         n
     };
-    assert_eq!(count(&loader.load(LayoutKind::Visio2016).unwrap()), 8);
-    assert_eq!(count(&loader.load(LayoutKind::Visio365).unwrap()), 9);
+    assert_eq!(count(&loader.load(LayoutKind::Panel2016).unwrap()), 8);
+    assert_eq!(count(&loader.load(LayoutKind::Panel365).unwrap()), 9);
 }

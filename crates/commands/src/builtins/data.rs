@@ -1,4 +1,4 @@
-//! `data.*` commands (task P6-18): the Shape Data panel's edits (ADR
+//! `data.*` commands (task P6-18): the Shape Data pane's edits (ADR
 //! 0035's reserved ids, ADR 0058).
 //!
 //! - `data.set.property` — `row` names the Shape Data row (its `N`
@@ -27,8 +27,8 @@
 //! editable: one `CommandError`, nothing written (a list has no literal
 //! spelling and an error is what the file holds).
 
-use ferrogram_model::{CellValue, CellWrite, ShapeId, SheetRef};
-use ferrogram_shapesheet::{
+use larrygram_model::{CellValue, CellWrite, ShapeId, SheetRef};
+use larrygram_shapesheet::{
     CellRef, Error as FormulaError, EvalContext, EvalWarning, Expr, ExprKind, Number, UnaryOp,
     Unit, Value, eval, parse,
 };
@@ -51,7 +51,7 @@ pub(crate) const TABLE: CommandTable = &[(
 )];
 
 /// `data.set.property`: writes one Shape Data `Prop.<row>.Value` cell of
-/// the anchor shape (the panel's subject, ADR 0041).
+/// the anchor shape (the pane's subject, ADR 0041).
 pub(super) fn run_set_property(
     ctx: &mut AppCtx,
     inv: &Invocation,
@@ -118,7 +118,7 @@ fn need_value(args: &crate::Args) -> Result<String, CommandError> {
 /// `cached` is the cell's cached value and its recorded unit, when the
 /// row has a `Value` cell at all.
 fn property_write(
-    cached: Option<(Option<&CellValue>, ferrogram_geom::Unit)>,
+    cached: Option<(Option<&CellValue>, larrygram_geom::Unit)>,
     text: &str,
 ) -> Result<CellWrite, CommandError> {
     let (value, unit) =
@@ -162,7 +162,7 @@ fn property_write(
 /// is a number of the cell's own unit. A spelling that is no number
 /// literal, or that lands on a non-finite canonical value, is one
 /// refusal (nothing written).
-fn number_write(unit: ferrogram_geom::Unit, text: &str) -> Result<CellWrite, CommandError> {
+fn number_write(unit: larrygram_geom::Unit, text: &str) -> Result<CellWrite, CommandError> {
     let not_a_number = || CommandError::invalid_args(format!("{text:?} is not a number"));
     let value = literal_value(text).map_err(|_| not_a_number())?;
     let Value::Number(number) = value else {
@@ -211,7 +211,7 @@ fn literal_value(text: &str) -> Result<Value, CommandError> {
 }
 
 /// Whether an expression is one literal of the grammar: a literal under
-/// any chain of unary `+`, `-` and `%` (the panels' rule, ADR 0058).
+/// any chain of unary `+`, `-` and `%` (the panes' rule, ADR 0058).
 fn is_literal(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::Literal(_) => true,
@@ -263,7 +263,7 @@ fn string_literal(text: &str) -> String {
 /// The colour of a `#RGB` or `#RRGGBB` literal (any case), or `None`:
 /// the file's own colour spelling (task P6-18; the formula grammar has
 /// no colour literal).
-fn color_literal(text: &str) -> Option<ferrogram_model::Color> {
+fn color_literal(text: &str) -> Option<larrygram_model::Color> {
     fn digit(byte: u8) -> Option<u8> {
         match byte {
             b'0'..=b'9' => Some(byte - b'0'),
@@ -277,12 +277,12 @@ fn color_literal(text: &str) -> Option<ferrogram_model::Color> {
     }
     let digits = text.trim().strip_prefix('#')?.as_bytes();
     match digits {
-        [r1, r2, g1, g2, b1, b2] => Some(ferrogram_model::Color::new(
+        [r1, r2, g1, g2, b1, b2] => Some(larrygram_model::Color::new(
             pair(*r1, *r2)?,
             pair(*g1, *g2)?,
             pair(*b1, *b2)?,
         )),
-        [r, g, b] => Some(ferrogram_model::Color::new(
+        [r, g, b] => Some(larrygram_model::Color::new(
             digit(*r)? * 17,
             digit(*g)? * 17,
             digit(*b)? * 17,
@@ -348,7 +348,7 @@ mod tests {
     fn a_boolean_value_takes_every_spelling_of_true_and_false() {
         let cached = Some((
             Some(&CellValue::Bool(false)),
-            ferrogram_geom::Unit::Unitsless,
+            larrygram_geom::Unit::Unitsless,
         ));
         for (text, flag) in [
             ("TRUE", true),
@@ -375,14 +375,14 @@ mod tests {
             "{error:?}"
         );
         // ... and a `Value` cell that caches nothing.
-        let error = property_write(Some((None, ferrogram_geom::Unit::Unitsless)), "x")
+        let error = property_write(Some((None, larrygram_geom::Unit::Unitsless)), "x")
             .expect_err("no cached value");
         assert!(error.to_string().contains("no value to edit"), "{error}");
     }
 
     #[test]
     fn a_number_row_reads_only_number_literals() {
-        let unit = ferrogram_geom::Unit::Inches;
+        let unit = larrygram_geom::Unit::Inches;
         let cached = Some((Some(&CellValue::Number(1.0)), unit));
         for text in ["TRUE", "hello", "Width*2", "1 + 2", "#FF0000"] {
             let error = property_write(cached, text).expect_err("not a number");
@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(context.warnings, 0);
         context.warn(EvalWarning {
             sheet,
-            kind: ferrogram_shapesheet::EvalWarningKind::Coercion(String::from("x")),
+            kind: larrygram_shapesheet::EvalWarningKind::Coercion(String::from("x")),
         });
         assert_eq!(context.warnings, 1);
     }
@@ -440,11 +440,11 @@ mod tests {
     fn colour_literals_take_the_files_own_spelling() {
         assert_eq!(
             color_literal("#FF8000"),
-            Some(ferrogram_model::Color::new(255, 128, 0))
+            Some(larrygram_model::Color::new(255, 128, 0))
         );
         assert_eq!(
             color_literal("#abc"),
-            Some(ferrogram_model::Color::new(170, 187, 204))
+            Some(larrygram_model::Color::new(170, 187, 204))
         );
         assert_eq!(color_literal("#GGGGGG"), None);
         assert_eq!(color_literal("#12345"), None);
@@ -463,15 +463,15 @@ mod tests {
     fn a_number_write_keeps_only_finite_values() {
         // A literal that lands on a non-finite canonical value (a huge
         // magnitude in a converting unit) is refused.
-        let error = number_write(ferrogram_geom::Unit::Feet, "1e308")
+        let error = number_write(larrygram_geom::Unit::Feet, "1e308")
             .expect_err("the conversion overflows");
         assert!(error.to_string().contains("not a finite number"), "{error}");
         // The plain-number rule: a literal without a unit is a number
         // of the cell's own unit.
-        let write = number_write(ferrogram_geom::Unit::Inches, "5").expect("a plain number");
+        let write = number_write(larrygram_geom::Unit::Inches, "5").expect("a plain number");
         assert_eq!(write.value, CellValue::Number(5.0));
         let write =
-            number_write(ferrogram_geom::Unit::Unitsless, "2.5 cm").expect("a unit literal");
+            number_write(larrygram_geom::Unit::Unitsless, "2.5 cm").expect("a unit literal");
         assert!(matches!(write.value, CellValue::Number(_)));
         if let CellValue::Number(value) = write.value {
             assert!((value - 2.5 / 2.54).abs() < 1.0e-12, "{value}");
@@ -481,18 +481,18 @@ mod tests {
     #[test]
     fn a_colour_or_string_write_takes_the_text_as_written() {
         let cached = Some((
-            Some(&CellValue::Color(ferrogram_model::Color::new(0, 0, 0))),
-            ferrogram_geom::Unit::Unitsless,
+            Some(&CellValue::Color(larrygram_model::Color::new(0, 0, 0))),
+            larrygram_geom::Unit::Unitsless,
         ));
         let write = property_write(cached, "#ff8000").expect("the colour writes");
         assert_eq!(write.formula, "#FF8000");
         assert_eq!(
             write.value,
-            CellValue::Color(ferrogram_model::Color::new(255, 128, 0))
+            CellValue::Color(larrygram_model::Color::new(255, 128, 0))
         );
         let cached = Some((
             Some(&CellValue::Str(String::new())),
-            ferrogram_geom::Unit::Unitsless,
+            larrygram_geom::Unit::Unitsless,
         ));
         let write = property_write(cached, "say \"hi\"").expect("the string writes");
         assert_eq!(write.formula, "\"say \"\"hi\"\"\"");

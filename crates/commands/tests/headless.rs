@@ -21,17 +21,17 @@
 // these helpers are test code and use `expect` freely.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     Args, CommandError, CommandId, CommandStatus, Invocation, NeededInput, Source, UiRequest,
 };
 
 /// Runs one registered id with empty arguments and a fresh state.
 fn run_isolated(
-    registry: &ferrogram_commands::Registry,
+    registry: &larrygram_commands::Registry,
     id: &CommandId,
-) -> Result<ferrogram_commands::Outcome, CommandError> {
+) -> Result<larrygram_commands::Outcome, CommandError> {
     let mut ctx = AppCtx::new(Settings::default());
     registry.execute(id, &mut ctx, Invocation::empty(Source::Test))
 }
@@ -109,7 +109,12 @@ fn source_test_is_never_interactive() {
     for source in [Source::Cli, Source::Control, Source::Mcp] {
         assert!(!source.is_interactive(), "{source:?} is programmatic");
     }
-    for source in [Source::Ui, Source::Ribbon, Source::Menu, Source::Shortcut] {
+    for source in [
+        Source::Ui,
+        Source::CommandBar,
+        Source::Menu,
+        Source::Shortcut,
+    ] {
         assert!(source.is_interactive(), "{source:?} is interactive");
     }
 }
@@ -162,7 +167,7 @@ fn args_survive_the_sweep_untouched() {
     // invocation reaches the command unchanged (the seam the CLI and
     // the Phase 8 channel reuse).
     let registry = registry().expect("the builtin registry builds");
-    let command = CommandId::parse("view.ui_layout.visio_365").expect("id");
+    let command = CommandId::parse("view.ui_layout.panel_365").expect("id");
     let mut ctx = AppCtx::new(Settings::default());
     let invocation = Invocation::new(Args::new(), Source::Test);
     registry
@@ -170,6 +175,6 @@ fn args_survive_the_sweep_untouched() {
         .expect("the layout switch runs");
     assert_eq!(
         ctx.settings.ui_layout,
-        ferrogram_ui_spec::LayoutKind::Visio365
+        larrygram_ui_spec::LayoutKind::Panel365
     );
 }

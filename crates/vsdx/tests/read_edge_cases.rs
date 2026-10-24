@@ -10,8 +10,8 @@
 
 mod common;
 
-use ferrogram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
-use ferrogram_vsdx::{
+use larrygram_model::{Preserved, QName, XmlAttribute, XmlChild, XmlNode};
+use larrygram_vsdx::{
     ContentType, Error, Limits, Package, Part, PartData, PartName, Relationship, RelationshipId,
     TargetMode, to_model,
 };
@@ -587,5 +587,5 @@ fn the_drawing_fixture_reads_through_the_package_layer() {
 
 #[allow(clippy::expect_used)] // test helper: a failing read is the bug under test
 fn read_package_bytes(bytes: &[u8]) -> Package {
-    ferrogram_vsdx::read_package(bytes, &Limits::DEFAULT).expect("the fixture package reads")
+    larrygram_vsdx::read_package(bytes, &Limits::DEFAULT).expect("the fixture package reads")
 }

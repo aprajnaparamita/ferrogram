@@ -191,25 +191,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrogram-ui-spec"
-version = "0.0.1"
-dependencies = [
- "jsonschema",
- "serde",
- "serde-saphyr",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ferrogram-ui-spec-fuzz"
-version = "0.0.0"
-dependencies = [
- "ferrogram-ui-spec",
- "libfuzzer-sys",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,6 +352,25 @@ dependencies = [
  "num-traits",
  "serde_json",
  "zmij",
+]
+
+[[package]]
+name = "larrygram-ui-spec"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "larrygram-ui-spec-fuzz"
+version = "0.0.0"
+dependencies = [
+ "larrygram-ui-spec",
+ "libfuzzer-sys",
 ]
 
 [[package]]

@@ -61,7 +61,7 @@ panic and never a partial document with no diagnostics.
 ## 2. Layering inside `crates/vsd-binary`
 
 The crate is L2 (ADR 0002) and depends only on L0/L1 crates
-(`ferrogram-model`, later `ferrogram-geom` if geometry mapping needs
+(`larrygram-model`, later `larrygram-geom` if geometry mapping needs
 it). MPL-2.0, every file with the MPL header (ADR 0003). The layers:
 
 1. **Container** (`container.rs`): the OLE compound file (MS-CFB), the

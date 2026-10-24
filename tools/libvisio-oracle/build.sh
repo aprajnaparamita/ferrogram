@@ -1,8 +1,8 @@
 #!/bin/sh
-# Build libvisio's CLI tools for use as a Ferrogram test oracle.
+# Build libvisio's CLI tools for use as a Larrygram test oracle.
 #
 # Dev-only harness, see ADR 0010. libvisio is never a runtime
-# dependency of Ferrogram and is never linked into it: the tools are
+# dependency of Larrygram and is never linked into it: the tools are
 # compared against in tests only.
 #
 # usage: build.sh [build|clean|status] [--build-dir <path>] [--jobs <n>]
@@ -20,10 +20,10 @@ BINARIES="vsd2raw vss2raw vsd2xhtml vss2xhtml vsd2text vss2text"
 
 # On this machine everything large lives on the external drive
 # (AGENTS.md, "Disk usage"); CI overrides with --build-dir or
-# FERROGRAM_LIBVISIO_BUILD_DIR.
-DEFAULT_BUILD_DIR=/Volumes/Dara/ferrogram/build/libvisio-oracle
+# LARRYGRAM_LIBVISIO_BUILD_DIR.
+DEFAULT_BUILD_DIR=/Volumes/Dara/larrygram/build/libvisio-oracle
 
-build_dir=${FERROGRAM_LIBVISIO_BUILD_DIR:-$DEFAULT_BUILD_DIR}
+build_dir=${LARRYGRAM_LIBVISIO_BUILD_DIR:-$DEFAULT_BUILD_DIR}
 jobs=
 cmd=status
 
@@ -45,7 +45,7 @@ commands:
 
 options:
   --build-dir <path>  build directory
-                      (default: \$FERROGRAM_LIBVISIO_BUILD_DIR or $DEFAULT_BUILD_DIR)
+                      (default: \$LARRYGRAM_LIBVISIO_BUILD_DIR or $DEFAULT_BUILD_DIR)
   --jobs <n>          parallel jobs for make (default: number of CPUs)
   -h, --help          show this help
 

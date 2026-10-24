@@ -1,7 +1,7 @@
 # Phase 7 plan: Larrygram, the Panel Modern and Panel Classic layouts, the welcome wizard
 
 - Status: accepted (2026-10-23); the wizard copy and the button label confirmed by the user
-- Inputs: the Phase 7 package (`/Volumes/Dara/ferrogram-phase7/`, its
+- Inputs: the Phase 7 package (`/Volumes/Dara/larrygram-phase7/`, its
   `docs/phase-7/README.md` and draft tasks P7-01 to P7-14), the user's
   brief of 2026-10-23 and the graphics in `graphics/`
 

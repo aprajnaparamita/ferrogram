@@ -5,7 +5,7 @@ Every Fluent control id in `ui-spec/panel-2016.yaml` and `ui-spec/panel-365.yaml
 The status is derived, never hand-edited (ADR 0037):
 
 - `out-of-scope` when the id is listed in `ui-spec/out-of-scope.txt` (one Fluent id per line; matched exactly or by a `*` glob);
-- `implemented` when the control's command (its `command` link, else its `commands.yaml` entry) resolves in `ferrogram_commands::builtins::registry()` to `CommandStatus::Implemented`;
+- `implemented` when the control's command (its `command` link, else its `commands.yaml` entry) resolves in `larrygram_commands::builtins::registry()` to `CommandStatus::Implemented`;
 - `stub` otherwise.
 
 A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a command resolves: the alpha does not implement that control. Regenerate with `cargo xtask parity`; the gate's `parity` step runs `cargo xtask parity --check` and fails when this file is stale.
@@ -721,12 +721,12 @@ A row listed in `ui-spec/out-of-scope.txt` stays `out-of-scope` even when a comm
 
 # Parity matrix: registry commands
 
-Every command id in `ferrogram_commands::builtins::registry()`, including ids with no Fluent control, with a status of `implemented`, `stub`, or `out-of-scope`. Sorted by `(status, id)`; the status order is `implemented`, `stub`, `out-of-scope`.
+Every command id in `larrygram_commands::builtins::registry()`, including ids with no Fluent control, with a status of `implemented`, `stub`, or `out-of-scope`. Sorted by `(status, id)`; the status order is `implemented`, `stub`, `out-of-scope`.
 
 The status is derived, never hand-edited (ADR 0037):
 
 - `out-of-scope` when the command id is listed in `ui-spec/out-of-scope.txt` (matched case-insensitively, exactly or by a `*` glob), or every one of its Fluent ids is listed (the controls it serves are out of the alpha);
-- `implemented` when `ferrogram_commands::builtins::registry()` reports `CommandStatus::Implemented` for the id;
+- `implemented` when `larrygram_commands::builtins::registry()` reports `CommandStatus::Implemented` for the id;
 - `stub` otherwise.
 
 An `out-of-scope` row stays out of scope even when a handler resolves: the same precedence as the control table. Regenerate with `cargo xtask parity`; the gate's `parity` step runs `cargo xtask parity --check` and fails when this file is stale.
@@ -812,8 +812,8 @@ An `out-of-scope` row stays out of scope even when a handler resolves: the same 
 | tools.text | Text Tool | implemented |
 | view.rulers | Rulers | implemented |
 | view.toggle_grid | Toggle Grid | implemented |
-| view.ui_layout.visio_2016 | Visio 2016 Ribbon | implemented |
-| view.ui_layout.visio_365 | Microsoft 365 Ribbon | implemented |
+| view.ui_layout.panel_2016 | Panel (2016 data) | implemented |
+| view.ui_layout.panel_365 | Panel (365 data) | implemented |
 | view.units | Units | implemented |
 | view.zoom.fit | Fit to Window | implemented |
 | view.zoom.in | Zoom In | implemented |
@@ -829,7 +829,7 @@ An `out-of-scope` row stays out of scope even when a handler resolves: the same 
 | app.mdi.minimize | Minimize | stub |
 | app.mdi.restore | Restore | stub |
 | app.minimize | Minimize | stub |
-| app.minimize.ribbon.toggle | Toggle | stub |
+| app.minimize.command_bar.toggle | Toggle | stub |
 | app.office.diagnostics | Diagnostics | stub |
 | app.office.feedback.help | Office Feedback Help | stub |
 | app.office.feedback.icon | Office Feedback Icon | stub |
@@ -1032,7 +1032,7 @@ An `out-of-scope` row stays out of scope even when a handler resolves: the same 
 | file.checkin | Checkin | stub |
 | file.checkout | Checkout | stub |
 | file.choose.templates | Templates | stub |
-| file.close.ink.tools.ribbon.tab | Ink Tools Close | stub |
+| file.close.ink.tools.tab | Ink Tools Close | stub |
 | file.close_window | Close Window | stub |
 | file.create.edit.master | Edit Master | stub |
 | file.create.new.drawing | Drawing | stub |

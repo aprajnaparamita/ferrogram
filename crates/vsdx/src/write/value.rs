@@ -3,7 +3,7 @@
 //!
 //! This is the inverse of [`crate::read::value`]: the cached value is written
 //! in canonical units (ADR 0011), so no conversion happens, and the `U` code
-//! is restored from [`Cell::unit`](ferrogram_model::Cell). Only the codes that
+//! is restored from [`Cell::unit`](larrygram_model::Cell). Only the codes that
 //! map back to the same spelling are translated (the reader keeps every other
 //! code in `Preserved`), so a write restores the file's own spelling.
 //!
@@ -23,8 +23,8 @@
 //! boolean may be `0`/`1` or `true`/`false` in any case, and a color may be
 //! `#RGB` or `#RRGGBB` in any case. That keeps an unedited value byte-stable.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{CellValue, Color};
+use larrygram_geom::Unit;
+use larrygram_model::{CellValue, Color};
 
 use crate::read::value::{Kind, kind};
 use crate::value_parse::{Shaped, parse_color, shape};
@@ -67,7 +67,7 @@ pub(crate) enum UnitSpelling {
     /// Write this code.
     Code(&'static str),
     /// Write no `U`. A spelling the file used and the model kept is not
-    /// removed by this; the caller checks [`Preserved`](ferrogram_model::Preserved).
+    /// removed by this; the caller checks [`Preserved`](larrygram_model::Preserved).
     Absent,
 }
 

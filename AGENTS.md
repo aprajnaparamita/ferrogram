@@ -1,6 +1,6 @@
-# AGENTS.md — rules for every agent working on Ferrogram
+# AGENTS.md — rules for every agent working on Larrygram
 
-Ferrogram is a clean-room, pure-Rust, Visio-compatible diagramming app (alpha). These rules apply to every agent and every harness (Claude Code, pi, others). If a task prompt conflicts with this file, this file wins; stop and report the conflict.
+Larrygram is a clean-room, pure-Rust, Visio-compatible diagramming app (alpha). These rules apply to every agent and every harness (Claude Code, pi, others). If a task prompt conflicts with this file, this file wins; stop and report the conflict.
 
 ## 1. Session start
 
@@ -12,18 +12,18 @@ Ferrogram is a clean-room, pure-Rust, Visio-compatible diagramming app (alpha). 
 
 ## 2. Shared local repository and git workflow
 
-The **main repo** is `/Users/dara/ferrogram`, branch `main`. It is shared by every agent on this machine. Only the master agent commits to `main`.
+The **main repo** is `/Users/dara/larrygram`, branch `main`. It is shared by every agent on this machine. Only the master agent commits to `main`.
 
 Each task works in its own git worktree on the external drive:
 
 ```sh
 TASK=P1-03                                   # your task id
-WT=/Volumes/Dara/ferrogram/worktrees/$TASK
-git -C /Users/dara/ferrogram worktree add -b agent/$TASK "$WT" main
+WT=/Volumes/Dara/larrygram/worktrees/$TASK
+git -C /Users/dara/larrygram worktree add -b agent/$TASK "$WT" main
 cd "$WT"
 ```
 
-Builds go through a shared `sccache` cache (machine-wide `~/.cargo/config.toml` sets `rustc-wrapper = "sccache"`; the cache lives at `/Volumes/Dara/ferrogram/sccache`). A fresh worktree therefore reuses compiled dependencies from every other worktree. Build in the worktree's own `target/` (it is on the external drive and gitignored). **Do not set `CARGO_TARGET_DIR`** (or any other `CARGO_*` variable): sccache hashes them, so a per-task value makes every cache lookup miss. Do not set `RUSTC_WRAPPER` yourself and do not clear the cache. If `sccache` is missing in your harness, builds still work, only slower: say so in your Result.
+Builds go through a shared `sccache` cache (machine-wide `~/.cargo/config.toml` sets `rustc-wrapper = "sccache"`; the cache lives at `/Volumes/Dara/larrygram/sccache`). A fresh worktree therefore reuses compiled dependencies from every other worktree. Build in the worktree's own `target/` (it is on the external drive and gitignored). **Do not set `CARGO_TARGET_DIR`** (or any other `CARGO_*` variable): sccache hashes them, so a per-task value makes every cache lookup miss. Do not set `RUSTC_WRAPPER` yourself and do not clear the cache. If `sccache` is missing in your harness, builds still work, only slower: say so in your Result.
 
 - Commit only on `agent/<task-id>`. Never commit to `main`, never rewrite `main`, never touch another agent's branch or worktree.
 - Before handing off, rebase on the latest `main`: `git rebase main` (worktrees share refs with the main repo, so `main` is always current).
@@ -33,13 +33,13 @@ Builds go through a shared `sccache` cache (machine-wide `~/.cargo/config.toml` 
 
 ## 3. Disk usage
 
-The main drive is small. Put everything large on `/Volumes/Dara/ferrogram/`:
+The main drive is small. Put everything large on `/Volumes/Dara/larrygram/`:
 
-- Worktrees: `/Volumes/Dara/ferrogram/worktrees/`
-- Cargo target dirs: each worktree's own `target/` (already on the external drive); the shared compile cache is `/Volumes/Dara/ferrogram/sccache`. The main checkout is on the small drive: the master builds there with `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/main`.
-- Raw downloads: `/Volumes/Dara/ferrogram/reference/`. The repo's `reference/` directory is a symlink to it (gitignored). In a worktree, create the same symlink: `ln -s /Volumes/Dara/ferrogram/reference reference`.
-- Corpus files: `corpus/vsdx/` and `corpus/vsd/` are gitignored and exist only in the main checkout. In a worktree, link them: `ln -s /Users/dara/ferrogram/corpus/vsdx corpus/vsdx` and the same for `vsd`. If git shows the links as untracked, add them to `.git/info/exclude`, not to `.gitignore`.
-- Large builds (libvisio, corpora): `/Volumes/Dara/ferrogram/`.
+- Worktrees: `/Volumes/Dara/larrygram/worktrees/`
+- Cargo target dirs: each worktree's own `target/` (already on the external drive); the shared compile cache is `/Volumes/Dara/larrygram/sccache`. The main checkout is on the small drive: the master builds there with `CARGO_TARGET_DIR=/Volumes/Dara/larrygram/target/main`.
+- Raw downloads: `/Volumes/Dara/larrygram/reference/`. The repo's `reference/` directory is a symlink to it (gitignored). In a worktree, create the same symlink: `ln -s /Volumes/Dara/larrygram/reference reference`.
+- Corpus files: `corpus/vsdx/` and `corpus/vsd/` are gitignored and exist only in the main checkout. In a worktree, link them: `ln -s /Users/dara/larrygram/corpus/vsdx corpus/vsdx` and the same for `vsd`. If git shows the links as untracked, add them to `.git/info/exclude`, not to `.gitignore`.
+- Large builds (libvisio, corpora): `/Volumes/Dara/larrygram/`.
 
 ## 4. Clean-room rules (non-negotiable)
 
@@ -52,7 +52,7 @@ Allowed sources only:
 - Observed behavior of Visio as a black box. Only derived facts (structure, geometry, color values, our own descriptions) are committed.
 
 Never:
-- Disassemble, decompile or debug any Microsoft binary or installer, or extract resources from one (ribbon XML, strings, icons, images, fonts).
+- Disassemble, decompile or debug any Microsoft binary or installer, or extract resources from one (UI XML, strings, icons, images, fonts).
 - Commit Microsoft-owned content: spec documents, icons, images, stencils (.vss/.vssx), templates, sample drawings, fonts (Calibri, Segoe UI).
 - Copy long-form text (super-tooltips, help descriptions). Short command labels ("Align", "Connector", "Pointer Tool") are fine as UI labels. Write our own descriptions.
 - Copy GPL/LGPL/AGPL code.
@@ -72,13 +72,13 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 - **Test oracle:** its CLI tools (vsd2raw, vsd2xhtml, vss2raw — whichever exist) are built in a dev-only harness under `tools/libvisio-oracle/`. Never a runtime dependency.
 - **Binary .vsd reference:** code ported or derived from libvisio lives **only** in `crates/vsd-binary`, with MPL-2.0 file headers and attribution in `NOTICE`. No libvisio-derived code anywhere else, including tests of other crates.
 - For .vsdx, MS-VSDX is the source of truth, not libvisio.
-- `cargo deny` enforces that `ferrogram-vsd-binary` is the only MPL crate.
+- `cargo deny` enforces that `larrygram-vsd-binary` is the only MPL crate.
 
 ## 6. Engineering rules
 
 - **Never crash.** Malformed input produces errors, never panics. Non-test code may not use `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!` or `unimplemented!` (workspace clippy lints). Parser crates (vsdx, vsd-binary, shapesheet) also deny `clippy::indexing_slicing`: use `get()`. Use checked arithmetic and capped allocations on input-derived values. Bound recursion. Tests may use these (clippy.toml). Every crash fix gets a regression test.
 - **No unsafe.** Every crate root has `#![forbid(unsafe_code)]` unless an ADR justifies an exception.
-- **One command registry** (`crates/commands`). Every user action is a command with an id, label, enabled-state predicate and undo support. Menus, ribbon, shortcuts, CLI, the JSON control channel and MCP all dispatch by command id through the same registry. Programmatic calls never open dialogs.
+- **One command registry** (`crates/commands`). Every user action is a command with an id, label, enabled-state predicate and undo support. Menus, command bar, shortcuts, CLI, the JSON control channel and MCP all dispatch by command id through the same registry. Programmatic calls never open dialogs.
 - **Units.** Internal units are Visio's (inches). Convert only at the edges (UI pixels, file formats that differ).
 - **Layering** (ADR 0002, checked by `cargo xtask layers`). A crate depends only on lower layers. Nothing below L6 depends on egui/eframe/winit/rfd.
   - L0 `geom`, `ui-spec` · L1 `model`, `text` · L2 `vsdx`, `vsd-binary`, `shapesheet` · L3 `render` · L4 `commands` · L5 `control` · L6 `ui` · L7 `apps/*`
@@ -104,14 +104,14 @@ libvisio is MPL-2.0 (verify `COPYING` when you fetch it; record the commit hash)
 | coverage | `cargo llvm-cov`, per-crate thresholds and ratchet from `coverage.toml` |
 | deny | `cargo deny check` |
 | layers | `cargo xtask layers` |
-| wasm | `cargo build -p ferrogram-web --target wasm32-unknown-unknown` |
+| wasm | `cargo build -p larrygram-web --target wasm32-unknown-unknown` |
 | fuzz | `cargo +nightly fuzz build` in every `crates/*/fuzz` |
 
 Slow steps a worker adds to the hand-off gate:
 
 | Step | Run it when your change |
 |---|---|
-| wasm | touches `crates/ui`, `apps/ferrogram-web`, `#[cfg(target_arch)]` code, or any `Cargo.toml` / `Cargo.lock` |
+| wasm | touches `crates/ui`, `apps/larrygram-web`, `#[cfg(target_arch)]` code, or any `Cargo.toml` / `Cargo.lock` |
 | fuzz | touches a `crates/*/fuzz` directory, or changes the public API of a crate that has one (`ui-spec`, `vsdx`, `render`, `ui`) |
 | coverage | changes any non-test code in a crate. The ratchets sit near 99%, so new untested code fails them. Give each interface stub a test of its "not implemented" contract. Skip coverage only for docs-only or test-only tasks |
 

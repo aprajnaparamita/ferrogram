@@ -7,14 +7,14 @@
 //! text; groups are not hit directly (their leaf shapes are, and the
 //! caller maps to the top-level ancestor through the model).
 //!
-//! The geometry math goes through `ferrogram_geom` (L0): paths are mapped
+//! The geometry math goes through `larrygram_geom` (L0): paths are mapped
 //! into page space through the node's ancestor transforms and measured
 //! there, so `distance` is always in page inches even under a scaled or
 //! rotated transform. Curve outlines flatten within
-//! `ferrogram_geom::FLATTEN_TOLERANCE` (ADR 0022 flattening).
+//! `larrygram_geom::FLATTEN_TOLERANCE` (ADR 0022 flattening).
 
-use ferrogram_geom::{Path, Point, Rect, Segment, Transform, distance_point_path, path_contains};
-use ferrogram_model::ShapeId;
+use larrygram_geom::{Path, Point, Rect, Segment, Transform, distance_point_path, path_contains};
+use larrygram_model::ShapeId;
 
 use crate::error::Error;
 use crate::scene::{Node, Scene, Shape, TextNode};
@@ -410,7 +410,7 @@ fn shape_bounds(shape: &Shape, transform: Transform) -> Option<Rect> {
     rect_bounds(local, transform)
 }
 
-/// Like [`ferrogram_geom::Path::bounds`], but non-finite points are
+/// Like [`larrygram_geom::Path::bounds`], but non-finite points are
 /// skipped (a degenerate path degrades instead of poisoning the box).
 fn path_bounds(path: &Path) -> Option<Rect> {
     let mut bounds: Option<Rect> = None;
@@ -651,10 +651,10 @@ mod tests {
         let text = TextNode {
             fonts: Vec::new(),
             runs: Vec::new(),
-            layout: ferrogram_text::Layout {
+            layout: larrygram_text::Layout {
                 width: 2.0,
                 height: 1.0,
-                ..ferrogram_text::Layout::default()
+                ..larrygram_text::Layout::default()
             },
             color: crate::scene::Rgba::opaque(0, 0, 0),
             origin: Point::new(1.0, 3.0),
@@ -672,10 +672,10 @@ mod tests {
         let base = TextNode {
             fonts: Vec::new(),
             runs: Vec::new(),
-            layout: ferrogram_text::Layout {
+            layout: larrygram_text::Layout {
                 width: 1.0,
                 height: 1.0,
-                ..ferrogram_text::Layout::default()
+                ..larrygram_text::Layout::default()
             },
             color: crate::scene::Rgba::opaque(0, 0, 0),
             origin: Point::new(0.0, 0.0),
@@ -686,15 +686,15 @@ mod tests {
         };
         assert_eq!(text_quad(&moved), None);
         let turned = TextNode {
-            layout: ferrogram_text::Layout {
-                rotation: ferrogram_geom::Angle::from_radians(nan),
+            layout: larrygram_text::Layout {
+                rotation: larrygram_geom::Angle::from_radians(nan),
                 ..base.layout.clone()
             },
             ..base.clone()
         };
         assert_eq!(text_quad(&turned), None);
         let shrunk = TextNode {
-            layout: ferrogram_text::Layout {
+            layout: larrygram_text::Layout {
                 height: 0.0,
                 ..base.layout.clone()
             },

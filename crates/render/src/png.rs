@@ -53,7 +53,7 @@
 //! fixed-order integer or `f32`/`f64` arithmetic and the PNG encoder is
 //! deterministic.
 
-use ferrogram_geom::{Path, Point, Segment, Transform};
+use larrygram_geom::{Path, Point, Segment, Transform};
 
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop as SkGradientStop, LineCap as SkLineCap,
@@ -586,7 +586,7 @@ fn tile_pixmap(pattern: &PatternPaint, ctx: &Ctx) -> Option<Pixmap> {
 
 /// The tile pixmap size in pixels: one tile at device resolution, under
 /// the raster caps.
-fn tile_pixels(size: ferrogram_geom::Size, ctx: &Ctx) -> Option<(u32, u32)> {
+fn tile_pixels(size: larrygram_geom::Size, ctx: &Ctx) -> Option<(u32, u32)> {
     let (w_in, h_in) = (size.width, size.height);
     if !w_in.is_finite() || !h_in.is_finite() || w_in <= 0.0 || h_in <= 0.0 {
         return None;
@@ -873,7 +873,7 @@ fn path_ends(path: &Path) -> (Option<VertexDir>, Option<VertexDir>) {
                     current = Some(start);
                 }
             }
-            // `Segment` is non-exhaustive outside `ferrogram-geom`.
+            // `Segment` is non-exhaustive outside `larrygram-geom`.
             _ => {}
         }
     }
@@ -913,8 +913,8 @@ fn finite(p: Point) -> bool {
 mod tests {
     use super::*;
 
-    use ferrogram_geom::{Angle, Size};
-    use ferrogram_text::{Block, Format, Insets, Paragraph, Run, VAlign, default_fonts, layout};
+    use larrygram_geom::{Angle, Size};
+    use larrygram_text::{Block, Format, Insets, Paragraph, Run, VAlign, default_fonts, layout};
 
     fn path_rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Path {
         let mut path = Path::new();
@@ -1265,7 +1265,7 @@ mod tests {
                         strikethrough: false,
                     },
                 }],
-                align: ferrogram_text::Align::Left,
+                align: larrygram_text::Align::Left,
                 line_spacing: 1.0,
                 space_before: 0.0,
                 space_after: 0.0,

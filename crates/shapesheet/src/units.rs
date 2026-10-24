@@ -9,8 +9,8 @@
 //!
 //! This is the unit set of *formula literals* and evaluated values. The
 //! `U=` spelling a `.vsdx` cell writes is a different, smaller set and is
-//! mapped by `ferrogram-vsdx`; [`Unit::to_geom`] is the bridge to the
-//! model's `ferrogram_geom::Unit`.
+//! mapped by `larrygram-vsdx`; [`Unit::to_geom`] is the bridge to the
+//! model's `larrygram_geom::Unit`.
 //!
 //! Spellings come in two alphabets ("About Units of Measure", "Universal
 //! strings"): the localized spelling of the first table (`in`, `deg`) and
@@ -303,7 +303,7 @@ impl Unit {
     /// rad, 1 % = 1/100. Metric lengths follow the international inch
     /// (1 in = 25.4 mm, exact), written once as an `f64`. The typographic
     /// non-inch units follow the didot point (0.376 mm), so ciceros are
-    /// 12 didot points = 4.512 mm (the `ferrogram_geom` factor). A date
+    /// 12 didot points = 4.512 mm (the `larrygram_geom` factor). A date
     /// serial counts days (1 = one day), so it converts at 86 400 s/day.
     /// The implicit units carry no scale of their own: internal units are
     /// the canonical ones (ADR 0052).
@@ -378,23 +378,23 @@ impl Unit {
     /// dates (ADR 0052). [`crate::Value::to_cached`] falls back to the family's
     /// canonical unit for those; this function stays strict so a caller
     /// that needs the file's own spelling can say so.
-    pub fn to_geom(self) -> Result<ferrogram_geom::Unit, Error> {
+    pub fn to_geom(self) -> Result<larrygram_geom::Unit, Error> {
         let unit = match self {
-            Unit::Inches => ferrogram_geom::Unit::Inches,
-            Unit::Feet => ferrogram_geom::Unit::Feet,
-            Unit::Yards => ferrogram_geom::Unit::Yards,
-            Unit::Miles => ferrogram_geom::Unit::Miles,
-            Unit::Millimeters => ferrogram_geom::Unit::Millimeters,
-            Unit::Centimeters => ferrogram_geom::Unit::Centimeters,
-            Unit::Meters => ferrogram_geom::Unit::Meters,
-            Unit::Kilometers => ferrogram_geom::Unit::Kilometers,
-            Unit::Points => ferrogram_geom::Unit::Points,
-            Unit::Picas => ferrogram_geom::Unit::Picas,
-            Unit::Ciceros => ferrogram_geom::Unit::Ciceros,
-            Unit::Degrees => ferrogram_geom::Unit::Degrees,
-            Unit::Radians => ferrogram_geom::Unit::Radians,
-            Unit::Percent => ferrogram_geom::Unit::Percent,
-            Unit::Unitsless => ferrogram_geom::Unit::Unitsless,
+            Unit::Inches => larrygram_geom::Unit::Inches,
+            Unit::Feet => larrygram_geom::Unit::Feet,
+            Unit::Yards => larrygram_geom::Unit::Yards,
+            Unit::Miles => larrygram_geom::Unit::Miles,
+            Unit::Millimeters => larrygram_geom::Unit::Millimeters,
+            Unit::Centimeters => larrygram_geom::Unit::Centimeters,
+            Unit::Meters => larrygram_geom::Unit::Meters,
+            Unit::Kilometers => larrygram_geom::Unit::Kilometers,
+            Unit::Points => larrygram_geom::Unit::Points,
+            Unit::Picas => larrygram_geom::Unit::Picas,
+            Unit::Ciceros => larrygram_geom::Unit::Ciceros,
+            Unit::Degrees => larrygram_geom::Unit::Degrees,
+            Unit::Radians => larrygram_geom::Unit::Radians,
+            Unit::Percent => larrygram_geom::Unit::Percent,
+            Unit::Unitsless => larrygram_geom::Unit::Unitsless,
             _ => return Err(Error::Conversion("unit has no model spelling")),
         };
         Ok(unit)
@@ -405,23 +405,23 @@ impl Unit {
     /// The model's angstroms, nanometers, micrometers and millipoints have
     /// no formula spelling ("About Units of Measure" has none), so they
     /// are [`Error::Conversion`] and never a silent scale change.
-    pub fn from_geom(unit: ferrogram_geom::Unit) -> Result<Unit, Error> {
+    pub fn from_geom(unit: larrygram_geom::Unit) -> Result<Unit, Error> {
         let formula_unit = match unit {
-            ferrogram_geom::Unit::Inches => Unit::Inches,
-            ferrogram_geom::Unit::Feet => Unit::Feet,
-            ferrogram_geom::Unit::Yards => Unit::Yards,
-            ferrogram_geom::Unit::Miles => Unit::Miles,
-            ferrogram_geom::Unit::Millimeters => Unit::Millimeters,
-            ferrogram_geom::Unit::Centimeters => Unit::Centimeters,
-            ferrogram_geom::Unit::Meters => Unit::Meters,
-            ferrogram_geom::Unit::Kilometers => Unit::Kilometers,
-            ferrogram_geom::Unit::Points => Unit::Points,
-            ferrogram_geom::Unit::Picas => Unit::Picas,
-            ferrogram_geom::Unit::Ciceros => Unit::Ciceros,
-            ferrogram_geom::Unit::Degrees => Unit::Degrees,
-            ferrogram_geom::Unit::Radians => Unit::Radians,
-            ferrogram_geom::Unit::Percent => Unit::Percent,
-            ferrogram_geom::Unit::Unitsless => Unit::Unitsless,
+            larrygram_geom::Unit::Inches => Unit::Inches,
+            larrygram_geom::Unit::Feet => Unit::Feet,
+            larrygram_geom::Unit::Yards => Unit::Yards,
+            larrygram_geom::Unit::Miles => Unit::Miles,
+            larrygram_geom::Unit::Millimeters => Unit::Millimeters,
+            larrygram_geom::Unit::Centimeters => Unit::Centimeters,
+            larrygram_geom::Unit::Meters => Unit::Meters,
+            larrygram_geom::Unit::Kilometers => Unit::Kilometers,
+            larrygram_geom::Unit::Points => Unit::Points,
+            larrygram_geom::Unit::Picas => Unit::Picas,
+            larrygram_geom::Unit::Ciceros => Unit::Ciceros,
+            larrygram_geom::Unit::Degrees => Unit::Degrees,
+            larrygram_geom::Unit::Radians => Unit::Radians,
+            larrygram_geom::Unit::Percent => Unit::Percent,
+            larrygram_geom::Unit::Unitsless => Unit::Unitsless,
             _ => return Err(Error::Conversion("model unit has no formula spelling")),
         };
         Ok(formula_unit)
@@ -617,10 +617,10 @@ mod tests {
             assert!(unit.to_geom().is_err(), "{unit:?} bridged");
         }
         for geom in [
-            ferrogram_geom::Unit::Angstroms,
-            ferrogram_geom::Unit::Nanometers,
-            ferrogram_geom::Unit::Microns,
-            ferrogram_geom::Unit::Millipoints,
+            larrygram_geom::Unit::Angstroms,
+            larrygram_geom::Unit::Nanometers,
+            larrygram_geom::Unit::Microns,
+            larrygram_geom::Unit::Millipoints,
         ] {
             assert!(Unit::from_geom(geom).is_err(), "{geom:?} bridged");
         }

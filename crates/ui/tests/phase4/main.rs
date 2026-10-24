@@ -1,13 +1,13 @@
 //! The Phase 4 UI test harness (task P4-09, ADR 0037).
 //!
-//! One test binary with one module per ADR 0037 item: `ribbon`
+//! One test binary with one module per ADR 0037 item: `tab_bar`
 //! (placement completeness), `layout_switch` (ADR 0032),
 //! `enabled_state` (ADR 0031) and `file_flow` (ADR 0036). The helpers
 //! below drive a real [`Shell`] through `egui_kittest` (ADR 0030) and
 //! walk the frame's AccessKit tree, the way assistive tech and the
 //! tests see the widgets.
 //!
-//! Placement exactness per ribbon tab, backstage entry and QAT is
+//! Placement exactness per command-bar tab, backstage entry and QAT is
 //! pinned inside `crates/ui` by P4-04's
 //! `both_layouts_render_one_widget_per_placement` and its
 //! `layout_counts` snapshot. These tests extend that to the committed
@@ -23,7 +23,7 @@ mod file_flow;
 mod flows;
 mod interactions;
 mod layout_switch;
-mod ribbon;
+mod tab_bar;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -34,11 +34,11 @@ use egui_kittest::{
     Harness,
     kittest::{NodeT, Queryable},
 };
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{CommandError, CommandId, Invocation, Outcome, Registry, Source};
-use ferrogram_ui::Intent;
-use ferrogram_ui::shell::Shell;
-use ferrogram_ui_spec::{LayoutSets, Loader};
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{CommandError, CommandId, Invocation, Outcome, Registry, Source};
+use larrygram_ui::Intent;
+use larrygram_ui::shell::Shell;
+use larrygram_ui_spec::{LayoutSets, Loader};
 
 /// The committed layouts, parsed once per test binary (the app loads
 /// the same embedded bytes).
@@ -136,7 +136,7 @@ impl ShellRig {
     /// A shell over the builtin registry and the committed layouts,
     /// with caller-chosen state.
     pub fn with_app(app: AppCtx) -> Self {
-        let registry = ferrogram_commands::builtins::registry().expect("the registry builds");
+        let registry = larrygram_commands::builtins::registry().expect("the registry builds");
         Self::build(Shell::new(registry, sets().clone(), app))
     }
 
@@ -150,13 +150,13 @@ impl ShellRig {
         Self::build_sized(shell, egui::vec2(1600.0, 900.0))
     }
 
-    /// The same rig with a window the whole committed ribbon fits in
+    /// The same rig with a window the whole committed command bar fits in
     /// (the P4-04 note: the layouts are about 5000 points wide, and a
     /// click outside the screen rect never reaches a widget).
     pub fn large() -> Self {
         Self::build_sized(
             Shell::new(
-                ferrogram_commands::builtins::registry().expect("the registry builds"),
+                larrygram_commands::builtins::registry().expect("the registry builds"),
                 sets().clone(),
                 AppCtx::new(Settings::default()),
             ),
@@ -231,7 +231,7 @@ impl ShellRig {
     }
 
     /// Like [`ShellRig::try_click`], but the `nth` matching widget
-    /// (the window has two "File" buttons: menu bar and ribbon).
+    /// (the window has two "File" buttons: menu bar and command bar).
     pub fn try_click_nth(&mut self, role: Role, name: &str, nth: usize) -> bool {
         let clicked = {
             let root = self.harness.root();

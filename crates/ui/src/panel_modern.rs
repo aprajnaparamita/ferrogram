@@ -6,7 +6,7 @@
 //! [`Intent`]s; they never execute commands themselves (ADR 0028).
 
 use egui::Ui;
-use ferrogram_ui_spec::v2::LayoutV2;
+use larrygram_ui_spec::v2::LayoutV2;
 
 use crate::contexts::SelectionContext;
 use crate::{Intent, UiError};

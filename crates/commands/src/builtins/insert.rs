@@ -26,10 +26,10 @@
 //! part of the shape's undo step: undoing a first drop removes the shape
 //! (and its glue), leaving an unreferenced master behind.
 
-use ferrogram_geom::{Angle, Point, Size, Transform, Unit};
-use ferrogram_model::mutate::VIS_CONNECTION_POINT;
-use ferrogram_model::stencils::{self, MasterDef};
-use ferrogram_model::{
+use larrygram_geom::{Angle, Point, Size, Transform, Unit};
+use larrygram_model::mutate::VIS_CONNECTION_POINT;
+use larrygram_model::stencils::{self, MasterDef};
+use larrygram_model::{
     Cell, CellName, CellReader, CellValue, Connect, Document, MasterId, Preserved, Row, Section,
     SectionName, Shape, ShapeId, SheetRef,
 };
@@ -455,7 +455,7 @@ fn ensure_catalog_master(
 /// `target`'s connection point (ADR 0046).
 fn add_drop_glue(
     doc: &mut Document,
-    page: ferrogram_model::PageId,
+    page: larrygram_model::PageId,
     shape: ShapeId,
     target_visio_id: i32,
     glue_point: Option<usize>,
@@ -617,7 +617,7 @@ fn shape_transform(doc: &Document, shape: ShapeId) -> Transform {
 }
 
 /// The active session and page, or a typed failure.
-fn active_page(ctx: &AppCtx) -> Result<(SessionId, ferrogram_model::PageId), CommandError> {
+fn active_page(ctx: &AppCtx) -> Result<(SessionId, larrygram_model::PageId), CommandError> {
     let session = ctx.active_document().ok_or_else(no_document)?;
     let page = session
         .active_page
@@ -630,7 +630,7 @@ fn active_page(ctx: &AppCtx) -> Result<(SessionId, ferrogram_model::PageId), Com
 fn select_new(
     ctx: &mut AppCtx,
     _session: SessionId,
-    page: ferrogram_model::PageId,
+    page: larrygram_model::PageId,
     shape: ShapeId,
 ) -> Result<(), CommandError> {
     ctx.selection.shapes = vec![shape];
@@ -719,7 +719,7 @@ mod tests {
     use crate::app::{DocumentSession, Settings};
 
     /// A session with one page and one 2x1 rectangle on it.
-    fn fixture() -> (AppCtx, SessionId, ferrogram_model::PageId, ShapeId) {
+    fn fixture() -> (AppCtx, SessionId, larrygram_model::PageId, ShapeId) {
         let mut ctx = AppCtx::new(Settings::default());
         let mut doc = Document::new();
         let page = doc.add_page("Page-1").expect("page");

@@ -8,7 +8,7 @@
 //! This module reads the text records (the text string itself, the
 //! character and paragraph lists and their index records, the field
 //! list and text fields) and maps them onto
-//! [`ferrogram_model::TextContent`]: literal text to
+//! [`larrygram_model::TextContent`]: literal text to
 //! `TextPart::Text`, run boundaries to `CharRun`, `ParaRun` and
 //! `TabsRun` markers, fields to `TextPart::Field` with their cached
 //! display text.
@@ -21,7 +21,7 @@
 //! Task P8-01 defines the entry point as an interface stub; task P8-05
 //! implements it.
 
-use ferrogram_model::Document;
+use larrygram_model::Document;
 
 use crate::chunks::Chunk;
 use crate::error::Error;

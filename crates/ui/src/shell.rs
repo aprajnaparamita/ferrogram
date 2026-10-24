@@ -1,11 +1,11 @@
-//! The application shell (ADR 0029, ADR 0031): hosts the ribbon, the
-//! canvas, the panels and the status bar, and dispatches every [`Intent`]
+//! The application shell (ADR 0029, ADR 0031): hosts the command bar, the
+//! canvas, the panes and the status bar, and dispatches every [`Intent`]
 //! through the command registry.
 //!
 //! The frame (top to bottom) is: a title strip with the quick access
-//! toolbar, the menu bar (File, View, Help), the ribbon, the canvas
+//! toolbar, the menu bar (File, View, Help), the command bar, the canvas
 //! area (the Shapes window on the left, the Shape Data and Size &
-//! Position panels on the right, page tabs and the status bar below),
+//! Position panes on the right, page tabs and the status bar below),
 //! and the File backstage over the canvas when it is open. Widget
 //! failures are shown in the status bar and never crash the frame
 //! (AGENTS.md section 6).
@@ -20,23 +20,23 @@
 //! Owned by task P4-03.
 
 use egui::{Context, PointerButton, Ui};
-use ferrogram_commands::{
+use larrygram_commands::{
     ActiveTool, AppCtx, ArgValue, CommandError, CommandId, Invocation, NeededInput, Outcome,
     PathPurpose, Payload, Registry, SessionId, Source, UiRequest,
 };
-use ferrogram_model::{PageId, ShapeId, TextContent, TextPart};
-use ferrogram_render::Overlay;
-use ferrogram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
+use larrygram_model::{PageId, ShapeId, TextContent, TextPart};
+use larrygram_render::Overlay;
+use larrygram_ui_spec::{LayoutKind, LayoutSet, LayoutSets, ShortcutScope, Shortcuts};
 
 use crate::canvas::{self, CanvasCache};
 use crate::dialogs::{
     FileChoice, FilePicker, NativeFilePicker, OpenRequest, PickState, SaveRequest,
 };
-use crate::panels;
-use crate::ribbon::Ribbon;
+use crate::panes;
 use crate::settings;
 use crate::shapes_window::ShapesWindow;
 use crate::shortcuts::{self, ShortcutMap};
+use crate::tab_bar::TabBar;
 use crate::text_edit::{EditorAction, TextEditor};
 use crate::tools::{Tool, ToolMachine, stencil};
 use crate::{Intent, UiError};
@@ -59,8 +59,8 @@ const VIEW_MENU: &[&str] = &[
     "view.zoom.fit",
     "view.toggle_grid",
     "view.rulers",
-    "view.ui_layout.visio_2016",
-    "view.ui_layout.visio_365",
+    "view.ui_layout.panel_2016",
+    "view.ui_layout.panel_365",
     "app.office.center.options",
 ];
 
@@ -91,12 +91,12 @@ fn tool_for(active: ActiveTool) -> Tool {
 pub struct Shell {
     /// The command registry every intent dispatches through (ADR 0028).
     pub registry: Registry,
-    /// Both ribbon layouts, loaded from `ui-spec` (ADR 0031).
+    /// Both Panel layouts, loaded from `ui-spec` (ADR 0031).
     pub layouts: LayoutSets,
     /// The application state (ADR 0029).
     pub app: AppCtx,
-    /// The ribbon widget (its tab and backstage state, ADR 0031).
-    ribbon: Ribbon,
+    /// The command-bar widget (its tab and backstage state, ADR 0031).
+    tab_bar: TabBar,
     /// The Shapes window widget (ADR 0034).
     shapes: ShapesWindow,
     /// The canvas raster cache (ADR 0033).
@@ -129,8 +129,8 @@ pub struct Shell {
     escape_pressed: bool,
     /// The transient overlay marks drawn over the cached raster.
     overlay: Overlay,
-    /// The ribbon strip of the previous frame (focus tracking).
-    ribbon_rect: Option<egui::Rect>,
+    /// The command-bar strip of the previous frame (focus tracking).
+    tab_bar_rect: Option<egui::Rect>,
     /// A command waiting for an asynchronous pick (the wasm upload,
     /// ADR 0036).
     pending: Option<(CommandId, Invocation)>,
@@ -155,22 +155,26 @@ impl Shell {
     /// the keyboard shortcut map are created here (ADR 0029:
     /// widget-local state lives in `crates/ui`; ADR 0036: the map is
     /// built from the loader's `shortcuts.yaml`, the same embedded
-    /// source the ribbon uses). `Shell::new`'s signature is fixed; a
+    /// source the command bar uses). `Shell::new`'s signature is fixed; a
     /// table that fails to load falls back to an empty map with one
     /// warning, and [`Shell::set_shortcuts`] replaces the map later.
     pub fn new(registry: Registry, layouts: LayoutSets, app: AppCtx) -> Self {
         let mut app = app;
         let kind = app.settings.ui_layout;
-        let (shortcuts, warnings) = load_shortcuts(&layouts.get(kind).shortcuts);
+        let empty = Shortcuts::default();
+        let (shortcuts, warnings) = match layouts.get(kind) {
+            Some(set) => load_shortcuts(&set.shortcuts),
+            None => load_shortcuts(&empty),
+        };
         for warning in warnings {
             app.record_warning(warning);
         }
-        let ribbon = Ribbon::new(app.settings.ui_layout);
+        let tab_bar = TabBar::new(app.settings.ui_layout);
         Self {
             registry,
             layouts,
             app,
-            ribbon,
+            tab_bar,
             shapes: ShapesWindow::new(),
             cache: CanvasCache::new(),
             picker: Box::new(NativeFilePicker),
@@ -179,7 +183,7 @@ impl Shell {
             canvas_rect: None,
             canvas_id: None,
             last_page: None,
-            ribbon_rect: None,
+            tab_bar_rect: None,
             tools: ToolMachine::new(),
             editor: TextEditor::new(),
             stencil_down: false,
@@ -199,18 +203,20 @@ impl Shell {
         self.focus
     }
 
-    /// The active ribbon layout (ADR 0032).
+    /// The active Panel layout (ADR 0032).
     pub fn layout_kind(&self) -> LayoutKind {
         self.app.settings.ui_layout
     }
 
-    /// Switches the ribbon layout without a restart (ADR 0032).
+    /// Switches the Panel layout without a restart (ADR 0032).
     pub fn set_layout_kind(&mut self, kind: LayoutKind) {
         self.app.settings.ui_layout = kind;
     }
 
-    /// The layout set for the active kind (ADR 0031).
-    pub fn layout_set(&self) -> &LayoutSet {
+    /// The layout set for the active kind (ADR 0031), when the kind
+    /// has v1 data. Panel Modern and Panel Classic read the curated
+    /// v2 files (`ui_spec::v2`) and have no [`LayoutSet`] yet (P7-09).
+    pub fn layout_set(&self) -> Option<&LayoutSet> {
         self.layouts.get(self.layout_kind())
     }
 
@@ -272,8 +278,8 @@ impl Shell {
     }
 
     /// Records which surface the pointer pressed last (the ADR 0036
-    /// shortcut scopes): the canvas area is `Page`, the ribbon strip
-    /// is `Ribbon`, and any other press falls back to `Global`. This
+    /// shortcut scopes): the canvas area is `Page`, the command-bar strip
+    /// is `TabBar`, and any other press falls back to `Global`. This
     /// is the smallest focus tracking that gives the three scopes
     /// (P4-14): the rects are the ones the previous frame drew, so a
     /// press takes effect in its own frame, before the widgets draw.
@@ -288,8 +294,8 @@ impl Shell {
         if let Some(pos) = pressed {
             if self.canvas_rect.is_some_and(|rect| rect.contains(pos)) {
                 self.focus = ShortcutScope::Page;
-            } else if self.ribbon_rect.is_some_and(|rect| rect.contains(pos)) {
-                self.focus = ShortcutScope::Ribbon;
+            } else if self.tab_bar_rect.is_some_and(|rect| rect.contains(pos)) {
+                self.focus = ShortcutScope::CommandBar;
             } else {
                 self.focus = ShortcutScope::Global;
             }
@@ -346,17 +352,18 @@ impl Shell {
         // toolbar (ADR 0031).
         egui::Panel::top("shell-title").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("Ferrogram");
+                ui.heading("Larrygram");
                 ui.separator();
                 ui.label(self.title_text());
                 ui.separator();
                 ui.label(self.status_line());
                 let kind = self.app.settings.ui_layout;
-                let set = self.layouts.get(kind);
-                let produced = self
-                    .ribbon
-                    .show_quick_access(ui, set, &self.registry, &self.app);
-                self.absorb(produced, &mut intents);
+                if let Some(set) = self.layouts.get(kind) {
+                    let produced =
+                        self.tab_bar
+                            .show_quick_access(ui, set, &self.registry, &self.app);
+                    self.absorb(produced, &mut intents);
+                }
             });
         });
 
@@ -369,19 +376,20 @@ impl Shell {
             });
         });
 
-        // The ribbon (or the backstage over the canvas, ADR 0031).
+        // The command bar (or the backstage over the canvas, ADR 0031).
         let kind = self.app.settings.ui_layout;
-        if self.ribbon.kind() != kind {
-            self.ribbon.set_kind(kind);
+        if self.tab_bar.kind() != kind {
+            self.tab_bar.set_kind(kind);
         }
-        egui::Panel::top("shell-ribbon").show(ui, |ui| {
-            self.ribbon_rect = Some(ui.max_rect());
-            let set = self.layouts.get(kind);
-            let produced = self.ribbon.show(ui, set, &self.registry, &self.app);
-            self.absorb(produced, &mut intents);
+        egui::Panel::top("shell-command-bar").show(ui, |ui| {
+            self.tab_bar_rect = Some(ui.max_rect());
+            if let Some(set) = self.layouts.get(kind) {
+                let produced = self.tab_bar.show(ui, set, &self.registry, &self.app);
+                self.absorb(produced, &mut intents);
+            }
         });
 
-        // Shapes window (left) and the two panels (right).
+        // Shapes window (left) and the two panes (right).
         egui::Panel::left("shell-shapes")
             .resizable(true)
             .default_size(200.0)
@@ -396,15 +404,15 @@ impl Shell {
                     self.stencil_down = false;
                 }
             });
-        egui::Panel::right("shell-panels")
+        egui::Panel::right("shell-panes")
             .resizable(true)
             .default_size(220.0)
             .show(ui, |ui| {
-                let shape_data = panels::show_shape_data(ui, &mut self.app);
+                let shape_data = panes::show_shape_data(ui, &mut self.app);
                 if let Some(mut more) = self.keep(shape_data) {
                     intents.append(&mut more);
                 }
-                let size_position = panels::show_size_position(ui, &mut self.app);
+                let size_position = panes::show_size_position(ui, &mut self.app);
                 if let Some(mut more) = self.keep(size_position) {
                     intents.append(&mut more);
                 }
@@ -430,17 +438,18 @@ impl Shell {
         });
 
         egui::CentralPanel::default().show(ui, |ui| {
-            if self.ribbon.backstage_open() {
-                let set = self.layouts.get(kind);
-                let produced = self
-                    .ribbon
-                    .show_backstage(ui, set, &self.registry, &self.app);
-                let opened = matches!(&produced, Ok(intents) if !intents.is_empty());
-                self.absorb(produced, &mut intents);
-                if opened {
-                    // A backstage command runs: leave the File view
-                    // (ADR 0031).
-                    self.ribbon.set_backstage_open(false);
+            if self.tab_bar.backstage_open() {
+                if let Some(set) = self.layouts.get(kind) {
+                    let produced = self
+                        .tab_bar
+                        .show_backstage(ui, set, &self.registry, &self.app);
+                    let opened = matches!(&produced, Ok(intents) if !intents.is_empty());
+                    self.absorb(produced, &mut intents);
+                    if opened {
+                        // A backstage command runs: leave the File view
+                        // (ADR 0031).
+                        self.tab_bar.set_backstage_open(false);
+                    }
                 }
             } else {
                 self.show_canvas_area(ui, &mut intents);
@@ -710,12 +719,12 @@ impl Shell {
                 _ => None,
             })
             .collect();
-        let mut args = ferrogram_commands::Args::new();
+        let mut args = larrygram_commands::Args::new();
         args.set("shapes", ArgValue::List(vec![visio_id.to_string()]));
         args.set("mode", ArgValue::Text("replace".to_owned()));
         let command = CommandId::parse("edit.select").ok()?;
         let select = Intent::new(command, Invocation::new(args, Source::Ui));
-        let mut args = ferrogram_commands::Args::new();
+        let mut args = larrygram_commands::Args::new();
         args.set("text", ArgValue::Text(literal));
         let command = CommandId::parse("shape.set.text").ok()?;
         let write = Intent::new(command, Invocation::new(args, Source::Ui));
@@ -764,12 +773,12 @@ impl Shell {
         }
         if self.about_open {
             let mut open = true;
-            egui::Window::new("About Ferrogram")
+            egui::Window::new("About Larrygram")
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut open)
                 .show(ui.ctx(), |ui| {
-                    ui.heading("Ferrogram");
+                    ui.heading("Larrygram v1.0 alpha");
                     ui.label("A clean-room, Visio-compatible diagramming app (alpha).");
                     ui.label("Original work; no Microsoft assets (ADR 0030).");
                 });
@@ -795,7 +804,7 @@ impl Shell {
                 self.confirm_close = None;
                 if close && let Ok(command) = CommandId::parse("file.close") {
                     let args =
-                        ferrogram_commands::Args::new().with("confirm", ArgValue::Flag(true));
+                        larrygram_commands::Args::new().with("confirm", ArgValue::Flag(true));
                     intents.push(Intent::new(command, Invocation::new(args, Source::Ui)));
                 }
             }
@@ -814,11 +823,11 @@ impl Shell {
         ui.menu_button(title, |ui| {
             for &id in ids {
                 let checked = match id {
-                    "view.ui_layout.visio_2016" => {
-                        Some(self.app.settings.ui_layout == LayoutKind::Visio2016)
+                    "view.ui_layout.panel_2016" => {
+                        Some(self.app.settings.ui_layout == LayoutKind::Panel2016)
                     }
-                    "view.ui_layout.visio_365" => {
-                        Some(self.app.settings.ui_layout == LayoutKind::Visio365)
+                    "view.ui_layout.panel_365" => {
+                        Some(self.app.settings.ui_layout == LayoutKind::Panel365)
                     }
                     _ => None,
                 };
@@ -1155,9 +1164,9 @@ fn with_choice(invocation: &Invocation, choice: FileChoice) -> Invocation {
 /// Dispatches one already-built invocation; the seam the CLI and the
 /// Phase 8 control channel reuse (ADR 0028).
 ///
-/// A thin wrapper over [`ferrogram_commands::dispatch`]:
+/// A thin wrapper over [`larrygram_commands::dispatch`]:
 /// the run and the undo-step recording (the session the command ran
-/// against, ADR 0040 rule 2) live in `ferrogram_commands`, so every
+/// against, ADR 0040 rule 2) live in `larrygram_commands`, so every
 /// programmatic caller shares one rule (task P5-19 review F3).
 pub fn dispatch_one(
     registry: &Registry,
@@ -1165,7 +1174,7 @@ pub fn dispatch_one(
     command: &CommandId,
     invocation: Invocation,
 ) -> Result<Outcome, UiError> {
-    Ok(ferrogram_commands::dispatch(
+    Ok(larrygram_commands::dispatch(
         registry, app, command, invocation,
     )?)
 }
@@ -1179,11 +1188,11 @@ mod tests {
 
     use super::*;
     use crate::dialogs::{OpenRequest, SaveRequest};
-    use ferrogram_commands::{
+    use larrygram_commands::{
         Command, CommandMeta, CommandStatus, DocumentSession, Edit, Enabled, Settings, StubCommand,
     };
-    use ferrogram_model::Document;
-    use ferrogram_ui_spec::Loader;
+    use larrygram_model::Document;
+    use larrygram_ui_spec::Loader;
 
     /// The committed layouts (the app loads the same way).
     fn sets() -> LayoutSets {
@@ -1201,7 +1210,7 @@ mod tests {
     /// A shell over the real builtin registry and layouts.
     fn full_shell() -> Shell {
         Shell::new(
-            ferrogram_commands::builtins::registry().expect("registry"),
+            larrygram_commands::builtins::registry().expect("registry"),
             sets(),
             AppCtx::new(Settings::default()),
         )
@@ -1359,10 +1368,27 @@ mod tests {
     #[test]
     fn shell_tracks_the_layout_kind() {
         let mut shell = shell();
-        assert_eq!(shell.layout_kind(), LayoutKind::Visio2016);
-        shell.set_layout_kind(LayoutKind::Visio365);
-        assert_eq!(shell.layout_kind(), LayoutKind::Visio365);
-        assert_eq!(shell.layout_set(), &shell.layouts.visio_365);
+        assert_eq!(shell.layout_kind(), LayoutKind::Panel2016);
+        shell.set_layout_kind(LayoutKind::Panel365);
+        assert_eq!(shell.layout_kind(), LayoutKind::Panel365);
+        assert_eq!(shell.layout_set(), Some(&shell.layouts.panel_365));
+    }
+
+    #[test]
+    fn a_curated_layout_kind_draws_no_v1_widgets() {
+        // Panel Modern and Panel Classic have no `LayoutSet` yet
+        // (P7-09 draws them from `ui_spec::v2`), so the shell draws the
+        // frame without the v1 widgets and never crashes (task P7-00).
+        let mut settings = Settings::default();
+        settings.ui_layout = LayoutKind::PanelModern;
+        let mut shell = Shell::new(
+            Registry::new(),
+            LayoutSets::default(),
+            AppCtx::new(settings),
+        );
+        assert_eq!(shell.layout_kind(), LayoutKind::PanelModern);
+        assert_eq!(shell.layout_set(), None);
+        shell_frame(&mut shell, Vec::new(), 0.0);
     }
 
     #[test]
@@ -1372,26 +1398,26 @@ mod tests {
             .dispatch(&[intent("file.new", Source::Test)])
             .expect("dispatch");
         let session = shell.app.active_document_mut().expect("a document");
-        session.document.pages.push(ferrogram_model::Page::new(
-            ferrogram_model::PageId { index: 1 },
+        session.document.pages.push(larrygram_model::Page::new(
+            larrygram_model::PageId { index: 1 },
             2,
         ));
-        shell.app.selection.shapes = vec![ferrogram_model::ShapeId { index: 0 }];
-        shell.app.selection.anchor = Some(ferrogram_model::ShapeId { index: 0 });
+        shell.app.selection.shapes = vec![larrygram_model::ShapeId { index: 0 }];
+        shell.app.selection.anchor = Some(larrygram_model::ShapeId { index: 0 });
         shell.clear_selection_on_page_switch();
         assert!(!shell.app.selection.is_empty());
         shell
             .app
             .active_document_mut()
             .expect("a document")
-            .active_page = Some(ferrogram_model::PageId { index: 1 });
+            .active_page = Some(larrygram_model::PageId { index: 1 });
         shell.clear_selection_on_page_switch();
         assert!(shell.app.selection.is_empty(), "the page switch cleared it");
     }
 
     #[test]
     fn dispatch_one_runs_a_command() {
-        let registry = ferrogram_commands::builtins::registry().expect("registry");
+        let registry = larrygram_commands::builtins::registry().expect("registry");
         let mut app = AppCtx::new(Settings::default());
         let id = CommandId::parse("file.new").expect("id");
         let outcome = dispatch_one(&registry, &mut app, &id, Invocation::empty(Source::Test))
@@ -1533,7 +1559,7 @@ mod tests {
             ..FakePicker::default()
         }));
         let results = shell
-            .dispatch(&[intent("file.needs_path", Source::Ribbon)])
+            .dispatch(&[intent("file.needs_path", Source::CommandBar)])
             .expect("dispatch");
         assert_eq!(runs.load(Ordering::SeqCst), 2);
         let outcome = results[0].as_ref().expect("uploaded");
@@ -1769,8 +1795,8 @@ mod tests {
     #[test]
     fn repeated_errors_are_recorded_once() {
         let mut shell = shell();
-        shell.note_error("ribbon is not implemented yet");
-        shell.note_error("ribbon is not implemented yet");
+        shell.note_error("command bar is not implemented yet");
+        shell.note_error("command bar is not implemented yet");
         assert_eq!(shell.app.warnings.len(), 1);
     }
 
@@ -1817,7 +1843,11 @@ mod tests {
     /// The committed `shortcuts.yaml` table (the loader's).
     #[allow(clippy::expect_used)] // test helper: a failure here is the bug
     fn committed_shortcuts() -> Shortcuts {
-        sets().get(LayoutKind::Visio2016).shortcuts.clone()
+        sets()
+            .get(LayoutKind::Panel2016)
+            .expect("the set")
+            .shortcuts
+            .clone()
     }
 
     /// A two-chord sequence (`Alt+H, F`): the committed table has
@@ -1825,9 +1855,9 @@ mod tests {
     #[allow(clippy::expect_used)] // test helper: a failure here is the bug
     fn keytip_table() -> Shortcuts {
         Shortcuts {
-            entries: vec![ferrogram_ui_spec::Shortcut {
+            entries: vec![larrygram_ui_spec::Shortcut {
                 sequence: vec![vec!["Alt".to_owned(), "H".to_owned()], vec!["F".to_owned()]],
-                command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                command: larrygram_ui_spec::CommandId::parse("arrange.group").expect("id"),
                 scope: ShortcutScope::Global,
                 section: None,
             }],
@@ -1836,7 +1866,7 @@ mod tests {
 
     #[test]
     fn the_shell_loads_the_committed_table_without_conflicts() {
-        // The same embedded `shortcuts.yaml` the ribbon uses; the
+        // The same embedded `shortcuts.yaml` the command bar uses; the
         // committed table has no (sequence, scope) conflict (P4-14).
         let mut shell = full_shell();
         shell.set_shortcuts(&committed_shortcuts());
@@ -1928,18 +1958,20 @@ mod tests {
     }
 
     #[test]
-    fn clicking_the_canvas_or_the_ribbon_sets_the_focus_scope() {
+    fn clicking_the_canvas_or_the_command_bar_sets_the_focus_scope() {
         let mut shell = full_shell();
         shell_frame(&mut shell, Vec::new(), 0.0);
         let canvas = shell.canvas_rect.expect("the canvas rect is recorded");
-        let ribbon = shell.ribbon_rect.expect("the ribbon rect is recorded");
+        let tab_bar = shell
+            .tab_bar_rect
+            .expect("the command bar rect is recorded");
         assert_eq!(shell.focus, ShortcutScope::Global);
 
         shell_frame(&mut shell, vec![press_event(canvas.center())], 1.0);
         assert_eq!(shell.focus, ShortcutScope::Page);
 
-        shell_frame(&mut shell, vec![press_event(ribbon.center())], 2.0);
-        assert_eq!(shell.focus, ShortcutScope::Ribbon);
+        shell_frame(&mut shell, vec![press_event(tab_bar.center())], 2.0);
+        assert_eq!(shell.focus, ShortcutScope::CommandBar);
 
         shell_frame(&mut shell, vec![press_event(egui::pos2(0.0, 0.0))], 3.0);
         assert_eq!(shell.focus, ShortcutScope::Global);
@@ -1950,21 +1982,21 @@ mod tests {
         let mut shell = shell();
         let table = Shortcuts {
             entries: vec![
-                ferrogram_ui_spec::Shortcut {
+                larrygram_ui_spec::Shortcut {
                     sequence: vec![vec!["Ctrl".to_owned(), "G".to_owned()]],
-                    command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                    command: larrygram_ui_spec::CommandId::parse("arrange.group").expect("id"),
                     scope: ShortcutScope::Global,
                     section: None,
                 },
-                ferrogram_ui_spec::Shortcut {
+                larrygram_ui_spec::Shortcut {
                     sequence: vec![vec!["Ctrl".to_owned(), "G".to_owned()]],
-                    command: ferrogram_ui_spec::CommandId::parse("arrange.ungroup").expect("id"),
+                    command: larrygram_ui_spec::CommandId::parse("arrange.ungroup").expect("id"),
                     scope: ShortcutScope::Global,
                     section: None,
                 },
-                ferrogram_ui_spec::Shortcut {
+                larrygram_ui_spec::Shortcut {
                     sequence: vec![vec!["Ctrl".to_owned(), "H".to_owned()]],
-                    command: ferrogram_ui_spec::CommandId::parse("arrange.group").expect("id"),
+                    command: larrygram_ui_spec::CommandId::parse("arrange.group").expect("id"),
                     scope: ShortcutScope::Global,
                     section: None,
                 },
@@ -1983,9 +2015,9 @@ mod tests {
     fn a_table_that_fails_to_load_records_one_warning() {
         let mut shell = shell();
         let bad = Shortcuts {
-            entries: vec![ferrogram_ui_spec::Shortcut {
+            entries: vec![larrygram_ui_spec::Shortcut {
                 sequence: vec![vec!["Warp".to_owned()]],
-                command: ferrogram_ui_spec::CommandId::parse("edit.undo").expect("id"),
+                command: larrygram_ui_spec::CommandId::parse("edit.undo").expect("id"),
                 scope: ShortcutScope::Global,
                 section: None,
             }],

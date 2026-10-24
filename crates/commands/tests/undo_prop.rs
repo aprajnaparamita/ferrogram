@@ -25,7 +25,7 @@
 //! The comparison ignores the change counter, the undo stack and
 //! `AppCtx::warnings` (they are not part of the document), and it
 //! normalises writer-managed spellings the way
-//! `apps/ferrogram/tests/flowchart.rs` does (`Preserved` attribute
+//! `apps/larrygram/tests/flowchart.rs` does (`Preserved` attribute
 //! order, preserved `Rel` children, a cell's `U` kind spelling, the
 //! volatile document properties). Numbers fold to 12 significant
 //! digits ([`rounded`]): a re-route pass re-derives a **free**
@@ -55,10 +55,10 @@ use support::dispatch;
 
 use std::collections::{BTreeSet, HashMap};
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, CommandId, CommandStatus, Invocation, Registry, Source};
-use ferrogram_model::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, CommandId, CommandStatus, Invocation, Registry, Source};
+use larrygram_model::{
     Cell, CellName, CellValue, Document, MasterId, PageId, Preserved, Row, Section, SectionName,
     Shape, ShapeId, Sheet, XmlChild, XmlNode,
 };
@@ -73,7 +73,7 @@ fn cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -1080,8 +1080,8 @@ const NON_EDITING: &[(&str, &str)] = &[
     ("view.toggle_grid", "view state only (ADR 0040 rule 3)"),
     ("view.rulers", "view state only (ADR 0040 rule 3)"),
     ("view.units", "view state only (ADR 0040 rule 3)"),
-    ("view.ui_layout.visio_2016", "layout choice only (ADR 0032)"),
-    ("view.ui_layout.visio_365", "layout choice only (ADR 0032)"),
+    ("view.ui_layout.panel_2016", "layout choice only (ADR 0032)"),
+    ("view.ui_layout.panel_365", "layout choice only (ADR 0032)"),
     ("page.next", "active-page navigation, no edit"),
     ("page.previous", "active-page navigation, no edit"),
     ("edit.select", "selection only (P5-16)"),

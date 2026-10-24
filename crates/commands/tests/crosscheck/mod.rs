@@ -5,7 +5,7 @@
 //! file with `#[path = "crosscheck/mod.rs"] mod helpers;`. It holds what
 //! they share: the corpus discovery convention of the workspace (the
 //! fetched corpus is never committed, ADR 0005; the tests self-skip
-//! with a message and fail instead when `FERROGRAM_REQUIRE_CORPUS=1`
+//! with a message and fail instead when `LARRYGRAM_REQUIRE_CORPUS=1`
 //! is set) and the walk over every cell of a document, with the report
 //! spelling of its address.
 //!
@@ -22,9 +22,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use ferrogram_model::{Cell, Document, RowTarget, Sheet, SheetRef};
-use ferrogram_shapesheet::CellAddress;
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_model::{Cell, Document, RowTarget, Sheet, SheetRef};
+use larrygram_shapesheet::CellAddress;
+use larrygram_vsdx::{Limits, read_document};
 
 /// The corpus directory with the real `.vsdx` packages (fetched).
 pub fn corpus_dir() -> PathBuf {
@@ -51,7 +51,7 @@ pub fn corpus_files() -> Vec<PathBuf> {
 
 /// The workspace's corpus convention: returns `true` when the calling
 /// test must return early (the corpus is absent), printing why, and
-/// failing instead when `FERROGRAM_REQUIRE_CORPUS=1` makes the corpus
+/// failing instead when `LARRYGRAM_REQUIRE_CORPUS=1` makes the corpus
 /// mandatory.
 pub fn skip_without_corpus(files: &[PathBuf]) -> bool {
     if !files.is_empty() {
@@ -59,8 +59,8 @@ pub fn skip_without_corpus(files: &[PathBuf]) -> bool {
     }
     eprintln!("skipping: corpus/vsdx is absent; run `cargo xtask corpus`");
     assert!(
-        std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-        "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+        std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+        "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
     );
     true
 }

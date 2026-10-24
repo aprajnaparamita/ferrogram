@@ -13,10 +13,10 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, CommandError, Registry};
-use ferrogram_model::{Document, PageId, Shape, ShapeId};
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, CommandError, Registry};
+use larrygram_model::{Document, PageId, Shape, ShapeId};
 
 /// A document with two pages and one shape on the first.
 fn fixture() -> (AppCtx, Registry) {

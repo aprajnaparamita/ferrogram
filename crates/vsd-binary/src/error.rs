@@ -33,8 +33,8 @@ pub enum Error {
         /// The cap.
         max: u64,
     },
-    /// A [`ferrogram_model`] operation failed while mapping.
-    Model(ferrogram_model::Error),
+    /// A [`larrygram_model`] operation failed while mapping.
+    Model(larrygram_model::Error),
     /// The operation is not implemented yet (an interface stub of task
     /// P8-01; the Phase 8 tasks replace every stub).
     NotImplemented,
@@ -59,8 +59,8 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-impl From<ferrogram_model::Error> for Error {
-    fn from(e: ferrogram_model::Error) -> Self {
+impl From<larrygram_model::Error> for Error {
+    fn from(e: larrygram_model::Error) -> Self {
         Error::Model(e)
     }
 }
@@ -93,8 +93,8 @@ mod tests {
             "limit `max_chunks` exceeded: 9 > 8"
         );
         assert_eq!(
-            Error::Model(ferrogram_model::Error::UnknownPage(
-                ferrogram_model::PageId { index: 3 }
+            Error::Model(larrygram_model::Error::UnknownPage(
+                larrygram_model::PageId { index: 3 }
             ))
             .to_string(),
             "model error: unknown page id 3"
@@ -104,13 +104,13 @@ mod tests {
 
     #[test]
     fn model_errors_convert() {
-        let converted = Error::from(ferrogram_model::Error::UnknownPage(
-            ferrogram_model::PageId { index: 3 },
+        let converted = Error::from(larrygram_model::Error::UnknownPage(
+            larrygram_model::PageId { index: 3 },
         ));
         assert_eq!(
             converted,
-            Error::Model(ferrogram_model::Error::UnknownPage(
-                ferrogram_model::PageId { index: 3 }
+            Error::Model(larrygram_model::Error::UnknownPage(
+                larrygram_model::PageId { index: 3 }
             ))
         );
     }

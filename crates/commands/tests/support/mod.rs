@@ -1,24 +1,24 @@
 //! Shared test helpers (task P5-19).
 //!
-//! `dispatch` is a thin wrapper over [`ferrogram_commands::dispatch`],
+//! `dispatch` is a thin wrapper over [`larrygram_commands::dispatch`],
 //! the one dispatch-and-push seam (review F3): the test suites must not
 //! re-implement the undo-step recording of [`Outcome::edit`].
 
 #![allow(dead_code, clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_commands::{
+use larrygram_commands::{
     AppCtx, Args, CommandError, CommandId, Invocation, Outcome, Registry, Source,
 };
 
 /// One command the way the shell dispatches it: the run and its
-/// undo-step recording live in [`ferrogram_commands::dispatch`].
+/// undo-step recording live in [`larrygram_commands::dispatch`].
 pub fn dispatch(
     ctx: &mut AppCtx,
     registry: &Registry,
     id: &str,
     args: Args,
 ) -> Result<Outcome, CommandError> {
-    ferrogram_commands::dispatch(
+    larrygram_commands::dispatch(
         registry,
         ctx,
         &CommandId::intern(id).expect("id"),

@@ -10,11 +10,11 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{ActiveTool, AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Registry, Source};
-use ferrogram_geom::Point;
-use ferrogram_model::{
+use larrygram_commands::app::{ActiveTool, AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{ArgValue, Args, CommandError, CommandId, Invocation, Registry, Source};
+use larrygram_geom::Point;
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Page, PageId, Preserved, Row, Section,
     SectionName, Shape, ShapeId,
 };
@@ -24,7 +24,7 @@ fn cell(name: &str, value: f64) -> Cell {
         name: CellName::new(name),
         formula: Some(format!("{value}")),
         value: Some(CellValue::Number(value)),
-        unit: ferrogram_geom::Unit::Inches,
+        unit: larrygram_geom::Unit::Inches,
         preserved: Preserved::new(),
     }
 }
@@ -161,8 +161,8 @@ fn connector_page_points(ctx: &AppCtx, visio_id: i32) -> Vec<Point> {
         .rows
         .iter()
         .filter_map(|row| match row {
-            ferrogram_model::GeometryRow::MoveTo { x, y }
-            | ferrogram_model::GeometryRow::LineTo { x, y } => {
+            larrygram_model::GeometryRow::MoveTo { x, y }
+            | larrygram_model::GeometryRow::LineTo { x, y } => {
                 Some(Point::new(x + offset.x, y + offset.y))
             }
             _ => None,
@@ -516,10 +516,10 @@ fn a_reroute_route_failure_is_a_warning_not_an_edit_failure() {
             let mut connect = Connect::new();
             connect.from_sheet = 3;
             connect.from_cell = "BeginX".to_owned();
-            connect.from_part = ferrogram_model::mutate::VIS_BEGIN;
+            connect.from_part = larrygram_model::mutate::VIS_BEGIN;
             connect.to_sheet = 1;
             connect.to_cell = "PinX".to_owned();
-            connect.to_part = ferrogram_model::mutate::VIS_WHOLE_SHAPE;
+            connect.to_part = larrygram_model::mutate::VIS_WHOLE_SHAPE;
             page.connects.push(connect);
         }
         let target = session

@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-commands"
+name = "larrygram-commands"
 description = "Command registry, undo/redo and selection"
 version.workspace = true
 edition.workspace = true
@@ -12,15 +12,15 @@ publish = false
 # and takes its ids and layout kinds from the ui-spec data (ADRs 0006, 0029).
 # `serde` is for the persisted `Settings` only (ADR 0029); `serde_json`
 # writes the `file.inspect` JSON summary. The `commands.yaml` stub rows
-# come through `ferrogram-ui-spec`'s loader (one parse path, P4-15).
+# come through `larrygram-ui-spec`'s loader (one parse path, P4-15).
 # Licences checked by cargo deny.
-ferrogram-geom = { path = "../geom" }
-ferrogram-model = { path = "../model" }
-ferrogram-render = { path = "../render" }
+larrygram-geom = { path = "../geom" }
+larrygram-model = { path = "../model" }
+larrygram-render = { path = "../render" }
 # The recalc hook after an edit (ADR 0056) drives the ShapeSheet engine.
-ferrogram-shapesheet = { path = "../shapesheet" }
-ferrogram-ui-spec = { path = "../ui-spec" }
-ferrogram-vsdx = { path = "../vsdx" }
+larrygram-shapesheet = { path = "../shapesheet" }
+larrygram-ui-spec = { path = "../ui-spec" }
+larrygram-vsdx = { path = "../vsdx" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

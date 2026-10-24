@@ -24,7 +24,7 @@
 //! - A non-finite magnitude never stores as `inf`: it is `#NUM!` in both
 //!   directions (P3-11/P3-16, ADR 0052).
 
-use ferrogram_model::{CellValue, Color};
+use larrygram_model::{CellValue, Color};
 
 use crate::Error;
 use crate::units::Unit;
@@ -119,7 +119,7 @@ pub struct CachedValue {
     /// The cached value, in canonical units (ADR 0011).
     pub value: CellValue,
     /// The unit the cell records (`U=` spelling source).
-    pub unit: ferrogram_geom::Unit,
+    pub unit: larrygram_geom::Unit,
 }
 
 /// The shortest decimal spelling of a number that parses back to the same
@@ -243,18 +243,18 @@ pub(crate) fn parse_list(raw: &str) -> Vec<Value> {
     raw.split(';').map(parse_list_element).collect()
 }
 
-/// The [`ferrogram_geom::Unit`] a number's unit records in a cell: the
+/// The [`larrygram_geom::Unit`] a number's unit records in a cell: the
 /// file's own unit when the model carries it, else the family's canonical
 /// unit (inches, radians, percent), and the plain number for the
 /// dimensionless and duration families (the model has no duration unit).
-fn cached_unit(unit: Unit) -> ferrogram_geom::Unit {
+fn cached_unit(unit: Unit) -> larrygram_geom::Unit {
     unit.to_geom().unwrap_or_else(|_| match unit.family() {
         Ok(crate::units::UnitFamily::Length) | Ok(crate::units::UnitFamily::Typographic) => {
-            ferrogram_geom::Unit::Inches
+            larrygram_geom::Unit::Inches
         }
-        Ok(crate::units::UnitFamily::Angle) => ferrogram_geom::Unit::Radians,
-        Ok(crate::units::UnitFamily::Ratio) => ferrogram_geom::Unit::Percent,
-        _ => ferrogram_geom::Unit::Unitsless,
+        Ok(crate::units::UnitFamily::Angle) => larrygram_geom::Unit::Radians,
+        Ok(crate::units::UnitFamily::Ratio) => larrygram_geom::Unit::Percent,
+        _ => larrygram_geom::Unit::Unitsless,
     })
 }
 
@@ -263,7 +263,7 @@ impl Value {
     ///
     /// A number becomes [`CellValue::Number`] in canonical units and
     /// records the unit spelling of [`Unit::to_geom`]; every non-numeric
-    /// kind records [`ferrogram_geom::Unit::Unitsless`] (the P2-14 unit
+    /// kind records [`larrygram_geom::Unit::Unitsless`] (the P2-14 unit
     /// drop). A non-finite magnitude becomes [`CellValue::Error`] `#NUM!`.
     pub fn to_cached(&self) -> Result<CachedValue, Error> {
         let cached = match self {
@@ -271,7 +271,7 @@ impl Value {
                 if !number.magnitude.is_finite() {
                     CachedValue {
                         value: CellValue::Error(ErrorCode::Num.as_str().to_owned()),
-                        unit: ferrogram_geom::Unit::Unitsless,
+                        unit: larrygram_geom::Unit::Unitsless,
                     }
                 } else {
                     let magnitude = number.unit.to_canonical(number.magnitude)?;
@@ -283,23 +283,23 @@ impl Value {
             }
             Value::Str(text) => CachedValue {
                 value: CellValue::Str(text.clone()),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
             },
             Value::Bool(flag) => CachedValue {
                 value: CellValue::Bool(*flag),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
             },
             Value::Color(color) => CachedValue {
                 value: CellValue::Color(*color),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
             },
             Value::List(entries) => CachedValue {
                 value: CellValue::List(list_raw(entries)),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
             },
             Value::Err(code) => CachedValue {
                 value: CellValue::Error(code.as_str().to_owned()),
-                unit: ferrogram_geom::Unit::Unitsless,
+                unit: larrygram_geom::Unit::Unitsless,
             },
         };
         Ok(cached)
@@ -312,7 +312,7 @@ impl Value {
     /// converted back into `unit` (`V='11.69' U='MM'` reads as 297 mm).
     /// A non-finite number reads as `#NUM!` and a cached error keeps its
     /// text. The unit of a non-numeric kind is ignored (the P2-14 drop).
-    pub fn from_cached(value: &CellValue, unit: ferrogram_geom::Unit) -> Result<Value, Error> {
+    pub fn from_cached(value: &CellValue, unit: larrygram_geom::Unit) -> Result<Value, Error> {
         let value = match value {
             CellValue::Number(magnitude) => {
                 if !magnitude.is_finite() {
@@ -403,7 +403,7 @@ mod tests {
             .to_cached()
             .expect("to_cached never fails");
         assert_eq!(cached.value, CellValue::Number(1.0));
-        assert_eq!(cached.unit, ferrogram_geom::Unit::Points);
+        assert_eq!(cached.unit, larrygram_geom::Unit::Points);
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod tests {
             cached.value,
             CellValue::Number(core::f64::consts::PI / 10_800.0)
         );
-        assert_eq!(cached.unit, ferrogram_geom::Unit::Radians);
+        assert_eq!(cached.unit, larrygram_geom::Unit::Radians);
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod tests {
         // is a 297 mm page written in inches (ADR 0011).
         let value = Value::from_cached(
             &CellValue::Number(11.69291338582677),
-            ferrogram_geom::Unit::Millimeters,
+            larrygram_geom::Unit::Millimeters,
         )
         .expect("from_cached never fails here");
         match value {
@@ -442,9 +442,9 @@ mod tests {
             .to_cached()
             .expect("to_cached never fails");
         assert_eq!(cached.value, CellValue::Error(String::from("#NUM!")));
-        assert_eq!(cached.unit, ferrogram_geom::Unit::Unitsless);
+        assert_eq!(cached.unit, larrygram_geom::Unit::Unitsless);
         assert_eq!(
-            Value::from_cached(&CellValue::Number(f64::NAN), ferrogram_geom::Unit::Inches),
+            Value::from_cached(&CellValue::Number(f64::NAN), larrygram_geom::Unit::Inches),
             Ok(Value::Err(ErrorCode::Num))
         );
     }
@@ -459,9 +459,9 @@ mod tests {
             Value::Err(ErrorCode::Value),
         ] {
             let cached = value.to_cached().expect("to_cached never fails");
-            assert_eq!(cached.unit, ferrogram_geom::Unit::Unitsless, "{value:?}");
+            assert_eq!(cached.unit, larrygram_geom::Unit::Unitsless, "{value:?}");
             // The test that reads it back (P2-14).
-            let back = Value::from_cached(&cached.value, ferrogram_geom::Unit::Inches)
+            let back = Value::from_cached(&cached.value, larrygram_geom::Unit::Inches)
                 .expect("from_cached round-trips");
             assert_eq!(back, value, "{value:?}");
         }
@@ -472,7 +472,7 @@ mod tests {
         assert_eq!(
             Value::from_cached(
                 &CellValue::Error(String::from("#NAME?")),
-                ferrogram_geom::Unit::Inches
+                larrygram_geom::Unit::Inches
             ),
             Err(Error::Conversion("cached error value"))
         );
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn a_model_unit_without_a_formula_spelling_is_a_conversion_error() {
         assert_eq!(
-            Value::from_cached(&CellValue::Number(1.0), ferrogram_geom::Unit::Nanometers),
+            Value::from_cached(&CellValue::Number(1.0), larrygram_geom::Unit::Nanometers),
             Err(Error::Conversion("model unit has no formula spelling"))
         );
     }

@@ -6,7 +6,7 @@
 //! the same pattern, so the hand-rolled parsers cannot drift from the
 //! schema unnoticed.
 
-use ferrogram_ui_spec::{CommandId, FluentId};
+use larrygram_ui_spec::{CommandId, FluentId};
 use proptest::prelude::*;
 
 /// The `commandId` pattern of `ui-spec/schema.json`.

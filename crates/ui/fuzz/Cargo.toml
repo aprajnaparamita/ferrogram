@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-ui-fuzz"
+name = "larrygram-ui-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -10,13 +10,13 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.ferrogram-ui]
+[dependencies.larrygram-ui]
 path = ".."
 
-[dependencies.ferrogram-ui-spec]
+[dependencies.larrygram-ui-spec]
 path = "../../ui-spec"
 
-[dependencies.ferrogram-commands]
+[dependencies.larrygram-commands]
 path = "../../commands"
 
 # Prevent this from interfering with workspaces (the cargo-fuzz way).

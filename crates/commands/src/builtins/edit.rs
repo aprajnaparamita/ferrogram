@@ -20,12 +20,12 @@
 //! restores the cell entries directly, because `Document::write_cell`
 //! cannot express "no entry" or a formula-less literal.
 
-use ferrogram_geom::Size;
-use ferrogram_model::{
+use larrygram_geom::Size;
+use larrygram_model::{
     Cell, CellName, CellReader, CellValue, CellWrite, DetachedShapes, Document, DocumentedDefault,
     PageId, Row, RowTarget, Section, ShapeId, SheetRef, documented_default,
 };
-use ferrogram_shapesheet::CellAddress;
+use larrygram_shapesheet::CellAddress;
 
 use crate::app::{AppCtx, SessionId};
 use crate::edit::CompositeEdit;
@@ -60,17 +60,17 @@ pub(crate) fn document_mut(
 /// The literal formula of one number cell (ADR 0038): `0` for zero,
 /// the shortest round-trip spelling otherwise. `-0.0` folds to `"0"`.
 ///
-/// The model's one spelling rule, exported by `ferrogram_model` (task
+/// The model's one spelling rule, exported by `larrygram_model` (task
 /// P5-19 review F6: one spelling, one implementation — a local copy
 /// could diverge and make a redo write a different `F` than the first
 /// apply). Re-exported here under the command layer's name.
-pub(crate) use ferrogram_model::mutate::literal as number_literal;
+pub(crate) use larrygram_model::mutate::literal as number_literal;
 
 /// The exact cell entries a `Document::write_cell` of `cell` touches:
 /// the cell itself plus the cells the documented-defaults table derives
 /// from it by one multiplication (ADR 0038 rule 2).
 ///
-/// This mirrors the derived-cell rule of `ferrogram_model::mutate`
+/// This mirrors the derived-cell rule of `larrygram_model::mutate`
 /// (`DERIVED_CELLS`); the `a_width_write_refreshes_the_derived_cells`
 /// test pins the mirror against the model's behaviour.
 fn touched_cells(cell: &str) -> Vec<CellName> {
@@ -381,7 +381,7 @@ impl CellEdit {
                 let prior = property_prior(doc, shape, key)?;
                 let dirty = vec![CellAddress::in_row(
                     sheet,
-                    ferrogram_model::SectionName::from_static("Property"),
+                    larrygram_model::SectionName::from_static("Property"),
                     prior.target,
                     CellName::from_static("Value"),
                 )];
@@ -474,7 +474,7 @@ impl Edit for CellEdit {
                     .map_err(model_error)?;
                 self.dirty = vec![CellAddress::in_row(
                     self.sheet,
-                    ferrogram_model::SectionName::from_static("Property"),
+                    larrygram_model::SectionName::from_static("Property"),
                     written,
                     CellName::from_static("Value"),
                 )];
@@ -844,12 +844,12 @@ fn check_sizes(from: Size, to: Size) -> Result<(), CommandError> {
         || from.width <= 0.0
         || from.height <= 0.0
     {
-        return Err(model_error(ferrogram_model::Error::BadCell(
+        return Err(model_error(larrygram_model::Error::BadCell(
             "zero or non-finite source size",
         )));
     }
     if !to.width.is_finite() || !to.height.is_finite() || to.width < 0.0 || to.height < 0.0 {
-        return Err(model_error(ferrogram_model::Error::BadCell(
+        return Err(model_error(larrygram_model::Error::BadCell(
             "negative or non-finite target size",
         )));
     }
@@ -865,7 +865,7 @@ fn check_sizes(from: Size, to: Size) -> Result<(), CommandError> {
 /// because the model's position rule of `master_shape` is not public.
 fn geometry_source(doc: &Document, shape: ShapeId) -> Vec<Section> {
     const MAX_CHAIN: usize = 32;
-    let geometry = |entity: &ferrogram_model::Shape| -> Vec<Section> {
+    let geometry = |entity: &larrygram_model::Shape| -> Vec<Section> {
         entity
             .sheet
             .sections
@@ -882,7 +882,7 @@ fn geometry_source(doc: &Document, shape: ShapeId) -> Vec<Section> {
         }
         chained = entity.master;
     }
-    let mut seen: Vec<ferrogram_model::MasterId> = Vec::new();
+    let mut seen: Vec<larrygram_model::MasterId> = Vec::new();
     for _ in 0..MAX_CHAIN {
         let Some(master) = chained else {
             break;
@@ -1372,7 +1372,7 @@ pub(super) fn run_deselect(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcom
 mod tests {
     use super::*;
     use crate::app::{DocumentSession, Settings};
-    use ferrogram_model::{CellValue, Preserved, Row, SectionName, Shape};
+    use larrygram_model::{CellValue, Preserved, Row, SectionName, Shape};
 
     /// One numeric cell with a literal formula and its cached value.
     fn number_cell(name: &str, value: f64) -> Cell {
@@ -1380,7 +1380,7 @@ mod tests {
             name: CellName::new(name),
             formula: Some(number_literal(value)),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }
@@ -1403,7 +1403,7 @@ mod tests {
                     name: CellName::new(name),
                     formula: Some(number_literal(value)),
                     value: Some(CellValue::Number(value)),
-                    unit: ferrogram_geom::Unit::Inches,
+                    unit: larrygram_geom::Unit::Inches,
                     preserved: Preserved::new(),
                 });
             }
@@ -1422,7 +1422,7 @@ mod tests {
                         name: CellName::new(cell),
                         formula: Some(number_literal(value)),
                         value: Some(CellValue::Number(value)),
-                        unit: ferrogram_geom::Unit::Inches,
+                        unit: larrygram_geom::Unit::Inches,
                         preserved: Preserved::new(),
                     });
                 }
@@ -1842,7 +1842,7 @@ mod tests {
             name: CellName::new(name),
             formula: Some(number_literal(value)),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Unitsless,
+            unit: larrygram_geom::Unit::Unitsless,
             preserved: Preserved::new(),
         };
         let mut cells = vec![entry("kept", 1.0), entry("gone", 2.0)];
@@ -2125,7 +2125,7 @@ mod tests {
     /// any, else the nearest master rung's rows (the ADR 0019 union).
     #[test]
     fn geometry_source_falls_back_to_the_master_rung() {
-        use ferrogram_model::{Master, MasterId, SectionName};
+        use larrygram_model::{Master, MasterId, SectionName};
         let (mut ctx, session, page, shapes) = fixture(1);
         let doc = document_mut(&mut ctx, session).expect("doc");
         // No own rows and no master: no source at all.
@@ -2242,7 +2242,7 @@ mod tests {
                 name: CellName::new("A"),
                 formula: Some(String::from("Width")),
                 value: Some(CellValue::Number(1.0)),
-                unit: ferrogram_geom::Unit::Inches,
+                unit: larrygram_geom::Unit::Inches,
                 preserved: Preserved::new(),
             },
         ];
@@ -2265,7 +2265,7 @@ mod tests {
             name: CellName::new("X"),
             formula: Some(String::from("Width")),
             value: Some(CellValue::Number(1.0)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }];
         let mut section = Section::new(SectionName::from_static("Geometry"));
@@ -2649,7 +2649,7 @@ mod tests {
         });
         deep.sheet.sections.push(rows);
         let deep = doc.add_shape(deep);
-        let mut master2 = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 20);
+        let mut master2 = larrygram_model::Master::new(larrygram_model::MasterId { index: 0 }, 20);
         master2.shapes = vec![deep];
         doc.masters.push(master2);
 
@@ -2658,9 +2658,9 @@ mod tests {
         let plain = doc.add_shape(Shape::new(ShapeId { index: 0 }, 11));
         let chained = doc.add_shape(Shape::new(ShapeId { index: 0 }, 12));
         if let Some(entity) = doc.shape_mut(chained) {
-            entity.master = Some(ferrogram_model::MasterId { index: 0 });
+            entity.master = Some(larrygram_model::MasterId { index: 0 });
         }
-        let mut master1 = ferrogram_model::Master::new(ferrogram_model::MasterId { index: 1 }, 21);
+        let mut master1 = larrygram_model::Master::new(larrygram_model::MasterId { index: 1 }, 21);
         master1.shapes = vec![plain, chained];
         doc.masters.push(master1);
 
@@ -2668,7 +2668,7 @@ mod tests {
         // master.
         let instance = doc.add_shape(Shape::new(ShapeId { index: 0 }, 13));
         if let Some(entity) = doc.shape_mut(instance) {
-            entity.master = Some(ferrogram_model::MasterId { index: 1 });
+            entity.master = Some(larrygram_model::MasterId { index: 1 });
         }
 
         let rows = geometry_source(doc, instance);

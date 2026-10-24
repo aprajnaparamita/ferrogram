@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-render-fuzz"
+name = "larrygram-render-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -10,13 +10,13 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.ferrogram-render]
+[dependencies.larrygram-render]
 path = ".."
 
-[dependencies.ferrogram-model]
+[dependencies.larrygram-model]
 path = "../../model"
 
-[dependencies.ferrogram-vsdx]
+[dependencies.larrygram-vsdx]
 path = "../../vsdx"
 
 # Prevent this from interfering with workspaces (the cargo-fuzz way).

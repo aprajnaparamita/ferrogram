@@ -22,22 +22,22 @@ The exit criterion is "both layouts load and switch without a restart".
 
 ### The setting
 
-`Settings::ui_layout: ui_spec::LayoutKind` (`Visio2016` | `Visio365`).
-The default is **`Visio2016`**: the classic ribbon arrangement most Visio
+`Settings::ui_layout: ui_spec::LayoutKind` (`Panel2016` | `Panel365`).
+The default is **`Panel2016`**: the classic command bar arrangement most Visio
 users know, and the smaller layout (7,511 vs 9,985 YAML lines).
 
 ### Switching at runtime
 
 Two registry commands dispatch the switch like any other command:
 
-- `view.ui_layout.visio_2016`
-- `view.ui_layout.visio_365`
+- `view.ui_layout.panel_2016`
+- `view.ui_layout.panel_365`
 
-(Ids are Ferrogram-only; ADR 0028's extractor rule adds them to
+(Ids are Larrygram-only; ADR 0028's extractor rule adds them to
 `commands.yaml` with `mapping_confidence: unknown`.) Each is always
 enabled; executing one sets `Settings::ui_layout` and returns
-`Outcome { message: Some("Ribbon layout: ..."), .. }`. The shell rebuilds
-its ribbon widget from `LayoutSets::get(kind)` on the next frame. No
+`Outcome { message: Some("Panel layout: ..."), .. }`. The shell rebuilds
+its command-bar widget from `LayoutSets::get(kind)` on the next frame. No
 restart, no widget state beyond the active tab index (which resets to the
 first tab when the id set changes). The same two commands appear in the
 View/Options dialog (`ui::settings::show_options`) as a radio choice; the
@@ -47,9 +47,9 @@ dialog edits `Settings` and marks the store dirty.
 mutate `Settings` itself. `show_options` returns the `Intent`s for the
 rows the user changed and the shell dispatches them through the
 registry like any other control: the layout radios dispatch
-`view.ui_layout.visio_2016` / `view.ui_layout.visio_365`, the grid and
+`view.ui_layout.panel_2016` / `view.ui_layout.panel_365`, the grid and
 rulers checkboxes dispatch `view.toggle_grid` / `view.rulers`, and the
-units combo dispatches the Ferrogram-only `view.units` with a `units`
+units combo dispatches the Larrygram-only `view.units` with a `units`
 argument. The dialog itself opens through `app.office.center.options`,
 whose handler returns `UiRequest::ShowOptions` (no shell intercept).
 `Settings::show_grid` and `Settings::show_rulers` are the defaults for

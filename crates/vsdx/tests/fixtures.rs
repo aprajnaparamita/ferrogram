@@ -11,7 +11,7 @@ mod common;
 use std::io::Cursor;
 
 use common::{COMMITTED_FIXTURES, Fixture, Malformed, build, file_name, path};
-use ferrogram_vsdx::Limits;
+use larrygram_vsdx::Limits;
 use zip::ZipArchive;
 
 /// Opens the bytes as a zip archive.

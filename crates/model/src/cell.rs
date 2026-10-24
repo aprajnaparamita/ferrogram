@@ -1,6 +1,6 @@
 //! ShapeSheet cells: formula, cached value and unit (ADR 0011).
 
-use ferrogram_geom::Unit;
+use larrygram_geom::Unit;
 
 use crate::name::CellName;
 use crate::raw::Preserved;
@@ -49,7 +49,7 @@ pub enum CellValue {
 /// separately (ADR 0011).
 ///
 /// Phase 2 stores the formula as its source string; formula parsing belongs
-/// to `ferrogram-shapesheet` (ADR 0014).
+/// to `larrygram-shapesheet` (ADR 0014).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cell {
     /// The cell name, e.g. `"PinX"`.

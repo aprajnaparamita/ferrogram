@@ -47,11 +47,11 @@ jobs:
       - name: Gate
         if: runner.os != 'Windows'
         env:
-          FERROGRAM_REQUIRE_CORPUS: "1"
+          LARRYGRAM_REQUIRE_CORPUS: "1"
         run: cargo xtask gate
 
       - name: Gate (Windows, no fuzz)
         if: runner.os == 'Windows'
         env:
-          FERROGRAM_REQUIRE_CORPUS: "1"
+          LARRYGRAM_REQUIRE_CORPUS: "1"
         run: cargo xtask gate --skip fuzz

@@ -12,7 +12,7 @@ Work is done by several agents, on different models and harnesses (Claude Code, 
 
 - The master agent plans phases, writes task files `docs/tasks/<task-id>.md`, reviews and merges. It does not spawn sub-agents; the user launches each task session, pointing it at its task file.
 - Task ids: `P<phase>-<nn>`. Each task names a role (a file in `.claude/agents/`, readable by any harness), owned crates/files, inputs, outputs, interfaces and acceptance criteria.
-- Each task runs in a git worktree at `/Volumes/Dara/ferrogram/worktrees/<task-id>` on branch `agent/<task-id>`, with `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/<task-id>`.
+- Each task runs in a git worktree at `/Volumes/Dara/larrygram/worktrees/<task-id>` on branch `agent/<task-id>`, with `CARGO_TARGET_DIR=/Volumes/Dara/larrygram/target/<task-id>`.
 - Workers never commit to `main`. They rebase on `main`, fill the task's Result section, and stop. The master reviews (with reviewer/auditor tasks for phase gates) and merges.
 - Tasks that may run in parallel own disjoint crates/files; the master merges them sequentially and re-runs the gate after each merge.
 - `docs/STATUS.md` is the task board; only the master edits it on `main`.

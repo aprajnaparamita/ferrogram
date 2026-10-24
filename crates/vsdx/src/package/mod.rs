@@ -9,7 +9,7 @@ mod read;
 mod write;
 mod xml;
 
-use ferrogram_model::Preserved;
+use larrygram_model::Preserved;
 
 /// A part name inside the package, e.g. `"/visio/document.xml"`.
 ///
@@ -98,7 +98,7 @@ pub struct Relationship {
 pub enum PartData {
     /// An XML part, parsed into a preserved tree. Parts the model maps are
     /// also parsed into the model; this tree is what a write puts back.
-    Xml(ferrogram_model::XmlNode),
+    Xml(larrygram_model::XmlNode),
     /// A non-XML part (an image, a thumbnail, anything unknown).
     Binary(Vec<u8>),
 }

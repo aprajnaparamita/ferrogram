@@ -1,4 +1,4 @@
-# Fluent control ids that Ferrogram will not implement in the alpha.
+# Fluent control ids that Larrygram will not implement in the alpha.
 #
 # One id per line. Lines starting with `#` and blank lines are
 # ignored. Matched exactly against the Fluent id of every control,

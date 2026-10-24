@@ -10,7 +10,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use ferrogram_shapesheet::{BinaryOp, CellRef, Expr, ExprKind, Formula, parse};
+use larrygram_shapesheet::{BinaryOp, CellRef, Expr, ExprKind, Formula, parse};
 
 #[test]
 fn a_formula_keeps_its_source_verbatim() {
@@ -79,13 +79,13 @@ fn parsing_reads_a_formula_into_a_tree() {
 #[test]
 fn an_expression_carries_its_span_and_kind() {
     let expr = Expr {
-        span: ferrogram_shapesheet::Span::new(0, 1),
-        kind: ferrogram_shapesheet::ExprKind::Literal(ferrogram_shapesheet::Literal::Bool(true)),
+        span: larrygram_shapesheet::Span::new(0, 1),
+        kind: larrygram_shapesheet::ExprKind::Literal(larrygram_shapesheet::Literal::Bool(true)),
     };
     assert_eq!(expr.span.len(), 1);
     assert!(matches!(
         expr.kind,
-        ferrogram_shapesheet::ExprKind::Literal(ferrogram_shapesheet::Literal::Bool(true))
+        larrygram_shapesheet::ExprKind::Literal(larrygram_shapesheet::Literal::Bool(true))
     ));
 }
 

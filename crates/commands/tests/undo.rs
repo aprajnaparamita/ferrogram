@@ -16,12 +16,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     CommandError, CommandId, CompositeEdit, Edit, Invocation, Registry, SessionId, Source,
 };
-use ferrogram_model::Document;
+use larrygram_model::Document;
 
 /// An edit that records what it saw of the recording gate and pushes a
 /// nested edit while it runs (the P4-10/P4-15 hazard of ADR 0040).

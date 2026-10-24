@@ -1,6 +1,6 @@
 # Test fixture for crates/ui-spec. Not real Microsoft data.
 # The same Fluent controls as panel-2016.yaml, reorganised the way the
-# 365 ribbon differs from 2016 (Save on the Home tab, Connector in a
+# 365 tab_bar differs from 2016 (Save on the Home tab, Connector in a
 # Tools group, one 365-only control).
 schema_version: 1
 product: visio

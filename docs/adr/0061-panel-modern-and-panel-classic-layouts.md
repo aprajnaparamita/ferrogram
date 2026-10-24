@@ -178,7 +178,7 @@ layouts. The amended decision:
   `token`/`itemId` patterns in `layout-v2.schema.json` allow `-`.
 - `LayoutKind` is `ui_spec::v2::LayoutKind` with `PanelModern`,
   `PanelClassic`, `Panel2016` and `Panel365` (ids and `file_name`s
-  `panel-*.yaml`). The v1 `ui_spec::LayoutKind` is renamed away in
+  `pane-*.yaml`). The v1 `ui_spec::LayoutKind` is renamed away in
   task P7-00. `view.ui_layout.panel_classic` and
   `view.ui_layout.panel_modern` are the new registry ids; P7-00
   renames the two Phase 4 ids and the CLI values

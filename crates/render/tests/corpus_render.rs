@@ -7,12 +7,12 @@
 //! bad values warn and substitute); an `Err` or a panic fails. The
 //! corpus is fetched, never committed (ADR 0005): the test skips with a
 //! message when `corpus/vsdx/` is absent and fails instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set.
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set.
 
 mod common;
 
-use ferrogram_render::{PngOptions, SvgOptions, render_png, render_svg};
-use ferrogram_vsdx::{Limits, read_document};
+use larrygram_render::{PngOptions, SvgOptions, render_png, render_svg};
+use larrygram_vsdx::{Limits, read_document};
 
 #[test]
 fn every_corpus_file_renders_every_page_in_both_backends() {

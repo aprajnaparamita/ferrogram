@@ -89,7 +89,7 @@ now).
   it breaks the ADR 0048 identity and turns a save into an edit.
 - **Keep the `SKIP_RASTER`/`KNOWN_BLANK` markers and fill lazily in the
   app.** Rejected: the fill-in pass fixes the files for every consumer
-  (CLI, tests, panels) at one point.
+  (CLI, tests, panes) at one point.
 
 ## Amendments
 

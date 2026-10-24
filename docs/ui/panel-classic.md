@@ -29,7 +29,7 @@ From top to bottom:
    - first, previous, next and last page buttons;
    - the page tabs;
    - the horizontal scroll bar.
-6. **Status bar** (20 px): panels for width, height and angle of the
+6. **Status bar** (20 px): panes for width, height and angle of the
    selection on the left, and "Page n/m" on the right.
 
 The whole chrome (menu bar, toolbar rows and status bar) is one flat
@@ -101,7 +101,7 @@ choices for each mode are remembered separately.
   - an 11 px arrow part opens the `items`;
   - `split_recent` (Connector Tool, Text Tool) puts the last chosen
     child into the main part.
-- **Colour palettes** open a panel with headings ("Theme Colors",
+- **Colour palettes** open a popup with headings ("Theme Colors",
   "Standard Colors", "Recent Colors"), then a grid of swatches
   (`list: theme_colors`, ...), then "More … Colors…".
 - **Line palettes** (`palette`) show "No Line", a list of sample
@@ -157,7 +157,7 @@ choices for each mode are remembered separately.
 
 ## Status bar
 
-The status bar is a row of sunken panels. The left panels show the
-width, height and angle of the selection when there is one. The
-right-most panel shows "Page n/m". Panels are `chrome.background` with
+The status bar is a row of sunken segments. The left segments show
+the width, height and angle of the selection when there is one. The
+right-most segment shows "Page n/m". Segments are `chrome.background` with
 a 1 px darker inset edge.

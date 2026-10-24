@@ -4,11 +4,11 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_geom::{Point, SnapKind};
-use ferrogram_model::{CellName, CellValue, CellWrite, ShapeId, SheetRef, stencils};
-use ferrogram_render::OverlayMark;
-use ferrogram_ui::snap::{SnapSettings, Snapper};
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_geom::{Point, SnapKind};
+use larrygram_model::{CellName, CellValue, CellWrite, ShapeId, SheetRef, stencils};
+use larrygram_render::OverlayMark;
+use larrygram_ui::snap::{SnapSettings, Snapper};
 
 use crate::{CanvasRig, app_with_one_shape, screen, shape_number};
 
@@ -20,7 +20,7 @@ fn resized_master_instance() -> (AppCtx, ShapeId) {
         .into_iter()
         .find(|master| master.name_u == "Rectangle")
         .expect("the rectangle master");
-    let mut document = ferrogram_model::Document::new();
+    let mut document = larrygram_model::Document::new();
     let shape = stencils::instantiate(&mut document, &master);
     for (cell, value) in [
         ("Width", 3.0),

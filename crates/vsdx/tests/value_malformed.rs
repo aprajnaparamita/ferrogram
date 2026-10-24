@@ -14,8 +14,8 @@
 // The never-crash lints apply to non-test code only (clippy.toml).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_model::{CellValue, Preserved, QName, XmlAttribute, XmlChild, XmlNode};
-use ferrogram_vsdx::{
+use larrygram_model::{CellValue, Preserved, QName, XmlAttribute, XmlChild, XmlNode};
+use larrygram_vsdx::{
     ContentType, Error, Package, Part, PartData, PartName, Relationship, RelationshipId,
     TargetMode, to_model,
 };
@@ -115,7 +115,7 @@ const DRAWING_RELS: &[(&str, &str, &str)] = &[
 ];
 
 /// Reads the one shape cell of `attrs`' package.
-fn read_cell(attrs: &[(&str, &str)]) -> Result<ferrogram_model::Cell, Error> {
+fn read_cell(attrs: &[(&str, &str)]) -> Result<larrygram_model::Cell, Error> {
     let document = to_model(&package(&drawing_with_cell(attrs), DRAWING_RELS))?;
     let page = document.pages.first().expect("page");
     let shape = document
@@ -209,7 +209,7 @@ fn junk_colour_text_keeps_the_raw_text_as_a_string() {
     let cell = read_cell(&[("N", "FillForegnd"), ("U", "COLOR"), ("V", "#FF8000")]).expect("reads");
     assert_eq!(
         cell.value,
-        Some(CellValue::Color(ferrogram_model::Color::new(255, 128, 0)))
+        Some(CellValue::Color(larrygram_model::Color::new(255, 128, 0)))
     );
 }
 

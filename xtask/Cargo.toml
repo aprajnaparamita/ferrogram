@@ -1,6 +1,6 @@
 [package]
-name = "xtask"
-description = "Ferrogram developer tasks: quality gate, coverage ratchet, layering check"
+name = "larrygram-xtask"
+description = "Larrygram developer tasks: quality gate, coverage ratchet, layering check"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,9 +20,9 @@ roxmltree = "0.21.1"
 
 # P4-09: the parity matrix derives `implemented` rows from the builtin
 # registry (ADR 0037). xtask is L9 and may depend on any lower layer.
-ferrogram-commands = { path = "../crates/commands" }
+larrygram-commands = { path = "../crates/commands" }
 
-# P1-03: Fluent UI ribbon extractor (ADR 0007, ADR 0009).
+# P1-03: Fluent UI tab_bar extractor (ADR 0007, ADR 0009).
 calamine = "0.36"        # MIT; xlsx reader (>=0.36 pulls in quick-xml >=0.41
                          # which clears cargo-deny's RUSTSEC advisories
                          # RUSTSEC-2024-0001 and RUSTSEC-2025-0004)
@@ -39,7 +39,7 @@ serde-saphyr = "1.3"     # MIT; pure-Rust YAML (replaces archived serde_yaml and
 # Path dev-dep: prove the extractor and the runtime loader agree on
 # the ui-spec format (P1-03 review M2). xtask is outside the layer
 # rules (AGENTS.md section 6), so it may depend on crates/ui-spec.
-ferrogram-ui-spec = { path = "../crates/ui-spec" }
+larrygram-ui-spec = { path = "../crates/ui-spec" }
 # The same zip major as crates/vsdx (calamine still pins 8.x); the P1-08
 # fixture builder writes tiny .xlsx workbooks for the extract --check
 # tests. Default features off: they pull in bzip2/zstd support whose

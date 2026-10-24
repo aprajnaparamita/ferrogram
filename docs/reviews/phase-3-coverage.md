@@ -2,7 +2,7 @@
 
 - Task: P3-13 (coverage-auditor), 2026-10-15
 - Scope: `main` at `255d730` (after P3-11), with the Phase 3 code in
-  `geom`, `model`, `render`, `text`, `vsdx` and `ferrogram-cli`.
+  `geom`, `model`, `render`, `text`, `vsdx` and `larrygram-cli`.
 - Verdict: **PASS** — every crate with instrumented lines is above its
   threshold and above its ratchet. Findings: 0 blocker, 5 major, 10 minor.
 
@@ -10,14 +10,14 @@
 
 - `cargo xtask coverage` (which runs
   `cargo llvm-cov --workspace --all-features --json --summary-only`) in the
-  P3-13 worktree with `CARGO_TARGET_DIR=/Volumes/Dara/ferrogram/target/P3-13`.
+  P3-13 worktree with `CARGO_TARGET_DIR=/Volumes/Dara/larrygram/target/P3-13`.
   All tests green in that run (230 xtask tests plus every crate's tests).
 - `cargo llvm-cov report --lcov` for exact per-line execution counts.
   Findings below list only lines with a count of 0, i.e. lines no test
   executes at all. `cargo-llvm-cov 0.9.1`.
 - The corpus is present in the worktree (`corpus/vsdx`, `corpus/vsd`), so the
   corpus tests ran and their execution counts are included.
-- Everything large stayed on `/Volumes/Dara/ferrogram/` (worktree, target dir);
+- Everything large stayed on `/Volumes/Dara/larrygram/` (worktree, target dir);
   this audit changed no code.
 
 ## Per-crate table
@@ -28,31 +28,31 @@ percentage from `docs/progress/phase-2.md`.
 
 | Crate | Lines | Covered | Pct | Threshold | Ratchet | Phase 2 | Pass/fail |
 |---|---:|---:|---:|---:|---:|---:|---|
-| ferrogram | 9 | 6 | 66.7 | 50.0 | 66.6 | 66.7 | pass |
-| ferrogram-cli | 1322 | 1256 | 95.0 | 50.0 | 66.6 | 66.7 | pass |
-| ferrogram-commands | 0 | 0 | n/a | 85.0 | — | n/a | pass (empty) |
-| ferrogram-control | 0 | 0 | n/a | 50.0 | — | n/a | pass (empty) |
-| ferrogram-geom | 1677 | 1677 | 100.0 | 85.0 | 100.0 | 100.0 | pass |
-| ferrogram-model | 6633 | 6613 | 99.7 | 85.0 | 99.7 | 99.7 | pass |
-| ferrogram-render | 5327 | 5027 | 94.4 | 75.0 | — | new | pass |
-| ferrogram-shapesheet | 45 | 45 | 100.0 | 85.0 | 100.0 | 100.0 | pass |
-| ferrogram-text | 1677 | 1627 | 97.0 | 75.0 | — | new | pass |
-| ferrogram-ui | 0 | 0 | n/a | 50.0 | — | n/a | pass (empty) |
-| ferrogram-ui-spec | 1738 | 1726 | 99.3 | 85.0 | 99.3 | 99.3 | pass |
-| ferrogram-vsd-binary | 0 | 0 | n/a | 85.0 | — | n/a | pass (empty) |
-| ferrogram-vsdx | 7188 | 7039 | 97.9 | 85.0 | 97.7 | 97.8 | pass |
-| ferrogram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | pass (no threshold) |
+| larrygram | 9 | 6 | 66.7 | 50.0 | 66.6 | 66.7 | pass |
+| larrygram-cli | 1322 | 1256 | 95.0 | 50.0 | 66.6 | 66.7 | pass |
+| larrygram-commands | 0 | 0 | n/a | 85.0 | — | n/a | pass (empty) |
+| larrygram-control | 0 | 0 | n/a | 50.0 | — | n/a | pass (empty) |
+| larrygram-geom | 1677 | 1677 | 100.0 | 85.0 | 100.0 | 100.0 | pass |
+| larrygram-model | 6633 | 6613 | 99.7 | 85.0 | 99.7 | 99.7 | pass |
+| larrygram-render | 5327 | 5027 | 94.4 | 75.0 | — | new | pass |
+| larrygram-shapesheet | 45 | 45 | 100.0 | 85.0 | 100.0 | 100.0 | pass |
+| larrygram-text | 1677 | 1627 | 97.0 | 75.0 | — | new | pass |
+| larrygram-ui | 0 | 0 | n/a | 50.0 | — | n/a | pass (empty) |
+| larrygram-ui-spec | 1738 | 1726 | 99.3 | 85.0 | 99.3 | 99.3 | pass |
+| larrygram-vsd-binary | 0 | 0 | n/a | 85.0 | — | n/a | pass (empty) |
+| larrygram-vsdx | 7188 | 7039 | 97.9 | 85.0 | 97.7 | 97.8 | pass |
+| larrygram-web | 2 | 0 | 0.0 | — | 0.0 | 0.0 | pass (no threshold) |
 | xtask | 9232 | 8457 | 91.6 | — | 91.6 | 91.6 | pass |
 
 No crate is below its threshold or below its ratchet, so there is no blocker.
-`ferrogram-geom` and `ferrogram-shapesheet` stay at 100%;
-`ferrogram-commands`, `ferrogram-control`, `ferrogram-ui` and
-`ferrogram-vsd-binary` are still empty placeholders.
+`larrygram-geom` and `larrygram-shapesheet` stay at 100%;
+`larrygram-commands`, `larrygram-control`, `larrygram-ui` and
+`larrygram-vsd-binary` are still empty placeholders.
 
 Comparison with Phase 2: `vsdx` grew (+0.1) while gaining Phase 3 code,
 `model` and `ui-spec` are flat, `xtask` is flat. The apps changed shape:
-`ferrogram-cli` went from 9 stub lines (66.7%) to 1322 lines (95.0%), and
-`ferrogram-render` (94.4%) and `ferrogram-text` (97.0%) are new, both well
+`larrygram-cli` went from 9 stub lines (66.7%) to 1322 lines (95.0%), and
+`larrygram-render` (94.4%) and `larrygram-text` (97.0%) are new, both well
 above their 75% thresholds.
 
 ## Recommended `[ratchet]` for the end of Phase 3
@@ -63,29 +63,29 @@ one decimal, empty crates omitted):
 
 ```toml
 [ratchet]
-ferrogram = 66.6
-ferrogram-cli = 95.0
-ferrogram-geom = 100.0
-ferrogram-model = 99.6
-ferrogram-render = 94.3
-ferrogram-shapesheet = 100.0
-ferrogram-text = 97.0
-ferrogram-ui-spec = 99.3
-ferrogram-vsdx = 97.9
-ferrogram-web = 0.0
+larrygram = 66.6
+larrygram-cli = 95.0
+larrygram-geom = 100.0
+larrygram-model = 99.6
+larrygram-render = 94.3
+larrygram-shapesheet = 100.0
+larrygram-text = 97.0
+larrygram-ui-spec = 99.3
+larrygram-vsdx = 97.9
+larrygram-web = 0.0
 xtask = 91.6
 ```
 
 Notes:
 
 - The floored values are one tenth below the displayed table numbers where the
-  measured percentage does not land on a tenth: `ferrogram-model` 99.6
-  (99.698% measured), `ferrogram-render` 94.3 (94.368%).
-- `ferrogram-model` is the one crate where the floor (99.6) is below the
+  measured percentage does not land on a tenth: `larrygram-model` 99.6
+  (99.698% measured), `larrygram-render` 94.3 (94.368%).
+- `larrygram-model` is the one crate where the floor (99.6) is below the
   current ratchet (99.7). The current gate passes only because `check` allows
   0.05 of float noise. Writing 99.6 is honest; writing 99.7 again would keep
   relying on the epsilon.
-- `ferrogram-render` and `ferrogram-text` get their first ratchets now.
+- `larrygram-render` and `larrygram-text` get their first ratchets now.
 
 ## Findings
 
@@ -132,9 +132,9 @@ None.
    not.
 
 5. **The CLI's usage-error paths and warning report formatting are
-   untested.** `apps/ferrogram-cli/src/cli/parse.rs:134-141`, `:183-190`
+   untested.** `apps/larrygram-cli/src/cli/parse.rs:134-141`, `:183-190`
    (unexpected argument, unknown option — the first thing hostile command
-   lines hit), `apps/ferrogram-cli/src/cli/exec.rs:232-239` (warning-kind
+   lines hit), `apps/larrygram-cli/src/cli/exec.rs:232-239` (warning-kind
    text), `:265-271` (`value_text` per `CellValue` kind). The happy paths of
    every subcommand are tested; the error and reporting edges are not.
 
@@ -199,7 +199,7 @@ None.
 The scan for `#[test]` functions with no assertion found only never-hit
 `panic!` arms in match positions (for example
 `crates/render/src/build.rs:2216`, `crates/render/src/scene.rs:381-408`,
-`apps/ferrogram-cli/src/cli/parse.rs:327-399`,
+`apps/larrygram-cli/src/cli/parse.rs:327-399`,
 `crates/vsdx/src/read/sheet.rs:186-190`) and test helpers. These are
 harmless: they are the "assert the shape" arms of tests that do assert, and
 they are not worth chasing.
@@ -212,11 +212,11 @@ they are not worth chasing.
   "product coverage". The new crates are no different: about a third of
   `crates/render/src/build.rs` past line 2100 is inline tests, and its
   uncovered `panic!` arms are test code, not product code.
-- `ferrogram` (the app) is unchanged at 6/9 lines, one uncovered line above
-  its ratchet. Its `main` (`apps/ferrogram/src/main.rs:7-9`) and
-  `ferrogram-cli`'s `main` (`apps/ferrogram-cli/src/main.rs:10-15`) are real
+- `larrygram` (the app) is unchanged at 6/9 lines, one uncovered line above
+  its ratchet. Its `main` (`apps/larrygram/src/main.rs:7-9`) and
+  `larrygram-cli`'s `main` (`apps/larrygram-cli/src/main.rs:10-15`) are real
   process entry points that no test executes; the 66.6 ratchet for
-  `ferrogram` stays fragile for the same reason as in earlier phases.
+  `larrygram` stays fragile for the same reason as in earlier phases.
 - The line totals for `geom`, `model`, `render`, `text` and `vsdx` are roughly
   three times the Phase 2 numbers for `geom`/`model` because Phase 3 added
   the geometry rows, the render builder and text layout with their inline
@@ -228,8 +228,8 @@ they are not worth chasing.
 - Task: P3-17 (test-engineer), 2026-10-15, branch `agent/P3-17` on top of
   `main` (`305626d`). Tests only: 56 new tests, and the only additions to
   non-test code are two `#[cfg(test)]` helpers
-  (`ferrogram_text::font::unparsable_for_test`,
-  `ferrogram_render::styles::parse_for_test`). No product behaviour
+  (`larrygram_text::font::unparsable_for_test`,
+  `larrygram_render::styles::parse_for_test`). No product behaviour
   changed; no new dependencies. Line numbers below are the current ones
   (several of the audit's moved in P3-16).
 
@@ -363,10 +363,10 @@ code, as in the audit above):
 
 | Crate | Before | After |
 |---|---:|---:|
-| ferrogram-render | 5251/5542 (94.7%) | 6364/6447 (98.7%) |
-| ferrogram-cli | 1233/1290 (95.6%) | 1340/1375 (97.5%) |
-| ferrogram-vsdx | 6823/6934 (98.4%) | 6865/6971 (98.5%) |
-| ferrogram-text | 1596/1641 (97.3%) | 1714/1731 (99.0%) |
+| larrygram-render | 5251/5542 (94.7%) | 6364/6447 (98.7%) |
+| larrygram-cli | 1233/1290 (95.6%) | 1340/1375 (97.5%) |
+| larrygram-vsdx | 6823/6934 (98.4%) | 6865/6971 (98.5%) |
+| larrygram-text | 1596/1641 (97.3%) | 1714/1731 (99.0%) |
 
 Nothing dropped. `xtask` moved 8143/8808 to 8141/8808 between runs
 without a source change: run-to-run attribution noise in test code, and
@@ -392,6 +392,6 @@ annotated where it sits:
   `Segment` match (`Segment` is non-exhaustive and has no other variant
   today).
 - `cli`: the `_` catch-alls of the `WarningKind` and `CellValue` matches
-  (both enums are non-exhaustive in `ferrogram-model`) and `unknown_option`'s
+  (both enums are non-exhaustive in `larrygram-model`) and `unknown_option`'s
   `Arg::Value` arm (a positional is handled before it can reach the
   helper).

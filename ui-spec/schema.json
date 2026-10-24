@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://ferrogram.dev/schemas/ui-spec-v1.json",
-  "title": "Ferrogram ui-spec layout, commands and shortcuts",
+  "$id": "https://larrygram.dev/schemas/ui-spec-v1.json",
+  "title": "Larrygram ui-spec layout, commands and shortcuts",
   "description": "Schema for ui-spec/panel-2016.yaml, ui-spec/panel-365.yaml, ui-spec/commands.yaml and ui-spec/shortcuts.yaml. Validated by the xtask extract step and by crates/ui-spec at load time. See ADR 0007.",
   "definitions": {
     "controlType": {
@@ -30,7 +30,7 @@
       ]
     },
     "commandId": {
-      "description": "A Ferrogram command id (ADR 0006): dotted, lowercase, [a-z0-9_]. Functional scope (arrange, file, tools, ...), never a ribbon tab.",
+      "description": "A Larrygram command id (ADR 0006): dotted, lowercase, [a-z0-9_]. Functional scope (arrange, file, tools, ...), never a command-bar tab.",
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
     },
@@ -80,7 +80,7 @@
       "type": ["string", "null"]
     },
     "control": {
-      "description": "One control in a ribbon, backstage, or context menu. The id is the Fluent control name; the optional `command` is a Ferrogram command id from commands.yaml.",
+      "description": "One control in a command bar, backstage, or context menu. The id is the Fluent control name; the optional `command` is a Larrygram command id from commands.yaml.",
       "type": "object",
       "required": [
         "id",
@@ -104,14 +104,14 @@
           "type": ["string", "null"]
         },
         "command": {
-          "description": "Ferrogram command id dispatched when the control is activated, or null if none.",
+          "description": "Larrygram command id dispatched when the control is activated, or null if none.",
           "anyOf": [
             { "$ref": "#/definitions/commandId" },
             { "type": "null" }
           ]
         },
         "aliases": {
-          "description": "Alternate Fluent ids for the same control across ribbon/cross-ribbon placements (P1-03 picks a primary parent).",
+          "description": "Alternate Fluent ids for the same control across command-bar/cross-command-bar placements (P1-03 picks a primary parent).",
           "type": "array",
           "items": { "$ref": "#/definitions/fluentId" },
           "uniqueItems": true
@@ -313,7 +313,7 @@
       "enum": ["exact", "inferred", "unknown"]
     },
     "command": {
-      "description": "One entry in commands.yaml. Maps a Ferrogram command id to a VisUICmds constant and to one or more Fluent control names. Every `fluent_ids` entry must appear in at least one layout; the loader enforces that.",
+      "description": "One entry in commands.yaml. Maps a Larrygram command id to a VisUICmds constant and to one or more Fluent control names. Every `fluent_ids` entry must appear in at least one layout; the loader enforces that.",
       "type": "object",
       "required": ["id", "label", "visuicmd", "fluent_ids", "mapping_confidence"],
       "properties": {
@@ -346,10 +346,10 @@
     },
     "shortcutScope": {
       "type": "string",
-      "enum": ["global", "ribbon", "page", "text", "selection", "window"]
+      "enum": ["global", "command_bar", "page", "text", "selection", "window"]
     },
     "shortcut": {
-      "description": "A keyboard shortcut. A sequence of chords typed in order; each chord is a set of keys pressed simultaneously. A single-key shortcut has a one-chord sequence (e.g. `[[Ctrl, Z]]` for Ctrl+Z); a ribbon keytip like Alt+H, F, O is `[[Alt, H], [F, O]]`.",
+      "description": "A keyboard shortcut. A sequence of chords typed in order; each chord is a set of keys pressed simultaneously. A single-key shortcut has a one-chord sequence (e.g. `[[Ctrl, Z]]` for Ctrl+Z); a command bar keytip like Alt+H, F, O is `[[Alt, H], [F, O]]`.",
       "type": "object",
       "required": ["sequence", "command", "scope"],
       "properties": {

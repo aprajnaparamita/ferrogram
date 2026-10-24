@@ -8,8 +8,8 @@
 mod common;
 
 use common::{Fixture, build};
-use ferrogram_model::{Cell, CellName, CellValue, Document, Preserved, Shape, ShapeId, XmlChild};
-use ferrogram_vsdx::{Limits, Package, PartData, PartName, read_package, to_model, write_document};
+use larrygram_model::{Cell, CellName, CellValue, Document, Preserved, Shape, ShapeId, XmlChild};
+use larrygram_vsdx::{Limits, Package, PartData, PartName, read_package, to_model, write_document};
 
 /// The drawing fixture as a model plus the package to patch.
 #[allow(clippy::expect_used)] // test helper
@@ -29,7 +29,7 @@ fn written(document: &Document, package: &Package) -> Package {
 
 /// The root element of an XML part.
 #[allow(clippy::panic, clippy::expect_used)] // test helper
-fn root<'p>(package: &'p Package, name: &str) -> &'p ferrogram_model::XmlNode {
+fn root<'p>(package: &'p Package, name: &str) -> &'p larrygram_model::XmlNode {
     match &package.part(&PartName::new(name)).expect("part").data {
         PartData::Xml(root) => root,
         _ => panic!("part is not XML"),
@@ -37,7 +37,7 @@ fn root<'p>(package: &'p Package, name: &str) -> &'p ferrogram_model::XmlNode {
 }
 
 /// The `V` attribute of the cell named `name` in `element`, if present.
-fn cell_value(element: &ferrogram_model::XmlNode, name: &str) -> Option<String> {
+fn cell_value(element: &larrygram_model::XmlNode, name: &str) -> Option<String> {
     element.children.iter().find_map(|child| match child {
         XmlChild::Element(cell)
             if cell.name.local == "Cell"
@@ -57,9 +57,9 @@ fn cell_value(element: &ferrogram_model::XmlNode, name: &str) -> Option<String> 
 
 /// The child elements of `element` with this local name.
 fn children_named<'n>(
-    element: &'n ferrogram_model::XmlNode,
+    element: &'n larrygram_model::XmlNode,
     local: &str,
-) -> Vec<&'n ferrogram_model::XmlNode> {
+) -> Vec<&'n larrygram_model::XmlNode> {
     element
         .children
         .iter()
@@ -72,7 +72,7 @@ fn children_named<'n>(
 
 /// The first `Shape` element of the drawing fixture's page contents.
 #[allow(clippy::expect_used)] // test helper
-fn first_shape(package: &Package) -> &ferrogram_model::XmlNode {
+fn first_shape(package: &Package) -> &larrygram_model::XmlNode {
     let contents = root(package, "/visio/pages/page1.xml");
     let wrapper = children_named(contents, "Shapes")
         .into_iter()
@@ -211,7 +211,7 @@ fn a_new_property_lands_in_document_properties() {
     let (mut document, package) = drawing();
     document
         .properties
-        .push(ferrogram_model::Property::new("title", "Hello"));
+        .push(larrygram_model::Property::new("title", "Hello"));
     let out = written(&document, &package);
     let contents = root(&out, "/visio/document.xml");
     let wrappers = children_named(contents, "DocumentProperties");
@@ -251,18 +251,18 @@ fn preserved_content_survives_an_edit() {
 fn element(
     local: &str,
     attrs: &[(&str, &str)],
-    children: Vec<ferrogram_model::XmlNode>,
-) -> ferrogram_model::XmlNode {
-    ferrogram_model::XmlNode {
-        name: ferrogram_model::QName {
+    children: Vec<larrygram_model::XmlNode>,
+) -> larrygram_model::XmlNode {
+    larrygram_model::XmlNode {
+        name: larrygram_model::QName {
             prefix: None,
             uri: Some("urn:visio".to_owned()),
             local: local.to_owned(),
         },
         attributes: attrs
             .iter()
-            .map(|(name, value)| ferrogram_model::XmlAttribute {
-                name: ferrogram_model::QName::local(*name),
+            .map(|(name, value)| larrygram_model::XmlAttribute {
+                name: larrygram_model::QName::local(*name),
                 value: (*value).to_owned(),
             })
             .collect(),
@@ -273,7 +273,7 @@ fn element(
 
 /// A minimal package whose page has no `Rel` and no contents part.
 fn relless_page_package() -> Package {
-    use ferrogram_vsdx::{
+    use larrygram_vsdx::{
         ContentType, ContentTypeDecl, ContentTypeKind, Part, Relationship, RelationshipId,
         TargetMode,
     };

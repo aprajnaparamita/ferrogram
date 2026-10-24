@@ -6,12 +6,12 @@
 //! writer is a function of the package, so a second write is byte-identical.
 //! Corpus files are fetched, never committed (ADR 0005); the tests skip with
 //! a message when `corpus/vsdx/` is absent, and fail instead when
-//! `FERROGRAM_REQUIRE_CORPUS=1` is set.
+//! `LARRYGRAM_REQUIRE_CORPUS=1` is set.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use ferrogram_vsdx::{
+use larrygram_vsdx::{
     ContentType, ContentTypeDecl, ContentTypeKind, Limits, Package, Part, PartData, PartName,
     Relationship, RelationshipId, TargetMode, read_package, write_package,
 };
@@ -41,7 +41,7 @@ fn corpus_files() -> Vec<PathBuf> {
 
 /// Returns `true` when no corpus is available and the run may skip.
 ///
-/// Fails the calling test (with a message) when `FERROGRAM_REQUIRE_CORPUS=1`
+/// Fails the calling test (with a message) when `LARRYGRAM_REQUIRE_CORPUS=1`
 /// is set and the corpus is absent; that check lives in the test functions.
 fn corpus_missing(files: &[PathBuf]) -> bool {
     if files.is_empty() {
@@ -106,7 +106,7 @@ fn hand_built_package() -> Option<Package> {
 }
 
 /// Builds a preserved tree with the same parser `read_package` uses.
-fn build_tree(text: &str) -> Option<ferrogram_model::XmlNode> {
+fn build_tree(text: &str) -> Option<larrygram_model::XmlNode> {
     let types = "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"xml\" ContentType=\"application/xml\"/></Types>";
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     for (name, data) in [
@@ -204,8 +204,8 @@ fn corpus_packages_round_trip() {
     let files = corpus_files();
     if corpus_missing(&files) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }
@@ -220,8 +220,8 @@ fn corpus_packages_keep_every_xml_and_binary_part() {
     let files = corpus_files();
     if corpus_missing(&files) {
         assert!(
-            std::env::var_os("FERROGRAM_REQUIRE_CORPUS").is_none(),
-            "corpus/vsdx is missing and FERROGRAM_REQUIRE_CORPUS=1 is set"
+            std::env::var_os("LARRYGRAM_REQUIRE_CORPUS").is_none(),
+            "corpus/vsdx is missing and LARRYGRAM_REQUIRE_CORPUS=1 is set"
         );
         return;
     }

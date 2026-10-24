@@ -1,4 +1,4 @@
-//! Fluent UI ribbon extractor (P1-03).
+//! Fluent UI command bar extractor (P1-03).
 //!
 //! Reads `reference/fluent-ui-ids/Office 2016/visiocontrols.xlsx` and
 //! `reference/fluent-ui-ids/Microsoft 365/Current Channel/visiocontrols.xlsx`
@@ -25,7 +25,7 @@ use super::schema::Schema;
 use super::util::{emit_yaml, write_and_validate};
 use super::{ExtractError, ExtractResult};
 
-/// Hand-written Fluent control -> Ferrogram command id bindings
+/// Hand-written Fluent control -> Larrygram command id bindings
 /// (P4-02, ADR 0006 amendment).
 ///
 /// A control listed here surfaces the given command id whatever the
@@ -39,7 +39,7 @@ use super::{ExtractError, ExtractResult};
 /// `ui-spec/panel-365.yaml`; [`super::commands`] fails the extraction
 /// for a rule that names a control in neither layout. The `FileExit`
 /// family of the task has no control in either layout (the Fluent rows
-/// are dropped as "Not in the Ribbon"), so `app.quit` has no binding
+/// are dropped as "Not in the TabBar"), so `app.quit` has no binding
 /// here yet.
 pub const FLUENT_COMMANDS: &[(&str, &str)] = &[
     ("ShowGrid", "view.toggle_grid"),
@@ -120,10 +120,10 @@ impl Row {
             "" => Section::Drop,
             "None (Backstage View)" => Section::Backstage,
             "None (Context Menu)" => Section::ContextMenu,
-            "None (Core Tab)" => Section::Ribbon,
+            "None (Core Tab)" => Section::CommandBar,
             "None (Quick Access Toolbar)" => Section::Qat,
             "None (Not in the Ribbon)" => Section::Drop,
-            ts if ts.starts_with("TabSet") => Section::Ribbon,
+            ts if ts.starts_with("TabSet") => Section::CommandBar,
             _ => Section::Drop,
         }
     }
@@ -159,7 +159,7 @@ impl Row {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Section {
     Drop,
-    Ribbon,
+    CommandBar,
     Backstage,
     Qat,
     ContextMenu,
@@ -374,13 +374,13 @@ fn assemble_layout(
     }
 
     // Group rows by section.
-    let mut ribbon_rows: Vec<&Row> = Vec::new();
+    let mut command_bar_rows: Vec<&Row> = Vec::new();
     let mut backstage_rows: Vec<&Row> = Vec::new();
     let mut qat_rows: Vec<&Row> = Vec::new();
     let mut context_menu_rows: Vec<&Row> = Vec::new();
     for r in rows {
         match r.section() {
-            Section::Ribbon => ribbon_rows.push(r),
+            Section::CommandBar => command_bar_rows.push(r),
             Section::Backstage => backstage_rows.push(r),
             Section::Qat => qat_rows.push(r),
             Section::ContextMenu => context_menu_rows.push(r),
@@ -388,7 +388,7 @@ fn assemble_layout(
         }
     }
 
-    let tabs = build_tabs(&ribbon_rows)?;
+    let tabs = build_tabs(&command_bar_rows)?;
     let backstage = build_backstage(&backstage_rows)?;
     let context_menus = build_context_menus(&context_menu_rows)?;
     let quick_access_toolbar = build_qat(&qat_rows)?;
@@ -777,11 +777,11 @@ mod tests {
     #[test]
     fn section_routing() {
         let cases: &[(&str, &str, Section)] = &[
-            ("None (Core Tab)", "", Section::Ribbon),
+            ("None (Core Tab)", "", Section::CommandBar),
             (
                 "TabSetPictureTools",
                 "TabPictureToolsFormat",
-                Section::Ribbon,
+                Section::CommandBar,
             ),
             ("None (Backstage View)", "TabInfo", Section::Backstage),
             (
@@ -1262,13 +1262,13 @@ mod tests {
     }
 
     /// M2 of the P1-03 review: prove the committed layouts load
-    /// with the runtime [`ferrogram_ui_spec::Loader`]. Copies the
+    /// with the runtime [`larrygram_ui_spec::Loader`]. Copies the
     /// committed YAMLs into a temp workspace, adds empty
     /// `commands.yaml` and `shortcuts.yaml` (the P1-04 files do not
     /// exist yet), and calls `Loader::load` for both layouts.
     #[test]
     fn committed_layouts_load_with_the_runtime_loader() {
-        use ferrogram_ui_spec::{LayoutKind, Loader};
+        use larrygram_ui_spec::{LayoutKind, Loader};
 
         let ws = crate::util::root();
         let committed_2016 = ws.join("ui-spec").join("panel-2016.yaml");
@@ -1300,12 +1300,12 @@ mod tests {
         }
 
         let loader = Loader::new(tmp.path()).expect("loader compiles");
-        let set_2016 = loader.load(LayoutKind::Visio2016).expect("2016 loads");
-        let set_365 = loader.load(LayoutKind::Visio365).expect("365 loads");
+        let set_2016 = loader.load(LayoutKind::Panel2016).expect("2016 loads");
+        let set_365 = loader.load(LayoutKind::Panel365).expect("365 loads");
 
         // Counts match the values reported in the Result section.
-        // 2016: 16 ribbon + 8 backstage + 43 context menus + 9 QAT.
-        assert_eq!(set_2016.layout.tabs.len(), 16, "2016 ribbon tabs");
+        // 2016: 16 command-bar tabs + 8 backstage + 43 context menus + 9 QAT.
+        assert_eq!(set_2016.layout.tabs.len(), 16, "2016 command bar tabs");
         assert_eq!(
             set_2016.layout.backstage.tabs.len(),
             8,
@@ -1322,8 +1322,8 @@ mod tests {
             "2016 QAT controls"
         );
 
-        // 365: 19 ribbon + 10 backstage + 43 context menus + 9 QAT.
-        assert_eq!(set_365.layout.tabs.len(), 19, "365 ribbon tabs");
+        // 365: 19 command-bar tabs + 10 backstage + 43 context menus + 9 QAT.
+        assert_eq!(set_365.layout.tabs.len(), 19, "365 command bar tabs");
         assert_eq!(
             set_365.layout.backstage.tabs.len(),
             10,

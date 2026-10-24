@@ -25,10 +25,10 @@ use std::path::PathBuf;
 
 use proptest::prelude::*;
 
-use ferrogram_commands::{AppCtx, DisplayUnits, Settings, SettingsError, SettingsStore};
-use ferrogram_ui_spec::LayoutKind;
+use larrygram_commands::{AppCtx, DisplayUnits, Settings, SettingsError, SettingsStore};
+use larrygram_ui_spec::LayoutKind;
 
-use ferrogram_ui::settings::{TextStore, load_settings, save_settings};
+use larrygram_ui::settings::{TextStore, load_settings, save_settings};
 
 /// The slot as the app writes it: `Settings` serialized to JSON.
 fn canonical() -> String {
@@ -54,7 +54,7 @@ fn load_slot(text: &str) -> (Settings, Vec<String>) {
 const HOSTILE: &[&str] = &[
     "",
     " ",
-    "\u{feff}{\"ui_layout\":\"Visio2016\"}",
+    "\u{feff}{\"ui_layout\":\"Panel2016\"}",
     "null",
     "true",
     "false",
@@ -70,19 +70,19 @@ const HOSTILE: &[&str] = &[
     "{\"ui_layout\":null}",
     "{\"ui_layout\":42}",
     "{\"ui_layout\":\"Visio1997\"}",
-    "{\"ui_layout\":\"Visio365\",\"show_grid\":\"yes\",\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[]}",
+    "{\"ui_layout\":\"Panel365\",\"show_grid\":\"yes\",\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[]}",
     "{\"show_grid\":true}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\"}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[1,2]}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[null]}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":{}}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[\"\u{0}\"],\"x\":1}",
-    "{\"ui_layout\":\"Visio365\",\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[]}",
-    "{\"units\":\"Inches\",\"recent_files\":[],\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"extra\":{\"deep\":[[[[1]]]]}}",
-    "{\"ui_layout\":\"Visio2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[],\"junk\":\u{1}\u{2}\u{7f}}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\"}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[1,2]}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[null]}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":{}}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[\"\u{0}\"],\"x\":1}",
+    "{\"ui_layout\":\"Panel365\",\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[]}",
+    "{\"units\":\"Inches\",\"recent_files\":[],\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"extra\":{\"deep\":[[[[1]]]]}}",
+    "{\"ui_layout\":\"Panel2016\",\"show_grid\":true,\"show_rulers\":true,\"units\":\"Inches\",\"recent_files\":[],\"junk\":\u{1}\u{2}\u{7f}}",
     "not json at all",
-    "{\"ui_layout\": \"Visio2016\"",
-    "{\"ui_layout\": \"Visio2016\"}}}}",
+    "{\"ui_layout\": \"Panel2016\"",
+    "{\"ui_layout\": \"Panel2016\"}}}}",
     "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[",
     "{\"recent_files\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[",
 ];
@@ -115,7 +115,10 @@ fn every_hostile_slot_loads_without_a_crash() {
             _ => panic!("unknown units from {text:?}"),
         }
         match settings.ui_layout {
-            LayoutKind::Visio2016 | LayoutKind::Visio365 => {}
+            LayoutKind::Panel2016
+            | LayoutKind::Panel365
+            | LayoutKind::PanelModern
+            | LayoutKind::PanelClassic => {}
         }
     }
 }
@@ -146,7 +149,7 @@ fn a_missing_field_is_corrupt_not_a_partial_load() {
     // One missing field must not half-load: the whole slot falls back
     // (ADR 0032), so a hostile edit cannot flip one setting silently.
     let text =
-        "{\"ui_layout\":\"Visio365\",\"show_grid\":false,\"show_rulers\":false,\"units\":\"Feet\"}";
+        "{\"ui_layout\":\"Panel365\",\"show_grid\":false,\"show_rulers\":false,\"units\":\"Feet\"}";
     let (settings, warnings) = load_slot(text);
     assert_eq!(warnings.len(), 1);
     assert_eq!(settings, Settings::default());
@@ -157,11 +160,11 @@ fn unknown_fields_are_ignored_and_round_trip_stays_stable() {
     // Forward compatibility rule: an extra field written by a later
     // version does not corrupt the slot; the next `save` normalizes it.
     let mut store = TextStore::new(Some(
-        "{\"ui_layout\":\"Visio365\",\"show_grid\":false,\"show_rulers\":true,\"units\":\"Feet\",\"recent_files\":[],\"future\":{\"x\":1}}"
+        "{\"ui_layout\":\"Panel365\",\"show_grid\":false,\"show_rulers\":true,\"units\":\"Feet\",\"recent_files\":[],\"future\":{\"x\":1}}"
             .to_owned(),
     ));
     let settings = store.load().unwrap();
-    assert_eq!(settings.ui_layout, LayoutKind::Visio365);
+    assert_eq!(settings.ui_layout, LayoutKind::Panel365);
     assert!(!settings.show_grid);
     assert_eq!(settings.units, DisplayUnits::Feet);
     assert!(store.take_warning().is_none());
@@ -199,7 +202,7 @@ fn a_failing_store_load_falls_back_with_one_warning() {
 /// An arbitrary `Settings` (the round-trip property below).
 ///
 /// `Settings` is `#[non_exhaustive]` (it lives in
-/// `ferrogram-commands`), so the strategy builds from the default and
+/// `larrygram-commands`), so the strategy builds from the default and
 /// fills every field; `recent_files` holds arbitrary hostiles names.
 fn arb_settings() -> impl Strategy<Value = Settings> {
     (
@@ -218,9 +221,9 @@ fn arb_settings() -> impl Strategy<Value = Settings> {
         .prop_map(|(layout, show_grid, show_rulers, units, recent)| {
             let mut settings = Settings::default();
             settings.ui_layout = if layout {
-                LayoutKind::Visio2016
+                LayoutKind::Panel2016
             } else {
-                LayoutKind::Visio365
+                LayoutKind::Panel365
             };
             settings.show_grid = show_grid;
             settings.show_rulers = show_rulers;

@@ -8,12 +8,12 @@
 
 AGENTS.md section 6 says: "One command registry (`crates/commands`). Every user
 action is a command with an id, label, enabled-state predicate and undo support.
-Menus, ribbon, shortcuts, CLI, the JSON control channel and MCP all dispatch by
+Menus, command bar, shortcuts, CLI, the JSON control channel and MCP all dispatch by
 command id through the same registry. Programmatic calls never open dialogs."
 
 Microsoft's published surface uses two separate id spaces:
 
-1. **Fluent UI control names** (ribbon XML). Examples: `FileSave`,
+1. **Fluent UI control names** (command bar XML). Examples: `FileSave`,
    `ConnectorTool`, `AlignLeftGallery`. These are the strings used in the
    Office 2016 and Microsoft 365 control-identifier spreadsheets (source 1 in
    `docs/sources.md`).
@@ -26,20 +26,20 @@ Microsoft's published surface uses two separate id spaces:
 These two spaces overlap on some names (`ConnectorTool` is a Fluent name and
 has a `visCmdConnectorTool` constant) but not on most (`FileSave` is a Fluent
 name without a `visCmdFileSave` constant; many visUICmds have no Fluent
-control). The Phase 1 extractor must keep them separate, and Ferrogram needs
+control). The Phase 1 extractor must keep them separate, and Larrygram needs
 its own id space that survives future Fluent and VisUICmds renames and works
-uniformly across the ribbon, menus, shortcuts, CLI, JSON control channel and
+uniformly across the command bar, menus, shortcuts, CLI, JSON control channel and
 MCP.
 
-The P1-02 review found that an earlier draft used ribbon-tab scopes
+The P1-02 review found that an earlier draft used command bar-tab scopes
 (`home`, `design`, ...). That is wrong: a single command may be reachable
-from two ribbons in two layouts (Home in 2016, Insert in 365) and from a
+from two command bars in two layouts (Home in 2016, Insert in 365) and from a
 context menu, a shortcut, the JSON channel and MCP. The scope must describe
 what the command does, not where the user finds it.
 
 ## Decision
 
-Ferrogram defines its own command id space, called `CommandId` everywhere in
+Larrygram defines its own command id space, called `CommandId` everywhere in
 code. The id grammar is:
 
 ```
@@ -68,7 +68,7 @@ Rules:
   stored; it is re-derived from the enumeration at load time.
 - Two Fluent control names can map to the same command id (one action, two
   surfaces) and one command id can map to multiple Fluent control names
-  (e.g. `arrange.align.left` appears in the ribbon group and in a context
+  (e.g. `arrange.align.left` appears in the command-bar group and in a context
   menu). The mapping is many-to-many in both directions.
 
 The scope list is functional, not positional. Examples of correct ids:
@@ -127,7 +127,7 @@ help.about
 ```
 
 Compared to the earlier `home.align.left` / `home.insert.shape` form, the
-new ids do not change when the ribbon layout changes. The same `arrange.align.left`
+new ids do not change when the Panel layout changes. The same `arrange.align.left`
 id is used whether the command lives on the Home tab (2016) or the Arrange
 tab (365) or a context menu, and is the same id in the shortcut, CLI,
 JSON control channel and MCP.
@@ -182,7 +182,7 @@ crate does not yet depend on it.
 A separate decision: the id of a control, group, tab, backstage tab, or
 context menu in `ui-spec/panel-2016.yaml` and `ui-spec/panel-365.yaml` is
 the **Fluent control name** verbatim (e.g. `FileSave`, `TabHome`,
-`GroupClipboard`), not a Ferrogram command id. See ADR 0007. This is
+`GroupClipboard`), not a Larrygram command id. See ADR 0007. This is
 because:
 
 - KICKOFF requires the layouts to come from Microsoft's control-identifier
@@ -191,16 +191,16 @@ because:
   Fluent name.
 - A command is not always tied to one control: a single control has one
   `command` link (a `CommandId` or null), and one command may be surfaced
-  by many controls (e.g. `arrange.align.left` is in the Home ribbon in
+  by many controls (e.g. `arrange.align.left` is in the Home command bar in
   2016 and in the Arrange tab in 365).
 
 ## Consequences
 
 - We can rename a Fluent control or a VisUICmds constant without touching
-  any Ferrogram code; only the generated `commands.yaml` changes.
+  any Larrygram code; only the generated `commands.yaml` changes.
 - Adding a new user action is a single new entry in `commands.yaml` plus
   a handler in the registry; no UI plumbing.
-- The same id is used for menu, ribbon, shortcut, CLI flag, JSON control
+- The same id is used for menu, command bar, shortcut, CLI flag, JSON control
   channel and MCP. There is exactly one dispatch table.
 - The fixed functional scope list means new top-level groupings (e.g.
   "diagram" if we ever add it) require an ADR. This is intentional: every
@@ -221,15 +221,15 @@ because:
 ## Alternatives considered
 
 - **Use Fluent control names directly as command ids.** Rejected: those
-  names are ribbon-specific; menus, shortcuts and MCP would need a
-  parallel table. The same command reachable from two ribbons would need
+  names are command bar-specific; menus, shortcuts and MCP would need a
+  parallel table. The same command reachable from two command bars would need
   two ids.
 - **Use VisUICmds constants directly as command ids.** Rejected: VisUICmds
   is 664 integers without structure; they do not group by feature, and a
   constant is missing for any UI action that Microsoft did not script
   (e.g. some 365-only commands). Future versions rename constants; the
   mapping table is the right level of indirection.
-- **Ribbon-tab scopes (`home`, `design`, `process`, `stencils`).** Tried
+- **Command-bar tab scopes (`home`, `design`, `process`, `stencils`).** Tried
   in an earlier draft. Rejected by the P1-02 review: a single command may
   be on different tabs in 2016 and 365, and on a context menu, a shortcut
   and MCP. A positional id forces a rename whenever the UI surface moves.
@@ -244,10 +244,10 @@ because:
 
 Two clarifications from the Phase 4 command registry (ADR 0028).
 
-**Ferrogram-only ids live in `commands.yaml` too.** Ids with no Microsoft
+**Larrygram-only ids live in `commands.yaml` too.** Ids with no Microsoft
 counterpart (the ADR 0026 CLI triad `file.inspect`, `file.render`,
 `file.export`, plus `app.quit`, `page.next`, `page.previous`,
-`view.ui_layout.visio_2016`, `view.ui_layout.visio_365`,
+`view.ui_layout.panel_2016`, `view.ui_layout.panel_365`,
 `view.zoom.fit`, `help.about` and later Phase 5 edit ids) are emitted by
 the extractor from a static "our own commands" list in
 `xtask/src/extract/commands.rs`, with `fluent_ids: []` (or the Fluent ids

@@ -1,5 +1,5 @@
 //! The `edit`, `view`, `page` and `help` commands (ADR 0028): undo,
-//! zoom, the grid and rulers toggles, the display units, the ribbon
+//! zoom, the grid and rulers toggles, the display units, the command bar
 //! layout switch (ADR 0032), page navigation, the Options request and
 //! the About request.
 //!
@@ -9,7 +9,7 @@
 //! default and say so (ADR 0032 amendment), the other view commands
 //! are disabled with a reason instead of doing nothing.
 
-use ferrogram_model::{CellValue, Page};
+use larrygram_model::{CellValue, Page};
 
 use crate::app::AppCtx;
 use crate::error::CommandError;
@@ -30,7 +30,7 @@ pub const ZOOM_MAX: f64 = 40.0;
 
 // The page size of a sheet with no positive `PageWidth` or
 // `PageHeight`: the renderer's own fallback.
-use ferrogram_render::FALLBACK_PAGE_SIZE;
+use larrygram_render::FALLBACK_PAGE_SIZE;
 
 /// `edit.undo`: reverts the newest edit of the active document.
 pub(super) fn run_undo(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
@@ -61,7 +61,7 @@ pub(super) fn run_redo(ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, C
 }
 
 /// Re-routes the glued connectors after an undo or redo step (ADR 0045).
-fn reroute_after_step(ctx: &mut AppCtx, page: Option<ferrogram_model::PageId>) {
+fn reroute_after_step(ctx: &mut AppCtx, page: Option<larrygram_model::PageId>) {
     if let Some(page) = page {
         reroute_quietly_on(ctx, page);
     }
@@ -283,24 +283,24 @@ pub(super) fn run_options(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcom
     })
 }
 
-/// `view.ui_layout.visio_2016`: switches the ribbon to the 2016 layout
+/// `view.ui_layout.panel_2016`: switches the command bar to the 2016 layout
 /// (ADR 0032; always enabled, no restart).
 pub(super) fn run_ui_layout_2016(
     ctx: &mut AppCtx,
     _inv: &Invocation,
 ) -> Result<Outcome, CommandError> {
-    ctx.settings.ui_layout = ferrogram_ui_spec::LayoutKind::Visio2016;
-    Ok(outcome("Ribbon layout: Visio 2016", Vec::new()))
+    ctx.settings.ui_layout = larrygram_ui_spec::LayoutKind::Panel2016;
+    Ok(outcome("Panel layout: Panel (2016 data)", Vec::new()))
 }
 
-/// `view.ui_layout.visio_365`: switches the ribbon to the Microsoft
+/// `view.ui_layout.panel_365`: switches the command bar to the Microsoft
 /// 365 layout (ADR 0032).
 pub(super) fn run_ui_layout_365(
     ctx: &mut AppCtx,
     _inv: &Invocation,
 ) -> Result<Outcome, CommandError> {
-    ctx.settings.ui_layout = ferrogram_ui_spec::LayoutKind::Visio365;
-    Ok(outcome("Ribbon layout: Visio 365", Vec::new()))
+    ctx.settings.ui_layout = larrygram_ui_spec::LayoutKind::Panel365;
+    Ok(outcome("Panel layout: Panel (365 data)", Vec::new()))
 }
 
 /// `page.next`: moves to the next page, wrapping at the end.
@@ -352,7 +352,7 @@ fn move_page(ctx: &mut AppCtx, delta: i64) -> Result<Outcome, CommandError> {
 /// (never a dialog from inside the command, AGENTS.md section 6).
 pub(super) fn run_about(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome, CommandError> {
     Ok(Outcome {
-        message: Some("About Ferrogram".to_owned()),
+        message: Some("About Larrygram".to_owned()),
         ui_request: Some(UiRequest::ShowAbout),
         ..Outcome::default()
     })
@@ -362,12 +362,12 @@ pub(super) fn run_about(_ctx: &mut AppCtx, _inv: &Invocation) -> Result<Outcome,
 mod tests {
     use super::*;
     use crate::app::{AppCtx, DocumentSession, Settings};
-    use ferrogram_model::{Cell, CellName, Page, PageId};
+    use larrygram_model::{Cell, CellName, Page, PageId};
 
     #[test]
     fn undo_and_redo_without_history_say_so() {
         let mut ctx = AppCtx::new(Settings::default());
-        ctx.open_document(DocumentSession::new(ferrogram_model::Document::new(), None));
+        ctx.open_document(DocumentSession::new(larrygram_model::Document::new(), None));
         let invocation = Invocation::empty(crate::Source::Test);
         let outcome = run_undo(&mut ctx, &invocation).expect("undo");
         assert_eq!(outcome.message.as_deref(), Some("Nothing to undo"));
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn page_navigation_without_pages_reports_it() {
         let mut ctx = AppCtx::new(Settings::default());
-        ctx.open_document(DocumentSession::new(ferrogram_model::Document::new(), None));
+        ctx.open_document(DocumentSession::new(larrygram_model::Document::new(), None));
         let invocation = Invocation::empty(crate::Source::Test);
         let error = run_page_next(&mut ctx, &invocation).expect_err("no pages");
         assert_eq!(error.to_string(), "the document has no pages");
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn zoom_fit_falls_back_for_a_non_numeric_page_size() {
-        let mut document = ferrogram_model::Document::new();
+        let mut document = larrygram_model::Document::new();
         let mut page = Page::new(PageId { index: 0 }, 1);
         let mut width = Cell::new(CellName::from_static("PageWidth"));
         width.value = Some(CellValue::Str("wide".to_owned()));

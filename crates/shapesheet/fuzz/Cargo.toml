@@ -1,5 +1,5 @@
 [package]
-name = "ferrogram-shapesheet-fuzz"
+name = "larrygram-shapesheet-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -10,11 +10,11 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.ferrogram-shapesheet]
+[dependencies.larrygram-shapesheet]
 path = ".."
 
 # The fuzz targets name a sheet (the evaluator's `SheetRef`).
-[dependencies.ferrogram-model]
+[dependencies.larrygram-model]
 path = "../../model"
 
 # Prevent this from interfering with workspaces (the cargo-fuzz way).

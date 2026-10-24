@@ -5,11 +5,11 @@
 //! The drag lives in [`ToolMachine`]'s `stencil` field; only this module
 //! reads it.
 
-use ferrogram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
-use ferrogram_geom::{Angle, Point, Rect};
-use ferrogram_model::PageId;
-use ferrogram_model::stencils::{self, MasterDef};
-use ferrogram_render::{Overlay, OverlayMark};
+use larrygram_commands::{AppCtx, ArgValue, Args, CommandId, Invocation, SessionId, Source};
+use larrygram_geom::{Angle, Point, Rect};
+use larrygram_model::PageId;
+use larrygram_model::stencils::{self, MasterDef};
+use larrygram_render::{Overlay, OverlayMark};
 
 use super::{Modifiers, ToolEffect, ToolEvent};
 use crate::UiError;
@@ -73,7 +73,7 @@ pub fn is_dragging(state: &ToolMachine) -> bool {
 pub fn handle(
     state: &mut ToolMachine,
     event: &ToolEvent,
-    ctx: &ferrogram_commands::AppCtx,
+    ctx: &larrygram_commands::AppCtx,
 ) -> Result<super::ToolEffect, UiError> {
     let Some(session) = ctx.active_document() else {
         state.stencil.drag = None;
@@ -345,19 +345,19 @@ fn finite(point: Point) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_model::{
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_model::{
         Cell, CellName, CellValue, Document, Page, PageId, Preserved, Row, Section, SectionName,
         Shape, ShapeId,
     };
-    use ferrogram_render::OverlayMark;
+    use larrygram_render::OverlayMark;
 
     fn cell(name: &str, value: f64) -> Cell {
         Cell {
             name: CellName::new(name),
             formula: Some(format!("{value}")),
             value: Some(CellValue::Number(value)),
-            unit: ferrogram_geom::Unit::Inches,
+            unit: larrygram_geom::Unit::Inches,
             preserved: Preserved::new(),
         }
     }

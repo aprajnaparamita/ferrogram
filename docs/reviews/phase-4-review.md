@@ -6,9 +6,9 @@ Task P4-11, reviewer, 2026-10-17, branch `agent/P4-11`. Review of
 changed no code.
 
 Scope covered: `crates/commands` (app, error, registry, undo, builtins),
-`crates/ui` (shell, ribbon, canvas, dialogs, settings, panels,
-shapes_window, shortcuts, icons), `apps/ferrogram`, `apps/ferrogram-web`,
-`apps/ferrogram-cli` (the registry dispatch move), the P4-02 extractor
+`crates/ui` (shell, tab_bar, canvas, dialogs, settings, panes,
+shapes_window, shortcuts, icons), `apps/larrygram`, `apps/larrygram-web`,
+`apps/larrygram-cli` (the registry dispatch move), the P4-02 extractor
 changes (`xtask/src/extract/commands.rs`, `fluent.rs`, `parity.rs`,
 `xtask/src/parity.rs`), the P4-05 raster seam (`crates/render/src/raster.rs`),
 the P4-06 stencils (`crates/model/src/stencils/`) and the P4-04 embedded
@@ -21,7 +21,7 @@ hold: no panic path outside tests, no command opens a dialog (the picker
 is reached only from the shell, and only for interactive sources on the
 `NeedsInput` path), layering holds (nothing below L6 sees egui/eframe/
 winit/rfd), the ADR 0028–0037 interfaces are the ones implemented
-(only documented extensions), and the ribbon, shortcut and raster code
+(only documented extensions), and the command bar, shortcut and raster code
 is bounded and careful. The four majors are one dead control, one silent
 failure path, and two rule seams (registry bypass in the Options dialog,
 payload-triggered dialog) that must be closed before Phase 5 spreads
@@ -33,8 +33,8 @@ them.
   -D warnings` is clean, so the never-crash lints hold outside tests; a
   manual grep of `unwrap`/`expect`/`panic!` in the new code finds hits
   only inside `#[cfg(test)]` modules. Input-derived work is bounded:
-  the ribbon caps control nesting at 8 and claims each placement once
-  (`crates/ui/src/ribbon.rs:44`, `:143`), the canvas caps ticks at 4096
+  the command bar caps control nesting at 8 and claims each placement once
+  (`crates/ui/src/tab_bar.rs:44`, `:143`), the canvas caps ticks at 4096
   and clamps the raster scale under `MAX_DEVICE_EXTENT`, a 256 MiB byte
   cap and `max_texture_side` with checked arithmetic
   (`crates/ui/src/canvas.rs:730`), `shape_count` walks cycles once
@@ -49,11 +49,11 @@ them.
   one gap: major 3). Programmatic dispatch (`Registry::execute`,
   `dispatch_one`, the CLI) reaches no dialog.
 - **One command registry.** Every user action resolves to a
-  `CommandId`: the menus, the ribbon/QAT/backstage, the canvas keys and
+  `CommandId`: the menus, the command bar/QAT/backstage, the canvas keys and
   the shortcut map all produce `Intent`s and only `Shell::dispatch_one`
   calls `Registry::execute` (`crates/ui/src/shell.rs:849`). The CLI's
   `Command` enum now dispatches `file.inspect`/`file.render`/
-  `file.export` through the same registry (`apps/ferrogram-cli`).
+  `file.export` through the same registry (`apps/larrygram-cli`).
   `builtins::registry()` is the single implementation list
   (`crates/commands/src/builtins/mod.rs:137`), and the parity matrix is
   derived from it (ADR 0037, gate step `parity`).
@@ -72,12 +72,12 @@ them.
   (both recorded as ADR 0036 amendments), `show_rulers(…, units)`
   (P4-05 note). The registry container is the one silent deviation
   (minor 5).
-- **Ribbon (ADR 0031).** One widget per placement path, the
+- **Command bar (ADR 0031).** One widget per placement path, the
   `(id, label, order)` dedup is exactly the ADR rule, repeats render
   once per occurrence, out-of-scope ids get the out-of-scope tooltip and
   everything unimplemented gets "Not yet implemented", disabled widgets
   carry their `Enabled` reason as the tooltip, and widgets emit
-  `Intent`s, never `execute` (`crates/ui/src/ribbon.rs:807`).
+  `Intent`s, never `execute` (`crates/ui/src/tab_bar.rs:807`).
 - **Shortcuts (ADR 0036 as amended).** The (sequence, scope) conflict
   key, the most-specific-active-scope order, the prefix-deferral with a
   2 second timeout, and the P4-14 rule that egui's own editing chords
@@ -121,7 +121,7 @@ them.
 2. **A failed command from the UI is dropped silently.**
    `Shell::dispatch` returns one `Result<Outcome, CommandError>` per
    intent, but both apps ignore the inner errors
-   (`apps/ferrogram/src/main.rs:173`, `apps/ferrogram-web/src/main.rs:93`)
+   (`apps/larrygram/src/main.rs:173`, `apps/larrygram-web/src/main.rs:93`)
    and `Shell::dispatch_intent` records only `NotEnabled` in the status
    bar (`crates/ui/src/shell.rs:256`, `:677`). A `file.open` on a
    corrupt file (a `CommandError::Failed` with the ADR 0026 one-line
@@ -147,11 +147,11 @@ them.
    `show_options` (`crates/ui/src/settings.rs:128`) writes
    `Settings::ui_layout`, `show_grid`, `show_rulers` and `units` by
    direct mutation, including the two layout radios
-   (`crates/ui/src/settings.rs:134`), while `view.ui_layout.visio_2016`
-   / `view.ui_layout.visio_365` are the registry commands for that
+   (`crates/ui/src/settings.rs:134`), while `view.ui_layout.panel_2016`
+   / `view.ui_layout.panel_365` are the registry commands for that
    change (ADR 0032 says both appear in the dialog "as a radio choice"
    and ADR 0029 says UI code never mutates `AppCtx` directly). The
-   dialog path is how most users will switch the ribbon, and it is the
+   dialog path is how most users will switch the command bar, and it is the
    one path that never produces a status message, an undoable step or a
    parity-visible dispatch. **Fix (pick one and record it):** have the
    dialog return `Intent`s (or a changed-flag plus the ids) and let the
@@ -164,7 +164,7 @@ them.
 1. **`Registry` is Vec-backed with a linear scan**, while ADR 0028
    specifies "`BTreeMap`-backed" (`crates/commands/src/registry.rs:114`,
    `:136`). `get` is O(ids) (~700 rows) and runs twice per actionable
-   control per frame from `action_for` (`crates/ui/src/ribbon.rs:96`).
+   control per frame from `action_for` (`crates/ui/src/tab_bar.rs:96`).
    Correctness is fine; use `BTreeMap<CommandId, …>` (ids are `Ord`) or
    amend the ADR line.
 
@@ -215,7 +215,7 @@ them.
 
 9. **`UiError::NotImplemented` has no producer left**
    (`crates/ui/src/lib.rs:59`): a P4-01 stub remnant, referenced only by
-   tests and one doc comment. Likewise `Ribbon::show_context_menu` /
+   tests and one doc comment. Likewise `TabBar::show_context_menu` /
    `set_context_menu` are never called by the shell (P4-03 open item:
    the committed context menus carry no controls). Drop the variant and
    wire or park the context menu in the fix pass.
@@ -248,5 +248,5 @@ a mismatch firing a held-back completion and the `UndoStack` capacity
 UI constants (P4-05), the `app.quit` / `app.office.center.options`
 registry stubs and `Shell::dispatch` intercepts (P4-02/P4-03; minor 4
 above covers the Options half), `Shell::show` usage in the exit test
-(P4-09), the panel warning rows and the non-positive page size display
+(P4-09), the pane warning rows and the non-positive page size display
 (P4-07), and the `SKIP_RASTER`/`KNOWN_BLANK` corpus exceptions (P4-09).

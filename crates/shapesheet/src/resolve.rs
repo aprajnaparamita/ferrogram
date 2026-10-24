@@ -21,8 +21,8 @@
 //! the rung that defines the formula, so a snapshot cannot hide an
 //! inheritance bug.
 
-use ferrogram_geom::Unit;
-use ferrogram_model::{
+use larrygram_geom::Unit;
+use larrygram_model::{
     Cell, CellLookup, CellName, CellValue, Document, Master, MasterId, PageId, Shape, ShapeId,
     Sheet, SheetRef, StyleId, ValueSource,
 };
@@ -837,7 +837,7 @@ fn hard_default(kind: &str) -> Option<(CellValue, Unit)> {
         "Number" => CellValue::Number(0.0),
         "String" => CellValue::Str(String::new()),
         "Bool" => CellValue::Bool(false),
-        "Color" => CellValue::Color(ferrogram_model::Color::new(0, 0, 0)),
+        "Color" => CellValue::Color(larrygram_model::Color::new(0, 0, 0)),
         "List" => CellValue::List(String::new()),
         _ => return None,
     };
@@ -1028,7 +1028,7 @@ mod tests {
     use super::*;
     use crate::eval::EvalWarningKind;
     use crate::names::NameParts;
-    use ferrogram_model::{Page, PageId, Row, Section, SectionName, Shape, Sheet};
+    use larrygram_model::{Page, PageId, Row, Section, SectionName, Shape, Sheet};
 
     fn sheet() -> SheetRef {
         SheetRef::Page(PageId { index: 0 })
@@ -1307,7 +1307,7 @@ mod tests {
     fn a_document_sheet_cell_reads_the_property() {
         let mut doc = Document::new();
         doc.properties
-            .push(ferrogram_model::Property::new("DocScale", "1"));
+            .push(larrygram_model::Property::new("DocScale", "1"));
         let mut resolver = DocumentResolver::new(&mut doc);
         let reference = CellRef {
             sheets: vec![String::from("TheDoc")],

@@ -1,11 +1,11 @@
-//! The Shape Data and Size & Position panels (ADR 0035, ADR 0058).
+//! The Shape Data and Size & Position panes (ADR 0035, ADR 0058).
 //!
-//! With no selection the panels show honest page and document data;
-//! with a selection they show the anchor shape (the panels' subject,
+//! With no selection the panes show honest page and document data;
+//! with a selection they show the anchor shape (the panes' subject,
 //! ADR 0041): its `Prop` rows typed (ADR 0058) and its size, position
 //! and angle as typed fields. An edit is parsed with the formula
 //! grammar's own parser, converted through the engine's unit table and
-//! dispatched as one `shape.set.*` command (P5-05); the panel itself
+//! dispatched as one `shape.set.*` command (P5-05); the pane itself
 //! never mutates `AppCtx` and never opens a dialog.
 //!
 //! # Typed values (ADR 0058)
@@ -17,14 +17,14 @@
 //! every other kind as its cached text. The `Prop` row's `Type` cell is
 //! only a Shape Data format hint (P4-06); when it disagrees with the
 //! cached kind the cached value wins ("it is what the file holds"), so
-//! the panels show the cached kind and never consult `Type`.
+//! the panes show the cached kind and never consult `Type`.
 //!
 //! # Typed input (ADR 0058)
 //!
 //! An editable field takes the literals the grammar does (`2.5 in`,
 //! `2.5 cm`, `37%`, `45 deg`, `5 1/2`; ADR 0051) and converts the
 //! parsed value through the engine's unit table (ADR 0052) into the
-//! field's own unit before the write: the panels take inches and
+//! field's own unit before the write: the panes take inches and
 //! degrees (P5-05). A literal without a unit is a plain number of the
 //! field's unit (`5 1/2` is 5.5 in in a width field) and a ratio is its
 //! fraction (`37%` is 0.37); any other unit converts over the canonical
@@ -65,13 +65,13 @@
 //! directly instead of riding along in a fake row.
 
 use egui::{RichText, Ui};
-use ferrogram_commands::{
+use larrygram_commands::{
     AppCtx, ArgValue, Args, CommandId, DisplayUnits, DocumentSession, Invocation, Source,
 };
-use ferrogram_model::{
+use larrygram_model::{
     CellLookup, CellName, CellReader, CellValue, Page, PageId, ShapeId, SheetRef, ValueSource,
 };
-use ferrogram_shapesheet::{
+use larrygram_shapesheet::{
     CellRef, Error as FormulaError, EvalContext, EvalWarning, Expr, ExprKind, UnaryOp, Unit,
     UnitFamily, Value, eval, parse,
 };
@@ -95,9 +95,9 @@ const FORMULA_REFUSAL: &str = "is a formula cell; formulas are read-only in this
 /// The width of a typed field, in points.
 const FIELD_WIDTH: f32 = 140.0;
 
-/// One label/value row of a panel (ADR 0035).
+/// One label/value row of a pane (ADR 0035).
 #[derive(Debug, Clone, PartialEq)]
-pub struct PanelRow {
+pub struct PaneRow {
     /// The row label ("Width", "Name", ...).
     pub label: String,
     /// The formatted value; "—" for missing or non-finite values.
@@ -109,7 +109,7 @@ pub struct PanelRow {
     pub numeric: Option<f64>,
 }
 
-impl PanelRow {
+impl PaneRow {
     /// A read-only row.
     pub fn read_only(label: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
@@ -129,7 +129,7 @@ impl PanelRow {
         args: Args,
     ) -> Result<Self, UiError> {
         let command = CommandId::parse(command).map_err(|error| UiError::Io {
-            message: format!("the panel command id {command} is not valid: {error}"),
+            message: format!("the pane command id {command} is not valid: {error}"),
         })?;
         Ok(Self {
             label: label.to_owned(),
@@ -140,7 +140,7 @@ impl PanelRow {
     }
 }
 
-/// The unit a typed entry is read in (P5-05: the panels take inches and
+/// The unit a typed entry is read in (P5-05: the panes take inches and
 /// degrees, [`DisplayUnits`] is the display system only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntryUnit {
@@ -212,11 +212,11 @@ fn prop_kind(value: &CellValue) -> Option<PropKind> {
     }
 }
 
-/// One panel row and what its value column does (ADR 0058).
+/// One pane row and what its value column does (ADR 0058).
 #[derive(Debug, Clone, PartialEq)]
 struct Entry {
     /// The row as [`shape_data_rows`] and [`size_position_rows`] show it.
-    row: PanelRow,
+    row: PaneRow,
     /// What the value column does when it is typed into.
     field: Field,
     /// Whether the cell behind the row carries a formula (ADR 0058).
@@ -228,7 +228,7 @@ struct Entry {
 
 impl Entry {
     /// A read-only row with no note and no formula.
-    fn shown(row: PanelRow) -> Self {
+    fn shown(row: PaneRow) -> Self {
         Self {
             row,
             field: Field::Shown(None),
@@ -253,7 +253,7 @@ struct FieldState {
 /// per `Prop` row (the label, the row name and the typed `Value`). Without
 /// one: the document's `Property` rows (name, value) and the active page's
 /// name. A missing value renders "—" and records one warning.
-pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
+pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PaneRow>, UiError> {
     Ok(shape_data_entries(app)?
         .into_iter()
         .map(|entry| entry.row)
@@ -267,26 +267,26 @@ pub fn shape_data_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
 /// then the evaluated `LocPinX`, `LocPinY`, `FlipX` and `FlipY`. Cells
 /// that carry a formula are read-only (ADR 0058). Without a selection:
 /// the active page's width and height in
-/// [`ferrogram_commands::Settings::units`], then its name. A missing
+/// [`larrygram_commands::Settings::units`], then its name. A missing
 /// value renders "—" and records one warning.
-pub fn size_position_rows(app: &mut AppCtx) -> Result<Vec<PanelRow>, UiError> {
+pub fn size_position_rows(app: &mut AppCtx) -> Result<Vec<PaneRow>, UiError> {
     Ok(size_position_entries(app)?
         .into_iter()
         .map(|entry| entry.row)
         .collect())
 }
 
-/// Draws the Shape Data panel (ADR 0035) and returns the edit intents.
+/// Draws the Shape Data pane (ADR 0035) and returns the edit intents.
 pub fn show_shape_data(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
     let entries = shape_data_entries(app)?;
-    Ok(show_panel(ui, app, "Shape Data", &entries))
+    Ok(show_pane(ui, app, "Shape Data", &entries))
 }
 
-/// Draws the Size & Position panel (ADR 0035) and returns the edit
+/// Draws the Size & Position pane (ADR 0035) and returns the edit
 /// intents.
 pub fn show_size_position(ui: &mut Ui, app: &mut AppCtx) -> Result<Vec<Intent>, UiError> {
     let entries = size_position_entries(app)?;
-    Ok(show_panel(ui, app, "Size & Position", &entries))
+    Ok(show_pane(ui, app, "Size & Position", &entries))
 }
 
 /// Builds the Shape Data entries (ADR 0058).
@@ -308,11 +308,8 @@ fn shape_data_entries(app: &mut AppCtx) -> Result<Vec<Entry>, UiError> {
         };
         let visio_id = shape.visio_id;
         let props = prop_rows(session, anchor);
-        rows.push(Entry::shown(PanelRow::read_only("Name", name)));
-        rows.push(Entry::shown(PanelRow::read_only(
-            "ID",
-            visio_id.to_string(),
-        )));
+        rows.push(Entry::shown(PaneRow::read_only("Name", name)));
+        rows.push(Entry::shown(PaneRow::read_only("ID", visio_id.to_string())));
         for prop in &props {
             rows.push(prop_entry(app, prop, units));
         }
@@ -512,7 +509,7 @@ fn pin_pair(data: &[Row]) -> (Option<f64>, Option<f64>) {
     (x, y)
 }
 
-/// Builds one entry of the Size & Position panel (ADR 0058).
+/// Builds one entry of the Size & Position pane (ADR 0058).
 fn shape_row_entry(
     app: &mut AppCtx,
     row: &Row,
@@ -523,7 +520,7 @@ fn shape_row_entry(
     if row.spec.flag {
         return Ok(match row.flag {
             Some(flag) => Entry {
-                row: PanelRow::read_only(label, flag_text(flag)),
+                row: PaneRow::read_only(label, flag_text(flag)),
                 field: Field::Shown(Some(flag)),
                 formula: row.formula,
                 note: None,
@@ -546,7 +543,7 @@ fn shape_row_entry(
     let (Some(unit), Some((command, argument))) = (row.spec.unit, row.spec.edit) else {
         // A read-only row (LocPinX and friends): no command edits it.
         return Ok(Entry {
-            row: PanelRow::read_only(label, text),
+            row: PaneRow::read_only(label, text),
             field: Field::Shown(None),
             formula: row.formula,
             note: None,
@@ -566,10 +563,10 @@ fn shape_row_entry(
     let edit = if row.formula {
         None
     } else {
-        PanelRow::editable(label, text.clone(), numeric, command, args)?.edit
+        PaneRow::editable(label, text.clone(), numeric, command, args)?.edit
     };
     Ok(Entry {
-        row: PanelRow {
+        row: PaneRow {
             label: label.to_owned(),
             value: text,
             edit,
@@ -581,7 +578,7 @@ fn shape_row_entry(
     })
 }
 
-/// One `Prop` row of the Shape Data panel (ADR 0058).
+/// One `Prop` row of the Shape Data pane (ADR 0058).
 struct PropRow {
     /// The label column: the `Label` cell's text, else the row name.
     label: String,
@@ -590,7 +587,7 @@ struct PropRow {
     /// The row's key (`Prop.<row>.Value`), for the edit command.
     key: String,
     /// The `Value` cell's cached value and unit, when it has one.
-    value: Option<(CellValue, ferrogram_geom::Unit)>,
+    value: Option<(CellValue, larrygram_geom::Unit)>,
     /// Whether the `Value` cell carries a formula (ADR 0058).
     formula: bool,
 }
@@ -657,7 +654,7 @@ fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
     let Some(kind) = prop_kind(value) else {
         // A list or error value has no literal spelling to type back.
         return Entry {
-            row: PanelRow::read_only(&prop.label, text),
+            row: PaneRow::read_only(&prop.label, text),
             field: Field::Shown(check),
             formula: prop.formula,
             note: prop.note.clone(),
@@ -668,7 +665,7 @@ fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
         // with one status line (ADR 0058, as in the other panes). A
         // boolean is a shown check box: it takes no click at all.
         return Entry {
-            row: PanelRow::read_only(&prop.label, text),
+            row: PaneRow::read_only(&prop.label, text),
             field: if kind == PropKind::Bool {
                 Field::Shown(check)
             } else {
@@ -693,9 +690,9 @@ fn prop_entry(app: &mut AppCtx, prop: &PropRow, units: DisplayUnits) -> Entry {
 
 /// The editable value row of one `Prop` entry: the `data.set.property`
 /// command with the row's key (the commit adds the `value` argument).
-fn value_row(label: &str, text: String, key: &str) -> PanelRow {
+fn value_row(label: &str, text: String, key: &str) -> PaneRow {
     let args = Args::new().with("row", ArgValue::Text(key.to_owned()));
-    match PanelRow::editable(label, text, 0.0, "data.set.property", args) {
+    match PaneRow::editable(label, text, 0.0, "data.set.property", args) {
         Ok(mut row) => {
             row.numeric = None;
             row
@@ -703,7 +700,7 @@ fn value_row(label: &str, text: String, key: &str) -> PanelRow {
         // A `CommandId` parse failure is a build bug of this crate (the
         // id is a constant): the row degrades to read-only, never a
         // panic (AGENTS.md section 6).
-        Err(_) => PanelRow::read_only(label, MISSING_VALUE),
+        Err(_) => PaneRow::read_only(label, MISSING_VALUE),
     }
 }
 
@@ -715,7 +712,7 @@ fn value_row(label: &str, text: String, key: &str) -> PanelRow {
 /// and shows as "—" with one warning at the caller.
 fn typed_value(
     value: &CellValue,
-    unit: ferrogram_geom::Unit,
+    unit: larrygram_geom::Unit,
     units: DisplayUnits,
 ) -> Option<(String, Option<bool>)> {
     let value = Value::from_cached(value, unit).ok()?;
@@ -746,7 +743,7 @@ fn typed_value(
 /// units of `Settings::units`, an angle in degrees, a ratio in percent
 /// and anything else as the cached number (a duration's spelling is
 /// lost in the model, ADR 0052, so its cached number is its text).
-fn number_text(number: &ferrogram_shapesheet::Number, units: DisplayUnits) -> Option<String> {
+fn number_text(number: &larrygram_shapesheet::Number, units: DisplayUnits) -> Option<String> {
     let canonical = number.unit.to_canonical(number.magnitude).ok()?;
     let family = number.unit.family().ok()?;
     let text = if family == UnitFamily::Length || family == UnitFamily::Typographic {
@@ -771,7 +768,7 @@ fn flag_text(flag: bool) -> String {
 }
 
 /// The `#RRGGBB` RGB value of a colour (the spelling the file writes).
-fn color_text(color: &ferrogram_model::Color) -> String {
+fn color_text(color: &larrygram_model::Color) -> String {
     format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b)
 }
 
@@ -823,7 +820,7 @@ impl EvalContext for LiteralOnly {
         _sheet: SheetRef,
         _reference: &CellRef,
     ) -> Result<Value, FormulaError> {
-        Err(FormulaError::Conversion("panel entries are constants"))
+        Err(FormulaError::Conversion("pane entries are constants"))
     }
 
     fn set_cell(
@@ -832,7 +829,7 @@ impl EvalContext for LiteralOnly {
         _reference: &CellRef,
         _value: Value,
     ) -> Result<(), FormulaError> {
-        Err(FormulaError::Conversion("panel entries are constants"))
+        Err(FormulaError::Conversion("pane entries are constants"))
     }
 
     fn warn(&mut self, _warning: EvalWarning) {
@@ -895,8 +892,8 @@ fn typed_entry(text: &str, unit: EntryUnit) -> Result<f64, String> {
     }
 }
 
-/// Draws one panel: its title and the rows as a two-column grid.
-fn show_panel(ui: &mut Ui, app: &mut AppCtx, title: &str, entries: &[Entry]) -> Vec<Intent> {
+/// Draws one pane: its title and the rows as a two-column grid.
+fn show_pane(ui: &mut Ui, app: &mut AppCtx, title: &str, entries: &[Entry]) -> Vec<Intent> {
     ui.label(RichText::new(title).strong());
     if app.active_document().is_none() {
         ui.label("No document");
@@ -967,7 +964,7 @@ fn show_value(ui: &mut Ui, entry: &Entry) -> Vec<Intent> {
 /// is refused the same way; both change nothing (no intent, no model
 /// write).
 fn edit_field(ui: &mut Ui, app: &mut AppCtx, title: &str, entry: &Entry) -> Vec<Intent> {
-    let id = egui::Id::unique(("panel-field", title, entry.row.label.as_str()));
+    let id = egui::Id::unique(("pane-field", title, entry.row.label.as_str()));
     let mut state = ui.data_mut(|data| {
         data.get_temp::<FieldState>(id)
             .unwrap_or_else(|| FieldState {
@@ -1001,7 +998,7 @@ fn edit_field(ui: &mut Ui, app: &mut AppCtx, title: &str, entry: &Entry) -> Vec<
 
 /// The commit of one typed entry (ADR 0058): one command to dispatch,
 /// or one status line and nothing else — a formula cell refuses the
-/// edit and a bad entry is refused the same way. The panel itself
+/// edit and a bad entry is refused the same way. The pane itself
 /// never touches the model.
 ///
 /// A Size & Position field carries its number in the command's own
@@ -1043,10 +1040,10 @@ fn commit_entry(app: &mut AppCtx, entry: &Entry, text: &str) -> Vec<Intent> {
     }
 }
 
-/// The panel's instant feedback on one typed Shape Data value (task
+/// The pane's instant feedback on one typed Shape Data value (task
 /// P6-18): the text must be a value of the row's kind. The command
 /// parses the text again (one rule, one grammar); this check only
-/// decides whether an intent leaves the panel.
+/// decides whether an intent leaves the pane.
 fn value_entry(kind: PropKind, text: &str) -> Result<(), String> {
     match kind {
         PropKind::Number => typed_entry(text, EntryUnit::Length).map(|_| ()),
@@ -1104,7 +1101,7 @@ fn active_page(session: &DocumentSession) -> Option<&Page> {
 /// Reads one number cell of a sheet (inches or radians).
 ///
 /// `None` when the cell is missing or unusable: the ADR 0021 reader
-/// substitutes `0` and records a warning, which the panel treats as "no
+/// substitutes `0` and records a warning, which the pane treats as "no
 /// value" (ADR 0035) instead of showing the substitute.
 fn read_number(session: &DocumentSession, sheet: SheetRef, cell: &str) -> Option<f64> {
     let mut reader = CellReader::new(&session.document);
@@ -1202,7 +1199,7 @@ fn missing_entry(app: &mut AppCtx, label: &str, reason: &str) -> Entry {
     if !app.warnings.iter().any(|warning| warning == &message) {
         app.record_warning(message);
     }
-    Entry::shown(PanelRow::read_only(label, MISSING_VALUE))
+    Entry::shown(PaneRow::read_only(label, MISSING_VALUE))
 }
 
 /// Adds one length row: formatted with units, or "—" plus one warning.
@@ -1216,7 +1213,7 @@ fn push_length(
 ) -> Entry {
     let mut entry = match value {
         Some(value) if value.is_finite() => {
-            Entry::shown(PanelRow::read_only(label, format_length(value, units)))
+            Entry::shown(PaneRow::read_only(label, format_length(value, units)))
         }
         Some(_) => missing_entry(app, label, "not a number"),
         None => missing_entry(app, label, "no value"),
@@ -1230,7 +1227,7 @@ fn push_text(app: &mut AppCtx, rows: &mut Vec<Entry>, label: &str, value: &str) 
     if value.is_empty() {
         rows.push(missing_entry(app, label, "no value"));
     } else {
-        rows.push(Entry::shown(PanelRow::read_only(label, value)));
+        rows.push(Entry::shown(PaneRow::read_only(label, value)));
     }
 }
 
@@ -1238,9 +1235,9 @@ fn push_text(app: &mut AppCtx, rows: &mut Vec<Entry>, label: &str, value: &str) 
 mod tests {
     use super::*;
     use crate::test_util::with_ui;
-    use ferrogram_commands::{DocumentSession, Settings};
-    use ferrogram_geom::Unit as GeomUnit;
-    use ferrogram_model::{Cell, Color, Document, Page, PageId, Property, Row, Section, Shape};
+    use larrygram_commands::{DocumentSession, Settings};
+    use larrygram_geom::Unit as GeomUnit;
+    use larrygram_model::{Cell, Color, Document, Page, PageId, Property, Row, Section, Shape};
 
     /// A page with the given name and an 8.5 x 11 in sheet.
     fn page(name: &str) -> Page {
@@ -1349,7 +1346,7 @@ mod tests {
     }
 
     /// The row with `label` of a row list, or panic (tests may).
-    fn row<'a>(rows: &'a [PanelRow], label: &str) -> &'a PanelRow {
+    fn row<'a>(rows: &'a [PaneRow], label: &str) -> &'a PaneRow {
         rows.iter()
             .find(|row| row.label == label)
             .unwrap_or_else(|| panic!("no row labelled {label}"))
@@ -1357,7 +1354,7 @@ mod tests {
 
     #[test]
     fn editable_rows_reject_an_invalid_command_id() {
-        let error = PanelRow::editable("Width", "2 in".to_owned(), 2.0, "", Args::new())
+        let error = PaneRow::editable("Width", "2 in".to_owned(), 2.0, "", Args::new())
             .expect_err("an empty command id is invalid");
         assert!(matches!(error, UiError::Io { .. }));
     }
@@ -1418,7 +1415,7 @@ mod tests {
 
     #[test]
     fn a_read_only_row_has_no_edit() {
-        let row = PanelRow::read_only("Width", "8.5 in");
+        let row = PaneRow::read_only("Width", "8.5 in");
         assert_eq!(row.label, "Width");
         assert_eq!(row.value, "8.5 in");
         assert!(row.edit.is_none());
@@ -1432,15 +1429,15 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                PanelRow::read_only("title", "Diagram 1"),
-                PanelRow::read_only("Name", "Page-1"),
+                PaneRow::read_only("title", "Diagram 1"),
+                PaneRow::read_only("Name", "Page-1"),
             ]
         );
         assert!(rows.iter().all(|row| row.edit.is_none()));
     }
 
     #[test]
-    fn a_selection_makes_the_anchor_the_panels_subject() {
+    fn a_selection_makes_the_anchor_the_panes_subject() {
         let (mut app, _id) = selected_document();
         let data = shape_data_rows(&mut app).expect("rows");
         assert_eq!(data[0].value, "Box");
@@ -1479,9 +1476,9 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                PanelRow::read_only("Width", "8.5 in"),
-                PanelRow::read_only("Height", "11 in"),
-                PanelRow::read_only("Name", "Page-1"),
+                PaneRow::read_only("Width", "8.5 in"),
+                PaneRow::read_only("Height", "11 in"),
+                PaneRow::read_only("Name", "Page-1"),
             ]
         );
         assert!(rows.iter().all(|row| row.edit.is_none()));
@@ -1505,11 +1502,11 @@ mod tests {
         doc.pages.push(Page::new(PageId { index: 0 }, 0));
         let mut app = app_with(doc, DisplayUnits::Inches);
         let rows = size_position_rows(&mut app).expect("rows");
-        assert_eq!(rows[0], PanelRow::read_only("Width", MISSING_VALUE));
-        assert_eq!(rows[1], PanelRow::read_only("Height", MISSING_VALUE));
+        assert_eq!(rows[0], PaneRow::read_only("Width", MISSING_VALUE));
+        assert_eq!(rows[1], PaneRow::read_only("Height", MISSING_VALUE));
         assert_eq!(
             rows.last().cloned(),
-            Some(PanelRow::read_only("Name", MISSING_VALUE))
+            Some(PaneRow::read_only("Name", MISSING_VALUE))
         );
         assert_eq!(rows.len(), 3);
         assert_eq!(app.warnings.len(), 3);
@@ -1520,7 +1517,7 @@ mod tests {
         assert_eq!(app.warnings.len(), 3);
 
         let rows = shape_data_rows(&mut app).expect("rows");
-        assert_eq!(rows, vec![PanelRow::read_only("Name", MISSING_VALUE)]);
+        assert_eq!(rows, vec![PaneRow::read_only("Name", MISSING_VALUE)]);
         assert_eq!(
             app.warnings.last().map(String::as_str),
             Some("Name: no value")
@@ -1536,8 +1533,8 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                PanelRow::read_only("title", MISSING_VALUE),
-                PanelRow::read_only("Name", MISSING_VALUE),
+                PaneRow::read_only("title", MISSING_VALUE),
+                PaneRow::read_only("Name", MISSING_VALUE),
             ]
         );
         assert!(
@@ -1582,7 +1579,7 @@ mod tests {
     }
 
     #[test]
-    fn both_panels_render_in_an_egui_context() {
+    fn both_panes_render_in_an_egui_context() {
         let (mut app, _id) = selected_document();
         with_ui(|ui| {
             show_shape_data(ui, &mut app).expect("shape data");
@@ -1604,7 +1601,7 @@ mod tests {
     #[test]
     fn a_constant_literal_is_not_a_refused_formula() {
         // P6-07's classification: a constant literal computes nothing,
-        // so the panel keeps the field editable.
+        // so the pane keeps the field editable.
         for formula in ["2 in", "-2", "2+3", "0.5235987755982988"] {
             assert!(!formula_computes(formula), "{formula}");
         }
@@ -1665,7 +1662,7 @@ mod tests {
         master.sheet.cells = vec![formula_cell("Width", "Height*2", 2.0)];
         let master_id = doc.add_shape(master);
         let mut master_row =
-            ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+            larrygram_model::Master::new(larrygram_model::MasterId { index: 0 }, 1);
         master_row.shapes.push(master_id);
         let master_row = doc.add_master(master_row).expect("the master adds");
         let mut shape = Shape::new(ShapeId { index: 1 }, 7);
@@ -1776,7 +1773,7 @@ mod tests {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
         shape.name = "Box".to_owned();
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         section.rows.push(cost);
         shape.sheet.sections.push(section);
         let id = doc.add_shape(shape);
@@ -1806,7 +1803,7 @@ mod tests {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
         shape.name = "Box".to_owned();
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         section.rows.push(named);
         section.rows.push(unnamed);
         section.rows.push(prop_row("Row_3", Some("Empty"), None));
@@ -1864,7 +1861,7 @@ mod tests {
         ));
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         section.rows.push(code);
         shape.sheet.sections.push(section);
         let id = doc.add_shape(shape);
@@ -1990,7 +1987,7 @@ mod tests {
         );
         context.warn(EvalWarning {
             sheet: SheetRef::Shape(ShapeId { index: 0 }),
-            kind: ferrogram_shapesheet::EvalWarningKind::Coercion(String::from("x")),
+            kind: larrygram_shapesheet::EvalWarningKind::Coercion(String::from("x")),
         });
         assert_eq!(context.warnings, 1);
     }
@@ -2051,7 +2048,7 @@ mod tests {
         assert_eq!(
             app.active_document().expect("session").document,
             before,
-            "the panel itself never touches the model"
+            "the pane itself never touches the model"
         );
     }
 
@@ -2112,7 +2109,7 @@ mod tests {
 
     /// Task P6-18 (the coverage report's "formula read-only marker"):
     /// the `(formula)` marker and its hover hint render beside a
-    /// formula cell's value in a real frame, through [`show_panel`].
+    /// formula cell's value in a real frame, through [`show_pane`].
     #[test]
     fn a_formula_cell_renders_the_formula_marker() {
         let (mut app, id) = selected_document();
@@ -2129,7 +2126,7 @@ mod tests {
         let entries = size_position_entries(&mut app).expect("entries");
         assert!(entry_of(&entries, "Width").formula);
         with_ui(|ui| {
-            let intents = show_panel(ui, &mut app, "Size & Position", &entries);
+            let intents = show_pane(ui, &mut app, "Size & Position", &entries);
             assert!(intents.is_empty(), "a read-only row dispatches nothing");
         });
     }
@@ -2180,7 +2177,7 @@ mod tests {
 
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         section.rows.push(Row::new());
         shape.sheet.sections.push(section);
         let id = doc.add_shape(shape);
@@ -2195,12 +2192,12 @@ mod tests {
     fn deleted_prop_rows_are_skipped() {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         let mut row = prop_row("Row_1", Some("Gone"), None);
         row.preserved
             .attributes
-            .push(ferrogram_model::XmlAttribute {
-                name: ferrogram_model::QName {
+            .push(larrygram_model::XmlAttribute {
+                name: larrygram_model::QName {
                     prefix: None,
                     uri: None,
                     local: String::from("Del"),
@@ -2218,7 +2215,7 @@ mod tests {
     fn a_section_that_is_not_property_is_ignored() {
         let mut doc = Document::new();
         let mut shape = Shape::new(ShapeId { index: 0 }, 7);
-        let mut section = Section::new(ferrogram_model::SectionName::new("Geometry"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Geometry"));
         section.rows.push(prop_row("Row_1", Some("X"), None));
         shape.sheet.sections.push(section);
         let id = doc.add_shape(shape);
@@ -2230,7 +2227,7 @@ mod tests {
     fn add_props(app: &mut AppCtx, id: ShapeId, rows: Vec<Row>) {
         let session = app.active_document_mut().expect("session");
         if let Some(shape) = session.document.shape_mut(id) {
-            let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+            let mut section = Section::new(larrygram_model::SectionName::new("Property"));
             section.rows = rows;
             shape.sheet.sections.push(section);
         }
@@ -2296,7 +2293,7 @@ mod tests {
         );
 
         // The value column draws a check box (a click dispatches; the
-        // harness test in `tests/panels_typed.rs` drives the click).
+        // harness test in `tests/panes_typed.rs` drives the click).
         let seen = with_ui(|ui| show_value(ui, rounded));
         assert!(seen.is_empty(), "no click, no intent");
     }
@@ -2363,7 +2360,7 @@ mod tests {
     fn shape_data_rows_list_the_master_chain_rows_too() {
         let mut doc = Document::new();
         let mut rung = Shape::new(ShapeId { index: 0 }, 1);
-        let mut section = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut section = Section::new(larrygram_model::SectionName::new("Property"));
         section.rows.push(prop_row(
             "Cost",
             Some("Master cost"),
@@ -2377,14 +2374,14 @@ mod tests {
         rung.sheet.sections.push(section);
         let rung = doc.add_shape(rung);
         let mut master_row =
-            ferrogram_model::Master::new(ferrogram_model::MasterId { index: 0 }, 1);
+            larrygram_model::Master::new(larrygram_model::MasterId { index: 0 }, 1);
         master_row.shapes.push(rung);
         let master_row = doc.add_master(master_row).expect("the master adds");
 
         let mut shape = Shape::new(ShapeId { index: 1 }, 7);
         shape.name = "Box".to_owned();
         shape.master = Some(master_row);
-        let mut own = Section::new(ferrogram_model::SectionName::new("Property"));
+        let mut own = Section::new(larrygram_model::SectionName::new("Property"));
         own.rows.push(prop_row(
             "Cost",
             Some("Unit cost"),
@@ -2424,7 +2421,7 @@ mod tests {
     }
 
     /// Task P6-18: the value entry is validated in the row's kind (the
-    /// command parses the text again; this is the panel's feedback).
+    /// command parses the text again; this is the pane's feedback).
     #[test]
     fn value_entries_validate_in_the_rows_kind() {
         assert!(value_entry(PropKind::Number, "2.5 cm").is_ok());

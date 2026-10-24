@@ -9,7 +9,7 @@
 //! commands over this data; the data and its trivial constructors are
 //! fixed here by task P5-01.
 
-use ferrogram_model::{Connect, PageId, Shape};
+use larrygram_model::{Connect, PageId, Shape};
 
 /// What a copy holds (ADR 0047).
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -41,7 +41,7 @@ command.
 `crates/model/tests/mutate.rs` and `crates/commands/tests/connector.rs`
 (P5-02, P5-08): glue to a connection point and to an outline, replace an
 endpoint's glue, unglue, drop glue when the target is detached, and
-re-route after move/resize/undo. The routing math (`ferrogram_geom::
+re-route after move/resize/undo. The routing math (`larrygram_geom::
 routing`) gets unit tests for both styles including degenerate endpoints.
 
 ### 4. UI interaction tests (`egui_kittest`)
@@ -54,7 +54,7 @@ asserts on the registry state and the overlay.
 
 ### 5. The scripted exit-criterion flowchart
 
-`apps/ferrogram/tests/flowchart.rs` (P5-10), `#[ignore = "needs corpus"]`
+`apps/larrygram/tests/flowchart.rs` (P5-10), `#[ignore = "needs corpus"]`
 style guard not needed (it builds its own document): dispatch
 `insert.shape` ten times (process/decision/terminator mix), glue them
 into a flow with `connector.*`, add a second page with more shapes,

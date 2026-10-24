@@ -29,9 +29,9 @@
 //! A `Shape`, `PageSheet` or `StyleSheet` element carries its ShapeSheet
 //! content as children: `Cell` elements (direct cells) and `Section` elements
 //! (repeated-row sections, each with `Row` children). They map to
-//! [`Sheet`](ferrogram_model::Sheet): a `Cell` becomes a
-//! [`Cell`](ferrogram_model::Cell), a `Section` a
-//! [`Section`](ferrogram_model::Section), a `Row` a [`Row`](ferrogram_model::Row)
+//! [`Sheet`](larrygram_model::Sheet): a `Cell` becomes a
+//! [`Cell`](larrygram_model::Cell), a `Section` a
+//! [`Section`](larrygram_model::Section), a `Row` a [`Row`](larrygram_model::Row)
 //! and a `Cell` inside a row becomes that row's cell. A cell keeps the file's
 //! spelling of the name (`N`), the formula (`F`), the cached value (`V`, `E`)
 //! and the declared unit (`U`) separately (ADR 0011, and the table in
@@ -40,7 +40,7 @@
 //!
 //! The cells a `Section` writes *outside* its rows (`Geometry` writes
 //! `NoFill`, `NoLine`, `NoShow`, `NoSnap`, `NoQuickDrag` there) map to
-//! [`Section::cells`](ferrogram_model::Section) (P2-06b decision 1), where
+//! [`Section::cells`](larrygram_model::Section) (P2-06b decision 1), where
 //! the lookup sees them before the row cells.
 //!
 //! # Preservation (ADR 0012)
@@ -49,17 +49,17 @@
 //! [`Preserved::attributes`], and every child element no field takes goes to
 //! its [`Preserved::children`], in document order. Namespace declarations
 //! (`xmlns`, `xmlns:*`) are neither mapped nor preserved: they are not data
-//! ([`diff`](ferrogram_model::diff) ignores them) and a write synthesizes
+//! ([`diff`](larrygram_model::diff) ignores them) and a write synthesizes
 //! them. Where several source elements map to one entity (a page and its page
 //! sheet, a page and its page-contents root), their unmapped content merges
 //! into that one [`Preserved`] in depth-first document order.
 //!
 //! Unmapped content of a sheet element belongs to the entity that owns the
 //! sheet: a shape's `Text` and `Data1` children land in
-//! [`Shape::preserved`](ferrogram_model::Shape), a page sheet's `Trigger`
-//! children in [`Page::preserved`](ferrogram_model::Page). The `Shape`
+//! [`Shape::preserved`](larrygram_model::Shape), a page sheet's `Trigger`
+//! children in [`Page::preserved`](larrygram_model::Page). The `Shape`
 //! children of a `Shapes` wrapper map to the group's sub-shapes
-//! ([`Shape::children`](ferrogram_model::Shape)); the wrapper's own attributes
+//! ([`Shape::children`](larrygram_model::Shape)); the wrapper's own attributes
 //! follow the wrapper's owner.
 //!
 //! Two writer-managed spellings are the exception (task P6-16): a cell's
@@ -81,7 +81,7 @@
 //!   `Preserved` instead of being resolved;
 //! - a `Connect` element with text, a comment or a processing instruction is
 //!   kept verbatim rather than modeled; its other unmapped attributes and
-//!   children go to [`Connect::preserved`](ferrogram_model::Connect);
+//!   children go to [`Connect::preserved`](larrygram_model::Connect);
 //! - a numeric or boolean value that does not parse is
 //!   [`Error::InvalidPackage`] naming the part and the cell.
 
@@ -91,7 +91,7 @@ pub(crate) mod text;
 pub(crate) mod theme;
 pub(crate) mod value;
 
-use ferrogram_model::{
+use larrygram_model::{
     Connect, Document, DocumentKind, Master, MasterId, Page, PageId, Preserved, Property, Shape,
     ShapeId, Style, StyleId, XmlNode,
 };
@@ -259,7 +259,7 @@ impl Mapper<'_> {
 
     /// Keeps the attributes no model field takes, skipping namespace
     /// declarations.
-    fn keep_attributes(attributes: &[ferrogram_model::XmlAttribute], into: &mut Preserved) {
+    fn keep_attributes(attributes: &[larrygram_model::XmlAttribute], into: &mut Preserved) {
         for attribute in attributes.iter().filter(|a| !is_namespace_declaration(a)) {
             into.attributes.push(attribute.clone());
         }
@@ -849,7 +849,7 @@ fn map_connects(
 
 #[cfg(test)]
 mod tests {
-    use ferrogram_model::{CellLookup, CellName, QName, XmlAttribute, XmlChild};
+    use larrygram_model::{CellLookup, CellName, QName, XmlAttribute, XmlChild};
 
     use super::*;
     use crate::package::{ContentType, Part, Relationship, RelationshipId};
@@ -1322,7 +1322,7 @@ mod tests {
     fn to_model_maps_section_level_cells() {
         let document = to_model(&drawing()).expect("document");
         let style = document
-            .style(ferrogram_model::StyleId { index: 0 })
+            .style(larrygram_model::StyleId { index: 0 })
             .expect("style");
         let section = style.sheet.sections.first().expect("section");
         assert_eq!(section.name.as_str(), "Geometry");
@@ -1598,11 +1598,11 @@ mod tests {
             .expect("resolve");
         assert_eq!(
             resolved.source,
-            ferrogram_model::ValueSource::Master(MasterId { index: 0 })
+            larrygram_model::ValueSource::Master(MasterId { index: 0 })
         );
         assert_eq!(
             resolved.value,
-            Some(&ferrogram_model::CellValue::Number(2.0))
+            Some(&larrygram_model::CellValue::Number(2.0))
         );
     }
 }

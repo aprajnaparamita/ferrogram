@@ -10,7 +10,7 @@
 //! and is bounded like the lookup (ADR 0013): a cyclic chain stops at the
 //! first repeat, and at most a fixed rung cap (128) are visited.
 
-use ferrogram_geom::Point;
+use larrygram_geom::Point;
 
 use crate::cell::CellValue;
 use crate::document::Document;

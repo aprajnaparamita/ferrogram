@@ -14,7 +14,7 @@
 //! rotation and the union of several shapes is the axis-aligned union of
 //! their transformed bounds.
 
-use ferrogram_geom::{Angle, Point, Rect};
+use larrygram_geom::{Angle, Point, Rect};
 
 use crate::error::Error;
 use crate::hit::{NodePath, node_bounds, oriented_bounds, placement};
@@ -122,7 +122,7 @@ pub fn build_selection_overlay(scene: &Scene, nodes: &[NodePath]) -> Result<Over
 mod tests {
     use core::f64::consts::FRAC_PI_2;
 
-    use ferrogram_geom::{Path, Transform};
+    use larrygram_geom::{Path, Transform};
 
     use super::*;
     use crate::scene::{Node, Rgba, Shape};
@@ -142,11 +142,11 @@ mod tests {
 
     fn box_path(width: f64, height: f64) -> Path {
         let mut path = Path::new();
-        path.push(ferrogram_geom::Segment::MoveTo(Point::new(0.0, 0.0)));
-        path.push(ferrogram_geom::Segment::LineTo(Point::new(width, 0.0)));
-        path.push(ferrogram_geom::Segment::LineTo(Point::new(width, height)));
-        path.push(ferrogram_geom::Segment::LineTo(Point::new(0.0, height)));
-        path.push(ferrogram_geom::Segment::Close);
+        path.push(larrygram_geom::Segment::MoveTo(Point::new(0.0, 0.0)));
+        path.push(larrygram_geom::Segment::LineTo(Point::new(width, 0.0)));
+        path.push(larrygram_geom::Segment::LineTo(Point::new(width, height)));
+        path.push(larrygram_geom::Segment::LineTo(Point::new(0.0, height)));
+        path.push(larrygram_geom::Segment::Close);
         path
     }
 

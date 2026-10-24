@@ -32,7 +32,7 @@ is: `insert_shape`, `insert_subshape`, `detach_shape`, `restore_shapes`,
 `add_connect`, `remove_connects`, `connects_of`, `group_shapes`,
 `ungroup_shape`, `write_connector_path`, `next_visio_id`.
 
-All return `Result<_, ferrogram_model::Error>`; new variants go through
+All return `Result<_, larrygram_model::Error>`; new variants go through
 the crate's `error.rs` (task P5-02 may add a bounded set of them).
 
 ### Invariants

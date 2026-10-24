@@ -6,7 +6,7 @@
 
 ## Context
 
-The ribbon and menu layout data must be:
+The command bar and menu layout data must be:
 
 - Human-readable and diffable, so we can review what an extractor changed.
 - Independent of the Rust code, so the loader (`crates/ui-spec`) and the
@@ -16,7 +16,7 @@ The ribbon and menu layout data must be:
   without schema changes.
 - Validated at extractor time and at load time, so a typo in an extractor
   fails the gate instead of crashing the app at runtime.
-- Keyed by **Fluent control names** (not by Ferrogram command ids), so
+- Keyed by **Fluent control names** (not by Larrygram command ids), so
   the data round-trips with the Microsoft control-identifier spreadsheets
   and matches the screenshot pass. This is the P1-02
   review's blocker finding B1: the earlier draft used command ids as
@@ -25,7 +25,7 @@ The ribbon and menu layout data must be:
 The data covers three surfaces that have different shapes in Fluent XML but
 must be expressed in one schema:
 
-- The **ribbon**: tab → group → control tree, with a tab set and a quick
+- The **command bar**: tab → group → control tree, with a tab set and a quick
   access toolbar (QAT) on top.
 - **Backstage**: tabs behind the File menu (New, Open, Save, Print, ...).
 - **Context menus**: per-canvas and per-shape menus.
@@ -75,7 +75,7 @@ under source 1.
 ### Files
 
 - `ui-spec/schema.json` — JSON Schema (Draft 7). One schema validates:
-  - `panel-2016.yaml`, `panel-365.yaml` (ribbon + backstage + context
+  - `panel-2016.yaml`, `panel-365.yaml` (command bar + backstage + context
     menus).
   - `commands.yaml` (command-id ↔ VisUICmds ↔ Fluent control mappings).
   - `shortcuts.yaml` (keyboard shortcuts).
@@ -88,7 +88,7 @@ under source 1.
 - `ui-spec/shortcuts.yaml` — shortcut table, extracted from source 5.
 - `ui-spec/diff-2016-vs-365.md` — generated structural diff of the two
   layouts (a markdown table of Fluent ids in only one, only the other,
-  or both, with control type and ribbon path). Always regenerated.
+  or both, with control type and command-bar path). Always regenerated.
 - `docs/parity/controls.md` — every Fluent control id in both layouts,
   with a status: `implemented`, `stub`, or `out-of-scope`. Initial state
   is `stub` (nothing implemented yet) and `out-of-scope` for Microsoft
@@ -121,7 +121,7 @@ tabs:                             # ordered list of top-level tabs (excl. file/b
             type: gallery
             label: Paste
             order: 0
-            command: edit.paste   # optional Ferrogram command id
+            command: edit.paste   # optional Larrygram command id
             # The five fields below are REQUIRED in the schema
             # (with type [..., "null"]) so the screenshot pass can
             # fill them in without further schema work:
@@ -206,18 +206,18 @@ comes from the `Tab Set` + `Tab` columns, recorded as `tab` and
 `tab_set` on the top tab entry (not on every control).
 
 This avoids the cyclic-parent trap in the Fluent data: the same
-control can be a member of two groups in two ribbons (e.g.
-`ConnectorTool` appears in the Home ribbon's Tools group and the
-Insert ribbon's Shapes gallery). In our format the control appears
+control can be a member of two groups in two command bars (e.g.
+`ConnectorTool` appears in the Home command bar's Tools group and the
+Insert command bar's Shapes gallery). In our format the control appears
 once with two parent links collapsed: the **primary** parent is the
-one in the same ribbon as the control's `tab` field; alternate paths
-go in a sibling `aliases: [parent_in_other_ribbon]` field. P1-03 picks
+one in the same command bar as the control's `tab` field; alternate paths
+go in a sibling `aliases: [parent_in_other_command_bar]` field. P1-03 picks
 the primary parent by `tab` match.
 
 ### Commands and shortcuts
 
 - `commands.yaml` schema is in the same `ui-spec/schema.json`, under
-  `$defs/command`. Each entry: `id` (a Ferrogram `CommandId`,
+  `$defs/command`. Each entry: `id` (a Larrygram `CommandId`,
   pattern `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`),
   `label`, `visuicmd` (a `visCmd*` string or `null`,
   pattern `^visCmd[A-Za-z0-9]+$` and `type: ["string", "null"]`),
@@ -229,13 +229,13 @@ the primary parent by `tab` match.
 - `shortcuts.yaml` schema is under `$defs/shortcut`. A shortcut is a
   **sequence of chords** (m2): the user types one chord (a set of
   modifiers plus one key, e.g. `[Ctrl, Z]`), then the next, until the
-  sequence is complete. Visio's ribbon keytips (Alt + H, F, O) are
+  sequence is complete. Visio's command bar keytips (Alt + H, F, O) are
   naturally represented as a two-chord sequence
   `[[Alt, H], [F, O]]`. Each chord is an unordered set of keys
   (modifiers + one key); the sequence is the order the user types
   them. Each entry: `sequence` (a list of chords, each chord is a
   list of key tokens), `command` (a `CommandId` from `commands.yaml`),
-  `scope` (`global` | `ribbon` | `page` | `text` | `selection` |
+  `scope` (`global` | `command_bar` | `page` | `text` | `selection` |
   `window`). An optional `section` records the human-readable section
   from the source page (e.g. "Frequently used shortcuts").
 
@@ -284,7 +284,7 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
   immediately.
 - A `serde_yml` regression is contained to the loader. The schema is
   the contract.
-- Layout control ids are Fluent names; commands are Ferrogram ids. The
+- Layout control ids are Fluent names; commands are Larrygram ids. The
   two namespaces are explicitly distinct in the schema (`fluentId` vs
   `commandId` patterns) and in `crates/ui-spec` (`FluentId` vs
   `CommandId` newtypes).
@@ -296,8 +296,8 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
   thousand rows).
 - **Use TOML instead of YAML.** TOML cannot express nested lists of
   mixed records as cleanly, and the Fluent data is tree-shaped.
-- **Split backstage, context menus and ribbon into three files.**
-  Rejected: harder to keep them in sync (a control can be on a ribbon
+- **Split backstage, context menus and command bar into three files.**
+  Rejected: harder to keep them in sync (a control can be on a command bar
   and in a context menu), and the schema is the same.
 - **Embed the schema in each YAML file.** Rejected: duplicates the
   schema; the schema is committed once at `ui-spec/schema.json`.
@@ -321,10 +321,10 @@ A failure is `LoadError::CrossReference { kind, id, referenced_by }`
 ### Amended 2026-10-16, P4-01: a placement is a path, ids repeat (P1-14 note)
 
 The P1-14 finding is now a rule: **a Fluent id is not unique within a
-layout**. The same control appears in several places (ribbon, quick access
+layout**. The same control appears in several places (command bar, quick access
 toolbar, backstage) and a placement is identified by its path
 (`tab/TabHome/GroupClipboard/PasteGallery`; the parity matrix's `path`
-column). The ribbon (ADR 0031) renders every placement; repeats inside one
+column). The command bar (ADR 0031) renders every placement; repeats inside one
 container (`TabSave` x9 in one backstage tab, `LineStylesDialog` twice in
 one group) are kept in the data and deduplicated at render time only when
 id, label and order match exactly in one container (first wins), since

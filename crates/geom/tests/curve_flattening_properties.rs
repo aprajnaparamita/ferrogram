@@ -5,7 +5,7 @@
 //! conversion never panics (and always yields finite points) on random
 //! bounded inputs of every curve kind.
 
-use ferrogram_geom::{
+use larrygram_geom::{
     Angle, Arc, Cubic, Curve, EllipticalArc, Nurbs, NurbsPoint, Point, Polyline, Spline,
 };
 use proptest::prelude::*;

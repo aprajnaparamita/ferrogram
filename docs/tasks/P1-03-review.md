@@ -31,7 +31,7 @@ Fix:
   `cargo tree -i reqwest` finds nothing.
 
 **M2. The committed layouts must load with the runtime loader.**
-`crates/ui-spec` (`ferrogram_ui_spec::Loader`) is now on `main`. Add
+`crates/ui-spec` (`larrygram_ui_spec::Loader`) is now on `main`. Add
 an xtask test that does all of the following:
 - copy the committed `ui-spec/panel-2016.yaml` and `panel-365.yaml`
   into a temp workspace;
@@ -40,7 +40,7 @@ an xtask test that does all of the following:
 - call `Loader::load` for both `LayoutKind`s;
 - assert success and the control counts from your Result.
 
-`xtask` may depend on `ferrogram-ui-spec` (a path dev-dependency is
+`xtask` may depend on `larrygram-ui-spec` (a path dev-dependency is
 fine; xtask is outside the layer rules). This proves the extractor and
 the loader agree on the format before P1-04 starts. If the loader
 rejects something, report it under "Open issues" with the exact

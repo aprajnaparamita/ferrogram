@@ -28,8 +28,8 @@
 // these helpers are test code and use `unwrap` freely.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-use ferrogram_commands::app::{AppCtx, Settings};
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, Settings};
+use larrygram_commands::{
     ArgValue, Args, Command, CommandError, CommandId, CommandMeta, CommandStatus, Enabled,
     Invocation, Outcome, Registry, RegistryError, Source, StubCommand,
 };
@@ -374,20 +374,20 @@ proptest! {
     fn from_mappings_builds_the_table_it_is_given(
         picks in proptest::collection::vec(0..POOL.len(), 1..12),
     ) {
-        let entries: Vec<ferrogram_ui_spec::CommandMapping> = picks
+        let entries: Vec<larrygram_ui_spec::CommandMapping> = picks
             .iter()
-            .map(|index| ferrogram_ui_spec::CommandMapping {
-                id: ferrogram_ui_spec::CommandId::new(POOL[*index]),
+            .map(|index| larrygram_ui_spec::CommandMapping {
+                id: larrygram_ui_spec::CommandId::new(POOL[*index]),
                 label: "Label".to_owned(),
                 visuicmd: None,
                 fluent_ids: Vec::new(),
-                mapping_confidence: ferrogram_ui_spec::MappingConfidence::Unknown,
+                mapping_confidence: larrygram_ui_spec::MappingConfidence::Unknown,
             })
             .collect();
         let mut distinct: Vec<usize> = picks.clone();
         distinct.sort_unstable();
         distinct.dedup();
-        let result = Registry::from_mappings(&ferrogram_ui_spec::Commands { entries });
+        let result = Registry::from_mappings(&larrygram_ui_spec::Commands { entries });
         match result {
             Ok(registry) => {
                 prop_assert!(!distinct.is_empty());

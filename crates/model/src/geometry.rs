@@ -8,7 +8,7 @@
 //! their formula-encoded cached data (`NURBS(...)` text and the A-cell
 //! point list) without evaluating any formula (Phase 6).
 
-use ferrogram_geom::{Angle, Point};
+use larrygram_geom::{Angle, Point};
 
 use crate::cell::CellValue;
 use crate::document::Document;

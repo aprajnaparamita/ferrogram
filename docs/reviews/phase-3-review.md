@@ -5,11 +5,11 @@ Task P3-12, reviewer, 2026-10-15, branch `agent/P3-12`. Review of
 0002) and ADRs 0019–0027. The reviewer role is read-only: this task
 changed no code.
 
-Scope covered: `ferrogram-geom` (curve, path), `ferrogram-model`
+Scope covered: `larrygram-geom` (curve, path), `larrygram-model`
 (geometry, lookup, values, layer, theme, text, defaults, document),
-`ferrogram-text` (font, layout), `ferrogram-render` (scene, build,
-styles, png, svg), `ferrogram-vsdx` (read/text, read/theme and the read
-plumbing they touch) and `apps/ferrogram-cli` (cli, parse, exec, inspect).
+`larrygram-text` (font, layout), `larrygram-render` (scene, build,
+styles, png, svg), `larrygram-vsdx` (read/text, read/theme and the read
+plumbing they touch) and `apps/larrygram-cli` (cli, parse, exec, inspect).
 
 ## Verdict
 
@@ -181,7 +181,7 @@ left to this review.
    whole ancestor chain maps to the page. Fix the sentence.
 
 8. **Degenerate-curve degradation is silent; ADR 0022 says "and warn".**
-   `ferrogram-geom` has no warning channel (`to_cubics` is always `Ok`)
+   `larrygram-geom` has no warning channel (`to_cubics` is always `Ok`)
    and `append_curve` (`build.rs:1054`) records nothing, so bow 0, a
    zero chord, `ratio <= 0`, bad knot lists and non-finite points
    degrade to chords with no `CellWarning`, while unknown row types and
@@ -193,7 +193,7 @@ left to this review.
 9. **`ErrorValue` prose is printed as a cached error.** The builder
    stuffs a sentence into `WarningKind::ErrorValue`
    (`build.rs:1012–1020`), and the CLI prints it as
-   `cached error {error:?}, using …` (`apps/ferrogram-cli/src/cli/exec.rs:233`),
+   `cached error {error:?}, using …` (`apps/larrygram-cli/src/cli/exec.rs:233`),
    so a `NURBS()` parse failure reads as `cached error "a NURBS() formula
    that does not parse; drawing a straight segment"`. Cosmetic, but the
    wording misattributes the failure to the file's cached value.

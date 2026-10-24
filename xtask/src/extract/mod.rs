@@ -435,7 +435,7 @@ fn scratch_dir() -> Result<PathBuf> {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "ferrogram-extract-check-{}-{n}",
+        "larrygram-extract-check-{}-{n}",
         std::process::id()
     ));
     if dir.exists() {
@@ -534,11 +534,11 @@ mod tests {
     }
 
     /// Loader check (P1-04): the committed quartet loads with the
-    /// runtime [`ferrogram_ui_spec::Loader`], including the three ADR
+    /// runtime [`larrygram_ui_spec::Loader`], including the three ADR
     /// 0007 cross-references.
     #[test]
     fn committed_ui_spec_loads_with_the_runtime_loader() {
-        use ferrogram_ui_spec::Loader;
+        use larrygram_ui_spec::Loader;
 
         let root = crate::util::root();
         let ui = root.join("ui-spec");
@@ -561,15 +561,15 @@ mod tests {
 
         let loader = Loader::new(tmp.path()).expect("loader compiles");
         let sets = loader.load_all().expect("the committed quartet loads");
-        assert!(!sets.visio_365.commands.entries.is_empty());
-        assert!(!sets.visio_365.shortcuts.entries.is_empty());
+        assert!(!sets.panel_365.commands.entries.is_empty());
+        assert!(!sets.panel_365.shortcuts.entries.is_empty());
     }
 
     #[test]
     fn parse_args_defaults() {
         let a = parse_args(&[]).unwrap();
         assert!(a.reference.ends_with("reference"));
-        assert!(a.out.ends_with("ferrogram") || a.out.to_string_lossy().contains("ferrogram"));
+        assert_eq!(a.out, crate::util::root());
         assert!(!a.allow_unimplemented);
         assert!(!a.check);
     }

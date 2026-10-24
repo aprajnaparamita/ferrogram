@@ -11,13 +11,13 @@ mod support;
 
 use support::dispatch;
 
-use ferrogram_commands::app::{AppCtx, DocumentSession, Settings};
-use ferrogram_commands::builtins::registry;
-use ferrogram_commands::{
+use larrygram_commands::app::{AppCtx, DocumentSession, Settings};
+use larrygram_commands::builtins::registry;
+use larrygram_commands::{
     ArgValue, Args, CommandError, CommandId, Invocation, Registry, SessionId, Source,
 };
-use ferrogram_geom::{Point, Unit};
-use ferrogram_model::{
+use larrygram_geom::{Point, Unit};
+use larrygram_model::{
     Cell, CellName, CellValue, Connect, Document, Master, MasterId, PageId, Preserved, Shape,
     ShapeId,
 };
@@ -368,10 +368,10 @@ fn paste_of_a_fragment_with_a_connect_outside_the_copy_carries_no_stale_glue() {
                 Connect {
                     from_sheet: connector_visio,
                     from_cell: from_cell.to_owned(),
-                    from_part: ferrogram_model::mutate::VIS_BEGIN,
+                    from_part: larrygram_model::mutate::VIS_BEGIN,
                     to_sheet,
                     to_cell: "PinX".to_owned(),
-                    to_part: ferrogram_model::mutate::VIS_WHOLE_SHAPE,
+                    to_part: larrygram_model::mutate::VIS_WHOLE_SHAPE,
                     ..Connect::new()
                 },
             )

@@ -14,8 +14,8 @@ the whole tree; every added line of the Phase 6 `.rs`, `.md`, `.yaml` and
 (the ShapeSheet reference's formula and 209 function pages, the
 VBA/automation reference and the enumeration pages: 4 004 Markdown
 files, about 7.8M characters) with 8-word and 6-word shingle matching; the function table
-(`crates/shapesheet/src/functions.rs`) and the new panels
-(`crates/ui/src/panels.rs`) read string by string; libvisio identifiers
+(`crates/shapesheet/src/functions.rs`) and the new panes
+(`crates/ui/src/panes.rs`) read string by string; libvisio identifiers
 grepped outside `crates/vsd-binary`; `ATTRIBUTION.md`,
 `corpus/PROVENANCE.md` and `docs/sources.md` rows checked against the
 committed files and the two new fuzz seed directories; the corpus formula
@@ -26,9 +26,9 @@ census numbers in ADRs 0053-0054 checked against source 20's recording.
 **Pass with findings: 0 blocker, 0 major, 4 minor** in the Phase 6 diff
 (clean-room and licence rules), plus **1 minor outside it** (in the P7-01
 import, handed to P7-13). No Microsoft-owned content is committed, no
-copied long-form text exists in the function table or the panels, no
+copied long-form text exists in the function table or the panes, no
 libvisio-derived code exists outside `crates/vsd-binary`, and
-`cargo deny check` is green with `ferrogram-vsd-binary` still the only
+`cargo deny check` is green with `larrygram-vsd-binary` still the only
 MPL-2.0 crate. The four minor findings are two verbatim error-value
 glosses (F1), the reference's example-column strings used verbatim as
 fixtures and fuzz seeds whose `ATTRIBUTION.md` row calls them "our own
@@ -55,12 +55,12 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 ## Checklist
 
 1. **No Microsoft-owned content committed; no copied long-form text (function
-   descriptions, help strings) in the function table or the panels; the
+   descriptions, help strings) in the function table or the panes; the
    grammar facts are derived facts with `docs/sources.md` rows, never quoted
    prose.** Pass, with F1 and F2. The Phase 6 diff adds no binary or asset
    file at all: the only binary entries in `--name-status` are the fuzz
    seed `malformed-junk-bytes` (9 hand-written junk bytes). No Office
-   document, stencil, template, icon, image, font, spec PDF, ribbon XML or
+   document, stencil, template, icon, image, font, spec PDF, command bar XML or
    Visio screenshot anywhere in the diff. The function table
    (`crates/shapesheet/src/functions.rs`) holds names, arities and our own
    `FunctionKind` categories and **no description text at all**; its module
@@ -68,8 +68,8 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    descriptions are our own", and the two rows the reference does not
    spell (`MOD`, `EXP`) say so in their comments. The evaluator's
    per-function methods carry no copied descriptions (shingle scan over
-   `crates/shapesheet/src/eval.rs`: 0 matches). The new panels
-   (`crates/ui/src/panels.rs`) carry short labels only ("Size & Position",
+   `crates/shapesheet/src/eval.rs`: 0 matches). The new panes
+   (`crates/ui/src/panes.rs`) carry short labels only ("Size & Position",
    "Shape Data", "Pin X", "Loc Pin X", "Unit cost") plus our own one-line
    notes ("This cell carries a formula: read-only in this release"); scan:
    0 matches. The grammar facts in ADRs 0051-0054 (operator precedence,
@@ -97,7 +97,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    mentions of the rule in this task's own file. A tree-wide grep outside
    `crates/vsd-binary` and `tools/libvisio-oracle` matches documentation
    about the oracle and `crates/render/tests/oracle_render.rs` (the
-   dev-only oracle comparison of P3-10, behind `FERROGRAM_LIBVISIO_ORACLE`,
+   dev-only oracle comparison of P3-10, behind `LARRYGRAM_LIBVISIO_ORACLE`,
    holding counts and no libvisio code), plus one pre-existing comment in
    `crates/geom/src/curve.rs`. The `VisioDocument` hits are the [MS-VSDX]
    root element name. `NOTICE` still records the libvisio commit.
@@ -106,8 +106,8 @@ changes no code, so coverage, wasm and fuzz are not triggered).
    `advisories ok, bans ok, licenses ok, sources ok` (one
    `multiple-versions` **warning** for `zip` 8.6 via `calamine` in
    `xtask`, pre-existing and allowed by `deny.toml`). The only manifest
-   changes in the phase are internal edges (`ferrogram-shapesheet` into
-   `commands`/`ui`, `ferrogram-geom`/`ferrogram-model` into
+   changes in the phase are internal edges (`larrygram-shapesheet` into
+   `commands`/`ui`, `larrygram-geom`/`larrygram-model` into
    `shapesheet`), the `proptest` dev-dependency of `crates/shapesheet` and
    `serde` in `crates/ui`, both already in the workspace lock, and the
    standalone fuzz crate (`libfuzzer-sys`, same pattern as the existing
@@ -130,7 +130,7 @@ changes no code, so coverage, wasm and fuzz are not triggered).
 
 ## Gate
 
-`cargo xtask gate --quick` in `/Volumes/Dara/ferrogram/worktrees/P6-14`:
+`cargo xtask gate --quick` in `/Volumes/Dara/larrygram/worktrees/P6-14`:
 
 ```
 ==> gate summary
